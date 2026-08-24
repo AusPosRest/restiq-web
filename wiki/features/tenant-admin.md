@@ -389,6 +389,69 @@ story. Backend counterpart: `restiq-backend/wiki/features/tenant-admin.md`.
   constraint make the honest empty state the correct build, not a shortfall
   against the mock.
 
+## CAP-9 - Reports catalogue
+
+- **Intent:** an owner browses and exports Sales, Financial (GST/BAS-ready),
+  Menu Engineering, Operations, Inventory, and Labour reports, and can send
+  summarised journals to an accounting tool.
+- **Reality constraint:** no Order/Bill/Payment model or Z-report/Document
+  immutable model exists anywhere in the schema yet - POS Core Loop hasn't
+  been built. `GET /admin/v1/reports` (`restiq-backend#42`) returns one entry
+  per named report type; six of the eight are honestly `hasData: false` with
+  an explanatory message (`"Available once POS Core Loop is live"`) and no
+  export formats. Two are real, backed by tables that already exist: a menu
+  catalogue export (CAP-4's `menu_items`/`item_prices`) and a staff roster
+  export (CAP-7's `staff_users`/`roles`), both `hasData: true` with a working
+  `csv` export.
+- **Built:** `/admin/reports` (`src/app/admin/(shell)/reports/`) replaces the
+  `ComingSoon` placeholder. `reports.tsx` loads the catalogue via
+  `useAdminLoad<ReportDefinition[]>("reports")` and groups it by category
+  (`reports-state.ts#groupReportsByCategory`, `sales`/`financial`/`menu`/
+  `operations`/`inventory`/`labour`, in SPEC order) into a card grid
+  (`report-card.tsx`) - a report's `message` doubles as its card body copy
+  for both states; a real report (non-empty `exportFormats`) gets a working
+  "Export {FORMAT}" button, a pending one shows a "Pending" badge instead. An
+  "Accounting tools" button opens `export-destinations-dialog.tsx`, which
+  fetches `GET /admin/v1/reports/export-destinations` live and lists every
+  destination (Tally/Xero/MYOB/Zoho/QuickBooks) as honestly "Not connected" -
+  no fake connected state, no OAuth flow, since none exists in the backend.
+- **CSV export is a real file, not a JSON payload** -
+  `GET /admin/v1/reports/:key/export?format=csv` returns a raw `text/csv`
+  body with a `Content-Disposition` filename, which `src/app/admin/api/
+  [...path]/route.ts`'s pass-through previously couldn't forward correctly
+  (it always called `upstream.json()` and re-wrapped the result). The proxy
+  now checks the upstream `content-type`: a non-JSON response is forwarded as
+  raw bytes with its `content-type`/`content-disposition` intact instead of
+  being forced into a JSON envelope. `api.ts#exportReport` fetches through
+  that proxy, reads the body as a `Blob`, and pulls the filename from the
+  response's own `Content-Disposition` header
+  (`reports-state.ts#filenameFromContentDisposition`) rather than assuming
+  one client-side; `downloadReportExport` then does the actual
+  `URL.createObjectURL` + anchor-click browser save.
+- **Reconciliation pass:** this story's first web pass was built before
+  `restiq-backend#42` existed (checked `git branch -a` / `gh pr list` /
+  `gh issue view 42` on the backend repo - open, unassigned, zero commits at
+  the time) and used a self-authored contract: a `{ reports: [...] }`
+  envelope, an `id`/`description` field pair, display-label category strings
+  on the wire, a static client-side destinations list, and export returning
+  `{ filename, contentType, content }` JSON. Partway through this story the
+  backend branch (`feature/42-reports-catalogue`) appeared, uncommitted, in
+  the sibling checkout - reading `src/admin/reports/reports.controller.ts` /
+  `reports.dtos.ts` / `reports.service.ts` directly found the real contract
+  differs on every one of those points: `GET /admin/v1/reports` returns a
+  bare `ReportCatalogueEntry[]`; each entry uses `key` (not `id`) with no
+  separate `description` (`message` covers it); `category` is a lowercase
+  code, not a display label (`categoryLabel()` added to map it); the
+  destinations list is a real `GET /admin/v1/reports/export-destinations`,
+  not static; and both exports are per-report `GET .../reports/:key/export?
+  format=csv` routes returning a raw CSV body (see above), not a generic
+  POST returning JSON. `reports-state.ts`, `api.ts`, `report-card.tsx`,
+  `reports.tsx`, `export-destinations-dialog.tsx`, the proxy route, and every
+  test were rewritten to match. The backend's own e2e suite
+  (`test/reports-catalogue.e2e-spec.ts`, 13 tests) was run directly against
+  real Postgres to confirm the read contract, independent of this
+  reconciliation.
+
 ## Data model
 
 Owned by the backend - see `restiq-backend/wiki/features/tenant-admin.md`.
@@ -796,3 +859,29 @@ DESIGN.md dark/amber tokens with visible focus rings. Reconciling the actual
 request/response shapes against restiq-backend#38's real code once it lands
 is required follow-up before this can be called verified, not optional
 polish - flagged as this story's primary open risk.
+
+CAP-9 (reports catalogue) was verified against the real backend contract two
+ways. First, its own e2e suite (`test/reports-catalogue.e2e-spec.ts`, 13
+tests) was run directly against real Postgres from this checkout - all
+green, confirming the catalogue's honest `hasData`/`message` behavior, both
+real CSV exports (including cross-tenant isolation and the empty-price/
+unsupported-format edge cases), and the destinations list, independent of
+anything this story wrote. Second, a real browser click-through against the
+actual frontend code (`localhost:3100`) was driven through a local stub HTTP
+server replaying the exact response shapes read from
+`reports.controller.ts`/`reports.dtos.ts` - not the live NestJS binary
+itself, since the backend's shared `dist/` directory was being concurrently
+rebuilt and wiped by the backend-building agent's own watch processes in the
+same checkout, making a same-directory NestJS instance unreliable to hold
+still. That click-through confirmed: the category grid renders correctly
+against the dark/amber theme (Sales Performance/Financial & Compliance/Menu
+Engineering sections, matching the T9 render); the pending message and
+"Export CSV" button render correctly per report; clicking Export CSV fires a
+real `GET /admin/api/reports/menu-catalogue/export?format=csv` request that
+returns `200 OK` (proving the proxy's new non-JSON pass-through works, not
+just its unit tests); the Accounting Tools dialog fetches
+`GET /admin/api/reports/export-destinations` live and lists all five
+destinations as "Not connected"; and Escape closes the dialog. Covered by
+mocked-fetch component tests (`reports.test.tsx`,
+`export-destinations-dialog.test.tsx`) plus pure-logic unit tests
+(`reports-state.test.ts`).

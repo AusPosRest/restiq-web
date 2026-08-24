@@ -48,6 +48,21 @@ async function forward(request: NextRequest, params: Promise<{ path: string[] }>
   }
 
   if (upstream.status === 204) return new NextResponse(null, { status: 204 });
+
+  // CAP-9's report exports return a raw text/csv body (with a
+  // Content-Disposition filename), not a JSON envelope - forwarding those
+  // through upstream.json() would silently corrupt them. Any non-JSON
+  // upstream response is passed through as bytes with its content-type and
+  // content-disposition intact instead.
+  const contentType = upstream.headers.get("content-type") ?? "";
+  if (!contentType.includes("application/json")) {
+    const bytes = await upstream.arrayBuffer();
+    const headers: Record<string, string> = { "content-type": contentType || "application/octet-stream" };
+    const disposition = upstream.headers.get("content-disposition");
+    if (disposition) headers["content-disposition"] = disposition;
+    return new NextResponse(bytes, { status: upstream.status, headers });
+  }
+
   const body: unknown = await upstream.json().catch(() => null);
   return NextResponse.json(body ?? { error: { code: "error", message: "Unexpected API response" } }, { status: upstream.status });
 }

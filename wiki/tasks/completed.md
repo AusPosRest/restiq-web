@@ -101,3 +101,28 @@
   (shell rendering, graceful load-error with no backend, and full UI
   interaction against a client-side fetch patch). Issue
   AusPosRest/restiq-web#30.
+
+- **2026-08-24** - Tenant Admin story 9: reports catalogue UI (CAP-9).
+  `/admin/reports` - a report card grid grouped by category (Sales
+  Performance/Financial & Compliance/Menu Engineering/Operations/Inventory/
+  Labour), each card either a working "Export CSV" for the two reports
+  backed by real data (menu catalogue, staff roster) or an honest "Pending"
+  state with the backend's own message for the rest (no fake report data,
+  same `hasData`/`message` convention as CAP-8). An "Accounting tools" picker
+  lists Tally/Xero/MYOB/Zoho/QuickBooks live from the backend, all honestly
+  "Not connected" - no fake connected state, no OAuth flow. Extended
+  `src/app/admin/api/[...path]/route.ts` to pass non-JSON upstream responses
+  (the CSV export's raw `text/csv` body) through as bytes with their
+  content-type/content-disposition intact, instead of forcing every response
+  into a JSON envelope. Verified two ways: the backend's own e2e suite (13
+  tests) run directly against real Postgres, and a live browser
+  click-through against a contract-faithful local stub (the real backend's
+  `dist/` was being concurrently rebuilt by the backend-building agent's own
+  watch processes in the same checkout) that confirmed the real proxy
+  pass-through, category grid, export click, and destinations dialog all
+  work end to end. See
+  [wiki/features/tenant-admin.md](../features/tenant-admin.md) for the full
+  reconciliation against restiq-backend#42's actual (uncommitted at the
+  time) contract - found and fixed after this story's first pass, before
+  restiq-backend#42 existed, guessed a different envelope, field names, and
+  export mechanism. Issue AusPosRest/restiq-web#34.
