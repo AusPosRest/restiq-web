@@ -16,7 +16,8 @@ import { useToast } from "../../toast";
 import { useOpsLoad } from "../../use-ops-load";
 import { DevicesTable } from "../../devices/devices-table";
 import { CapabilitiesTab } from "./capabilities-tab";
-import { BrandingTab, OutletsTab, OverviewTab, OwnersTab, SubscriptionTab } from "./tabs";
+import { SubscriptionTab } from "./subscription-tab";
+import { BrandingTab, OutletsTab, OverviewTab, OwnersTab } from "./tabs";
 
 const TABS = ["overview", "outlets", "devices", "subscription", "capabilities", "branding", "owners"] as const;
 export type TabKey = (typeof TABS)[number];
@@ -148,7 +149,7 @@ export function TenantDetailPage() {
         {tab === "devices" && (
           <DevicesTable tenantId={tenant.id} tenantName={tenant.name} tenantOutlets={detail.outlets.map((o) => ({ id: o.id, name: o.name }))} />
         )}
-        {tab === "subscription" && <SubscriptionTab detail={detail} />}
+        {tab === "subscription" && <SubscriptionTab tenantId={tenant.id} />}
         {tab === "capabilities" && <CapabilitiesTab tenantId={tenant.id} capabilities={detail.capabilities} />}
         {tab === "branding" && <BrandingTab detail={detail} onMutated={load} />}
         {tab === "owners" && <OwnersTab detail={detail} onMutated={load} />}

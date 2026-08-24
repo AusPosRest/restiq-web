@@ -184,29 +184,6 @@ export function OutletsTab({ detail }: Readonly<{ detail: TenantDetail }>) {
   );
 }
 
-// --- Subscription: current plan snapshot; operations land with their story.
-
-export function SubscriptionTab({ detail }: Readonly<{ detail: TenantDetail }>) {
-  return (
-    <div className="max-w-2xl rounded-lg border border-border/40 bg-card p-5" data-testid="subscription-placeholder">
-      <h2 className="font-headline text-lg font-semibold">Subscription</h2>
-      <dl className="mt-4 grid grid-cols-2 gap-4 text-sm">
-        <div>
-          <dt className="font-label text-xs font-semibold uppercase tracking-wider text-muted-foreground">Plan</dt>
-          <dd className="mt-1">{detail.tenant.plan}</dd>
-        </div>
-        <div>
-          <dt className="font-label text-xs font-semibold uppercase tracking-wider text-muted-foreground">Billing period</dt>
-          <dd className="mt-1">{detail.tenant.billingPeriod}</dd>
-        </div>
-      </dl>
-      <p className="mt-5 rounded-lg border border-dashed border-border/60 bg-card/50 px-4 py-3 text-sm text-muted-foreground">
-        Plan changes, invoices, arrears and suspend/reactivate arrive with subscription operations.
-      </p>
-    </div>
-  );
-}
-
 // --- Branding: the tenant's design-token overrides as editable JSON.
 
 export function BrandingTab({ detail, onMutated }: Readonly<TabProps>) {

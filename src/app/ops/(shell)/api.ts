@@ -124,3 +124,24 @@ export interface EnrolmentCode {
   deviceType: string;
   expiresAt: string;
 }
+
+// --- CAP-5 subscription operations.
+
+export interface SubscriptionView {
+  tenantId: string;
+  status: string;
+  plan: string;
+  billingPeriod: string;
+  currentPeriodStart: string;
+  currentPeriodEnd: string;
+  suspendedAt: string | null;
+  graceWindowHours: number;
+}
+
+export interface InvoiceView {
+  id: string;
+  period: string;
+  amountMinor: string;
+  status: string;
+  createdAt: string;
+}
