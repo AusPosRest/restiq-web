@@ -4,42 +4,42 @@ import { afterEach, describe, expect, it, vi } from "vitest";
 import { Dashboard } from "./dashboard";
 import type { DashboardView } from "./dashboard-state";
 
+const NO_DATA = { amountMinor: 0, currency: "INR", hasData: false, message: "No sales data yet - connect POS to see live figures" };
+
 const MULTI_OUTLET: DashboardView = {
   asOf: "2026-08-24T09:05:00.000Z",
-  stale: false,
-  counts: { outlets: 2, staff: 12, menuItems: 84, devices: 7 },
+  tenant: { outletCount: 2, staffCount: 12, menuItemCount: 84, deviceCount: 7 },
   outlets: [
     {
       outletId: "o1",
       outletName: "Indiranagar",
-      sales: { status: "available", totalMinor: 8432000, currency: "INR" },
-      margin: { status: "available", percent: 28.4 },
-      labour: { status: "available", costMinor: 1200000, currency: "INR", percentOfSales: 14.2 },
-      waste: { status: "available", costMinor: 124000, currency: "INR" },
+      sales: { amountMinor: 8432000, currency: "INR", hasData: true, message: "" },
+      margin: { amountMinor: 2396288, currency: "INR", hasData: true, message: "" },
+      labourCost: { amountMinor: 1200000, currency: "INR", hasData: true, message: "" },
+      waste: { amountMinor: 124000, currency: "INR", hasData: true, message: "" },
     },
     {
       outletId: "o2",
       outletName: "Koramangala",
-      sales: { status: "unavailable" },
-      margin: { status: "unavailable" },
-      labour: { status: "unavailable" },
-      waste: { status: "unavailable" },
+      sales: NO_DATA,
+      margin: NO_DATA,
+      labourCost: NO_DATA,
+      waste: NO_DATA,
     },
   ],
 };
 
 const SINGLE_OUTLET: DashboardView = {
   asOf: "2026-08-24T09:05:00.000Z",
-  stale: true,
-  counts: { outlets: 1, staff: 3, menuItems: 20, devices: 2 },
+  tenant: { outletCount: 1, staffCount: 3, menuItemCount: 20, deviceCount: 2 },
   outlets: [
     {
       outletId: "o1",
       outletName: "Whitefield",
-      sales: { status: "unavailable" },
-      margin: { status: "unavailable" },
-      labour: { status: "unavailable" },
-      waste: { status: "unavailable" },
+      sales: NO_DATA,
+      margin: NO_DATA,
+      labourCost: NO_DATA,
+      waste: NO_DATA,
     },
   ],
 };
@@ -87,8 +87,8 @@ describe("Dashboard", () => {
     await screen.findByTestId("dashboard-count-outlets-value");
 
     expect(screen.getByTestId("outlet-kpi-o1-sales-value").textContent).toBe("₹84320");
-    expect(screen.getByTestId("outlet-kpi-o1-margin-value").textContent).toBe("28.4%");
-    expect(screen.getByTestId("outlet-kpi-o1-labour-value").textContent).toContain("14.2% of sales");
+    expect(screen.getByTestId("outlet-kpi-o1-margin-value").textContent).toBe("₹23963");
+    expect(screen.getByTestId("outlet-kpi-o1-labour-value").textContent).toBe("₹12000");
     expect(screen.getByTestId("outlet-kpi-o1-waste-value").textContent).toBe("₹1240");
     expect(screen.queryByTestId("outlet-kpi-o1-sales-empty")).toBeNull();
 
@@ -120,21 +120,12 @@ describe("Dashboard", () => {
     expect(screen.queryByTestId("dashboard-comparison-table")).toBeNull();
   });
 
-  it("formats the freshness badge as-of time and marks it live when the sync is current", async () => {
+  it("formats the freshness badge as-of time - always live, since the backend computes it fresh on every request", async () => {
     stubFetch(MULTI_OUTLET);
     render(<Dashboard />);
 
     const badge = await screen.findByTestId("dashboard-freshness-badge");
     expect(badge.textContent).toContain("As of 9:05am");
     expect(badge.getAttribute("data-stale")).toBe("false");
-  });
-
-  it("marks the freshness badge stale and never presents it as live when the sync is behind", async () => {
-    stubFetch(SINGLE_OUTLET);
-    render(<Dashboard />);
-
-    const badge = await screen.findByTestId("dashboard-freshness-badge");
-    expect(badge.textContent).toContain("Sync is behind");
-    expect(badge.getAttribute("data-stale")).toBe("true");
   });
 });

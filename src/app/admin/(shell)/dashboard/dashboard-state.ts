@@ -1,45 +1,48 @@
 // Pure Owner Dashboard logic (CAP-8), kept free of React - mirrors
 // staff-state.ts/menu-state.ts's split between logic and UI.
 //
-// Contract status: restiq-backend's dashboard API (backend issue #40, CAP-8)
-// has no branch or PR open as of this writing - only Platform Console's
-// unrelated src/ops/dashboard.controller.ts exists on its dev. Unlike every
-// other admin/* API in api.ts (each reconciled against real backend DTOs per
-// their own file headers), this is a self-authored contract pending that
-// reconciliation: GET /admin/v1/dashboard returns tenant-wide real counts
-// plus per-outlet financial KPIs. Sales/margin/labour/waste have no real
-// data source until POS Core Loop ships (issue #40's own acceptance
-// criteria: "documents clearly what's stubbed"), so each is a discriminated
-// union of unavailable | available rather than a bare number that could be
-// mistaken for an honest zero.
+// Reconciled against the real restiq-backend#41 response (GET
+// /admin/v1/dashboard). Real shape differs from this story's first-pass
+// self-authored contract in several ways: the tenant-wide counts live under
+// `tenant`, not `counts`, with backend field names (outletCount, not
+// `outlets`); there is no `stale` field on the wire at all - the backend
+// computes `asOf` fresh on every request (no caching layer exists yet), so
+// the freshness badge always renders the live, non-stale state client-side;
+// and all four per-outlet financial metrics (sales, margin, labourCost,
+// waste) share one flat shape - `{ amountMinor, currency, hasData, message }`
+// - rather than a per-metric discriminated union. Notably margin is a real
+// currency AMOUNT on the backend, not a percentage (no percentOfSales field
+// either), so this story's original percent-based Margin/Labour rendering
+// was wrong and has been corrected to match.
 
-export interface DashboardCounts {
-  outlets: number;
-  staff: number;
-  menuItems: number;
-  devices: number;
+export interface DashboardTenant {
+  outletCount: number;
+  staffCount: number;
+  menuItemCount: number;
+  deviceCount: number;
 }
 
-export type FinancialMetric = { status: "unavailable" } | { status: "available"; totalMinor: number; currency: string };
-export type MarginMetric = { status: "unavailable" } | { status: "available"; percent: number };
-export type LabourMetric = { status: "unavailable" } | { status: "available"; costMinor: number; currency: string; percentOfSales: number };
-export type WasteMetric = { status: "unavailable" } | { status: "available"; costMinor: number; currency: string };
+/** Sales, margin, labourCost, and waste all share this shape on the wire - hasData:false is an honest empty state, never a fake zero. */
+export interface FinancialMetric {
+  amountMinor: number;
+  currency: string;
+  hasData: boolean;
+  message: string;
+}
 
 export interface OutletKpis {
   outletId: string;
   outletName: string;
   sales: FinancialMetric;
-  margin: MarginMetric;
-  labour: LabourMetric;
-  waste: WasteMetric;
+  margin: FinancialMetric;
+  labourCost: FinancialMetric;
+  waste: FinancialMetric;
 }
 
 export interface DashboardView {
   /** ISO timestamp the snapshot was computed - EXPERIENCE.md's "as of [time]" badge. */
   asOf: string;
-  /** True when the underlying sync is behind (SPEC CAP-8 success criterion: never present stale data as current). */
-  stale: boolean;
-  counts: DashboardCounts;
+  tenant: DashboardTenant;
   outlets: OutletKpis[];
 }
 
@@ -57,8 +60,4 @@ export function formatAsOf(iso: string, now: Date = new Date()): string {
 
   const month = then.toLocaleString("en-US", { month: "short", timeZone: "UTC" });
   return `${then.getUTCDate()} ${month}, ${time}`;
-}
-
-export function formatPercent(percent: number): string {
-  return `${percent.toFixed(1)}%`;
 }

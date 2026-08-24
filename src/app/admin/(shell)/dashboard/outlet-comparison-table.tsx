@@ -3,9 +3,13 @@
 // while every metric is still the no-data state - the table structure itself
 // is real, only the figures are pending POS Core Loop.
 import { formatPriceMinor } from "../menu/menu-state";
-import { formatPercent, type OutletKpis } from "./dashboard-state";
+import type { FinancialMetric, OutletKpis } from "./dashboard-state";
 
 const NO_DATA = "No data yet";
+
+function cell(metric: FinancialMetric): string {
+  return metric.hasData ? formatPriceMinor(metric.amountMinor, metric.currency) : NO_DATA;
+}
 
 export function OutletComparisonTable({ outlets }: Readonly<{ outlets: readonly OutletKpis[] }>) {
   return (
@@ -25,16 +29,16 @@ export function OutletComparisonTable({ outlets }: Readonly<{ outlets: readonly 
             <tr key={outlet.outletId} data-testid={`dashboard-comparison-row-${outlet.outletId}`} className="h-12 border-b border-border/20 last:border-b-0">
               <td className="px-4 font-medium">{outlet.outletName}</td>
               <td className="px-4 tabular-nums text-muted-foreground" data-testid={`dashboard-comparison-${outlet.outletId}-sales`}>
-                {outlet.sales.status === "available" ? formatPriceMinor(outlet.sales.totalMinor, outlet.sales.currency) : NO_DATA}
+                {cell(outlet.sales)}
               </td>
               <td className="px-4 tabular-nums text-muted-foreground" data-testid={`dashboard-comparison-${outlet.outletId}-margin`}>
-                {outlet.margin.status === "available" ? formatPercent(outlet.margin.percent) : NO_DATA}
+                {cell(outlet.margin)}
               </td>
               <td className="px-4 tabular-nums text-muted-foreground" data-testid={`dashboard-comparison-${outlet.outletId}-labour`}>
-                {outlet.labour.status === "available" ? formatPriceMinor(outlet.labour.costMinor, outlet.labour.currency) : NO_DATA}
+                {cell(outlet.labourCost)}
               </td>
               <td className="px-4 tabular-nums text-muted-foreground" data-testid={`dashboard-comparison-${outlet.outletId}-waste`}>
-                {outlet.waste.status === "available" ? formatPriceMinor(outlet.waste.costMinor, outlet.waste.currency) : NO_DATA}
+                {cell(outlet.waste)}
               </td>
             </tr>
           ))}

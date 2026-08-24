@@ -39,27 +39,29 @@ export function Dashboard() {
 }
 
 function DashboardContent({ view }: Readonly<{ view: DashboardView }>) {
-  const { counts, outlets, asOf, stale } = view;
+  const { tenant, outlets, asOf } = view;
 
   return (
     <div className="flex flex-1 flex-col gap-8">
       <div className="flex items-start justify-between gap-4">
         <h1 className="font-headline text-2xl font-semibold">Dashboard</h1>
-        <FreshnessBadge asOf={asOf} stale={stale} />
+        {/* Backend computes asOf fresh on every request (no caching layer
+            exists yet), so there is no wire "stale" signal - always false. */}
+        <FreshnessBadge asOf={asOf} stale={false} />
       </div>
 
       <div className="grid grid-cols-2 gap-4 xl:grid-cols-4">
         <KpiStatCard testId="dashboard-count-outlets" label="Outlets" icon={Store}>
-          <CountValue testId="dashboard-count-outlets-value" value={counts.outlets} />
+          <CountValue testId="dashboard-count-outlets-value" value={tenant.outletCount} />
         </KpiStatCard>
         <KpiStatCard testId="dashboard-count-staff" label="Staff" icon={Users}>
-          <CountValue testId="dashboard-count-staff-value" value={counts.staff} />
+          <CountValue testId="dashboard-count-staff-value" value={tenant.staffCount} />
         </KpiStatCard>
         <KpiStatCard testId="dashboard-count-menu-items" label="Menu items" icon={Soup}>
-          <CountValue testId="dashboard-count-menu-items-value" value={counts.menuItems} />
+          <CountValue testId="dashboard-count-menu-items-value" value={tenant.menuItemCount} />
         </KpiStatCard>
         <KpiStatCard testId="dashboard-count-devices" label="Devices" icon={MonitorSmartphone}>
-          <CountValue testId="dashboard-count-devices-value" value={counts.devices} />
+          <CountValue testId="dashboard-count-devices-value" value={tenant.deviceCount} />
         </KpiStatCard>
       </div>
 
