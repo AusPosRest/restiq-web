@@ -145,3 +145,30 @@ export interface InvoiceView {
   status: string;
   createdAt: string;
 }
+
+// --- CAP-6 fleet sync health monitor.
+
+export type Severity = "healthy" | "lagging" | "silent";
+
+export interface SyncHealthRow {
+  deviceId: string;
+  tenantId: string;
+  tenantName: string;
+  outletId: string | null;
+  outletName: string | null;
+  deviceLabel: string;
+  deviceType: string;
+  lastContactAt: string | null;
+  lagSeconds: number;
+  outboxDepth: number | null;
+  appVersion: string | null;
+  clockSkewSeconds: number | null;
+  recentRejectionCount: number | null;
+  severity: Severity;
+}
+
+export interface SyncHealthResult {
+  devices: SyncHealthRow[];
+  summary: Record<Severity, number>;
+  generatedAt: string;
+}
