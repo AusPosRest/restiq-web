@@ -131,6 +131,35 @@ export function findOverlap(candidate: TableRect, others: readonly TableRect[]):
   return others.find((other) => other.id !== candidate.id && rectsOverlap(candidate, other))?.id ?? null;
 }
 
+// --- Add-table defaults. SHAPE_SIZES gives the add-table form a
+// fixed footprint per shape so it only has to ask "what shape", not raw
+// width/height. computeNextTablePosition scans the same grid the canvas
+// snaps to for the first spot clear of every existing table on the floor,
+// reusing rectsOverlap rather than a second overlap check - if the floor is
+// fully packed it falls back to (0, 0) and lets the server's own overlap
+// check (floor-plan.service.ts's boundsOverlap) reject it like any other
+// spot, since only the server can serialize concurrent edits.
+
+export const SHAPE_SIZES: Record<TableShape, { width: number; height: number }> = {
+  square: { width: 40, height: 40 },
+  circle: { width: 40, height: 40 },
+  rectangle: { width: 64, height: 40 },
+};
+
+export function computeNextTablePosition(
+  existing: readonly TableRect[],
+  size: { width: number; height: number },
+  canvas: CanvasBounds,
+): { x: number; y: number } {
+  for (let y = 0; y + size.height <= canvas.height; y += GRID_SNAP_PX) {
+    for (let x = 0; x + size.width <= canvas.width; x += GRID_SNAP_PX) {
+      const candidate: TableRect = { id: "", x, y, width: size.width, height: size.height };
+      if (!existing.some((other) => rectsOverlap(candidate, other))) return { x, y };
+    }
+  }
+  return { x: 0, y: 0 };
+}
+
 // --- Station printer-requirement validation. Mirrors the backend's own
 // rule (see file header): a station must carry a primary printer, or the
 // caller must explicitly acknowledge it has none - the UI enforces this
