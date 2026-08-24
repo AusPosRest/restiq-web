@@ -124,3 +124,51 @@
     @apply bg-background text-foreground;
   }
 }
+/* RESTIQ Console Dark - the /ops surface's theme (ux-platform-console DESIGN.md).
+   Semantic tokens only; the charcoal+amber palette is a placeholder pending a
+   real brand direction, so a re-skin is an edit here, not in components. */
+.ops-theme {
+  --background: #131315;
+  --foreground: #f5f5f4;
+  --card: #1c1c1e;
+  --card-foreground: #f5f5f4;
+  --popover: #26262a;
+  --popover-foreground: #f5f5f4;
+  --primary: #f59e0b;
+  --primary-foreground: #472a00;
+  --secondary: #26262a;
+  --secondary-foreground: #f5f5f4;
+  --muted: #1f1f21;
+  --muted-foreground: #a1a1aa;
+  --accent: #2a2a2c;
+  --accent-foreground: #f5f5f4;
+  --destructive: #ef4444;
+  --border: #534434;
+  --input: #26262a;
+  --ring: #f59e0b;
+  --radius: 8px;
+
+  /* status vocabulary - fixed across every console screen */
+  --status-healthy: #22c55e;
+  --status-info: #3b82f6;
+  --status-warning: #eab308;
+  --status-critical: #ef4444;
+  --status-pending: #a855f7;
+  --error: #ffb4ab;
+  --error-container: #93000a;
+
+  --font-sans: var(--font-inter);
+  font-family: var(--font-inter), Inter, sans-serif;
+}
+
+@theme inline {
+  --color-status-healthy: var(--status-healthy);
+  --color-status-info: var(--status-info);
+  --color-status-warning: var(--status-warning);
+  --color-status-critical: var(--status-critical);
+  --color-status-pending: var(--status-pending);
+  --color-error-soft: var(--error);
+  --color-error-container: var(--error-container);
+  --font-headline: var(--font-hanken-grotesk);
+  --font-label: var(--font-public-sans);
+}

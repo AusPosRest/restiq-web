@@ -1,14 +1,14 @@
 name: CI
 
-# The gate on merging to main. Job name "check" is what the branch ruleset
+# The gate on merging. Job name "check" is what the branch ruleset
 # requires - rename it and protection silently stops matching.
 # See restiq-design/setup/02-repos-and-cicd.md
 
 on:
   pull_request:
-    branches: [main]
+    branches: [main, dev]
   push:
-    branches: [main]
+    branches: [main, dev]
 
 jobs:
   check:
@@ -16,21 +16,26 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
+      - uses: pnpm/action-setup@v4
+        with:
+          version: 10
+
       - uses: actions/setup-node@v4
         with:
           node-version-file: .nvmrc
-          cache: npm
+          cache: pnpm
 
-      # ci, not install: exactly what package-lock.json says, nothing newer.
-      - run: npm ci
+      # --frozen-lockfile: exactly what pnpm-lock.yaml says, nothing newer.
+      - run: pnpm install --frozen-lockfile
 
       - name: Lint
-        run: npm run lint
+        run: pnpm run lint
 
       - name: Typecheck
-        run: npm run typecheck
+        run: pnpm run typecheck
+
+      - name: Tests
+        run: pnpm run test
 
       - name: Build
-        run: npm run build
-
-      # No test step yet - tests arrive with the first feature that needs them.
+        run: pnpm run build
