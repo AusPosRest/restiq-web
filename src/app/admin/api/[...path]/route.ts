@@ -27,8 +27,17 @@ async function forward(request: NextRequest, params: Promise<{ path: string[] }>
   const headers: Record<string, string> = { authorization: `Bearer ${token}` };
   const init: RequestInit = { method: request.method, headers, cache: "no-store" };
   if (request.method !== "GET" && request.method !== "HEAD") {
-    headers["content-type"] = "application/json";
-    init.body = await request.text();
+    const contentType = request.headers.get("content-type") ?? "";
+    if (contentType.startsWith("multipart/form-data")) {
+      // Menu import's file upload: forward the original content-type (its
+      // boundary is part of the value) and the raw bytes - decoding as text
+      // would corrupt binary files.
+      headers["content-type"] = contentType;
+      init.body = await request.arrayBuffer();
+    } else {
+      headers["content-type"] = "application/json";
+      init.body = await request.text();
+    }
   }
 
   let upstream: Response;
