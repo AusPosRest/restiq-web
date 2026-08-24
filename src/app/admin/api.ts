@@ -15,6 +15,7 @@ import type { BrandingTokens } from "./(shell)/settings/branding-state";
 import type { OutletCapabilityView } from "./(shell)/settings/capability-state";
 import type { DiningTableView, FloorPlanView, FloorView, PrinterRenderMode, PrinterView, StationView } from "./(shell)/floor-plan/floor-plan-state";
 import type { AdminDeviceView, DeviceType, EnrolmentCodeResult } from "./(shell)/devices/devices-state";
+import type { RoleView, StaffView } from "./(shell)/staff/staff-state";
 
 export class AdminApiError extends Error {
   constructor(
@@ -400,4 +401,54 @@ export function generateEnrolmentCode(outletId: string, deviceType: DeviceType):
     method: "POST",
     body: JSON.stringify({ deviceType }),
   });
+}
+
+// --- CAP-7 Staff & roles. UNVERIFIED against restiq-backend: issue
+// AusPosRest/restiq-backend#38 was still open with no branch and no staff/PIN
+// Prisma model at implementation time (only `Role` - id/tenantId/name/
+// isSystem - existed, seeded from tenants.service.ts's SYSTEM_ROLES). These
+// paths and shapes are this story's provisional contract, following the
+// admin realm's existing REST conventions (plural resource, nested action
+// segment, PATCH for partial update) - reconcile against the real DTOs once
+// #38 lands, same as every other CAP module's header note in this file.
+
+export function fetchRoles(): Promise<RoleView[]> {
+  return adminApi<RoleView[]>("roles");
+}
+
+export function fetchStaff(): Promise<StaffView[]> {
+  return adminApi<StaffView[]>("staff");
+}
+
+export interface CreateStaffInput {
+  firstName: string;
+  lastName: string;
+  email: string;
+  roleId: string;
+}
+
+export function createStaff(input: CreateStaffInput): Promise<StaffView> {
+  return adminApi<StaffView>("staff", { method: "POST", body: JSON.stringify(input) });
+}
+
+// Role change is security-relevant (SPEC constraints: audited with actor +
+// reason, EXPERIENCE.md: pessimistic with a confirm step) - same reason
+// requirement as a price change.
+export function updateStaffRole(staffId: string, roleId: string, reason: string): Promise<StaffView> {
+  return adminApi<StaffView>(`staff/${staffId}/role`, { method: "PATCH", body: JSON.stringify({ roleId, reason }) });
+}
+
+export interface IssuedPin {
+  pin: string;
+  issuedAt: string;
+}
+
+export function issueStaffPin(staffId: string): Promise<IssuedPin> {
+  return adminApi<IssuedPin>(`staff/${staffId}/pin`, { method: "POST" });
+}
+
+// PIN revoke is security-relevant (SPEC constraints; EXPERIENCE.md: confirm-
+// modal-with-plain-language-consequence) - carries the same audit reason.
+export function revokeStaffPin(staffId: string, reason: string): Promise<StaffView> {
+  return adminApi<StaffView>(`staff/${staffId}/pin`, { method: "DELETE", body: JSON.stringify({ reason }) });
 }
