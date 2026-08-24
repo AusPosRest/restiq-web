@@ -1,13 +1,5 @@
-import { LayoutDashboard } from "lucide-react";
-import { ComingSoon } from "./coming-soon";
+import { Dashboard } from "./dashboard/dashboard";
 
 export default function AdminDashboardPage() {
-  return (
-    <ComingSoon
-      testId="admin-dashboard-placeholder"
-      title="Dashboard"
-      description="Live sales, margin, labour and waste for your outlets will show up here."
-      icon={LayoutDashboard}
-    />
-  );
+  return <Dashboard />;
 }
