@@ -97,9 +97,18 @@ export interface CurrentPriceView {
   effectiveAt: string;
 }
 
+// Matches restiq-backend's actual GET /admin/v1/outlets response
+// (src/admin/outlets/outlets.dtos.ts, read directly - not the { id, name,
+// city } shape assumed at kickoff, since the real `outlets` table has no
+// city column).
+export type OutletType = "dine_in" | "qsr" | "cloud_kitchen" | "food_court";
+
 export interface OutletView {
   id: string;
   name: string;
+  address: string;
+  type: OutletType;
+  timezone: string;
 }
 
 /** Client-tracked only (see file header) - the price just scheduled/saved in

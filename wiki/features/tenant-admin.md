@@ -138,6 +138,56 @@ story. Backend counterpart: `restiq-backend/wiki/features/tenant-admin.md`.
   Menu. `/admin/menu/import` (CAP-3, prior story) is untouched and still
   lives outside the shell at its original route.
 
+## CAP-10 - Branding & capabilities
+
+- **Intent:** an owner sets receipt/UI branding tokens (colors, font, corner
+  radius, logo, receipt header/footer) with a live receipt preview that
+  updates before saving, and toggles per-outlet capabilities (QR ordering,
+  kiosk, token queue) that take effect without a redeploy; the shell's
+  outlet switcher (built hidden in story 3, since no outlets endpoint
+  existed) now shows real outlets.
+- **Built:**
+  - `/admin/settings` redirects to `/admin/settings/branding`
+    (`src/app/admin/(shell)/settings/page.tsx`); a shared tab-strip layout
+    (`settings-tabs.tsx`, mirroring the shell's own `SidebarNav` active-link
+    idiom) switches between `/admin/settings/branding` and
+    `/admin/settings/capabilities`.
+  - **Branding** (`branding-editor.tsx`): a `BrandingForm` seeded once from
+    the landed `GET /admin/v1/branding` response (no effect needed to mirror
+    it into state - the loading/failed states gate the mount, so by the time
+    the form exists the data is already there) with four color-token
+    swatches (native `<input type="color">`, always emits a valid hex, plus
+    a read-only hex label under each), a font `<select>`, a corner-radius
+    `<input type="range">`, receipt header/footer `<textarea>`s, and a
+    `ReceiptPreview` (`receipt-preview.tsx`) that re-renders from the same
+    draft state on every keystroke - live, before Save. Save is a plain
+    pessimistic button (disabled until the draft actually differs from the
+    last-saved value) - branding isn't in the SPEC's named security-relevant
+    list, so no reason prompt.
+  - **Capabilities** (`capabilities-editor.tsx`): scoped by the same
+    `useOutlets()` selection the rest of the shell's per-outlet screens use.
+    A `key={selectedOutletId}` remount (not an effect) resets the toggle
+    list's local optimistic-overlay state when the outlet changes. Each row
+    is a `CapabilityToggle` (`capability-toggle.tsx`) - optimistic,
+    rollback-on-failure toast, same shape as Menu's `EightySixToggle`, since
+    capability toggles aren't security-relevant either. A tenant with zero
+    outlets gets an informational empty state (no outlet-management screen
+    exists anywhere in this build to link to, matching CAP-4's precedent for
+    the same gap).
+  - **Outlet switcher wiring**: `outlet-context.tsx` and `outlet-switcher.tsx`
+    already called `fetchOutlets()` from story 3 (built ahead of the
+    endpoint, hidden with zero outlets) - this story only needed to correct
+    `OutletView`'s shape (see Key decisions) once the real endpoint's
+    response was readable; the switcher itself required no logic changes.
+- **data-testid** on every interactive element (`branding-color-*`,
+  `branding-font`, `branding-corner-radius`, `branding-logo-input`,
+  `branding-logo-url`, `branding-receipt-header/footer`, `branding-save`,
+  `settings-tab-branding/capabilities`, `capability-toggle-*`); keyboard
+  operable throughout (native form controls plus visible focus rings on
+  every custom control); receipt preview carries `role="img"` with a
+  descriptive `aria-label` since it's a live visual summary, not
+  interactive content.
+
 ## Data model
 
 Owned by the backend - see `restiq-backend/wiki/features/tenant-admin.md`.
@@ -225,20 +275,97 @@ rows, which shapes several UI choices below.
     after scheduling a change, but a page reload loses the pending badge
     until the backend grows a listing endpoint. Noted as a real,
     unreconciled gap, not silently dropped.
-  - There is **no outlets-listing endpoint anywhere in the admin realm**
-    (checked across every story to date, not just this one - outlets are
-    only ever created directly in backend test fixtures). `fetchOutlets()`
-    and the sidebar outlet switcher are this story's own inferred guess at
-    where that will land; with zero outlets returned, the switcher and every
-    per-outlet section degrade to hidden rather than broken.
+  - There was **no outlets-listing endpoint anywhere in the admin realm** as
+    of this story (outlets were only ever created directly in backend test
+    fixtures). `fetchOutlets()` and the sidebar outlet switcher were this
+    story's own inferred guess at where that would land; with zero outlets
+    returned, the switcher and every per-outlet section degrade to hidden
+    rather than broken. CAP-10 (below) adds the real endpoint and confirms
+    the switcher's shape guess - see that section for what changed.
   - The Menu list itself (`GET /admin/v1/menu/items`) carries no price -
     `MenuTable` fetches each row's current dine-in/delivery price
     individually after mount; a row with variants shows "Varies" rather than
     fetching every variant's price into the list view.
+- **`GET /admin/v1/outlets` returns `{ id, name, address, type, timezone }`,
+  not `{ id, name, area }`** - contract read directly from
+  `restiq-backend/src/admin/outlets/outlets.dtos.ts`
+  (`feature/32-branding-capabilities`) once it landed. An initial pass
+  guessed a `city`/`area` field (matching the backend issue's loose wording)
+  and added it to `OutletView`/the switcher; both were reverted once the
+  real shape was readable. `OutletView` now carries the full real shape
+  (`address`, `type`, `timezone`) for future stories even though the
+  switcher itself only displays `name`.
+- **`BrandingTokens` is flat, not nested under `colors`** -
+  `{ primaryColor, secondaryColor, accentColor, surfaceColor, font,
+  cornerRadiusPx, logoUrl, receiptHeader, receiptFooter }`, matching
+  `branding.dtos.ts`'s `BrandingView`/`UpdateBrandingDto` exactly (read
+  directly, not assumed) rather than the `{ colors: {...} }` nesting
+  sketched before that code existed. `GET` returns every field `null` for a
+  tenant that's never saved; `normalizeBranding` fills in this editor's
+  defaults, not the backend's.
+- **Corner radius clamps to 0-64, not 0-24** - the design mock's slider
+  reads roughly 8-24px by eye, but the backend's actual
+  `UpdateBrandingDto` validates `@Min(0) @Max(64)`; the wider, backend-
+  confirmed range wins.
+- **A picked logo file only ever previews locally - it is never sent to the
+  backend.** `branding.dtos.ts`'s `logoUrl` is a plain string capped at
+  `@MaxLength(2048)`, the same as any other token field, not an asset
+  reference - there is no upload endpoint (confirmed in the backend's own
+  wiki: "wiring actual file upload... is left to whichever story needs
+  it"). Encoding even a small PNG as a `data:` URL runs to thousands of
+  characters and the backend would reject it outright. The editor therefore
+  keeps a locally-picked file's `data:` URL in ephemeral state
+  (`localLogoPreview`, read via `FileReader`) that only feeds the
+  `ReceiptPreview`, plus a separate "Logo URL" text field (client-validated
+  against the same 2048-char cap) for pasting an already-hosted URL, which
+  is the only logo value Save ever actually persists. This is a real,
+  visible product gap (an owner can preview a logo but not save the file
+  itself) rather than something faked to look complete - a future story
+  wiring real asset storage removes it.
+- **Outlet capabilities render a client-owned known-key set
+  (`qr_ordering`, `kiosk`, `token_queue`), not just whatever the backend
+  returns.** `outlets.service.ts`'s `listCapabilities` only returns rows
+  that have been explicitly toggled at least once ("an absent key means not
+  yet toggled, left for the caller to render as its platform default" - the
+  service's own comment); the backend's wiki says as much too ("no
+  capability-catalogue validation... a future story that needs a fixed
+  catalogue... can add one without touching this write path"). Without a
+  client-side known set, a fresh outlet's `[]` response would render as "no
+  capabilities configured" with no way to ever turn one on.
+  `capability-state.ts#mergeCapabilities` renders one row per known key
+  (defaulting an absent key to disabled) plus any extra/unknown key the
+  backend does return, so a future capability this build doesn't know about
+  still surfaces instead of being silently dropped.
+- The Settings tab strip (`settings-tabs.tsx`) reuses the exact
+  `Link` + `usePathname` active-link idiom `SidebarNav` already established,
+  rather than reaching for Radix's `Tabs` primitive (available via the
+  `radix-ui` dependency, unused elsewhere) - two destinations sharing one
+  layout didn't justify a new pattern.
 
 ## Live verification
 
-Verified against the real backend (`restiq-backend`, `localhost:8180`) during
+CAP-10 was verified **live**, both servers up together against a shared
+Postgres (`restiq_test`) - the backend's half (`feature/32-branding-
+capabilities`) was a finished, pushed, single-commit branch with its
+migration already applied to that database (checked `_prisma_migrations`
+before touching anything, so no `prisma migrate`/`test:e2e` run of my own
+was needed or risked stepping on it). Seeded a real tenant/outlet/JWT
+directly via Prisma (mirroring the backend's own e2e fixture helpers),
+exercised all five endpoints with `curl` first to confirm exact shapes
+(`GET/PUT /admin/v1/branding`, `GET /admin/v1/outlets`,
+`GET/PATCH /admin/v1/outlets/:id/capabilities`), then drove the real UI in a
+browser against both running servers: the outlet switcher showed the real
+seeded outlet name; the branding form round-tripped saved tokens
+(color/font/corner-radius identical after a reload) and the live preview
+updated instantly on a color-token edit before Save; the Capabilities tab
+showed `qr_ordering` on (as toggled via `curl`) with `kiosk`/`token_queue`
+correctly defaulted off, and clicking Kiosk Mode persisted through a reload.
+Test data was deleted from the shared database afterward. Covered by
+mocked-fetch component tests (`branding-editor.test.tsx`,
+`capabilities-editor.test.tsx`, `outlet-switcher.test.tsx`) plus pure-logic
+unit tests (`branding-state.test.ts`, `capability-state.test.ts`).
+
+CAP-1/CAP-2 were verified against the real backend (`restiq-backend`, `localhost:8180`) during
 development: confirmed exact request/response shapes for all four endpoints
 by reading `src/admin/**` there and by exercising `GET /admin/v1/checklist`,
 `POST /admin/v1/auth/accept-invite` and the T1 invite page end-to-end through

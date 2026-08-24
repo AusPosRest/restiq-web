@@ -11,6 +11,8 @@ import type {
   OutletView,
   PriceChannel,
 } from "./(shell)/menu/menu-state";
+import type { BrandingTokens } from "./(shell)/settings/branding-state";
+import type { OutletCapabilityView } from "./(shell)/settings/capability-state";
 
 export class AdminApiError extends Error {
   constructor(
@@ -128,9 +130,11 @@ export function commitMenuImport(importId: string): Promise<MenuImportCommitResu
 // tracks a just-scheduled change locally (see menu-state.ts's file header
 // and PendingPriceInfo) rather than pretending the backend can list it. There
 // is also no outlets-listing endpoint anywhere in the admin realm yet (not
-// just this story) - fetchOutlets is this story's own inferred guess at
-// where that will land; the outlet switcher and per-outlet features degrade
-// to "no outlets" until it exists.
+// just this story) - fetchOutlets calls the path CAP-10 lands it at
+// (`GET /admin/v1/outlets`, verified directly against
+// src/admin/outlets/outlets.controller.ts on feature/32-branding-
+// capabilities); the outlet switcher and per-outlet features degrade to "no
+// outlets" until that story merges.
 
 export function fetchOutlets(): Promise<OutletView[]> {
   return adminApi<OutletView[]>("outlets");
@@ -274,4 +278,37 @@ export interface CreateComboInput {
 
 export function createCombo(input: CreateComboInput): Promise<ComboView> {
   return adminApi<ComboView>("menu/combos", { method: "POST", body: JSON.stringify(input) });
+}
+
+// --- CAP-10 Branding & capabilities. Verified against restiq-backend's
+// actual admin/v1/branding and admin/v1/outlets working tree
+// (feature/32-branding-capabilities, read directly - not a summarized
+// contract, same discipline as CAP-3/CAP-4). Notably: branding.dtos.ts's
+// BrandingView is a *flat* token set (primaryColor/secondaryColor/
+// accentColor/surfaceColor/font/cornerRadiusPx/logoUrl/receiptHeader/
+// receiptFooter), not the `{ colors: {...} }` nesting assumed before that
+// code existed, and PUT merges whatever fields are sent into the tenant's
+// existing branding_tokens JSON rather than replacing it wholesale - see
+// branding-state.ts's file header. Outlet capabilities live in a new,
+// outlet-scoped `outlet_capabilities` table (distinct from the pre-existing,
+// tenant-wide `TenantCapability`) and only ever return rows that have been
+// explicitly toggled - see capability-state.ts's mergeCapabilities for how
+// the UI fills in the rest as disabled-by-default.
+
+// GET is read via useAdminLoad("branding") directly (that hook exists
+// precisely for this GET-and-render shape and had no caller yet).
+
+export function saveBranding(tokens: BrandingTokens): Promise<BrandingTokens> {
+  return adminApi<BrandingTokens>("branding", { method: "PUT", body: JSON.stringify(tokens) });
+}
+
+export function fetchOutletCapabilities(outletId: string): Promise<OutletCapabilityView[]> {
+  return adminApi<OutletCapabilityView[]>(`outlets/${outletId}/capabilities`);
+}
+
+export function setOutletCapability(outletId: string, key: string, enabled: boolean): Promise<OutletCapabilityView> {
+  return adminApi<OutletCapabilityView>(`outlets/${outletId}/capabilities/${key}`, {
+    method: "PATCH",
+    body: JSON.stringify({ enabled }),
+  });
 }
