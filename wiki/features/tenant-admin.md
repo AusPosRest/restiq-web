@@ -95,6 +95,49 @@ story. Backend counterpart: `restiq-backend/wiki/features/tenant-admin.md`.
   JSON requests are unaffected. Covered by
   `src/app/admin/api/[...path]/route.test.ts`.
 
+## CAP-4 - Menu management
+
+- **Intent:** an owner manages categories, items, variants, modifier groups
+  (min/max rules), combos, allergen/dietary tags, per-outlet availability and
+  per-channel/scheduled prices, and item availability (86), from one screen
+  that keeps list context (item editor as a drawer, not a page nav); a price
+  edit creates a new version rather than rewriting the old one.
+- **Built:** `/admin/menu` (`src/app/admin/(shell)/menu/`) - the first screen
+  to use the post-go-live app shell (`src/app/admin/(shell)/layout.tsx`:
+  sidebar with Dashboard/Menu/Floor Plan/Devices/Staff/Reports/Settings,
+  mirroring `/ops`'s `(shell)` route group; every destination but Menu is a
+  `ComingSoon` placeholder for now). `menu-management.tsx` fetches items,
+  categories, and the tenant-wide modifier-group/allergen/combo catalogs in
+  parallel, renders a category sidebar (`category-sidebar.tsx`, T4a's
+  "Tandoor" filter is this same list with a category selected, one route) and
+  a `MenuTable` (`menu-table.tsx`) with a search box, both filtering
+  client-side (`menu-state.ts#visibleItems`). Each row has an `EightySixToggle`
+  (`eighty-six-toggle.tsx`) - optimistic, rollback-on-failure toast, no reason
+  prompt (routine per SPEC). Clicking a row or "Add Item" opens `ItemDrawer`
+  (`item-drawer.tsx`, Radix `Dialog` styled as a right-side panel): name,
+  kitchen-ticket short name, category; a Variants section that adds/removes
+  variants immediately (their own endpoints, not batched); Modifier Groups and
+  Allergen tags as checkbox pickers against the tenant-wide catalogs (with an
+  inline "create and attach" form for a new one) rather than per-item free
+  text; Combos as a read-only list of combos containing this item plus a
+  create form; a per-outlet availability override section. Modifier-group
+  min/max validation (`menu-state.ts#validateModifierGroup`) surfaces a
+  specific message per failure (missing name, no options yet, negative
+  minimum, maximum below 1, maximum below minimum, maximum above the option
+  count) both while creating a group and blocking its save. Price editing
+  (`price-change-dialog.tsx` + `price-schedule-state.ts`) always shows the
+  current price and a "Change price" action that opens a dialog offering
+  "Effective today" or "Schedule for a date"; every price change requires a
+  reason (price changes are one of the SPEC's named security-relevant
+  actions) and is a separate, pessimistic call from the drawer's routine
+  Save - it never overwrites the price fields in place.
+- **No sidebar shell existed before this story** (`src/app/admin/layout.tsx`
+  previously said so explicitly) - CAP-4 is where the design's IA first needs
+  one (Menu is a real nav item), so this story adds
+  `src/app/admin/(shell)/` rather than building a one-off header just for
+  Menu. `/admin/menu/import` (CAP-3, prior story) is untouched and still
+  lives outside the shell at its original route.
+
 ## Data model
 
 Owned by the backend - see `restiq-backend/wiki/features/tenant-admin.md`.
@@ -104,6 +147,18 @@ This surface talks to the API purely through the documented shapes:
 `outlet_details`, `floor_plan`, `menu_import`, `devices`, `staff`) plus
 `canGoLive` and `tenantStatus` - there is no `firstIncompleteRequiredStep`
 field, so `checklist-state.ts` derives it from the array's own order.
+
+CAP-4's `ItemView` (`GET/POST/PATCH /admin/v1/menu/items`) carries only
+`id, categoryId, name, shortName, available, variants, modifierGroups,
+allergens` - no description, native-language name, dietary type (veg/non-veg),
+or photo; none of those exist in the backend's `MenuItem` model as built, so
+this UI doesn't render them (a deviation from the design renders, which show
+all four - see Key decisions). A price is written with
+`POST .../items/:id/prices` and read with
+`GET .../items/:id/price?channel=&variantId=&outletId=` - always scoped to
+exactly one `(item, variant?, channel, outlet?)` line; there is no endpoint
+that returns a bulk "menu with prices" list or an item's future-scheduled
+rows, which shapes several UI choices below.
 
 ## Key decisions
 
@@ -134,6 +189,52 @@ field, so `checklist-state.ts` derives it from the array's own order.
   field, this build has no tags to edit - a real, currently-unreconciled gap
   between SPEC and the backend as actually built, not something invented
   client-side just to look complete.
+- CAP-4's contract was read directly from `restiq-backend/src/admin/menu/`
+  (uncommitted, `feature/30-menu-management` at the time - controllers, DTOs,
+  services and the Prisma schema diff, plus its e2e spec) rather than assumed,
+  and differs substantially from an initial draft built against the SPEC/
+  design renders alone before that code existed:
+  - Modifier groups and allergens are **tenant-wide reusable catalogs**
+    (`GET/POST /admin/v1/menu/modifier-groups`, `.../allergens`) an item only
+    references by id (`PUT .../items/:id/modifier-groups` /
+    `.../allergens` replace the full set) - not data an item owns and edits
+    inline. The drawer's pickers reflect that: checkboxes against the
+    catalog, not a free-text tag editor per item.
+  - There is no `description`, native-language name, dietary type (veg/
+    non-veg), or photo field on `MenuItem` - the design renders show all
+    four; this build only implements what the backend can actually persist
+    and drops the rest rather than faking client-only fields with nowhere to
+    save.
+  - Combos have `GET`/`POST` only (`/admin/v1/menu/combos`) - no update or
+    delete, so the drawer can list combos containing an item and create a
+    new one, but can't edit or remove an existing combo from here.
+  - **86 is `available: boolean`** via `PATCH .../items/:id/availability`,
+    not the `is86d` + `/86` path an earlier draft of this UI guessed.
+  - **Per-outlet "override" is availability, not price** -
+    `PUT/DELETE .../items/:id/outlets/:outletId/availability`. Per-outlet
+    *pricing* is a real, separate capability (`POST .../prices` accepts an
+    optional `outletId`), but the UI here only exposes the availability
+    override; per-outlet price editing is a follow-up.
+  - **Price has no "list scheduled changes" endpoint** - `GET .../price`
+    only ever resolves the current (non-future) row for one exact
+    `(variant, channel, outlet)` combination; there is nothing that returns
+    an item's future-scheduled rows. `menu-state.ts`'s `PendingPriceInfo` is
+    therefore populated only from what the drawer itself just scheduled in
+    that session (kept in local state), not fetched - the "current vs.
+    pending" distinction the SPEC/EXPERIENCE call for holds true immediately
+    after scheduling a change, but a page reload loses the pending badge
+    until the backend grows a listing endpoint. Noted as a real,
+    unreconciled gap, not silently dropped.
+  - There is **no outlets-listing endpoint anywhere in the admin realm**
+    (checked across every story to date, not just this one - outlets are
+    only ever created directly in backend test fixtures). `fetchOutlets()`
+    and the sidebar outlet switcher are this story's own inferred guess at
+    where that will land; with zero outlets returned, the switcher and every
+    per-outlet section degrade to hidden rather than broken.
+  - The Menu list itself (`GET /admin/v1/menu/items`) carries no price -
+    `MenuTable` fetches each row's current dine-in/delivery price
+    individually after mount; a row with variants shows "Varies" rather than
+    fetching every variant's price into the list view.
 
 ## Live verification
 
@@ -158,3 +259,31 @@ originally sketched contract - plus the mocked-fetch component tests in
 `menu-import.test.tsx` and `menu-import-state.test.ts`. A live click-through
 (upload -> review -> edit -> commit -> checklist reflects it) is a follow-up
 once that backend PR lands and both servers run together.
+
+CAP-4 (menu management) was **not** verified end-to-end against live backend
+data: its module (`restiq-backend/src/admin/menu/`) existed only uncommitted
+on `feature/30-menu-management` throughout this story, sharing the same
+Postgres database (`restiq_test`) its own migration and e2e-test scripts
+write to - starting that backend myself risked stepping on the concurrent
+backend session's DB state (a `prisma migrate` or `test:e2e` run mid-session
+would have reset or altered the schema out from under a manual click-through)
+rather than blocking on it. Verification here is code-matched, not live: the
+contract was read directly from that branch's actual controllers, DTOs,
+services, Prisma schema diff, and its own `test/menu-management.e2e-spec.ts`
+(see Key decisions for what differed from an earlier SPEC-only draft),
+implemented against exactly that, and covered by mocked-fetch component
+tests (`item-drawer.test.tsx`, `menu-management.test.tsx`,
+`eighty-six-toggle.test.tsx`) plus pure-logic unit tests (`menu-state.test.ts`,
+`item-drawer-state.test.ts`, `price-schedule-state.test.ts`). What *was*
+verified live, in a real browser against the running frontend
+(`localhost:3100`, backend unreachable by design): the new `(shell)` route
+group renders correctly (sidebar, active-nav state, warm amber theme) for
+`/admin` (Dashboard placeholder), `/admin/menu`, and the other `ComingSoon`
+destinations; `/admin/menu` shows the loading skeleton then a graceful
+`LoadErrorPanel` with Retry on a `502 upstream_unreachable` (rather than a
+crash) with a synthetic-but-unexpired `admin_session` cookie, confirming the
+proxy's routing/auth gate and the page's own failure state both behave
+correctly with no backend present. A full click-through (create an item with
+a modifier group, edit its price, schedule a future change, toggle 86) is the
+right follow-up once both PRs land and both dev servers run together against
+a shared, quiescent database.

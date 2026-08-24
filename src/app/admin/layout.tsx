@@ -23,8 +23,9 @@ export const metadata: Metadata = {
 };
 
 // Tenant Admin's own theme wraps everything under /admin (AD-10); the ops
-// console and tenant surfaces never inherit it. No sidebar shell yet - that
-// arrives once the checklist hands off to the rest of the console.
+// console and tenant surfaces never inherit it. T1/T2 (invite, checklist)
+// render directly under here; the post-go-live shell nests its own layout
+// under the (shell) route group.
 export default function AdminLayout({
   children,
 }: Readonly<{

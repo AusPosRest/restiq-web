@@ -1,6 +1,16 @@
 // Typed client-side access to the backend API via the /admin/api pass-through.
 import type { ChecklistState } from "./checklist-state";
 import type { MenuImportDraft, MenuImportEditableField } from "./menu-import-state";
+import type {
+  AllergenView,
+  CategoryView,
+  ComboView,
+  CurrentPriceView,
+  ItemView,
+  ModifierGroupView,
+  OutletView,
+  PriceChannel,
+} from "./(shell)/menu/menu-state";
 
 export class AdminApiError extends Error {
   constructor(
@@ -106,4 +116,162 @@ export interface MenuImportCommitResult {
 
 export function commitMenuImport(importId: string): Promise<MenuImportCommitResult> {
   return adminApi<MenuImportCommitResult>(`menu-import/${importId}/commit`, { method: "POST" });
+}
+
+// --- CAP-4 Menu Management. Verified against restiq-backend's actual
+// admin/v1/menu working tree (feature/30-menu-management, read directly -
+// src/admin/menu/*.controller.ts/*.dtos.ts - not a summarized contract).
+// Notably: modifier groups and allergens are tenant-wide catalogs an item
+// only references by id; a price is written and read per (item, variant?,
+// channel, outlet?) - there is no bulk "menu with prices" or "list an item's
+// scheduled prices" endpoint, so this client fetches price per line and
+// tracks a just-scheduled change locally (see menu-state.ts's file header
+// and PendingPriceInfo) rather than pretending the backend can list it. There
+// is also no outlets-listing endpoint anywhere in the admin realm yet (not
+// just this story) - fetchOutlets is this story's own inferred guess at
+// where that will land; the outlet switcher and per-outlet features degrade
+// to "no outlets" until it exists.
+
+export function fetchOutlets(): Promise<OutletView[]> {
+  return adminApi<OutletView[]>("outlets");
+}
+
+export function fetchCategories(): Promise<CategoryView[]> {
+  return adminApi<CategoryView[]>("menu/categories");
+}
+
+export function createMenuCategory(name: string): Promise<CategoryView> {
+  return adminApi<CategoryView>("menu/categories", { method: "POST", body: JSON.stringify({ name }) });
+}
+
+export function fetchItems(categoryId?: string): Promise<ItemView[]> {
+  return adminApi<ItemView[]>(categoryId ? `menu/items?categoryId=${encodeURIComponent(categoryId)}` : "menu/items");
+}
+
+export interface CreateItemInput {
+  categoryId: string;
+  name: string;
+  shortName: string;
+  variants?: Array<{ name: string; sortOrder?: number }>;
+  modifierGroupIds?: string[];
+  allergenIds?: string[];
+}
+
+export function createMenuItem(input: CreateItemInput): Promise<ItemView> {
+  return adminApi<ItemView>("menu/items", { method: "POST", body: JSON.stringify(input) });
+}
+
+export interface UpdateItemInput {
+  name?: string;
+  shortName?: string;
+  categoryId?: string;
+}
+
+export function updateMenuItem(itemId: string, input: UpdateItemInput): Promise<ItemView> {
+  return adminApi<ItemView>(`menu/items/${itemId}`, { method: "PATCH", body: JSON.stringify(input) });
+}
+
+export function setItemAvailability(itemId: string, available: boolean): Promise<ItemView> {
+  return adminApi<ItemView>(`menu/items/${itemId}/availability`, { method: "PATCH", body: JSON.stringify({ available }) });
+}
+
+export function addVariant(itemId: string, name: string): Promise<ItemView> {
+  return adminApi<ItemView>(`menu/items/${itemId}/variants`, { method: "POST", body: JSON.stringify({ name }) });
+}
+
+export function removeVariant(itemId: string, variantId: string): Promise<ItemView> {
+  return adminApi<ItemView>(`menu/items/${itemId}/variants/${variantId}`, { method: "DELETE" });
+}
+
+export function replaceItemModifierGroups(itemId: string, modifierGroupIds: string[]): Promise<ItemView> {
+  return adminApi<ItemView>(`menu/items/${itemId}/modifier-groups`, { method: "PUT", body: JSON.stringify({ modifierGroupIds }) });
+}
+
+export function replaceItemAllergens(itemId: string, allergenIds: string[]): Promise<ItemView> {
+  return adminApi<ItemView>(`menu/items/${itemId}/allergens`, { method: "PUT", body: JSON.stringify({ allergenIds }) });
+}
+
+export function setOutletAvailability(itemId: string, outletId: string, available: boolean): Promise<{ itemId: string; outletId: string; available: boolean }> {
+  return adminApi(`menu/items/${itemId}/outlets/${outletId}/availability`, { method: "PUT", body: JSON.stringify({ available }) });
+}
+
+export function clearOutletAvailability(itemId: string, outletId: string): Promise<void> {
+  return adminApi<void>(`menu/items/${itemId}/outlets/${outletId}/availability`, { method: "DELETE" });
+}
+
+export interface CreatePriceInput {
+  variantId?: string;
+  channel: PriceChannel;
+  outletId?: string;
+  priceMinor: number;
+  currency: string;
+  effectiveAt?: string;
+  reason: string;
+}
+
+export interface ItemPriceView extends CurrentPriceView {
+  id: string;
+  createdAt: string;
+}
+
+export function createItemPrice(itemId: string, input: CreatePriceInput): Promise<ItemPriceView> {
+  return adminApi<ItemPriceView>(`menu/items/${itemId}/prices`, { method: "POST", body: JSON.stringify(input) });
+}
+
+export function fetchCurrentPrice(
+  itemId: string,
+  params: { channel: PriceChannel; variantId?: string; outletId?: string },
+): Promise<CurrentPriceView> {
+  const search = new URLSearchParams({ channel: params.channel });
+  if (params.variantId) search.set("variantId", params.variantId);
+  if (params.outletId) search.set("outletId", params.outletId);
+  return adminApi<CurrentPriceView>(`menu/items/${itemId}/price?${search.toString()}`).catch((error: unknown) => {
+    // 404 (no_current_price) means this line has never been priced yet -
+    // that's a normal state for a freshly added variant, not a load failure.
+    if (error instanceof AdminApiError && error.status === 404) return null as unknown as CurrentPriceView;
+    throw error;
+  });
+}
+
+export function fetchModifierGroups(): Promise<ModifierGroupView[]> {
+  return adminApi<ModifierGroupView[]>("menu/modifier-groups");
+}
+
+export interface CreateModifierGroupInput {
+  name: string;
+  minSelections: number;
+  maxSelections: number;
+  modifiers?: Array<{ name: string; priceMinor?: number }>;
+}
+
+export function createModifierGroup(input: CreateModifierGroupInput): Promise<ModifierGroupView> {
+  return adminApi<ModifierGroupView>("menu/modifier-groups", { method: "POST", body: JSON.stringify(input) });
+}
+
+export function addModifier(groupId: string, name: string, priceMinor: number): Promise<ModifierGroupView> {
+  return adminApi<ModifierGroupView>(`menu/modifier-groups/${groupId}/modifiers`, { method: "POST", body: JSON.stringify({ name, priceMinor }) });
+}
+
+export function fetchAllergens(): Promise<AllergenView[]> {
+  return adminApi<AllergenView[]>("menu/allergens");
+}
+
+export function createAllergen(name: string): Promise<AllergenView> {
+  return adminApi<AllergenView>("menu/allergens", { method: "POST", body: JSON.stringify({ name }) });
+}
+
+export function fetchCombos(): Promise<ComboView[]> {
+  return adminApi<ComboView[]>("menu/combos");
+}
+
+export interface CreateComboInput {
+  name: string;
+  categoryId?: string;
+  priceMinor: number;
+  currency: string;
+  components: Array<{ itemId: string; quantity?: number }>;
+}
+
+export function createCombo(input: CreateComboInput): Promise<ComboView> {
+  return adminApi<ComboView>("menu/combos", { method: "POST", body: JSON.stringify(input) });
 }
