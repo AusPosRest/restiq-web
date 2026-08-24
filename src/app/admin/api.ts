@@ -13,7 +13,8 @@ import type {
 } from "./(shell)/menu/menu-state";
 import type { BrandingTokens } from "./(shell)/settings/branding-state";
 import type { OutletCapabilityView } from "./(shell)/settings/capability-state";
-import type { DiningTableView, FloorPlanView, FloorView, PrinterView, StationView } from "./(shell)/floor-plan/floor-plan-state";
+import type { DiningTableView, FloorPlanView, FloorView, PrinterRenderMode, PrinterView, StationView } from "./(shell)/floor-plan/floor-plan-state";
+import type { AdminDeviceView, DeviceType, EnrolmentCodeResult } from "./(shell)/devices/devices-state";
 
 export class AdminApiError extends Error {
   constructor(
@@ -367,4 +368,36 @@ export interface UpdateStationInput {
 
 export function updateStation(outletId: string, stationId: string, input: UpdateStationInput): Promise<StationView> {
   return adminApi<StationView>(`outlets/${outletId}/stations/${stationId}`, { method: "PATCH", body: JSON.stringify(input) });
+}
+
+export function updatePrinter(outletId: string, printerId: string, renderMode: PrinterRenderMode): Promise<PrinterView> {
+  return adminApi<PrinterView>(`outlets/${outletId}/floor-plan/printers/${printerId}`, {
+    method: "PATCH",
+    body: JSON.stringify({ renderMode }),
+  });
+}
+
+// --- CAP-6 Devices & printers. Verified against restiq-backend's actual
+// admin/v1/outlets/:outletId/devices working tree (feature/36-tenant-
+// devices, src/admin/devices/devices.controller.ts, read directly - not a
+// summarized contract, same discipline as CAP-4/CAP-5/CAP-10). Per AD-12,
+// AdminDevicesService is a thin tenant-forced wrapper around the same
+// DevicesService Platform Console's device fleet uses - GET returns the same
+// {devices, nextCursor, total} shape ops's fleet view does (devices-state.ts
+// documents the appVersion/lastContactAt gap in that shared response
+// mapping); POST enrolment-codes takes only {deviceType} since tenantId and
+// outletId come from the owner's session and the URL, never the body.
+// updatePrinter reuses CAP-5's floor-plan module (PATCH .../floor-plan/
+// printers/:printerId, {renderMode}) - printer render-mode isn't part of
+// CAP-6's own backend surface.
+
+export function fetchDevices(outletId: string): Promise<AdminDeviceView[]> {
+  return adminApi<{ devices: AdminDeviceView[] }>(`outlets/${outletId}/devices`).then((res) => res.devices);
+}
+
+export function generateEnrolmentCode(outletId: string, deviceType: DeviceType): Promise<EnrolmentCodeResult> {
+  return adminApi<EnrolmentCodeResult>(`outlets/${outletId}/devices/enrolment-codes`, {
+    method: "POST",
+    body: JSON.stringify({ deviceType }),
+  });
 }
