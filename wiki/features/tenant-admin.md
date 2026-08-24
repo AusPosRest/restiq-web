@@ -242,6 +242,45 @@ story. Backend counterpart: `restiq-backend/wiki/features/tenant-admin.md`.
   focus rings; every table shape carries an `aria-label` stating its name,
   capacity, and that arrow keys move it.
 
+## CAP-6 - Devices & printers
+
+- **Intent:** an owner views enrolled POS/KDS devices for the current outlet,
+  generates a one-time enrolment code with a live countdown, and configures
+  printer render-mode and fallback - reusing Platform Console's device/
+  enrolment-code backend (AD-12), scoped to their own tenant.
+- **Built:** `/admin/devices` (`src/app/admin/(shell)/devices/`), per-outlet
+  like Floor Plan/Capabilities (`key={selectedOutletId}` remount). `devices.tsx`
+  loads devices and the floor plan's printers/stations in parallel
+  (`fetchDevices` + `fetchFloorPlan`) into one shell:
+  - **Device table** (`devices-table.tsx`): name/type/role (Hub badge or
+    "Terminal")/app version/last seen/status ("Enrolled"/"Revoked" - warmer
+    owner-facing copy over the backend's raw `active`/`revoked`). Read-only -
+    enrolment and revocation stay Platform Console's job.
+  - **Enrolment code** (`code-chip.tsx`, `generate-code-dialog.tsx`): mirrors
+    Platform Console's Code Chip (`src/app/ops/(shell)/devices/code-chip.tsx`)
+    - same live `m:ss` countdown (`secondsRemaining`/`formatCountdown`,
+    pure and unit-tested, ticking via `setInterval` against real time, not
+    imported since ops/admin route trees never import from each other,
+    AD-4) - reimplemented here, admin-themed, under a `device-code-chip*`
+    testid prefix. "Enrol device" opens a dialog with only a device-type
+    picker (the outlet is already fixed by the shell, unlike the fleet-wide
+    ops version's tenant/outlet pickers); the generated code also populates
+    a persistent "Active enrolment code" card on the page itself, not just
+    inside the dialog.
+  - **Printer config** (`printer-config-panel.tsx`): one row per printer with
+    a render-mode `<select>` (auto-saves via `PATCH .../floor-plan/printers/
+    :printerId`) and a fallback-printer `<select>`. Fallback is a per-
+    *station* field (`Station.fallbackPrinterId`), not a Printer field, so
+    it's only editable when a printer is unambiguously the primary for
+    exactly one station (`devices-state.ts#stationForPrinter`); zero or
+    multiple such stations disables the selector with an inline note
+    pointing to Floor Plan instead of silently no-oping.
+- **data-testid** on every interactive element (`devices-generate-code`,
+  `generate-code-type/submit/done/close`, `device-code-chip-*`,
+  `devices-row-*`, `printer-row-*`, `printer-render-mode-*`,
+  `printer-fallback-select-*`); keyboard-operable throughout with visible
+  focus rings.
+
 ## Data model
 
 Owned by the backend - see `restiq-backend/wiki/features/tenant-admin.md`.
@@ -271,6 +310,15 @@ carries `id, outletId, name, ageingThresholdMinutes, primaryPrinterId,
 fallbackPrinterId` - no `noPrinterAcknowledged` (never persisted, see Key
 decisions) and no printer-online/offline status (that lives with the Device
 model, not `Printer`, and isn't part of this capability's read shape).
+
+CAP-6's `GET /admin/v1/outlets/:outletId/devices` returns the same
+`{ devices, nextCursor, total }` shape Platform Console's fleet view uses
+(AD-12 - one `DevicesService`, two callers), scoped down by an
+`AdminDevicesService` wrapper that forces `tenantId`/`outletId` from the
+owner's own session rather than trusting a client-supplied value. `POST
+.../devices/enrolment-codes` takes only `{ deviceType }` in the body.
+`PATCH .../floor-plan/printers/:printerId` (CAP-5's own module, not a CAP-6
+endpoint) takes `{ renderMode }`.
 
 ## Key decisions
 
@@ -437,6 +485,33 @@ model, not `Printer`, and isn't part of this capability's read shape).
   EXPERIENCE.md describe laying out an *existing* floor plan and stations,
   not authoring floors/stations from scratch) - this UI only reads and
   updates (`PATCH`) what the backend already has.
+- **The device list's response omits `appVersion`/`lastContactAt` even
+  though the `Device` row carries both columns** (populated by CAP-6's own
+  heartbeat ingestion) - `toDeviceView` in `restiq-backend/src/ops/devices/
+  devices.service.ts`, shared by both the ops fleet view and the admin
+  wrapper, doesn't map them into the response. Confirmed live: seeding a
+  device with both fields set directly via Prisma and loading `/admin/
+  devices` still showed "-"/"Never" for that row. `AdminDeviceView` marks
+  both fields optional and `devices-table.tsx`/`formatLastSeen` fall back
+  gracefully rather than assuming they're present - a real, unreconciled gap
+  in the shared response shape (not this story's backend module to fix),
+  flagged here rather than faked.
+- The design mock's Printers table also shows Connection/Paper Width/
+  live Online-Offline status/"Test print" columns with no backing field or
+  endpoint anywhere in the backend (`Printer` carries only `id, outletId,
+  name, renderMode`). Out of scope here: "printer status" is implemented as
+  *assignment* status (which station, if any, has this printer as primary),
+  the only real signal the current data model supports - not a fabricated
+  connectivity indicator.
+- The Code Chip's countdown is mirrored, not imported, from `src/app/ops/
+  (shell)/devices/code-chip.tsx` - it isn't factored into a shared location
+  on the ops side (confirmed via grep: only that directory's own dialog
+  imports it), and the ops/admin route trees never import from each other
+  (AD-4's boundary rule) regardless. The mock's QR-code glyph next to the
+  code was deliberately not built: the already-shipped ops Code Chip this
+  story mirrors has no QR code either, and the repo carries no QR
+  dependency - matching the real, reviewed ops behavior over the raw mock
+  pixels didn't justify adding one.
 
 ## Live verification
 
@@ -535,3 +610,33 @@ spot and see the reject-and-snap-back, assign a station's printer, load the
 list-view fallback) is the right follow-up once both PRs land, the new
 migration is applied, and both dev servers run together against a shared,
 seeded database.
+
+CAP-6 (devices & printers) was verified **live**, both servers up together
+against the shared Postgres (`restiq_test`) - the backend's half
+(`feature/36-tenant-devices`) was a finished, pushed branch with its schema
+already migrated. A stray `tsconfig.tsbuildinfo` left the backend's
+`deleteOutDir`+incremental-build combo unable to regenerate `dist/` on
+`nest start --watch` (an environment quirk unrelated to this story's code,
+not touched again once diagnosed); deleting it and building once fixed it.
+Ran the backend's own `admin-devices.e2e-spec.ts` (13 tests) and
+`floor-plan.e2e-spec.ts` (19 tests) against real Postgres - both green.
+Seeded a real tenant/outlet/two devices/two printers/one station directly
+via Prisma and a signed `admin_session` JWT (mirroring the backend's own
+e2e fixture helpers), then drove the real UI in a browser against both
+running servers at `localhost:3100`: the device table rendered both seeded
+devices with the Hub badge and "Enrolled" status; clicking "Enrol device",
+picking a type, and submitting returned a real code from the real
+`enrolment_codes` table with a genuine 15-minute TTL that visibly ticked
+down (14:58 -> 14:49) after clicking Done; the printer panel showed the
+seeded station assignment and fallback correctly, and changing a printer's
+render mode to Bitmap fired a real `PATCH`, confirmed 200 in the dev-server
+log and confirmed persisted with a direct `psql` read after. Test data was
+deleted from the shared database afterward. See Key decisions above for the
+`appVersion`/`lastContactAt` gap this live pass confirmed (seeded both
+fields directly in Postgres; the UI still showed "-"/"Never", proving the
+gap is in the backend's response mapping, not a frontend bug). Covered by
+mocked-fetch component tests (`devices.test.tsx`, `devices-table.test.tsx`,
+`generate-code-dialog.test.tsx`, `printer-config-panel.test.tsx`) plus
+pure-logic unit tests (`devices-state.test.ts` - countdown math with fake
+timers, last-seen formatting, printer-to-station assignment) and
+`code-chip.test.tsx` (mirrors the ops Code Chip's own test suite).

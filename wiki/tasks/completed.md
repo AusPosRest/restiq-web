@@ -67,3 +67,18 @@
   settled on (reject with 409, not auto-adjust) and that one GET returns
   floors/stations/printers together rather than three separate endpoints.
   Issue AusPosRest/restiq-web#26.
+
+- **2026-08-24** - Tenant Admin story 6: devices & printers UI (CAP-6).
+  `/admin/devices` - read-only device table (name/type/role/app version/last
+  seen/status), an "Enrol device" flow that generates a one-time code shown
+  with a live `m:ss` countdown (mirrors Platform Console's Code Chip
+  behavior, admin-themed and reimplemented rather than cross-realm imported
+  per AD-4), and a printer render-mode/fallback config panel reusing story
+  5's printers/stations. Verified **live** against the real backend
+  (`feature/36-tenant-devices`, both servers up together against the shared
+  test DB, backend's own CAP-6 and floor-plan e2e suites green) - see
+  [wiki/features/tenant-admin.md](../features/tenant-admin.md) for the
+  contract gap found and reconciled: the device list response omits
+  `appVersion`/`lastContactAt` even though the `Device` row carries both
+  columns, confirmed by seeding both fields directly and still seeing the
+  UI's graceful "-"/"Never" fallback render. Issue AusPosRest/restiq-web#28.
