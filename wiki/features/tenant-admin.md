@@ -281,6 +281,63 @@ story. Backend counterpart: `restiq-backend/wiki/features/tenant-admin.md`.
   `printer-fallback-select-*`); keyboard-operable throughout with visible
   focus rings.
 
+## CAP-7 - Staff & roles
+
+- **Intent:** an owner manages users, assigns outlet-scoped roles from the
+  six seeded system roles (Owner, Manager, Cashier, Waiter, Kitchen,
+  Accountant), and issues or revokes POS PINs; role change and PIN revoke
+  are both security-relevant and audited with a reason.
+- **Built:** `/admin/staff` (`src/app/admin/(shell)/staff/`), tenant-wide
+  (not per-outlet - `Role` carries no outlet scoping in the backend's Prisma
+  schema, see Key decisions). `staff.tsx` loads roles and staff in parallel
+  (`fetchRoles` + `fetchStaff`) into one editor:
+  - **Staff table** (`staff-table.tsx`): name/email, a per-row role
+    `<select>` populated only from the tenant's actual fetched roles (a
+    closed set by construction - no free-text option can ever exist), and a
+    POS PIN status badge with an "Issue PIN"/"Revoke access" action.
+    Selecting a new role doesn't apply it directly - it requests a
+    confirmation from `staff.tsx` (role change is one of SPEC's named
+    security-relevant, audit-reason actions; EXPERIENCE.md lists it
+    alongside PIN revoke as pessimistic-with-confirm), so the dropdown
+    reverts on cancel since the row's own state hasn't changed yet.
+  - **Add staff** (`add-staff-dialog.tsx`): first/last name, email, and the
+    same closed-set role `<select>`. Routine (not in SPEC's audited list) -
+    single submit, no reason prompt.
+  - **Confirm dialogs**: both role change and PIN revoke reuse the existing
+    `ConfirmReasonDialog` (built for CAP-4's price-change reason prompt,
+    unused elsewhere until this story) rather than a new component - it
+    already covers "pessimistic action + required audit reason". PIN
+    revoke's description is composed to match EXPERIENCE.md's exact voice
+    requirement: `"This removes {name}'s access to the till. They won't be
+    able to sign in with their PIN."`, naming the actual person, not
+    internal jargon.
+  - **PIN issue**: no confirm step (only revoke is named as security-
+    relevant) - a plaintext PIN is returned once and shown in a success
+    toast ("Share it with them now - it won't be shown again"), the same
+    show-once idiom CAP-6's enrolment codes use, without adding a persistent
+    on-screen PIN display component this story's scope didn't call for.
+  - **Role permission matrix** (`permission-matrix.tsx`): read-only
+    reference table, one column per seeded role, one row per permission.
+    **Deviation:** `GET /admin/v1/roles` (see Key decisions) returns only
+    `{ id, name, isSystem }` - no permission metadata - so this can't be
+    sourced from the API the way the render's Effective POS Permissions list
+    implies. It's rendered instead from a static reference
+    (`staff-state.ts#SYSTEM_ROLE_PERMISSIONS`), matching the render's intent
+    (a fixed, non-editable permission story per role) without inventing a
+    backend field that doesn't exist.
+  - **Not built** (out of this story's scope, T7 render shows them but
+    issue #30's scope and the current data model don't support them): the
+    render's per-user Outlet Access checkbox panel and per-user "Effective
+    POS Permissions" list in a detail drawer - `Role` has no outlet
+    dimension in the schema, so outlet-scoped role assignment isn't
+    buildable yet; the list+dropdown+matrix shape here covers the actual
+    issue scope.
+- **data-testid** on every interactive element (`staff-add-open`,
+  `staff-row-*`, `staff-role-select-*`, `staff-issue-pin-*`,
+  `staff-revoke-pin-*`, `add-staff-*`, `confirm-reason-dialog` and its
+  fields, `permission-matrix`); keyboard-operable throughout with visible
+  focus rings on every custom control.
+
 ## Data model
 
 Owned by the backend - see `restiq-backend/wiki/features/tenant-admin.md`.
@@ -513,6 +570,29 @@ endpoint) takes `{ renderMode }`.
   dependency - matching the real, reviewed ops behavior over the raw mock
   pixels didn't justify adding one.
 
+- **CAP-7's API was built against a provisional contract, then reconciled.**
+  restiq-backend's staff/roles work (#38) had no branch and no Prisma model
+  beyond `Role` at implementation time, so this story's first pass designed
+  `api.ts`'s CAP-7 section from the admin realm's REST conventions rather
+  than real DTOs. Once #38/#39 landed, the actual contract was read directly
+  and reconciled: `GET /admin/v1/staff` returns `{ staff: [...] }` (not a
+  bare array), `CreateStaffDto`/`UpdateStaffDto` use a single `name` field
+  (not `firstName`/`lastName` - the Add Staff form keeps two fields for UX,
+  `api.ts` concatenates them on the wire), role changes `PATCH
+  /admin/v1/staff/:id` directly (no `/role` suffix), `issuePin` returns only
+  `{ pin }`, and revoke is `POST /admin/v1/staff/:id/revoke-pin` (not
+  `DELETE .../pin`). `PinStatus` also gained its real third value,
+  `"revoked"` (the backend never clears `pinHash` on revoke, so a revoked
+  PIN is distinct from a staff member who never had one). The
+  role-permission matrix still can't be sourced from `GET /admin/v1/roles`
+  (`Role` carries no permission metadata) and stays a static reference
+  table, matching the render's intent. `staff.tsx`/`staff-state.ts`/
+  `staff-table.tsx`/`api.ts` and their tests were all updated to match; the
+  reconciliation also caught and fixed a mock-routing bug in
+  `staff.test.tsx` itself (a `!url.includes("/pin")` exclusion missed
+  `revoke-pin`, since it contains `-pin` not `/pin`, so a revoke call was
+  silently misrouted to the create-staff mock branch).
+
 ## Live verification
 
 CAP-10 was verified **live**, both servers up together against a shared
@@ -640,3 +720,28 @@ mocked-fetch component tests (`devices.test.tsx`, `devices-table.test.tsx`,
 pure-logic unit tests (`devices-state.test.ts` - countdown math with fake
 timers, last-seen formatting, printer-to-station assignment) and
 `code-chip.test.tsx` (mirrors the ops Code Chip's own test suite).
+
+CAP-7 (staff & roles) was **not** verified against a real backend at all -
+unlike every other CAP module in this doc, restiq-backend#38 had no branch,
+no controller, and no Prisma model to read at implementation time (checked
+`git branch -a`/`gh pr list`/`gh issue view 38` on the backend repo directly;
+issue open, unassigned, zero commits). There is nothing to code-match against
+yet, so this is mocked-only: `staff.test.tsx` (loading/error states, add
+staff, role-change confirm-and-persist, PIN revoke's plain-language modal
+naming the person, cancel leaves state unchanged), `staff-table.test.tsx`,
+`add-staff-dialog.test.tsx`, `permission-matrix.test.tsx`, and pure-logic
+`staff-state.test.ts` (form validation incl. the closed-role-set rule,
+`roleHasPermission`). Additionally verified live in a real browser against
+the running frontend (`localhost:3100`, backend unreachable by design, a
+synthetic-but-unexpired `admin_session` cookie): the shell renders `/admin/
+staff` with the Staff nav item active and a graceful `LoadErrorPanel` on the
+real `502 upstream_unreachable` with no backend present; then, with
+`window.fetch` patched client-side to return fixture roles/staff (proving
+only the browser rendering/interaction, not the network contract), the full
+staff table, revoke-PIN confirm dialog (confirmed the exact required copy:
+"This removes Priya Nair's access to the till. They won't be able to sign in
+with their PIN."), and Add staff dialog all rendered correctly against the
+DESIGN.md dark/amber tokens with visible focus rings. Reconciling the actual
+request/response shapes against restiq-backend#38's real code once it lands
+is required follow-up before this can be called verified, not optional
+polish - flagged as this story's primary open risk.

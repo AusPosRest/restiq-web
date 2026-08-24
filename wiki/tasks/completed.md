@@ -82,3 +82,22 @@
   `appVersion`/`lastContactAt` even though the `Device` row carries both
   columns, confirmed by seeding both fields directly and still seeing the
   UI's graceful "-"/"Never" fallback render. Issue AusPosRest/restiq-web#28.
+
+- **2026-08-24** - Tenant Admin story 7: staff & roles UI (CAP-7).
+  `/admin/staff` - staff list with a per-row role dropdown constrained to
+  the six seeded system roles, an "Add staff" form, PIN issue (plaintext
+  shown once via toast) and PIN revoke through a confirm-modal naming the
+  affected person by name ("This removes Priya Nair's access to the till.").
+  Role change is also pessimistic-with-confirm-and-reason, reusing CAP-4's
+  `ConfirmReasonDialog`. Role permission matrix is a read-only reference
+  table. **Not verified against a real backend**: restiq-backend#38 (the
+  CAP-7 API) had no branch, controller, or Prisma model beyond the bare
+  `Role` table at implementation time - see
+  [wiki/features/tenant-admin.md](../features/tenant-admin.md) for the full
+  provisional-contract note and the deviation this forces (the permission
+  matrix is sourced from a static reference, not the roles endpoint, since
+  `Role` carries no permission metadata). Covered by mocked-fetch component
+  tests and pure-logic unit tests; additionally verified live in a browser
+  (shell rendering, graceful load-error with no backend, and full UI
+  interaction against a client-side fetch patch). Issue
+  AusPosRest/restiq-web#30.
