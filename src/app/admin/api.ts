@@ -13,7 +13,7 @@ import type {
 } from "./(shell)/menu/menu-state";
 import type { BrandingTokens } from "./(shell)/settings/branding-state";
 import type { OutletCapabilityView } from "./(shell)/settings/capability-state";
-import type { DiningTableView, FloorPlanView, FloorView, PrinterRenderMode, PrinterView, StationView } from "./(shell)/floor-plan/floor-plan-state";
+import type { DiningTableView, FloorPlanView, FloorView, PrinterRenderMode, PrinterView, StationView, TableShape } from "./(shell)/floor-plan/floor-plan-state";
 import type { AdminDeviceView, DeviceType, EnrolmentCodeResult } from "./(shell)/devices/devices-state";
 import type { RoleView, StaffView } from "./(shell)/staff/staff-state";
 import { filenameFromContentDisposition, type ReportExport } from "./(shell)/reports/reports-state";
@@ -377,6 +377,47 @@ export function updatePrinter(outletId: string, printerId: string, renderMode: P
     method: "PATCH",
     body: JSON.stringify({ renderMode }),
   });
+}
+
+// --- Story 10: floor/table/station/printer creation. Same create endpoints
+// as the rest of this section (feature/34-floor-plan's
+// AdminFloorPlanController, read directly) - thin POST wrappers, no new
+// response shape to reconcile.
+
+export function createFloor(outletId: string, input: { name: string; sortOrder?: number }): Promise<FloorView> {
+  return adminApi<FloorView>(`outlets/${outletId}/floor-plan/floors`, { method: "POST", body: JSON.stringify(input) });
+}
+
+export interface CreateTableInput {
+  floorId: string;
+  label: string;
+  x: number;
+  y: number;
+  width: number;
+  height: number;
+  shape: TableShape;
+  seatCapacity: number;
+}
+
+export function createTable(outletId: string, input: CreateTableInput): Promise<DiningTableView> {
+  return adminApi<DiningTableView>(`outlets/${outletId}/floor-plan/tables`, { method: "POST", body: JSON.stringify(input) });
+}
+
+export interface CreateStationInput {
+  name: string;
+  ageingThresholdMinutes: number;
+  primaryPrinterId?: string | null;
+  fallbackPrinterId?: string | null;
+  /** Required (true) whenever this request would leave primaryPrinterId null - see UpdateStationInput above. */
+  noPrinterAcknowledged?: boolean;
+}
+
+export function createStation(outletId: string, input: CreateStationInput): Promise<StationView> {
+  return adminApi<StationView>(`outlets/${outletId}/floor-plan/stations`, { method: "POST", body: JSON.stringify(input) });
+}
+
+export function createPrinter(outletId: string, input: { name: string; renderMode: PrinterRenderMode }): Promise<PrinterView> {
+  return adminApi<PrinterView>(`outlets/${outletId}/floor-plan/printers`, { method: "POST", body: JSON.stringify(input) });
 }
 
 // --- CAP-6 Devices & printers. Verified against restiq-backend's actual

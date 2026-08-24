@@ -1,9 +1,11 @@
 import { describe, expect, it } from "vitest";
 import {
   computeDragPosition,
+  computeNextTablePosition,
   findOverlap,
   groupTablesByFloor,
   rectsOverlap,
+  SHAPE_SIZES,
   snapToGrid,
   stationPrinterIsValid,
   validateAgeingThresholdMinutes,
@@ -72,6 +74,31 @@ describe("rectsOverlap / findOverlap", () => {
   it("returns null when nothing overlaps", () => {
     const others = [{ id: "b", x: 200, y: 200, width: 40, height: 40 }];
     expect(findOverlap(a, others)).toBeNull();
+  });
+});
+
+describe("computeNextTablePosition", () => {
+  const canvas = { width: 80, height: 80 };
+  const size = SHAPE_SIZES.square; // 40x40
+
+  it("places the first table at the origin when the floor is empty", () => {
+    expect(computeNextTablePosition([], size, canvas)).toEqual({ x: 0, y: 0 });
+  });
+
+  it("scans past an occupied spot to the next clear one on the grid", () => {
+    const existing = [{ id: "t1", x: 0, y: 0, width: 40, height: 40 }];
+    const result = computeNextTablePosition(existing, size, canvas);
+    expect(rectsOverlap({ id: "candidate", ...result, width: size.width, height: size.height }, existing[0])).toBe(false);
+  });
+
+  it("falls back to (0, 0) when the floor has no clear spot left", () => {
+    const existing = [
+      { id: "t1", x: 0, y: 0, width: 40, height: 40 },
+      { id: "t2", x: 40, y: 0, width: 40, height: 40 },
+      { id: "t3", x: 0, y: 40, width: 40, height: 40 },
+      { id: "t4", x: 40, y: 40, width: 40, height: 40 },
+    ];
+    expect(computeNextTablePosition(existing, size, canvas)).toEqual({ x: 0, y: 0 });
   });
 });
 
