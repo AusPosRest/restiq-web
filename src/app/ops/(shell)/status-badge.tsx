@@ -6,6 +6,7 @@ const STYLES: Record<string, string> = {
   pending: "border-status-pending/50 bg-status-pending/10 text-status-pending",
   expired: "border-status-critical/50 bg-status-critical/10 text-status-critical",
   suspended: "border-status-critical/50 bg-status-critical/10 text-status-critical",
+  revoked: "border-status-critical/50 bg-status-critical/10 text-status-critical",
   healthy: "border-status-healthy/50 bg-status-healthy/10 text-status-healthy",
   lagging: "border-status-warning/50 bg-status-warning/10 text-status-warning",
   silent: "border-status-critical/50 bg-status-critical/10 text-status-critical",

@@ -93,3 +93,34 @@ export interface TenantDetail {
   ownerInvite: OwnerInvite | null;
   capabilities: Array<{ key: string; enabled: boolean }>;
 }
+
+// --- CAP-4 device fleet.
+
+export interface DeviceView {
+  id: string;
+  tenantId: string;
+  outletId: string | null;
+  label: string;
+  type: string;
+  role: string;
+  status: string;
+  enrolledAt: string;
+  revokedAt: string | null;
+}
+
+export interface DeviceListItem extends DeviceView {
+  tenantName: string;
+  outletName: string | null;
+}
+
+export interface DeviceListResult {
+  devices: DeviceListItem[];
+  nextCursor: string | null;
+  total: number;
+}
+
+export interface EnrolmentCode {
+  code: string;
+  deviceType: string;
+  expiresAt: string;
+}
