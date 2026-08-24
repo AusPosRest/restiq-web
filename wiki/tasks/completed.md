@@ -54,3 +54,16 @@
   outlet capabilities render a client-owned known-key set merged with
   whatever the backend has actually recorded. Issue
   AusPosRest/restiq-web#24.
+
+- **2026-08-24** - Tenant Admin story 5: floor plan & stations UI (CAP-5).
+  `/admin/floor-plan` - draggable-table canvas (pointer + keyboard, grid
+  snap, live overlap tint) with a floor tab strip, an accessible list-view
+  fallback (editable X/Y/capacity table) for non-pointer interaction, and a
+  Kitchen Routing stations panel (ageing threshold, printer dropdown, and an
+  explicit "no printer" acknowledgement checkbox that gates the save). See
+  [wiki/features/tenant-admin.md](../features/tenant-admin.md) for the
+  contract read directly from the backend's actual (concurrently-built,
+  uncommitted) `feature/34-floor-plan` code - notably the overlap policy it
+  settled on (reject with 409, not auto-adjust) and that one GET returns
+  floors/stations/printers together rather than three separate endpoints.
+  Issue AusPosRest/restiq-web#26.

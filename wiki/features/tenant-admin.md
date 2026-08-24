@@ -188,6 +188,60 @@ story. Backend counterpart: `restiq-backend/wiki/features/tenant-admin.md`.
   descriptive `aria-label` since it's a live visual summary, not
   interactive content.
 
+## CAP-5 - Floor plan & stations
+
+- **Intent:** an owner lays out floors and tables, defines kitchen Stations
+  with ageing thresholds, and maps printers to stations with a fallback
+  printer; an overlapping table position is never silently saved, and every
+  station carries a printer or an explicit "no printer" acknowledgement.
+- **Built:** `/admin/floor-plan` (`src/app/admin/(shell)/floor-plan/`),
+  per-outlet like Capabilities (`key={selectedOutletId}` remount). One
+  `GET /admin/v1/outlets/:outletId/floor-plan` call loads everything -
+  floors, stations, and printers together (see Data model) - into a single
+  `floor-plan.tsx` orchestrator that owns two views:
+  - **Canvas** (`floor-plan-canvas.tsx`): absolutely-positioned divs, not
+    SVG (rects/circles with a text label needed no path drawing). A floor
+    tab strip switches which floor's tables render. Each table shape is
+    draggable (pointer events) and keyboard-operable (arrow keys nudge by
+    `GRID_SNAP_PX`, both funnel through the same
+    `floor-plan-state.ts#computeDragPosition` so mouse and keyboard users get
+    identical snap/clamp behaviour). Dragging shows a live client-side
+    overlap tint (`findOverlap`, bounding-box intersection) purely as visual
+    feedback - the backend remains the actual source of truth on save.
+  - **List** (`floor-plan-list-view.tsx`): the EXPERIENCE.md-required
+    non-pointer fallback - a plain table, one row per table grouped by
+    floor, with editable X/Y/capacity number fields (commit on blur/Enter,
+    revert silently on an invalid value). Toggled via
+    `floor-plan-view-canvas`/`floor-plan-view-list`.
+  - Both views funnel every edit through one `commitTable` in
+    `floor-plan.tsx`: optimistic update, `PATCH .../tables/:tableId`, and on
+    failure a snap-back to the pre-edit value plus an error toast naming the
+    table (see Key decisions for the overlap policy this reflects). There is
+    no "adjusted position" reconciliation branch, since the backend never
+    returns a different position than requested on success.
+  - **Stations** (`stations-panel.tsx`), alongside the canvas/list: one row
+    per station with an ageing-threshold number input (validated ≥1 whole
+    minute, `floor-plan-state.ts#validateAgeingThresholdMinutes`, blocked
+    client-side before saving) and a printer `<select>` plus an explicit
+    "This station has no printer, on purpose." checkbox
+    (`validateStationPrinter` - a printer chosen or the checkbox checked,
+    never neither; the checkbox is disabled while a printer is selected,
+    since it's meaningless then). Picking a printer auto-saves
+    `{ primaryPrinterId, noPrinterAcknowledged: false }`; checking the box
+    auto-saves `{ primaryPrinterId: null, noPrinterAcknowledged: true }` -
+    same auto-save-per-field pattern as `CapabilityToggle`, gated on
+    validation rather than a separate Save button. A station already
+    persisted with no printer starts with the checkbox pre-checked (the
+    backend can't have saved that state without the acknowledgement having
+    already fired once, so re-demanding it on every load would be a false
+    error, not real friction).
+- **data-testid** on every interactive element (`table-shape-*`,
+  `floor-tab-*`, `floor-plan-view-canvas/list`, `floor-plan-list-x/y/
+  capacity-*`, `station-ageing-input-*`, `station-printer-select-*`,
+  `station-no-printer-ack-*`); keyboard-operable throughout with visible
+  focus rings; every table shape carries an `aria-label` stating its name,
+  capacity, and that arrow keys move it.
+
 ## Data model
 
 Owned by the backend - see `restiq-backend/wiki/features/tenant-admin.md`.
@@ -209,6 +263,14 @@ all four - see Key decisions). A price is written with
 exactly one `(item, variant?, channel, outlet?)` line; there is no endpoint
 that returns a bulk "menu with prices" list or an item's future-scheduled
 rows, which shapes several UI choices below.
+
+CAP-5's `TableView` carries `id, floorId, label, x, y, width, height, shape,
+seatCapacity` - position and size are always absolute grid-unit integers the
+editor itself owns; there's no separate `rotation` or `zIndex`. `StationView`
+carries `id, outletId, name, ageingThresholdMinutes, primaryPrinterId,
+fallbackPrinterId` - no `noPrinterAcknowledged` (never persisted, see Key
+decisions) and no printer-online/offline status (that lives with the Device
+model, not `Printer`, and isn't part of this capability's read shape).
 
 ## Key decisions
 
@@ -341,6 +403,40 @@ rows, which shapes several UI choices below.
   rather than reaching for Radix's `Tabs` primitive (available via the
   `radix-ui` dependency, unused elsewhere) - two destinations sharing one
   layout didn't justify a new pattern.
+- **CAP-5's overlap policy is REJECT with 409, not auto-adjust** - the
+  SPEC states this was an open product question left to the builder's
+  judgment, and the backend's actual `floor-plan.service.ts` (read directly,
+  `feature/34-floor-plan`) settled it: `assertNoOverlap` throws a
+  `ConflictException({ code: 'table_overlap' })`, with its own comment
+  explaining why (a silently-relocated table is a worse surprise mid-edit
+  than an immediate "that spot is taken" the UI can show right where it was
+  dropped). This build's UI was written to handle *either* outcome
+  generically (snap-back-and-toast on failure, reconcile-to-server-value on
+  a differing success) before that code existed; once it landed, the
+  "server adjusted the position" branch was removed as dead code rather than
+  left in for a case that can't occur.
+- **The floor-plan GET returns everything in one call, not three** -
+  `admin/v1/outlets/:outletId/floor-plan` (`floor-plan.controller.ts`/
+  `.dtos.ts`, read directly) returns `{ floors, stations, printers }`
+  together, with each floor carrying its own `tables` nested - there are no
+  separate `.../stations` or `.../printers` list endpoints. An earlier pass
+  (written before that code existed, following this file's own
+  outlet-nested convention) assumed three separate GETs; `api.ts#fetchFloorPlan`
+  now makes one call and flattens the nested shape into the flat
+  `{ floors, tables, stations, printers }` the UI components want, so a
+  table update only ever needs to look up one flat array by id.
+- **A station's "no printer" acknowledgement is a one-time request flag,
+  never a persisted column** - `updateStation`'s `noPrinterAcknowledged` is
+  read once per request and discarded; the backend's own comment: "never
+  silently save an unset printer." A station's actual no-printer state is
+  simply `primaryPrinterId: null`. This is why `StationsPanel` treats an
+  already-null station as pre-acknowledged on load rather than demanding
+  the checkbox again every time the page opens.
+- POST endpoints for creating floors/tables/printers/stations exist on the
+  backend but are out of this story's scope (the design's T5 screen and
+  EXPERIENCE.md describe laying out an *existing* floor plan and stations,
+  not authoring floors/stations from scratch) - this UI only reads and
+  updates (`PATCH`) what the backend already has.
 
 ## Live verification
 
@@ -414,3 +510,28 @@ correctly with no backend present. A full click-through (create an item with
 a modifier group, edit its price, schedule a future change, toggle 86) is the
 right follow-up once both PRs land and both dev servers run together against
 a shared, quiescent database.
+
+CAP-5 (floor plan & stations) was **not** verified end-to-end against live
+backend data: its module (`restiq-backend/src/admin/floor-plan/`) was built
+concurrently on `feature/34-floor-plan` and never reached a running
+`localhost:8180` during this story (the backend server available locally had
+no `DATABASE_URL` migrated for the new `floors`/`dining_tables`/`printers`/
+`stations` tables). Verification here is code-matched, not live: the
+contract - including the overlap policy - was read directly from that
+branch's actual controller, DTOs, service, and Prisma schema diff (not the
+originally sketched three-endpoint guess), implemented against exactly that,
+and covered by mocked-fetch component tests (`floor-plan.test.tsx`,
+`floor-plan-list-view.test.tsx`, `stations-panel.test.tsx`) plus pure-logic
+unit tests (`floor-plan-state.test.ts` - drag/snap/clamp math, overlap rect
+detection, station printer-requirement validation, floor/table grouping).
+What *was* verified live, in a real browser against the running frontend
+(`localhost:3100`, backend unreachable by design): `/admin/floor-plan`
+mounts with no console/runtime errors, the outlet-scoped loader hits
+`GET /admin/api/outlets`, gets a `502 upstream_unreachable` from the proxy
+with no backend running, and degrades to the same graceful "no outlets"
+empty state a legitimately outlet-less tenant would see - no crash, no
+unhandled rejection. A full click-through (drag a table into an occupied
+spot and see the reject-and-snap-back, assign a station's printer, load the
+list-view fallback) is the right follow-up once both PRs land, the new
+migration is applied, and both dev servers run together against a shared,
+seeded database.
