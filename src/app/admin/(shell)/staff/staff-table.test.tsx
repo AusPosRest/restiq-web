@@ -14,8 +14,8 @@ const ROLES: RoleView[] = [
 ];
 
 const STAFF: StaffView[] = [
-  { id: "s1", firstName: "Priya", lastName: "Nair", email: "priya@example.com", roleId: "r-cashier", roleName: "Cashier", pinStatus: "active" },
-  { id: "s2", firstName: "Arjun", lastName: "Rao", email: "arjun@example.com", roleId: "r-waiter", roleName: "Waiter", pinStatus: "none" },
+  { id: "s1", name: "Priya Nair", email: "priya@example.com", roleId: "r-cashier", roleName: "Cashier", pinStatus: "active" },
+  { id: "s2", name: "Arjun Rao", email: "arjun@example.com", roleId: "r-waiter", roleName: "Waiter", pinStatus: "none" },
 ];
 
 function noop() {}

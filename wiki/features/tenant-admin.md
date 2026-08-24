@@ -570,22 +570,28 @@ endpoint) takes `{ renderMode }`.
   dependency - matching the real, reviewed ops behavior over the raw mock
   pixels didn't justify adding one.
 
-- **CAP-7's API is a provisional contract, not a read one** - unlike every
-  prior CAP module, restiq-backend's staff/roles work
-  (AusPosRest/restiq-backend#38) had no branch and no Prisma model beyond
-  `Role` (`id, tenantId, name, isSystem` - confirmed by reading
-  `prisma/schema.prisma` directly; no `User`/`StaffMember`/PIN table exists
-  on `dev`) at implementation time. `GET /admin/v1/roles`,
-  `GET/POST /admin/v1/staff`, `PATCH /admin/v1/staff/:id/role`,
-  `POST/DELETE /admin/v1/staff/:id/pin` (`api.ts`'s CAP-7 section) are this
-  story's own best-effort design, following the admin realm's existing REST
-  conventions and the one fact that *is* confirmed (`Role`'s three real
-  columns plus its seeded six names from `tenants.service.ts`'s
-  `SYSTEM_ROLES`) - not read from real DTOs the way CAP-4/5/6/10 were. This
-  is the reason the role-permission matrix can't be sourced from the roles
-  endpoint (see CAP-7 section above) and is the biggest reconciliation risk
-  of this story - flagged here explicitly rather than presented as a
-  verified contract.
+- **CAP-7's API was built against a provisional contract, then reconciled.**
+  restiq-backend's staff/roles work (#38) had no branch and no Prisma model
+  beyond `Role` at implementation time, so this story's first pass designed
+  `api.ts`'s CAP-7 section from the admin realm's REST conventions rather
+  than real DTOs. Once #38/#39 landed, the actual contract was read directly
+  and reconciled: `GET /admin/v1/staff` returns `{ staff: [...] }` (not a
+  bare array), `CreateStaffDto`/`UpdateStaffDto` use a single `name` field
+  (not `firstName`/`lastName` - the Add Staff form keeps two fields for UX,
+  `api.ts` concatenates them on the wire), role changes `PATCH
+  /admin/v1/staff/:id` directly (no `/role` suffix), `issuePin` returns only
+  `{ pin }`, and revoke is `POST /admin/v1/staff/:id/revoke-pin` (not
+  `DELETE .../pin`). `PinStatus` also gained its real third value,
+  `"revoked"` (the backend never clears `pinHash` on revoke, so a revoked
+  PIN is distinct from a staff member who never had one). The
+  role-permission matrix still can't be sourced from `GET /admin/v1/roles`
+  (`Role` carries no permission metadata) and stays a static reference
+  table, matching the render's intent. `staff.tsx`/`staff-state.ts`/
+  `staff-table.tsx`/`api.ts` and their tests were all updated to match; the
+  reconciliation also caught and fixed a mock-routing bug in
+  `staff.test.tsx` itself (a `!url.includes("/pin")` exclusion missed
+  `revoke-pin`, since it contains `-pin` not `/pin`, so a revoke call was
+  silently misrouted to the create-staff mock branch).
 
 ## Live verification
 

@@ -403,21 +403,18 @@ export function generateEnrolmentCode(outletId: string, deviceType: DeviceType):
   });
 }
 
-// --- CAP-7 Staff & roles. UNVERIFIED against restiq-backend: issue
-// AusPosRest/restiq-backend#38 was still open with no branch and no staff/PIN
-// Prisma model at implementation time (only `Role` - id/tenantId/name/
-// isSystem - existed, seeded from tenants.service.ts's SYSTEM_ROLES). These
-// paths and shapes are this story's provisional contract, following the
-// admin realm's existing REST conventions (plural resource, nested action
-// segment, PATCH for partial update) - reconcile against the real DTOs once
-// #38 lands, same as every other CAP module's header note in this file.
+// --- CAP-7 Staff & roles. Reconciled against the real restiq-backend#38/#39
+// DTOs (GET /admin/v1/staff returns { staff: [...] }, not a bare array;
+// CreateStaffDto/UpdateStaffDto take a single `name`, not firstName/lastName;
+// role changes PATCH the staff resource directly, no /role suffix; issuePin
+// returns only { pin }; revoke is POST .../revoke-pin, not DELETE .../pin).
 
 export function fetchRoles(): Promise<RoleView[]> {
   return adminApi<RoleView[]>("roles");
 }
 
 export function fetchStaff(): Promise<StaffView[]> {
-  return adminApi<StaffView[]>("staff");
+  return adminApi<{ staff: StaffView[] }>("staff").then((res) => res.staff);
 }
 
 export interface CreateStaffInput {
@@ -428,19 +425,20 @@ export interface CreateStaffInput {
 }
 
 export function createStaff(input: CreateStaffInput): Promise<StaffView> {
-  return adminApi<StaffView>("staff", { method: "POST", body: JSON.stringify(input) });
+  const name = `${input.firstName} ${input.lastName}`.trim();
+  return adminApi<StaffView>("staff", { method: "POST", body: JSON.stringify({ name, email: input.email, roleId: input.roleId }) });
 }
 
 // Role change is security-relevant (SPEC constraints: audited with actor +
 // reason, EXPERIENCE.md: pessimistic with a confirm step) - same reason
-// requirement as a price change.
+// requirement as a price change. Backend only requires (and only audits) the
+// reason when roleId actually changes value - a name-only PATCH is routine.
 export function updateStaffRole(staffId: string, roleId: string, reason: string): Promise<StaffView> {
-  return adminApi<StaffView>(`staff/${staffId}/role`, { method: "PATCH", body: JSON.stringify({ roleId, reason }) });
+  return adminApi<StaffView>(`staff/${staffId}`, { method: "PATCH", body: JSON.stringify({ roleId, reason }) });
 }
 
 export interface IssuedPin {
   pin: string;
-  issuedAt: string;
 }
 
 export function issueStaffPin(staffId: string): Promise<IssuedPin> {
@@ -450,5 +448,5 @@ export function issueStaffPin(staffId: string): Promise<IssuedPin> {
 // PIN revoke is security-relevant (SPEC constraints; EXPERIENCE.md: confirm-
 // modal-with-plain-language-consequence) - carries the same audit reason.
 export function revokeStaffPin(staffId: string, reason: string): Promise<StaffView> {
-  return adminApi<StaffView>(`staff/${staffId}/pin`, { method: "DELETE", body: JSON.stringify({ reason }) });
+  return adminApi<StaffView>(`staff/${staffId}/revoke-pin`, { method: "POST", body: JSON.stringify({ reason }) });
 }

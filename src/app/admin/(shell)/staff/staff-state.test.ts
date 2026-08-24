@@ -18,8 +18,8 @@ const ROLES: RoleView[] = [
 ];
 
 describe("staffFullName", () => {
-  it("joins first and last name", () => {
-    expect(staffFullName({ firstName: "Priya", lastName: "Nair" })).toBe("Priya Nair");
+  it("returns the staff member's name", () => {
+    expect(staffFullName({ name: "Priya Nair" })).toBe("Priya Nair");
   });
 });
 

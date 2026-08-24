@@ -15,7 +15,7 @@ const ROLES = [
 ];
 
 const STAFF: StaffView[] = [
-  { id: "s1", firstName: "Priya", lastName: "Nair", email: "priya@example.com", roleId: "r-cashier", roleName: "Cashier", pinStatus: "active" },
+  { id: "s1", name: "Priya Nair", email: "priya@example.com", roleId: "r-cashier", roleName: "Cashier", pinStatus: "active" },
 ];
 
 function jsonResponse(body: unknown, status = 200): Response {
@@ -28,21 +28,24 @@ function stubFetch(overrides: { staff?: StaffView[]; onPatchRole?: (body: unknow
     const url = String(input);
     const method = init?.method ?? "GET";
     if (url.includes("/admin/api/roles") && method === "GET") return Promise.resolve(jsonResponse(ROLES));
-    if (url.includes("/admin/api/staff") && method === "GET") return Promise.resolve(jsonResponse(staff));
-    if (url.includes("/admin/api/staff") && method === "POST" && !url.includes("/pin")) {
-      const body = JSON.parse(String(init?.body)) as { firstName: string; lastName: string; email: string; roleId: string };
+    if (url.includes("/admin/api/staff") && method === "GET") return Promise.resolve(jsonResponse({ staff }));
+    if (url.endsWith("/admin/api/staff") && method === "POST") {
+      const body = JSON.parse(String(init?.body)) as { name: string; email: string; roleId: string };
       const role = ROLES.find((r) => r.id === body.roleId);
       return Promise.resolve(jsonResponse({ id: "s2", ...body, roleName: role?.name ?? "", pinStatus: "none" }));
     }
-    if (url.includes("/staff/s1/role") && method === "PATCH") {
+    if (url.includes("/staff/s1") && method === "PATCH") {
       const body = JSON.parse(String(init?.body));
       const result = overrides.onPatchRole ? overrides.onPatchRole(body) : { ...staff[0], roleId: body.roleId, roleName: ROLES.find((r) => r.id === body.roleId)?.name };
       return Promise.resolve(jsonResponse(result));
     }
-    if (url.includes("/staff/s1/pin") && method === "DELETE") {
+    if (url.includes("/staff/s1/revoke-pin") && method === "POST") {
       const body = JSON.parse(String(init?.body));
-      const result = overrides.onDeletePin ? overrides.onDeletePin(body) : { ...staff[0], pinStatus: "none" };
+      const result = overrides.onDeletePin ? overrides.onDeletePin(body) : { ...staff[0], pinStatus: "revoked" };
       return Promise.resolve(jsonResponse(result));
+    }
+    if (url.includes("/staff/s1/pin") && method === "POST") {
+      return Promise.resolve(jsonResponse({ pin: "4821" }));
     }
     return Promise.resolve(jsonResponse({ error: { code: "not_found", message: "unhandled" } }, 404));
   });
@@ -128,7 +131,7 @@ describe("Staff", () => {
     await userEvent.type(screen.getByTestId("confirm-reason"), "Left the company");
     await userEvent.click(screen.getByTestId("confirm-submit"));
 
-    await waitFor(() => expect(screen.getByTestId("staff-pin-status-s1").textContent).toBe("No PIN"));
+    await waitFor(() => expect(screen.getByTestId("staff-pin-status-s1").textContent).toBe("Revoked"));
     expect(screen.getByTestId("staff-issue-pin-s1")).toBeTruthy();
   });
 

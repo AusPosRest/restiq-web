@@ -2,16 +2,11 @@
 // the permission-matrix lookup are unit-testable without a DOM - mirrors
 // menu-state.ts/floor-plan-state.ts's split between logic and UI.
 //
-// restiq-backend's CAP-7 API (issue AusPosRest/restiq-backend#38) had not
-// been started at implementation time - no branch, no Prisma model beyond
-// `Role` (id/tenantId/name/isSystem, no permission metadata), no PIN or
-// staff-user table on dev. The shapes below are this story's best-effort
-// provisional contract, built from what does exist (Role's actual columns,
-// checklist.service.ts's `staffAt` step, restiq-backend's SYSTEM_ROLES
-// constant in tenants.service.ts) rather than invented from nothing; api.ts's
-// header carries the same note. Reconcile against the real DTOs once
-// restiq-backend#38 lands, same as CAP-4/5/6/10 reconciled against their
-// backends here.
+// Reconciled against the real restiq-backend#38/#39 DTOs (StaffView is
+// {id, tenantId, name, email, roleId, roleName, pinStatus, createdAt,
+// updatedAt} - a single `name`, not firstName/lastName; pinStatus is
+// 'none'|'active'|'revoked'). AddStaffForm keeps two fields for form UX;
+// api.ts concatenates them into `name` on the wire.
 //
 // Because Role carries no permission list, the "role permission matrix"
 // (EXPERIENCE.md T7 pattern: read-only reference, roles are seeded not
@@ -26,20 +21,19 @@ export interface RoleView {
   isSystem: boolean;
 }
 
-export type PinStatus = "active" | "none";
+export type PinStatus = "active" | "none" | "revoked";
 
 export interface StaffView {
   id: string;
-  firstName: string;
-  lastName: string;
-  email: string;
+  name: string;
+  email: string | null;
   roleId: string;
   roleName: string;
   pinStatus: PinStatus;
 }
 
-export function staffFullName(staff: Pick<StaffView, "firstName" | "lastName">): string {
-  return `${staff.firstName} ${staff.lastName}`.trim();
+export function staffFullName(staff: Pick<StaffView, "name">): string {
+  return staff.name;
 }
 
 // --- Add-staff form ---

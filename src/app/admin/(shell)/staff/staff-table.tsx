@@ -10,10 +10,11 @@ import { KeyRound, Users } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { staffFullName, type PinStatus, type RoleView, type StaffView } from "./staff-state";
 
-const PIN_STATUS_LABELS: Record<PinStatus, string> = { active: "Active", none: "No PIN" };
+const PIN_STATUS_LABELS: Record<PinStatus, string> = { active: "Active", none: "No PIN", revoked: "Revoked" };
 const PIN_STATUS_STYLES: Record<PinStatus, string> = {
   active: "border-status-active/50 bg-status-active/10 text-status-active",
   none: "border-border/60 bg-card/50 text-muted-foreground",
+  revoked: "border-status-error/50 bg-status-error/10 text-status-error",
 };
 
 const SELECT_CLASSES =
