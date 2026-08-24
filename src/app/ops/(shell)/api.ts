@@ -172,3 +172,32 @@ export interface SyncHealthResult {
   summary: Record<Severity, number>;
   generatedAt: string;
 }
+
+// --- CAP-7 platform dead-letter queue.
+
+export interface DeadLetterView {
+  id: string;
+  tenantId: string;
+  tenantName: string;
+  deviceId: string;
+  deviceLabel: string;
+  opId: string;
+  reasonCode: string;
+  reasonText: string;
+  payloadMeta: Record<string, unknown>;
+  createdAt: string;
+  resolvedAt: string | null;
+}
+
+export interface DeadLetterListResult {
+  deadLetters: DeadLetterView[];
+  nextCursor: string | null;
+  total: number;
+}
+
+export type ReplayStatus = "applied" | "duplicate" | "rejected-again";
+
+export interface ReplayResult {
+  id: string;
+  status: ReplayStatus;
+}
