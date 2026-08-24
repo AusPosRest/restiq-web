@@ -32,7 +32,7 @@ async function forward(request: NextRequest, params: Promise<{ path: string[] }>
 
   let upstream: Response;
   try {
-    upstream = await fetch(`${apiUrl}/ops/v1/${path.join("/")}`, init);
+    upstream = await fetch(`${apiUrl}/ops/v1/${path.join("/")}${request.nextUrl.search}`, init);
   } catch {
     return NextResponse.json({ error: { code: "upstream_unreachable", message: "The API could not be reached" } }, { status: 502 });
   }
