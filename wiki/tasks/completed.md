@@ -102,6 +102,22 @@
   interaction against a client-side fetch patch). Issue
   AusPosRest/restiq-web#30.
 
+- **2026-08-24** - Tenant Admin story 8: owner dashboard UI (CAP-8).
+  `/admin` (dashboard home, `src/app/admin/(shell)/dashboard/`) - real-count
+  KPI tiles (outlets/staff/menu items/devices), per-outlet
+  sales/margin/labour/waste tiles with an honest no-data state
+  ("No sales data yet. Connect POS to see live figures.") since no
+  Order/Bill/Payment model exists yet, a cross-outlet comparison table for
+  multi-outlet tenants, and an "As of [time]" freshness badge. First built
+  against a self-authored contract before restiq-backend#41 was checkable;
+  reconciled afterward against the real response - `tenant` not `counts`,
+  no `stale` field on the wire (backend computes `asOf` fresh every request),
+  and all four financial metrics share one flat `{amountMinor, currency,
+  hasData, message}` shape (margin is a currency amount, not a percentage -
+  the original percent-based rendering was wrong and corrected). See
+  [wiki/features/tenant-admin.md](../features/tenant-admin.md) for the full
+  reconciliation note. 400 tests passing. Issue AusPosRest/restiq-web#32.
+
 - **2026-08-24** - Tenant Admin story 9: reports catalogue UI (CAP-9).
   `/admin/reports` - a report card grid grouped by category (Sales
   Performance/Financial & Compliance/Menu Engineering/Operations/Inventory/
