@@ -13,6 +13,7 @@ import type {
 } from "./(shell)/menu/menu-state";
 import type { BrandingTokens } from "./(shell)/settings/branding-state";
 import type { OutletCapabilityView } from "./(shell)/settings/capability-state";
+import type { DiningTableView, FloorPlanView, FloorView, PrinterView, StationView } from "./(shell)/floor-plan/floor-plan-state";
 
 export class AdminApiError extends Error {
   constructor(
@@ -311,4 +312,59 @@ export function setOutletCapability(outletId: string, key: string, enabled: bool
     method: "PATCH",
     body: JSON.stringify({ enabled }),
   });
+}
+
+// --- CAP-5 Floor plan & stations. Verified against restiq-backend's actual
+// admin/v1/floor-plan working tree (feature/34-floor-plan,
+// src/admin/floor-plan/floor-plan.controller.ts / .dtos.ts, read directly -
+// not a summarized contract, same discipline as CAP-4/CAP-10). Notably: the
+// single GET returns floors, stations AND printers together in one payload
+// (no separate stations/printers list endpoints exist) with each floor
+// carrying its own tables nested - fetchFloorPlan flattens that into the
+// {floors, tables, stations, printers} shape floor-plan-state.ts's UI
+// components want, so a table move only ever needs to look up one flat
+// array by id. See floor-plan-state.ts's file header for the overlap-policy
+// (reject, not auto-adjust) and no-printer-acknowledgement facts this
+// contract carries.
+
+interface FloorPlanApiFloor extends FloorView {
+  tables: DiningTableView[];
+}
+
+interface FloorPlanApiResponse {
+  floors: FloorPlanApiFloor[];
+  stations: StationView[];
+  printers: PrinterView[];
+}
+
+export async function fetchFloorPlan(outletId: string): Promise<FloorPlanView> {
+  const data = await adminApi<FloorPlanApiResponse>(`outlets/${outletId}/floor-plan`);
+  return {
+    floors: data.floors.map(({ id, name, sortOrder }) => ({ id, name, sortOrder })),
+    tables: data.floors.flatMap((floor) => floor.tables),
+    stations: data.stations,
+    printers: data.printers,
+  };
+}
+
+export interface UpdateTableInput {
+  x?: number;
+  y?: number;
+  seatCapacity?: number;
+}
+
+export function updateTable(outletId: string, tableId: string, input: UpdateTableInput): Promise<DiningTableView> {
+  return adminApi<DiningTableView>(`outlets/${outletId}/tables/${tableId}`, { method: "PATCH", body: JSON.stringify(input) });
+}
+
+export interface UpdateStationInput {
+  ageingThresholdMinutes?: number;
+  primaryPrinterId?: string | null;
+  fallbackPrinterId?: string | null;
+  /** Required (true) whenever this request would leave primaryPrinterId null - the backend's own printer_required rule, see floor-plan-state.ts. */
+  noPrinterAcknowledged?: boolean;
+}
+
+export function updateStation(outletId: string, stationId: string, input: UpdateStationInput): Promise<StationView> {
+  return adminApi<StationView>(`outlets/${outletId}/stations/${stationId}`, { method: "PATCH", body: JSON.stringify(input) });
 }
