@@ -8,7 +8,7 @@
 // selection with the acknowledgement box unchecked never reaches the
 // network, so the checkbox is a real gate, not decoration.
 //
-// Story 10 adds "Add station" and "Add printer" forms below the list so a
+// "Add station" and "Add printer" forms below the list so a
 // brand-new outlet can reach a first station/printer through the console -
 // the printer-required gate on add-station reuses validateStationPrinter
 // verbatim, same as StationRow above.
@@ -180,7 +180,7 @@ function StationRow({
   );
 }
 
-// --- Add station (Story 10). Same printer-required-or-acknowledge gate as
+// --- Add station. Same printer-required-or-acknowledge gate as
 // StationRow above, applied verbatim: the error is shown unconditionally
 // (not gated behind a "touched" flag) and the submit button stays disabled
 // while it holds, so the 400 printer_required the backend would otherwise
@@ -336,7 +336,7 @@ function AddStationForm({
   );
 }
 
-// --- Add printer (Story 10). name + renderMode only - fallback routing is a
+// --- Add printer. name + renderMode only - fallback routing is a
 // per-station field (fallbackPrinterId), not something a printer owns.
 function AddPrinterForm({ outletId, onCreated }: Readonly<{ outletId: string; onCreated: (printer: PrinterView) => void }>) {
   const pushToast = useToast();

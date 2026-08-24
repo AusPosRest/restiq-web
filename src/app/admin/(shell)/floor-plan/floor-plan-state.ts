@@ -131,7 +131,7 @@ export function findOverlap(candidate: TableRect, others: readonly TableRect[]):
   return others.find((other) => other.id !== candidate.id && rectsOverlap(candidate, other))?.id ?? null;
 }
 
-// --- Add-table defaults (Story 10). SHAPE_SIZES gives the add-table form a
+// --- Add-table defaults. SHAPE_SIZES gives the add-table form a
 // fixed footprint per shape so it only has to ask "what shape", not raw
 // width/height. computeNextTablePosition scans the same grid the canvas
 // snaps to for the first spot clear of every existing table on the floor,

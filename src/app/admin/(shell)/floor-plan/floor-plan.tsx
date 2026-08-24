@@ -5,7 +5,7 @@
 // it)") - same key={selectedOutletId} remount shape as Settings/Capabilities
 // so an edit in flight for outlet A can never bleed into outlet B.
 //
-// Story 10 adds create affordances (empty state + add-floor/add-table
+// Also owns the create affordances (empty state + add-floor/add-table
 // toolbar) so a brand-new outlet with zero floors can reach the Go-Live
 // Checklist's floor_plan step through the console - see floor-plan-state.ts
 // and api.ts's file headers for the create-endpoint contract this reuses.
@@ -251,7 +251,7 @@ function ViewToggleButton({
   );
 }
 
-// --- Add floor (Story 10). Shared by the zero-floors empty state and the
+// --- Add floor. Shared by the zero-floors empty state and the
 // toolbar - the two never render at once (the empty state is replaced by the
 // toolbar the moment floors.length > 0), so both call sites use the same
 // data-testids without colliding.
@@ -320,8 +320,8 @@ function AddFloorControl({ outletId, triggerLabel, triggerTestId, onCreated }: R
   );
 }
 
-// --- Add table (Story 10). Click-to-place was rejected (see the story's
-// Design Notes) in favour of a compact form with a computed default X/Y -
+// --- Add table. Click-to-place was rejected in favour of a compact form
+// with a computed default X/Y -
 // computeNextTablePosition scans for the first open spot on the selected
 // floor, still adjustable here and still checked live via findOverlap (the
 // same helper the canvas uses for its drag-overlap preview), though the

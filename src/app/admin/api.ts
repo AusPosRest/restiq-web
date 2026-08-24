@@ -379,7 +379,7 @@ export function updatePrinter(outletId: string, printerId: string, renderMode: P
   });
 }
 
-// --- Story 10: floor/table/station/printer creation. Same create endpoints
+// --- Floor/table/station/printer creation. Same create endpoints
 // as the rest of this section (feature/34-floor-plan's
 // AdminFloorPlanController, read directly) - thin POST wrappers, no new
 // response shape to reconcile.
