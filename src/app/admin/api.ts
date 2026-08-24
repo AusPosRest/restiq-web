@@ -16,6 +16,7 @@ import type { OutletCapabilityView } from "./(shell)/settings/capability-state";
 import type { DiningTableView, FloorPlanView, FloorView, PrinterRenderMode, PrinterView, StationView } from "./(shell)/floor-plan/floor-plan-state";
 import type { AdminDeviceView, DeviceType, EnrolmentCodeResult } from "./(shell)/devices/devices-state";
 import type { RoleView, StaffView } from "./(shell)/staff/staff-state";
+import { filenameFromContentDisposition, type ReportExport } from "./(shell)/reports/reports-state";
 
 export class AdminApiError extends Error {
   constructor(
@@ -457,3 +458,31 @@ export function revokeStaffPin(staffId: string, reason: string): Promise<StaffVi
 
 // fetchDashboard is not exported separately - useAdminLoad("dashboard")
 // covers the one read this view needs.
+
+// --- CAP-9 Reports catalogue. Verified against restiq-backend's actual
+// admin/v1/reports working tree (feature/42-reports-catalogue, read directly
+// - see reports-state.ts's file header for what changed from this story's
+// first-pass assumption). Both GET /admin/v1/reports and GET .../reports/
+// export-destinations are read via useAdminLoad directly (bare arrays, same
+// shape as dashboard's/branding's GET) - only the export action, which
+// returns a raw file body rather than JSON, needs a dedicated function here.
+
+// adminApi always parses the response as JSON, which a CSV export body is
+// not - this fetches and reads the blob directly instead, same reasoning as
+// uploadMenuImport's FormData special-case.
+export async function exportReport(reportKey: string, format: string): Promise<ReportExport> {
+  let res: Response;
+  try {
+    res = await fetch(`/admin/api/reports/${reportKey}/export?format=${encodeURIComponent(format)}`);
+  } catch {
+    throw new AdminApiError("The API could not be reached", 0);
+  }
+  if (!res.ok) {
+    const body: unknown = await res.json().catch(() => null);
+    const error = (body as { error?: { code?: string; message?: string } } | null)?.error;
+    throw new AdminApiError(error?.message ?? "The export failed", res.status, error?.code);
+  }
+  const blob = await res.blob();
+  const filename = filenameFromContentDisposition(res.headers.get("content-disposition")) ?? `${reportKey}.${format}`;
+  return { filename, blob };
+}
