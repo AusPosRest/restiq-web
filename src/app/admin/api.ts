@@ -450,3 +450,10 @@ export function issueStaffPin(staffId: string): Promise<IssuedPin> {
 export function revokeStaffPin(staffId: string, reason: string): Promise<StaffView> {
   return adminApi<StaffView>(`staff/${staffId}/revoke-pin`, { method: "POST", body: JSON.stringify({ reason }) });
 }
+
+// --- CAP-8 Owner dashboard. Reconciled against the real restiq-backend#41
+// response (see dashboard-state.ts's file header for what changed). GET is
+// read via useAdminLoad("dashboard") directly, same shape as branding's GET.
+
+// fetchDashboard is not exported separately - useAdminLoad("dashboard")
+// covers the one read this view needs.

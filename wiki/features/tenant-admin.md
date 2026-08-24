@@ -338,6 +338,57 @@ story. Backend counterpart: `restiq-backend/wiki/features/tenant-admin.md`.
   fields, `permission-matrix`); keyboard-operable throughout with visible
   focus rings on every custom control.
 
+## CAP-8 - Owner dashboard
+
+- **Intent:** an owner sees live sales/margin/labour/waste per outlet with
+  cross-outlet comparison; every figure carries an honest freshness
+  indicator, never presented as current when it isn't.
+- **Reality constraint:** RESTIQ has no Order/Bill/Payment model anywhere in
+  the schema yet - POS Core Loop, the surface that would generate real
+  transactional data, hasn't been built. `GET /admin/v1/dashboard`
+  (`restiq-backend#41`) returns real counts (outlets, staff, menu items,
+  devices) alongside sales/margin/labourCost/waste fields that are always
+  present but carry `hasData: false` and an explicit message
+  ("No sales data yet - connect POS to see live figures") instead of a fake
+  zero. The frontend renders that distinction directly: count tiles always
+  show a number, financial tiles show `NoFinancialData` until `hasData` is
+  true.
+- **Built:** `/admin` (dashboard home, `src/app/admin/(shell)/dashboard/`)
+  replaces the placeholder. `dashboard.tsx` loads the one endpoint via
+  `useAdminLoad`; `KpiStatCard`/`CountValue` render the four real-count
+  tiles; `OutletKpiTiles` renders one `MetricValue` per outlet per financial
+  metric (`sales`, `margin`, `labourCost`, `waste`); `OutletComparisonTable`
+  renders whenever there's more than one outlet; `FreshnessBadge` shows
+  "As of [time]".
+- **Reconciliation pass (post-merge-check, both PRs #41/#33):** this story's
+  first web pass was built before restiq-backend#41 existed and used a
+  self-authored, unverified contract - a `stale` boolean on the wire, a
+  `counts` object with frontend-invented field names, and a per-metric
+  discriminated union (`{status:"unavailable"}|{status:"available",...}`)
+  with margin expressed as a **percentage** and labour carrying a
+  `percentOfSales` figure. None of that matches the real backend. Reading
+  `restiq-backend#41`'s actual response directly found: the real key is
+  `tenant` (not `counts`) with backend field names (`outletCount` etc.);
+  there is no `stale` field at all - the backend computes `asOf` fresh on
+  every request since no caching layer exists yet, so the badge is
+  unconditionally non-stale client-side now; and all four financial metrics
+  share one flat shape, `{ amountMinor, currency, hasData, message }` -
+  margin is a real currency **amount**, not a percentage, and there is no
+  `percentOfSales` anywhere. `dashboard-state.ts`, `dashboard.tsx`,
+  `outlet-kpi-tiles.tsx`, and `outlet-comparison-table.tsx` were rewritten to
+  match; `formatPercent` was deleted (no longer used by anything); the
+  Margin tile's icon changed from a percent glyph to a trend-up glyph to
+  match its new amount semantics. Tests were updated to the real shape (400
+  passing after; two prior tests - a standalone `formatPercent` unit test
+  and a "stale badge" scenario - were removed since the behavior they
+  covered no longer exists on the wire).
+- **Deviation:** the T8 render shows populated figures and several tiles
+  with no backing data source anywhere in this codebase (orders, covers,
+  sales-by-hour, top items, live tickets) - none reproduced; EXPERIENCE.md's
+  own rule ("spines win on conflict with any mock") plus the no-POS-data
+  constraint make the honest empty state the correct build, not a shortfall
+  against the mock.
+
 ## Data model
 
 Owned by the backend - see `restiq-backend/wiki/features/tenant-admin.md`.
