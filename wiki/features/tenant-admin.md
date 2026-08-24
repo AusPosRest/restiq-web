@@ -241,6 +241,42 @@ story. Backend counterpart: `restiq-backend/wiki/features/tenant-admin.md`.
   `station-no-printer-ack-*`); keyboard-operable throughout with visible
   focus rings; every table shape carries an `aria-label` stating its name,
   capacity, and that arrow keys move it.
+- **Gap closed - create affordances:** the above shipped layout editing only
+  - dragging existing tables, tuning existing stations - with no way to
+    create a floor plan's first floor, table, station, or printer, so a
+    brand-new outlet could never actually satisfy the Go-Live Checklist's
+    `floor_plan` step through the console. Added on top, reusing every
+    existing pattern rather than inventing new ones:
+  - **Empty state:** zero floors renders an icon + "No floor plan yet" + one
+    "Add your first floor" action (`floor-plan-no-floors`) in place of the
+    canvas/list/view-toggle, matching EXPERIENCE.md's empty-state formula
+    exactly (icon, one sentence, one primary action) and the same shape as
+    the pre-existing "No outlets yet" state above it in this file.
+  - **Add floor / Add table:** a toolbar (`floor-plan-toolbar`) sits above
+    the canvas-or-list split, not inside either view, so both the pointer
+    canvas and the accessibility list fallback get identical add affordances
+    for free - no separate list-view implementation to keep in sync. "Add
+    table" is a compact form (label, shape, seat count), not click-to-place:
+    a brand-new floor has nothing to align a placed table against anyway, so
+    typing three fields costs the owner nothing extra. Its X/Y default to
+    `computeNextTablePosition` (`floor-plan-state.ts`) - the first grid cell
+    clear of every existing table on the selected floor, reusing the same
+    `rectsOverlap` the canvas's drag-overlap tint already uses - and stay
+    editable inline with a live overlap warning before submit. The actual
+    save still goes through `POST .../floor-plan/tables` and inherits the
+    backend's real `table_overlap` 409 (optimistic add, rollback-and-toast on
+    rejection, same shape as `commitTable`'s existing move-rollback).
+  - **Add station / Add printer:** two more forms inside `stations-panel.tsx`
+    below the station list. Add-station reuses `validateStationPrinter`
+    verbatim - the same printer-required-or-acknowledge gate `StationRow`
+    already enforces, so there's no separate rule to keep consistent with the
+    update path. Add-printer is name + render mode only, matching
+    `CreatePrinterDto`.
+  - **Wiring:** `floor-plan.tsx` now holds `floors`/`printers` as state
+    (previously only `tables`/`stations` were - `floors` and `printers` came
+    straight from the initial load since nothing could mutate them yet); an
+    added floor auto-selects itself so the owner lands somewhere useful
+    immediately.
 
 ## CAP-6 - Devices & printers
 
@@ -804,6 +840,26 @@ spot and see the reject-and-snap-back, assign a station's printer, load the
 list-view fallback) is the right follow-up once both PRs land, the new
 migration is applied, and both dev servers run together against a shared,
 seeded database.
+
+The create-affordance follow-up above (empty state, add-floor/table/station/
+printer) closed that follow-up and *was* verified **live**, both servers up
+together against the shared Postgres (`restiq_test`), backend build clean.
+A brand-new tenant + outlet with zero floors/tables/stations/printers was
+seeded directly via Prisma (mirroring `floor-plan.e2e-spec.ts`'s fixture
+helpers) along with a real `OwnerInvite`, so sign-in went through the actual
+`/admin/invite/:token` accept flow rather than a synthetic session cookie.
+Driving the real UI end to end: the zero-floor outlet rendered the actual
+empty state ("No floor plan yet" / "Add your first floor"); adding a floor
+switched it to the canvas with the add-floor/add-table toolbar and an empty
+Kitchen Routing panel with its own add-station/add-printer actions; adding a
+table posted a real `201` to `POST .../floor-plan/tables` and rendered on the
+canvas at its computed default position; adding a printer then a station
+with that printer selected both posted real `201`s, and the station's
+printer `<select>` reflected the assignment on reload. `GET /admin/v1/
+checklist` (via the `/admin/api/checklist` proxy) confirmed
+`{"step":"floor_plan","completed":true,...}` as a direct result of the UI
+flow - the exact gap this story closes. Seeded data was deleted from the
+shared database afterward.
 
 CAP-6 (devices & printers) was verified **live**, both servers up together
 against the shared Postgres (`restiq_test`) - the backend's half

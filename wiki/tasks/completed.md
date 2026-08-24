@@ -142,3 +142,46 @@
   time) contract - found and fixed after this story's first pass, before
   restiq-backend#42 existed, guessed a different envelope, field names, and
   export mechanism. Issue AusPosRest/restiq-web#34.
+
+- **2026-08-24** - Tenant Admin story 10: floor, table, and station
+  authoring UI (CAP-5 gap-fix). Story 5 shipped floor-plan *layout* editing
+  (drag existing tables, edit existing stations) with no way to create a
+  floor plan's first floor, table, station, or printer - a brand-new outlet
+  could never actually reach the Go-Live Checklist's `floor_plan` step
+  through the console. Closed entirely on the frontend against story 5's
+  already-merged backend create endpoints (`POST .../floor-plan/{floors,
+  tables,stations,printers}`, no backend changes needed): an empty state
+  (icon + "No floor plan yet" + "Add your first floor", matching
+  EXPERIENCE.md's empty-state formula) for zero floors; an add-floor/
+  add-table toolbar sitting above the canvas/list split so both views get
+  create affordances without a second implementation; add-table as a
+  compact form (label/shape/seats) with a computed non-overlapping default
+  position, still respecting the real `table_overlap` 409; add-station and
+  add-printer forms in the stations panel, add-station reusing the existing
+  printer-required-or-acknowledge gate verbatim. See
+  [wiki/features/tenant-admin.md](../features/tenant-admin.md)'s CAP-5
+  section for the full design notes. Verified **live**: seeded a brand-new
+  tenant/outlet with zero floors and a real `OwnerInvite` directly via
+  Prisma, signed in through the actual invite-accept UI flow, then drove a
+  full add-floor -> add-table -> add-printer -> add-station click-through
+  against real running backend and web servers - `GET /admin/v1/checklist`
+  confirmed `floor_plan: completed: true` as a direct result, closing the
+  exact gap this story targets. 435 tests passing. Issue
+  AusPosRest/restiq-web#36.
+
+---
+
+**Tenant Admin: all 10 stories complete.** CAP-1 through CAP-9 plus this
+story's CAP-5 gap-fix now cover the full owner console end to end: invite
+acceptance and the go-live checklist (CAP-1/2), AI-assisted menu import
+(CAP-3), menu management (CAP-4), floor plan authoring and layout editing
+together (CAP-5), devices and printers (CAP-6), staff and roles (CAP-7), the
+owner dashboard (CAP-8), and the reports catalogue (CAP-9). A brand-new
+tenant can now go from an accepted invite to every Go-Live Checklist step
+completable through the console alone, with no backend gap left standing on
+the frontend's side. Follow-ups already on record rather than hidden:
+CAP-7's permission matrix still sources from a static reference pending
+`Role` gaining permission metadata, and CAP-9's non-CSV report cards remain
+honest "Pending" states until their backends exist - both documented in
+[wiki/features/tenant-admin.md](../features/tenant-admin.md), not silently
+faked.
