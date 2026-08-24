@@ -34,3 +34,23 @@
   groups/allergens are tenant-wide catalogs, not per-item fields, and that
   there is no endpoint to list an item's scheduled future prices. Issue
   AusPosRest/restiq-web#22.
+
+- **2026-08-24** - Tenant Admin story 4: branding & capabilities UI
+  (CAP-10). `/admin/settings/branding` - color-token editor, font, corner
+  radius, logo (local preview + hosted-URL field), receipt header/footer,
+  with a live receipt preview pane updating on every change before Save.
+  `/admin/settings/capabilities` - per-outlet capability toggles
+  (QR ordering, kiosk, token queue), optimistic with rollback-on-failure
+  toast. Wires the real `GET /admin/v1/outlets` into the shell's outlet
+  switcher (built hidden in story 3 for lack of the endpoint). Verified
+  **live** against the real backend (`feature/32-branding-capabilities`,
+  both servers up together, migration already applied to the shared test
+  DB) - see [wiki/features/tenant-admin.md](../features/tenant-admin.md)
+  for the contract mismatches found and reconciled: `BrandingTokens` is a
+  flat token set (not nested under `colors`), corner radius clamps to 0-64
+  (not 0-24), `OutletView` carries `address/type/timezone` (not
+  `city`/`area`), a picked logo file only ever previews locally since the
+  backend's `logoUrl` is capped at 2048 chars with no upload endpoint, and
+  outlet capabilities render a client-owned known-key set merged with
+  whatever the backend has actually recorded. Issue
+  AusPosRest/restiq-web#24.
