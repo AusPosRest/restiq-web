@@ -1,13 +1,10 @@
-import { Activity } from "lucide-react";
-import { ComingSoon } from "../coming-soon";
+import { Suspense } from "react";
+import { SyncHealthTable } from "./sync-health-table";
 
 export default function OpsSyncHealthPage() {
   return (
-    <ComingSoon
-      title="Sync Health"
-      description="Per-outlet sync lag, outbox depth and silence alerts arrive with the sync-health story."
-      icon={Activity}
-      testId="ops-sync-health-placeholder"
-    />
+    <Suspense>
+      <SyncHealthTable />
+    </Suspense>
   );
 }
