@@ -1,6 +1,6 @@
 import { cleanup, render, screen, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
-import { afterEach, describe, expect, it, vi } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { Dashboard } from "./dashboard";
 import type { DashboardView } from "./dashboard-state";
 
@@ -53,6 +53,17 @@ function stubFetch(view: DashboardView) {
   vi.stubGlobal("fetch", fetchMock);
   return fetchMock;
 }
+
+// Pre-existing, unrelated-to-CAP-10 fix (found while working issue #39): the
+// "same day" branch of formatAsOf() compares the asOf fixture against the
+// real system clock, so this test silently broke the day the calendar moved
+// past the fixture's hardcoded 2026-08-24 - not a CAP-8 regression, just a
+// missing clock pin. Fixed the same way devices.test.tsx already pins Date
+// for its own fixture-relative assertions.
+beforeEach(() => {
+  vi.useFakeTimers({ toFake: ["Date"] });
+  vi.setSystemTime(new Date("2026-08-24T12:00:00.000Z"));
+});
 
 afterEach(() => {
   cleanup();
