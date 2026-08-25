@@ -420,3 +420,44 @@ faked.
   backend. See
   [wiki/features/pos-cashier-waiter.md](../features/pos-cashier-waiter.md)
   for the full writeup.
+
+- **2026-08-25** - POS Cashier & Waiter story 10 (CAP-9 refunds and
+  adjustments), web-only build (`restiq-web`, branch
+  `feature/57-refunds-adjustments`, closes #57): the real P10 Refund &
+  Adjustments screen (`src/app/pos/orders/[orderId]/refund/`), reached from a
+  new "Refund…" button on the real, already-merged bill-settle screen's
+  post-finalisation panel (story 8). Reuses two real, already-merged pieces
+  outright rather than rebuilding either: `BillSummary` (story 8) renders the
+  original, finalised bill read-only and unmodified (it already hides its
+  discount affordance once `status: "finalised"`, so nothing new needed
+  wiring there), and `ManagerPinDialog` (story 9/#42) gates the one and only
+  path to submitting a refund - refund has no below-threshold exception
+  (CAP-8 always gates it), so the mandatory reason code comes solely from the
+  dialog's own reason-code select, with no plain-reason fallback the way
+  CAP-7's discount has. A new `RefundConfigPanel` lets staff check items and
+  adjust refund quantity (clamped to the original line's quantity) with a
+  live-computed subtotal/tax-reversal/total, matching the P10 mock's own
+  numbers exactly (2 x Butter Naan @ ₹60 -> ₹126 total at the same 5%
+  combined CGST+SGST rate CAP-7 established). On approval, a new
+  `CreditNoteResult` screen replaces the whole refund UI wholesale - the
+  original bill is never re-rendered as "edited" because it was never
+  written to in the first place (AD-14/CAP-9 insert-only design).
+  `restiq-backend#63` (this story's own backend) had no branch or commits at
+  build time (`gh api .../branches` against `AusPosRest/restiq-backend`
+  checked - a parallel agent was building it concurrently, not yet pushed);
+  unlike CAP-7's story, this story's `docs/specs/spec-pos-cashier-waiter/`
+  SPEC.md and screens.md *were* reachable from the sibling `restiq-design`
+  repo this time, so the contract and design basis is doubly grounded (SPEC
+  CAP-9 + the real P10 mock), self-authored and documented in full in
+  `refund-state.ts`'s and `api.ts`'s file headers. 16 new tests (10
+  pure-logic in `refund-state.test.ts`, 6 screen integration in
+  `refund-view.test.tsx` covering partial-selection totals, the manager-PIN
+  gate blocking submission until both PIN and reason are present, a rejected
+  PIN leaving the config panel untouched, a successful refund showing the
+  credit note with the original bill never re-fetched or mutated, and a
+  non-finalised bill showing no refund controls), 642/642 passing repo-wide;
+  lint/typecheck/build clean. No live backend reachable for CAP-9, so
+  verification is entirely the stubbed-fetch suite above, same posture as
+  every other POS story built ahead of its own backend. See
+  [wiki/features/pos-cashier-waiter.md](../features/pos-cashier-waiter.md)
+  for the full writeup.

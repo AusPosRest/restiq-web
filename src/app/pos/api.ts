@@ -301,3 +301,16 @@ export function addBillTender(orderId: string, input: AddTenderInput): Promise<B
 export function finalizeBill(orderId: string): Promise<BillView> {
   return posApi<BillView>(`orders/${orderId}/bill/finalize`, { method: "POST" });
 }
+
+// --- CAP-9 Refunds and adjustments (story 10, issue #57 web / #63 backend).
+// See orders/[orderId]/refund/refund-state.ts's file header for the full
+// self-authored-contract reasoning (restiq-backend#63 has no branch yet).
+// The original bill is read via the fetchBill() GET above - no separate read
+// endpoint exists for it.
+export type { CreateRefundInput, CreditNoteView, RefundMethod } from "./orders/[orderId]/refund/refund-state";
+import type { CreateRefundInput, CreditNoteView } from "./orders/[orderId]/refund/refund-state";
+
+/** POST /pos/v1/orders/:id/bill/refund - CAP-8-gated (managerPin always required, see refund-state.ts). Never mutates the original Bill (AD-14/CAP-9) - returns a new, separate CreditNoteView instead of a BillView. */
+export function createRefund(orderId: string, input: CreateRefundInput): Promise<CreditNoteView> {
+  return posApi<CreditNoteView>(`orders/${orderId}/bill/refund`, { method: "POST", body: JSON.stringify(input) });
+}
