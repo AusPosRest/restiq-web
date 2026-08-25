@@ -349,3 +349,35 @@ faked.
   same posture as every other POS story built ahead of its own backend. See
   [wiki/features/pos-cashier-waiter.md](../features/pos-cashier-waiter.md)
   for the full writeup.
+
+- **2026-08-25** - POS Cashier & Waiter story 5 (CAP-4 group ordering -
+  seats and covers), web-only build (`restiq-web`, branch
+  `feature/52-group-ordering`, closes #52): extends story 4's order-taking
+  screen and panel in place, not a separate route - EXPERIENCE.md's IA calls
+  this "optional seat-splitting, reached from the order panel's 'Split by
+  seat' action". `OrderPanel` gains a "Split by seat" toggle that reveals a
+  per-line seat stepper (reusing the existing quantity stepper's Minus/Plus
+  pattern) and a new "Send to kitchen" footer action - this action didn't
+  exist in the UI before this story. "Send to kitchen" is disabled, never
+  hidden, while any line lacks a seat number, with an inline message naming
+  the fix at the point of the violation (EXPERIENCE.md's Component/State
+  Patterns), mirroring the real backend's anticipated 400 for the same rule
+  (SPEC CAP-4: "unassigned items block fire"). `restiq-backend#58` (this
+  story's own backend, branch `feature/58-group-ordering`) had no branch or
+  commits yet when this was built (`gh api .../branches`, `gh issue view 58`
+  both confirming open/unstarted - a parallel agent was building it
+  concurrently) - so `assignSeat`/`sendOrderToKitchen`
+  (`src/app/pos/api.ts`) target the real, already-merged CAP-3 endpoints
+  (`PATCH .../lines/:lineId`, `PATCH .../status`, both verified directly off
+  restiq-backend's real `dev` tree, story 4's PR #57) while anticipating the
+  request/response fields (`seatNumber`, `firedAt`) issue #58 hasn't added
+  yet - must be reconciled once it lands. `OrderLineView.seatNumber`/
+  `OrderView.firedAt` are both optional so story 4's already-shipped
+  tests/call sites keep type-checking unchanged - existing order-taking
+  behavior (menu browsing, adding items, qty +/-/remove) is unaffected. 16
+  new tests (12 pure-logic in `order-taking-state.test.ts`, 4 screen
+  integration in `order-taking-view.test.tsx`), 611/611 passing repo-wide;
+  lint/typecheck/build clean. No live backend reachable, same posture as
+  every other POS story built ahead of its own backend. See
+  [wiki/features/pos-cashier-waiter.md](../features/pos-cashier-waiter.md)
+  for the full writeup.
