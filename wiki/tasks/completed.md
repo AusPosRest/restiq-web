@@ -278,3 +278,24 @@ faked.
   (missing a fake-clock pin, broke once the real calendar moved past its
   fixture date) found while getting this story's CI green. Issue
   AusPosRest/restiq-web#39.
+
+- **2026-08-25** - POS Cashier & Waiter story 6: open and held orders UI
+  (CAP-5). `/pos/open-orders` (`src/app/pos/(shell)/open-orders/`), nested
+  under the real shell so it gets the persistent shift bar. An outlet-wide,
+  five-state list of every non-closed order (table or counter origin,
+  server, status, elapsed time, item count/total shown as `—` rather than
+  crashing when the backend hasn't provided them yet) with a plain "Resume"
+  link to `/pos/orders/[orderId]` for the signed-in staff's own orders and a
+  "Take over" button that reuses story 3's real `TransferOwnershipDialog`
+  and `transferOrder()` action verbatim for everyone else's - no second
+  dialog, no second transfer endpoint. A persistent "Open orders" nav link
+  was added to the shift bar (`shift-bar.tsx`) and, since the table map
+  isn't nested under the shell yet, directly to the table map's own header
+  too, so the screen is reachable from both main-loop entry points per
+  EXPERIENCE.md's IA. Self-authored contract (`GET
+  /pos/v1/outlets/:outletId/orders`) - restiq-backend#53 had no branch yet
+  (confirmed via `git ls-remote` against the real remote) - flagged for
+  reconciliation once it lands. See
+  [wiki/features/pos-cashier-waiter.md](../features/pos-cashier-waiter.md)'s
+  CAP-5 section. 22 new tests, 552/552 passing repo-wide; lint/typecheck/
+  build clean. Issue AusPosRest/restiq-web#47.

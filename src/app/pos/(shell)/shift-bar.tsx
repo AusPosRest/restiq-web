@@ -19,7 +19,13 @@
 // mount (server-cookie display only), so the actual open/float/closed state
 // renders on /pos/shift itself (which already fetches it for its own
 // dashboard) rather than duplicating that fetch here.
-import { LogOut, Wallet, Wifi } from "lucide-react";
+//
+// CAP-5 (open & held orders, story 6) adds the same kind of plain nav link to
+// /pos/open-orders - EXPERIENCE.md's Information Architecture: "reachable
+// from anywhere via a persistent nav icon". The list itself lives on that
+// route (src/app/pos/(shell)/open-orders/), not here, same "link, not a
+// fetch" discipline as the Shift link above.
+import { ClipboardList, LogOut, Wallet, Wifi } from "lucide-react";
 import Link from "next/link";
 import { useState } from "react";
 import { useRouter } from "next/navigation";
@@ -79,6 +85,13 @@ export function ShiftBar({ initial }: Readonly<{ initial: PosStaffDisplay | null
               {initial.outlet.name}
             </p>
           </div>
+          <Link
+            href="/pos/open-orders"
+            data-testid="pos-shift-bar-open-orders-link"
+            className="flex items-center gap-1.5 rounded-lg px-2 py-1.5 text-xs font-medium text-muted-foreground transition-colors hover:bg-accent hover:text-foreground focus:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+          >
+            <ClipboardList className="size-3.5" aria-hidden="true" /> Open orders
+          </Link>
           <Link
             href="/pos/shift"
             data-testid="pos-shift-bar-shift-link"

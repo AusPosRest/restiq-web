@@ -162,9 +162,9 @@ actually built here, story by story. Backend counterpart:
   `/pos/orders/[orderId]`** (`src/app/pos/orders/[orderId]/order-stub.tsx` is exactly
   the placeholder to replace/extend) rather than creating a second order route - the
   table-map -> order navigation already lands there with a real order id.
-- **Story 6 (CAP-5, open/held orders)** should call this story's `transferOrder` action
-  (`src/app/pos/api.ts`) directly for take-over, per stories.yaml: "reused, not
-  reimplemented."
+- **Story 6 (CAP-5, open/held orders) - done, see its own section below.** It calls this
+  story's `transferOrder` action (`src/app/pos/api.ts`) directly for take-over, per
+  stories.yaml: "reused, not reimplemented."
 - **`.pos-theme` / `pos-session.ts` / `/pos` proxy wiring / `src/app/pos/layout.tsx`** were
   added independently by both story 1 and story 3 (neither existed when either story
   started) and have since been reconciled into one implementation - see Key decisions.
@@ -402,3 +402,83 @@ done now, this is what actually happened:
   DOM). The reconciliation pass above was verified against the real
   backend's source directly plus the full automated test suite, not a fresh
   live click-through.
+
+## CAP-5 - Open and held orders, outlet-wide (story 6)
+
+- **Intent:** staff sees every open/held order outlet-wide and resumes their own or takes
+  over someone else's - taking over requires the same explicit-transfer action as CAP-2,
+  never a silent switch (SPEC CAP-5 success criterion; stories.yaml story 6: "call story
+  3's transfer action directly for take-over - this screen is a list view over existing
+  Order state, not a new ownership mechanism").
+- **Built:** P6 Open & Held Orders (`src/app/pos/(shell)/open-orders/`, routed at
+  `/pos/open-orders`, nested under the real shell so it gets the persistent shift bar).
+  Pure list/format logic lives in `open-orders-state.ts` (`isOwnOrder`, `originLabel`,
+  `elapsedLabel`, `summarize`), unit-tested in isolation same as `table-map-state.ts`. The
+  screen (`open-orders-screen.tsx`) is a five-state view over `GET
+  /pos/api/outlets/:outletId/orders`: skeleton while loading, inline retry on failure, a
+  true empty state ("No open orders") for zero rows, and otherwise a table of every
+  non-closed order with its origin (`Table {label}` or `Counter`), server name, status
+  (Open / Sent to kitchen - no fabricated "held" status, see Key decisions), elapsed time,
+  and item count/total *only when the backend actually provides them* - both render `—`
+  rather than crashing or guessing when null, and the footer's running total only sums when
+  every row has one (`summarize()`), never a partial/misleading figure. The signed-in
+  staff's own orders get a plain **Resume** link straight to the existing
+  `/pos/orders/[orderId]` route (story 3's destination, no new endpoint); everyone else's
+  orders get a **Take over** button that opens story 3's real, reused
+  `TransferOwnershipDialog` (`../../table-map/transfer-ownership-dialog.tsx`) and calls its
+  real `transferOrder()` action (`../../api.ts`) on confirm - no second dialog, no second
+  transfer endpoint, exactly stories.yaml's instruction.
+  - **Reachable from anywhere**, per EXPERIENCE.md's IA: a persistent "Open orders" nav
+    link was added to the shell's `shift-bar.tsx` (same plain-link-not-a-fetch pattern as
+    the existing "Shift" link) so every `(shell)`-nested `/pos` screen can reach it. The
+    table map (`table-map.tsx`) isn't nested under `(shell)` yet (a pre-existing gap - see
+    CAP-2's Integration points above), so it doesn't get the shift bar's nav; a second,
+    matching link was added directly to its own header for the same reason, rather than
+    leaving the table map - the other half of the main loop - unable to reach P6 at all.
+- **Backend not available at build time.** `restiq-backend`#53 ("Open and held orders,
+  outlet-wide") had no branch and no commits when this story was built - confirmed by
+  `git ls-remote` against the real `restiq-backend` remote (only `dev`/`main`/
+  `feature/15-device-fleet` existed), not a summary. Self-authored contract (see
+  `open-orders-state.ts`'s file header for the full reasoning): `GET
+  /pos/v1/outlets/:outletId/orders -> { outletId, orders: OpenOrderEntry[] }`, where each
+  `OpenOrderEntry` carries `id, origin ("table"|"counter"), tableLabel, ownerStaffId,
+  ownerStaffName, status ("open"|"sent"), openedAt, itemCount, totalMinor` - the last two
+  nullable by design. This follows story 3's real, *verified* `GET
+  /pos/v1/outlets/:outletId/table-map` shape (outlet id in the path) rather than story 3's
+  own still-unreconciled `table-map` guess. **Must be reconciled against the real
+  restiq-backend#53 DTOs once that lands** - same discipline as `table-map-state.ts`'s own
+  pending reconciliation.
+- **Tests:** 22 new tests - pure logic (`open-orders-state.test.ts`: own-order detection,
+  table vs. counter origin labels, elapsed-time formatting including a clock-skew case, and
+  `summarize()`'s "only sum when every order has a total" rule) and a full component suite
+  (`open-orders-screen.test.tsx`: loading/error/empty states, rendering origin/server/
+  status/elapsed for a mixed table+counter list, Resume-vs-Take-over branching by
+  ownership, the reused transfer dialog's confirm/cancel paths including that a cancelled
+  transfer fires no network request, and that a missing item-count/total renders `—`
+  without crashing while a complete one sums correctly) plus a nav-link assertion added to
+  both `shift-bar.test.tsx` and `table-map.test.tsx`. 552/552 tests passing repo-wide;
+  lint/typecheck/build clean.
+- **Live verification:** none possible (no real backend for this story or story 3 to run
+  against, same posture as CAP-2). Verified entirely via the test suite above, stubbing
+  global `fetch` against the self-authored contract - the same convention every other
+  not-yet-backed realm story in this doc already uses.
+
+## Key decisions (CAP-5)
+
+- **No fabricated "held" status.** SPEC/UX call this "open and held orders", but the real
+  `Order` model (story 3's `orders.service.ts`) only has `open`/`sent`/`closed` - there is
+  no distinct "held" state to render. The screen shows every non-closed order (both `open`
+  and `sent`) under its real status label instead of inventing a "Held" badge with nothing
+  behind it, matching the `needs_bill` honesty precedent CAP-2 already established.
+- **Counter-origin orders render `tableLabel: null` as "Counter", not a blank cell** - CAP-6
+  (QSR counter mode) isn't built yet, so nothing in this prototype can actually produce one
+  today, but the contract models it now since a real Order's `tableId` is nullable (story
+  3's own `OrderView`) and stories.yaml's brief explicitly calls for "table or counter
+  origin".
+- **Item count/total are nullable, not defaulted to 0** - a missing summary must read as
+  "not available" (`—`), never as a fabricated real zero, since CAP-3/CAP-4 order-lines and
+  pricing may not exist for a given order yet. `summarize()`'s footer total only appears
+  once every row actually has one, for the same reason.
+- **No new dialog, no new transfer endpoint.** Take-over reuses story 3's
+  `TransferOwnershipDialog` and `transferOrder()` verbatim - stories.yaml is explicit this
+  screen is "a list view over existing Order state, not a new ownership mechanism."

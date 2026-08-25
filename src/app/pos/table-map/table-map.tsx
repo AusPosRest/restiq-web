@@ -4,6 +4,14 @@
 // empty table to start an order, tap an occupied one to open it". Empty-shift
 // state renders the floor as-is, no promotional empty state (EXPERIENCE.md
 // State Patterns).
+//
+// Also links to /pos/open-orders (CAP-5, story 6): the table map still isn't
+// nested under src/app/pos/(shell)/ (a known gap - see
+// wiki/features/pos-cashier-waiter.md's Integration points), so it doesn't
+// get the shell's persistent shift-bar nav. Without this link, Open & Held
+// Orders would only be reachable from the shell's other pages, not from the
+// table map itself - EXPERIENCE.md's IA calls it reachable "from anywhere".
+import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useState } from "react";
 import { startOrder, transferOrder, PosApiError } from "../api";
@@ -85,6 +93,13 @@ function TableMapLoaded({ initial, onReload }: Readonly<{ initial: TableMapView;
           <p data-testid="current-staff" className="font-label text-sm text-muted-foreground">
             Signed in as <span className="font-semibold text-foreground">{view.currentStaff.name}</span>
           </p>
+          <Link
+            href="/pos/open-orders"
+            data-testid="table-map-open-orders-link"
+            className="rounded-md border border-border px-3 py-1.5 text-xs font-semibold uppercase tracking-wider text-muted-foreground hover:bg-accent hover:text-accent-foreground"
+          >
+            Open orders
+          </Link>
           <button
             type="button"
             data-testid="table-map-refresh"

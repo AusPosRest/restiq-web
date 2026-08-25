@@ -30,6 +30,10 @@ describe("ShiftBar", () => {
     expect(screen.getByTestId("pos-shift-bar-clock-status").textContent).toBe("Spice Route - Indiranagar");
     expect(screen.getByTestId("pos-shift-bar-clock-out")).toBeTruthy();
     expect(screen.getByTestId("pos-shift-bar-shift-link")).toHaveProperty("href", expect.stringContaining("/pos/shift"));
+    expect(screen.getByTestId("pos-shift-bar-open-orders-link")).toHaveProperty(
+      "href",
+      expect.stringContaining("/pos/open-orders"),
+    );
     expect(fetchMock).not.toHaveBeenCalled();
   });
 
