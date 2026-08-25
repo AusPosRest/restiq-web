@@ -7,6 +7,13 @@
 // directly) - see src/app/pos/auth/login/route.ts's header for how the rest
 // of CAP-1's login contract was verified.
 //
+// --- CAP-3 Order taking with modifiers/variants (menu read + order-line
+// writes) - see orders/[orderId]/order-taking-state.ts's file header for the
+// full self-authored-contract reasoning (restiq-backend#52 has no branch
+// yet). fetchOrder/OrderStubView (story 3's placeholder, "enough to prove
+// the id round-trips, nothing about order lines") are replaced outright by
+// fetchOrderDetail/OrderView below, which carry real lines and a total.
+//
 // --- CAP-10 Shift & cash management. Verified against restiq-backend's real
 // feature/45-shift-cash-management branch (src/pos/shifts/shifts.controller.ts
 // / shifts.dtos.ts / shifts.service.ts, read directly - not merged to
@@ -73,22 +80,42 @@ export function transferOrder(orderId: string, reason?: string): Promise<TableMa
   });
 }
 
-export interface OrderStubView {
-  id: string;
-  tableId: string;
-  tableLabel: string;
-  status: "occupied" | "needs_bill";
-  ownerStaffId: string;
-  ownerStaffName: string;
-  openedAt: string;
-}
-
-/** Backs the story-4 placeholder route (/pos/orders/[orderId]) - enough to prove the id round-trips, nothing about order lines. */
-export function fetchOrder(orderId: string): Promise<OrderStubView> {
-  return posApi<OrderStubView>(`orders/${orderId}`);
-}
-
 export type { TableMapView };
+export type {
+  AddOrderLineInput,
+  OrderLineView,
+  OrderView,
+  PosMenuCategoryView,
+  PosMenuItemView,
+  PosMenuVariantView,
+  PosMenuView,
+  PosModifierGroupView,
+  PosModifierView,
+} from "./orders/[orderId]/order-taking-state";
+import type { AddOrderLineInput, OrderView, PosMenuView } from "./orders/[orderId]/order-taking-state";
+
+/** GET /pos/v1/menu - items/categories/modifier groups with a single dine-in price already resolved server-side. */
+export function fetchMenu(): Promise<PosMenuView> {
+  return posApi<PosMenuView>("menu");
+}
+
+/** GET /pos/v1/orders/:id - the real P3 order-taking screen's read, with lines and a running total (replaces story 3's OrderStubView). */
+export function fetchOrderDetail(orderId: string): Promise<OrderView> {
+  return posApi<OrderView>(`orders/${orderId}`);
+}
+
+/** POST /pos/v1/orders/:id/lines - rejected server-side (not just client-validated) if a modifier group's min/max is violated (SPEC CAP-3 success criterion). Attribution (which staff member added it) is resolved server-side from the bearer token, never sent from the client. */
+export function addOrderLine(orderId: string, input: AddOrderLineInput): Promise<OrderView> {
+  return posApi<OrderView>(`orders/${orderId}/lines`, { method: "POST", body: JSON.stringify(input) });
+}
+
+export function updateOrderLineQuantity(orderId: string, lineId: string, quantity: number): Promise<OrderView> {
+  return posApi<OrderView>(`orders/${orderId}/lines/${lineId}`, { method: "PATCH", body: JSON.stringify({ quantity }) });
+}
+
+export function removeOrderLine(orderId: string, lineId: string): Promise<OrderView> {
+  return posApi<OrderView>(`orders/${orderId}/lines/${lineId}`, { method: "DELETE" });
+}
 
 export interface ClockEventView {
   id: string;

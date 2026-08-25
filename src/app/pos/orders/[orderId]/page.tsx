@@ -1,6 +1,6 @@
-import { OrderStub } from "./order-stub";
+import { OrderTakingView } from "./order-taking-view";
 
 export default async function PosOrderPage({ params }: { params: Promise<{ orderId: string }> }) {
   const { orderId } = await params;
-  return <OrderStub orderId={orderId} />;
+  return <OrderTakingView orderId={orderId} />;
 }
