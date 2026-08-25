@@ -278,3 +278,22 @@ faked.
   (missing a fake-clock pin, broke once the real calendar moved past its
   fixture date) found while getting this story's CI green. Issue
   AusPosRest/restiq-web#39.
+
+- **2026-08-25** - POS Cashier & Waiter story 11: device and staff
+  attendance status UI (CAP-11). `/pos/status` (P13), nested under the real
+  `(shell)` route group from the start (built after wave 1's `/pos` shell,
+  PIN login, table map, and shift management had all landed) - a read-only
+  attendance list (name + real CAP-1 clock-in time, "Out {time}" once
+  clocked out, a genuine empty state rather than any fabricated row) plus a
+  device status panel using DESIGN.md's `PrinterStatusChip`/
+  `OfflineIndicatorPill`, both rendering a literal `(demo)` text node in the
+  DOM (not just a tooltip) so the mocked printer/connectivity status can
+  never be mistaken for live telemetry - asserted directly in
+  `device-status-screen.test.tsx`. The paired backend story
+  (restiq-backend#54) had no branch yet, so this ships a self-authored `GET
+  /pos/v1/outlets/:outletId/attendance/today` contract flagged for
+  reconciliation, same discipline as CAP-2's table-map contract. Added a
+  "Status" nav link to the persistent shift bar alongside CAP-10's "Shift"
+  link. See
+  [wiki/features/pos-cashier-waiter.md](../features/pos-cashier-waiter.md)
+  for the full writeup. Issue AusPosRest/restiq-web#48.

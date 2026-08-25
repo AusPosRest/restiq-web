@@ -164,3 +164,56 @@ export function logCashMovement(shiftId: string, type: CashMovementType, amountM
 export function closeShift(shiftId: string, countedMinor: number): Promise<ClosedShift> {
   return posApi<ClosedShift>(`shifts/${shiftId}/close`, { method: "POST", body: JSON.stringify({ countedMinor }) });
 }
+
+// --- CAP-11 Device and staff attendance status (story 11, issue #48).
+//
+// SELF-AUTHORED CONTRACT, not yet verified against a real backend. The
+// paired backend story (issue #54, branch feature/54-pos-device-status) had
+// no branch and no commits at the time this was built - `gh api
+// repos/AusPosRest/restiq-backend/branches` listed only dev/main/
+// feature/15-device-fleet. restiq-backend's dev branch does have the real
+// ClockEvent model and clock-out endpoint (src/pos/clock/*, verified by
+// reading the actual tree) but no endpoint that lists clock events back out -
+// only the write side exists so far.
+//
+// This shape is this story's best guess, built directly from SPEC CAP-11
+// ("who is clocked in on this device today" - "no fabricated staff or
+// times") and stories.yaml story 11 ("real ClockEvent rows from story 1...
+// static 'connected' placeholder, clearly not a live peripheral check"):
+// one GET returning today's attendance (derived server-side from ClockEvent
+// rows the same way CAP-1 already writes them - staffId/type/occurredAt) and
+// a `device` object that is deliberately never anything but a static mock,
+// never presented as live telemetry (DESIGN.md/EXPERIENCE.md's honesty
+// pattern for PrinterStatusChip/OfflineIndicatorPill).
+//
+// MUST be reconciled against the real restiq-backend#54 DTOs once that
+// lands - same discipline as table-map-state.ts's file header.
+
+export interface AttendanceEntry {
+  staffId: string;
+  staffName: string;
+  /** ISO timestamp of today's clock-in (outlet-local calendar day, per CAP-1's clock.util.ts convention). */
+  clockInAt: string;
+  /** null while still clocked in - the only clock write CAP-1's UI makes is clock-out. */
+  clockOutAt: string | null;
+}
+
+export type PrinterStatus = "connected" | "disconnected";
+export type ConnectivityStatus = "online" | "offline";
+
+/** Always mocked (SPEC CAP-11, DESIGN.md): no real printer or connectivity signal exists in this prototype. */
+export interface PosDeviceStatus {
+  printer: PrinterStatus;
+  connectivity: ConnectivityStatus;
+}
+
+export interface AttendanceView {
+  outletId: string;
+  /** Newest first. Empty is a real, valid state (no one clocked in yet today), never fabricated rows. */
+  staff: AttendanceEntry[];
+  device: PosDeviceStatus;
+}
+
+export function getAttendanceToday(outletId: string): Promise<AttendanceView> {
+  return posApi<AttendanceView>(`outlets/${encodeURIComponent(outletId)}/attendance/today`);
+}
