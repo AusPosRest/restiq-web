@@ -250,13 +250,14 @@ actually built here, story by story. Backend counterpart:
 ## Integration points for later stories
 
 - **Story 4 (CAP-3, order taking, P3/P4) - done, see its own section above.**
-- **Story 5 (CAP-4, group ordering/seats) and story 8 (CAP-7, bill & settle) build
-  directly on story 4's `OrderLine`/`OrderView` shape** (`order-taking-state.ts`) -
-  read that file's actual shape before extending it, per stories.yaml's own warning that
-  field names may have shifted during that story's build.
-- **Story 8 (CAP-7) owns tax breakdown and discounts** - story 4's `OrderPanel`
-  deliberately shows only a line-total sum, no GST/discount line (see CAP-3's Built
-  section above for why).
+- **Story 5 (CAP-4, group ordering/seats) builds directly on story 4's
+  `OrderLine`/`OrderView` shape** (`order-taking-state.ts`) - read that file's actual shape
+  before extending it, per stories.yaml's own warning that field names may have shifted
+  during that story's build.
+- **Story 8 (CAP-7, bill & settle) - done, see its own section below.** It reused
+  `order-taking-state.ts`'s `OrderLineView` directly for the bill's line items rather than
+  reshaping them, and owns the tax breakdown/discount line CAP-3's `OrderPanel` explicitly
+  left out (see CAP-3's Built section above for why).
 - **Story 6 (CAP-5, open/held orders) - done, see its own section below.** It calls
   story 3's `transferOrder` action (`src/app/pos/api.ts`) directly for take-over, per
   stories.yaml: "reused, not reimplemented."
@@ -645,3 +646,115 @@ done now, this is what actually happened:
 - **No new dialog, no new transfer endpoint.** Take-over reuses story 3's
   `TransferOwnershipDialog` and `transferOrder()` verbatim - stories.yaml is explicit this
   screen is "a list view over existing Order state, not a new ownership mechanism."
+
+## CAP-7 - Bill & Settle (story 8)
+
+- **Intent:** cashier reviews a tax breakdown of the order, optionally applies a discount
+  (gated by manager PIN once above a threshold), tenders payment across one or more
+  methods until the remaining-to-settle figure hits zero, then finalises - after which the
+  bill is read-only, no edit path anywhere (AD-14 insert-only-past-finalisation).
+- **A note on this story's source material.** The task brief for this story cites
+  `restiq-design/docs/specs/spec-pos-cashier-waiter/SPEC.md`,
+  `.../stories.yaml`, and `restiq-design/docs/ux/ux-pos-cashier-waiter-2026-08-25/`
+  (DESIGN.md/EXPERIENCE.md) - the same paths this whole doc's header cites. None of them
+  exist anywhere in the real `restiq-design` repo (checked every branch's full git tree via
+  `gh api .../git/trees?recursive=1`, not just `main`) - only `spec-platform-console` and
+  `spec-tenant-admin` have real SPEC/stories.yaml/DESIGN/EXPERIENCE docs; the POS capability
+  only ever got as far as `design-system.md` + Stitch screen mocks under
+  `design/screens/pos-core-loop/` (on the `design/pull-stitch-screens` branch). This story
+  was therefore built from the real P8 mock
+  (`restiq-bill-settle-order-1042--a6cdc714.png`) and `design-system.md`'s component list
+  (`BillSummary`, `TenderKeypad`) alone - see `settle/bill-state.ts`'s file header for the
+  full accounting. Flagged for whoever owns `restiq-design` to either author the missing
+  docs or correct this doc's header, which has cited them since story 1 without anyone
+  having verified they exist.
+- **Built:** `src/app/pos/orders/[orderId]/settle/`, a new route
+  (`/pos/orders/[orderId]/settle`) reached from the real, already-merged order-taking
+  screen's new "Settle" button (`order-panel.tsx`'s footer, disabled with no line items).
+  - **`bill-state.ts`** - `BillView`/`BillDiscountView`/`BillTaxLineView`/`BillTenderView`
+    types plus pure logic (`canFinalizeBill`, `isBillReadOnly`,
+    `discountRequiresManagerApproval`), unit-tested without a DOM, same split as every
+    other `/pos` screen's `*-state.ts`.
+  - **`BillSummary`** (left panel) - qty/item/amount lines (reusing `OrderLineView`
+    straight from CAP-3's `order-taking-state.ts`, no reshaping), then subtotal, an
+    optional discount line (green, `-amount`, tagged "Manager approved" when it went
+    through the PIN gate), CGST/SGST tax lines, a round-off line, and the grand total -
+    matches the P8 mock's own layout exactly. Split-bill (by seat/item/equal/amount, also
+    visible in the mock) is not built - not in this story's task list (YAGNI, noted in
+    `bill-state.ts`'s header).
+  - **`TenderKeypad`** (right panel) - a running "remaining amount due" figure, a
+    Cash/UPI method toggle, the already-merged shift `AmountKeypad` reused directly for
+    amount entry (an "exact remaining" quick-fill button added on top), and a captured-
+    tenders list. Each "Add tender" posts one tender and replaces the whole `BillView` from
+    the response - supports split/multiple tenders exactly as asked, with no client-side
+    running-total math the server response doesn't already carry.
+  - **Discount, below vs. above threshold** (`discount-dialog.tsx`) - percent-only (matches
+    the mock's own "Discount 10%" line; a fixed-amount discount isn't shown in the mock or
+    asked for). Below `DISCOUNT_MANAGER_APPROVAL_THRESHOLD_PERCENT` (10%, this story's own
+    documented judgment call - no numeric threshold exists anywhere to read), the dialog
+    collects a plain free-text reason and applies directly. At or above it, the plain
+    reason field disappears and the dialog instead renders the real, already-merged
+    **`ManagerPinDialog`** (`src/app/pos/components/manager-pin-dialog.tsx`, story 9/#42) -
+    not a second PIN dialog - with `actionTitle="Discount above threshold"` and
+    discount-specific `reasonCodeOptions` (Regular guest / Service recovery / Manager
+    discretion / Other, matching the mock's "Regular guest" tag). `onApprove` calls the
+    same `applyBillDiscount()` the below-threshold path calls, just with the PIN attached;
+    a rejected/thrown approval surfaces inline in `ManagerPinDialog`'s own error slot
+    without closing, exactly its existing contract. See "How to use this component" in
+    story 9's original wiki entry for the general pattern - this is that pattern's first
+    real caller.
+  - **Finalize** - disabled until `tenderedMinor` exactly equals `grandTotalMinor`
+    (`canFinalizeBill`, never allows over-tendering to silently pass either). Once the bill
+    comes back `status: "finalised"`, the whole mutation half of the screen (discount
+    button, `TenderKeypad`, Finalize button) stops rendering outright and is replaced by a
+    plain "Bill finalised" panel - there is no toggle, flag, or hidden route back to the
+    mutable view, matching the task's "no edit UI at all" requirement.
+  - **`AmountKeypad` gained an additive `display` prop** (`(shell)/shift/amount-keypad.tsx`)
+    so the discount dialog's percent entry could reuse it instead of writing a second
+    digit-grid component - every existing money caller is unaffected (the prop is optional
+    and only this story passes it).
+- **Backend not available at build time.** `restiq-backend#59` ("Bill and settle (CAP-7)")
+  was open with no branch and no commits when this was built (`gh issue view 59`/`gh api
+  .../branches` against `AusPosRest/restiq-backend`, confirming only `dev`/`main`/
+  `feature/15-device-fleet` exist) - the issue body itself calls this a "greenfield
+  Bill/Tender models, AD-14 insert-only, gapless outlet-scoped numbering" build, so unlike
+  CAP-3's order lines there was no real schema anywhere to read either. Self-authored
+  contract (`GET .../bill`, `POST .../bill/discount`, `POST .../bill/tenders`, `POST
+  .../bill/finalize`) documented in full in `bill-state.ts`'s and `api.ts`'s file headers,
+  including the CGST/SGST 2.5%+2.5% tax computation (the only concrete tax rule available
+  anywhere - `TenantTaxRegistration.taxProfile` exists in the real merged schema but has no
+  computation logic yet) and the bill-numbering convention (`TN1-000482` in the mock; this
+  client only ever displays whatever the response carries, never fabricates one). **Must be
+  reconciled against the real restiq-backend#59 DTOs once that lands** - same discipline as
+  every other not-yet-backed story in this doc.
+- **Tests:** 15 new tests - pure logic (`bill-state.test.ts`, 9: discount threshold
+  boundary at/above/below, finalize-gating including the never-over-settle case, read-only
+  detection) and a full integration suite (`bill-settle-view.test.tsx`, 6, stubbing global
+  `fetch` against the self-authored contract, same convention as
+  `order-taking-view.test.tsx`): tax breakdown rendering, remaining-to-settle updating
+  across two tenders (a manual entry plus an exact-remaining fill), Finalize staying
+  disabled until tenders exactly cover the total then enabling, a below-threshold discount
+  applying with just a reason and no PIN dialog appearing, an above-threshold discount
+  routing through the real `ManagerPinDialog` (confirming Approve stays disabled on PIN
+  alone until a reason is also picked, then proceeding only once both are present), and
+  that no mutation control of any kind renders once the bill is finalised. 614/614 tests
+  passing repo-wide; lint/typecheck/build clean.
+- **Live verification:** none possible - same constraint as CAP-3/CAP-5 above, now also
+  true of story 9's `ManagerPinDialog` itself (its own wiki entry already noted no screen
+  existed yet to verify it live in - this is that screen). Verified entirely via the 15
+  tests above, stubbing global `fetch` against the self-authored contract.
+
+## Key decisions (CAP-7)
+
+- **Discount is percent-only**, not percent-or-amount - the P8 mock only ever shows a
+  percent discount, and the task didn't ask for a fixed-amount variant either (YAGNI).
+- **The 10% manager-approval threshold is this story's own documented judgment call**,
+  chosen so the mock's own 10%-with-"Manager approved" discount sits exactly on the
+  boundary - no real threshold exists anywhere to read yet (see `bill-state.ts`).
+- **No tender-removal UI** - the mock itself has no such affordance either, and AD-14's
+  insert-only posture on the money path (already established by CAP-10's cash movements)
+  suggests a wrong tender is corrected by adding more tenders and reconciling at
+  finalisation/close, not by deleting a row. Flagged as a real usability gap worth
+  revisiting once the real backend's tender semantics land, not silently assumed away.
+- **Split-bill (by seat/item/equal/amount) is out of scope** - visible in the P8 mock but
+  not named anywhere in this story's task list.

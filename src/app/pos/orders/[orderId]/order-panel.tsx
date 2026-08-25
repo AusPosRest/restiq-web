@@ -5,7 +5,13 @@
 // stories.yaml) - out of scope here, this story's Order/OrderLine has no
 // seat field yet. Every line shows who added it (SPEC CAP-3 success
 // criterion: "every line records which staff member added it").
+//
+// The footer's "Settle" link is CAP-7 Bill & Settle's entry point
+// (story 8/#53) - the order-taking screen itself never computes tax or
+// discounts (see computeOrderTotalMinor's own comment), it only hands off.
+import Link from "next/link";
 import { Minus, Plus, Trash2 } from "lucide-react";
+import { Button } from "@/components/ui/button";
 import { computeOrderTotalMinor, formatPriceMinor, type OrderLineView } from "./order-taking-state";
 
 export interface OrderPanelProps {
@@ -105,6 +111,15 @@ export function OrderPanel({ orderId, tableLabel, currency, lines, busyLineId, o
           </span>
         </div>
         <p className="mt-1 text-[11px] text-muted-foreground">Tax and discounts apply at Bill &amp; Settle.</p>
+        {lines.length === 0 ? (
+          <Button size="lg" className="mt-3 w-full" data-testid="go-to-settle" disabled>
+            Settle
+          </Button>
+        ) : (
+          <Button asChild size="lg" className="mt-3 w-full" data-testid="go-to-settle">
+            <Link href={`/pos/orders/${orderId}/settle`}>Settle</Link>
+          </Button>
+        )}
       </footer>
     </aside>
   );

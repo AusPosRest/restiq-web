@@ -2,12 +2,18 @@
 
 // Shared digit-grid used by every amount entry in this story: the open-shift
 // float, a cash movement's amount, and BlindCountKeypad's counted amount
-// (close-shift-screen.tsx). EXPERIENCE.md's Interaction Primitives rule:
-// numeric entry always goes through a large on-screen keypad component,
-// never the OS's native numeric keyboard - so this is a button grid, not an
-// <input type="number">. The Accessibility Floor also requires physical
-// keyboard input to keep working for testing/demo, so digit/backspace keys
-// are wired on top of the click handlers, not instead of them.
+// (close-shift-screen.tsx); also reused by CAP-7 Bill & Settle's TenderKeypad
+// and discount-dialog.tsx for cash/UPI tender and discount-value entry.
+// EXPERIENCE.md's Interaction Primitives rule: numeric entry always goes
+// through a large on-screen keypad component, never the OS's native numeric
+// keyboard - so this is a button grid, not an <input type="number">. The
+// Accessibility Floor also requires physical keyboard input to keep working
+// for testing/demo, so digit/backspace keys are wired on top of the click
+// handlers, not instead of them.
+//
+// `display` overrides the default money-formatted readout for non-money
+// digit entry (CAP-7's percent-based discount) - optional and additive, so
+// every existing money caller is unaffected.
 import { formatMinor } from "./shift-state";
 
 const KEYS = ["1", "2", "3", "4", "5", "6", "7", "8", "9", "clear", "0", "back"] as const;
@@ -20,9 +26,11 @@ export interface AmountKeypadProps {
   testId: string;
   currency?: string;
   disabled?: boolean;
+  /** Overrides the default `formatMinor(digits, currency)` readout - e.g. a percent sign for non-money digit entry. */
+  display?: string;
 }
 
-export function AmountKeypad({ digits, onDigit, onBackspace, onClear, testId, currency = "INR", disabled }: Readonly<AmountKeypadProps>) {
+export function AmountKeypad({ digits, onDigit, onBackspace, onClear, testId, currency = "INR", disabled, display }: Readonly<AmountKeypadProps>) {
   function handleKeyDown(event: React.KeyboardEvent<HTMLDivElement>) {
     if (disabled) return;
     if (/^[0-9]$/.test(event.key)) {
@@ -40,7 +48,7 @@ export function AmountKeypad({ digits, onDigit, onBackspace, onClear, testId, cu
   return (
     <div data-testid={testId} onKeyDown={handleKeyDown} tabIndex={0} className="flex flex-col items-center gap-4 focus:outline-none">
       <output data-testid={`${testId}-display`} className="font-headline min-w-[10ch] text-center text-5xl font-bold tabular-nums tracking-tight text-foreground">
-        {formatMinor(parseInt(digits || "0", 10), currency)}
+        {display ?? formatMinor(parseInt(digits || "0", 10), currency)}
       </output>
       <div className="grid grid-cols-3 gap-3">
         {KEYS.map((key) => {
