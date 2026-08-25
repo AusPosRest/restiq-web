@@ -1,13 +1,9 @@
-// Server-side pass-through to the backend's /pos/v1 API. Mirrors
-// /admin/api/[...path]/route.ts exactly (same disjoint-realm shape, AD-13) -
-// the pos JWT lives in an httpOnly cookie, this attaches it as a bearer
-// credential, and the backend guard remains the actual enforcement point.
-//
-// restiq-backend has no /pos/v1 module yet as of this story (issue #46,
-// "Table map and order ownership/transfer" backend, was open with no branch
-// when this was built) - see table-map-state.ts's file header for the
-// self-authored contract this forwards to. No multipart handling: unlike
-// admin's menu-import upload, nothing under /pos/v1 in this story takes a
+// Server-side pass-through to the backend's /pos/v1 API. The pos JWT lives in
+// an httpOnly cookie (never readable client-side), so browser code calls
+// /pos/api/* and this handler attaches the Authorization header. The backend
+// guard remains the enforcement point - this adds a credential, not authz.
+// Mirrors src/app/admin/api/[...path]/route.ts (AD-4/AD-13). No multipart
+// handling: unlike admin's menu-import upload, nothing under /pos/v1 takes a
 // file body.
 import { NextRequest, NextResponse } from "next/server";
 import { POS_SESSION_COOKIE } from "@/lib/pos-session";
@@ -57,5 +53,11 @@ export function POST(request: NextRequest, ctx: { params: Promise<{ path: string
   return forward(request, ctx.params);
 }
 export function PATCH(request: NextRequest, ctx: { params: Promise<{ path: string[] }> }): Promise<NextResponse> {
+  return forward(request, ctx.params);
+}
+export function PUT(request: NextRequest, ctx: { params: Promise<{ path: string[] }> }): Promise<NextResponse> {
+  return forward(request, ctx.params);
+}
+export function DELETE(request: NextRequest, ctx: { params: Promise<{ path: string[] }> }): Promise<NextResponse> {
   return forward(request, ctx.params);
 }

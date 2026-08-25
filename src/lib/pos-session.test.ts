@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { decidePosRoute, sanitizePosNextPath } from "./pos-session";
+import { decidePosRoute, parsePosStaffDisplay, sanitizePosNextPath } from "./pos-session";
 
 function fakeToken(exp: number): string {
   const payload = Buffer.from(JSON.stringify({ sub: "staff-1", aud: "pos", exp })).toString("base64url");
@@ -10,8 +10,10 @@ const inOneHour = Math.floor(Date.now() / 1000) + 3600;
 const oneHourAgo = Math.floor(Date.now() / 1000) - 3600;
 
 describe("decidePosRoute", () => {
-  it("allows the login page without a session", () => {
+  it("allows the login page and both auth route handlers without a session", () => {
     expect(decidePosRoute("/pos/login", "", undefined)).toEqual({ allow: true });
+    expect(decidePosRoute("/pos/auth/login", "", undefined)).toEqual({ allow: true });
+    expect(decidePosRoute("/pos/auth/select-outlet", "", undefined)).toEqual({ allow: true });
   });
 
   it("redirects unauthenticated /pos requests to login with the return URL", () => {
@@ -52,5 +54,19 @@ describe("sanitizePosNextPath", () => {
     expect(sanitizePosNextPath("/admin")).toBe("/pos");
     expect(sanitizePosNextPath(undefined)).toBe("/pos");
     expect(sanitizePosNextPath("/posx")).toBe("/pos");
+  });
+});
+
+describe("parsePosStaffDisplay", () => {
+  const valid = { staff: { id: "s1", name: "Priya Nair" }, outlet: { id: "o1", name: "Spice Route" } };
+
+  it("parses a well-formed cookie value", () => {
+    expect(parsePosStaffDisplay(JSON.stringify(valid))).toEqual(valid);
+  });
+
+  it("returns null for missing, malformed, or incomplete values", () => {
+    expect(parsePosStaffDisplay(undefined)).toBeNull();
+    expect(parsePosStaffDisplay("not-json")).toBeNull();
+    expect(parsePosStaffDisplay(JSON.stringify({ staff: { id: "s1", name: "Priya" } }))).toBeNull();
   });
 });

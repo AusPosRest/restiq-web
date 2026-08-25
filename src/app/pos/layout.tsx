@@ -18,13 +18,14 @@ const publicSans = Public_Sans({
 
 export const metadata: Metadata = {
   title: "RESTIQ POS",
-  description: "Cashier and waiter POS - table map, order taking, and settlement",
+  description: "Cashier and waiter POS - PIN login, shift clock, table map, order taking, and settlement",
   robots: { index: false, follow: false },
 };
 
 // POS's own theme wraps everything under /pos (SPEC's AD-13, a fourth
-// disjoint realm alongside /ops and /admin) - mirrors admin/layout.tsx. Login
-// (story 1/#38) will render directly under here; table-map and every screen
+// disjoint realm alongside /ops and /admin) - mirrors admin/layout.tsx. PIN
+// login and the post-login shift-bar shell (story 1/#38) live under
+// src/app/pos/login and src/app/pos/(shell); table-map and every screen
 // after it live in their own route folders since this realm has no shared
 // sidebar chrome (EXPERIENCE.md: tablet-width, top-bar-per-screen, not a desk
 // console sidebar).
