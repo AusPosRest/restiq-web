@@ -60,9 +60,31 @@ describe("pos API pass-through", () => {
     expect(upstreamInit.body).toBe(JSON.stringify({ reason: "Covering the section" }));
   });
 
+  it("forwards clock/out (CAP-1) the same way as any other pos/v1 path", async () => {
+    const fetchMock = vi
+      .fn()
+      .mockResolvedValue(new Response(JSON.stringify({ id: "c1", type: "clock_out", occurredAt: "2026-08-25T09:00:00.000Z" }), { status: 200 }));
+    vi.stubGlobal("fetch", fetchMock);
+
+    const request = requestWithCookie("https://web.example.test/pos/api/clock/out", { method: "POST" });
+    const res = await POST(request, { params: Promise.resolve({ path: ["clock", "out"] }) });
+
+    expect(res.status).toBe(200);
+    const [url, init] = fetchMock.mock.calls[0] as [string, RequestInit];
+    expect(url).toBe(`${API_URL}/pos/v1/clock/out`);
+    expect((init.headers as Record<string, string>).authorization).toBe("Bearer a-jwt");
+  });
+
   it("rejects a path segment outside the allowed charset", async () => {
     const request = requestWithCookie("https://web.example.test/pos/api/..%2Fadmin");
     const res = await GET(request, { params: Promise.resolve({ path: ["../admin"] }) });
     expect(res.status).toBe(404);
+  });
+
+  it("passes an upstream 502 through when the API is unreachable", async () => {
+    vi.stubGlobal("fetch", vi.fn().mockRejectedValue(new TypeError("network down")));
+    const request = requestWithCookie("https://web.example.test/pos/api/clock/out", { method: "POST" });
+    const res = await POST(request, { params: Promise.resolve({ path: ["clock", "out"] }) });
+    expect(res.status).toBe(502);
   });
 });

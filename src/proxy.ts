@@ -1,7 +1,7 @@
-// The app's single request interceptor (AD-4/AD-10): auth scoping branches on
-// the /ops, /admin and /pos path prefixes, each its own disjoint realm with
-// its own session cookie. Tenant routes are untouched - the matcher never
-// fires for them.
+// The app's single request interceptor (AD-4/AD-10/AD-13): auth scoping
+// branches on the /ops, /admin and /pos path prefixes, each its own disjoint
+// realm with its own session cookie. Tenant routes are untouched - the
+// matcher never fires for them.
 import { NextRequest, NextResponse } from "next/server";
 import { decideAdminRoute, ADMIN_SESSION_COOKIE } from "@/lib/admin-session";
 import { decideOpsRoute, OPS_SESSION_COOKIE } from "@/lib/ops-session";

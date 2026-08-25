@@ -169,6 +169,30 @@
   exact gap this story targets. 435 tests passing. Issue
   AusPosRest/restiq-web#36.
 
+- **2026-08-25** - POS Cashier & Waiter story 1: PIN login and shift clock
+  UI (CAP-1). New fourth disjoint auth realm `/pos` (AD-13, `aud:"pos"`,
+  `pos_session` cookie) wired into `src/proxy.ts` alongside `/ops`/`/admin`,
+  with `/pos/api/[...path]` pass-through mirroring `/admin/api`'s. Full-
+  screen PIN keypad (`/pos/login`) auto-submitting at 4 digits, with an
+  inline wrong-PIN error, a live client-timed lockout countdown after 5
+  wrong attempts, and an outlet picker (a dedicated `select-outlet` step
+  with a backend-issued `pendingToken`) that only appears for multi-outlet
+  tenants. A lightweight persistent shift bar (`src/app/pos/(shell)/
+  shift-bar.tsx`) shows the staff name/outlet and a Clock Out control (the
+  real backend has no clock-in toggle - clock-in is automatic on login), plus
+  sign-out, reachable after login. **Verified against the real backend
+  contract**: restiq-backend's `feature/44-pos-auth-clock` branch (real,
+  pushed, not yet merged to `restiq-backend/dev`) was read directly -
+  `auth.dtos.ts`, `auth.controller.ts`, `auth.service.ts`,
+  `clock.controller.ts`, `lockout.ts` - and this story's originally-guessed
+  contract (`requiresOutletSelection`, `clock/toggle`, `auth/me`, a
+  server-echoed `lockedUntil`) was replaced with the real
+  `tenantId`+`pin`/`pendingToken`+`outletId`/`clock/out`-only shapes. See
+  [wiki/features/pos-cashier-waiter.md](../features/pos-cashier-waiter.md)
+  for the full reconciliation note. Covered by pure-logic and mocked-fetch
+  component tests plus the route handlers' own tests, all rewritten against
+  the real contract shapes. Issue AusPosRest/restiq-web#38.
+
 ---
 
 **Tenant Admin: all 10 stories complete.** CAP-1 through CAP-9 plus this
@@ -205,9 +229,11 @@ faked.
   this is the exact route story 4 (CAP-3 order taking) should build its real
   screen into, not a second route. `restiq-backend#46` (this story's own
   backend) and `restiq-web`'s own story 1/#38 (PIN login, so no real
-  `/pos/login` or `pos_session` cookie exists yet) were both unbuilt at the
+  `/pos/login` or `pos_session` cookie existed yet) were both unbuilt at the
   time - self-authored contract and an honest, documented auth gap, same
-  discipline as the CAP-8 dashboard story above. 32 new tests, 467/467
+  discipline as the CAP-8 dashboard story above. **Resolved by story 1 above**:
+  a real `/pos/login` and `pos_session` cookie now exist, so table map's own
+  route guard has a working login to redirect to. 32 new tests, 467/467
   passing repo-wide; lint/typecheck/build clean. See
   [wiki/features/pos-cashier-waiter.md](../features/pos-cashier-waiter.md)
   for the full writeup and the parallel-build dedupe note for any other

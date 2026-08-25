@@ -1,7 +1,11 @@
 // Typed client-side access to the backend API via the /pos/api pass-through.
 // Mirrors admin/api.ts's shape (AdminApiError -> PosApiError, adminApi ->
-// posApi). See table-map/table-map-state.ts's file header for why every
-// path below is a self-authored, not-yet-verified contract.
+// posApi). See table-map/table-map-state.ts's file header for why the
+// table-map/order endpoints below are a self-authored, not-yet-verified
+// contract. clockOut hits the real, verified restiq-backend contract instead
+// (feature/44-pos-auth-clock's src/pos/clock/clock.controller.ts, read
+// directly) - see src/app/pos/auth/login/route.ts's header for how the rest
+// of CAP-1's login contract was verified.
 import type { TableMapEntry, TableMapView } from "./table-map/table-map-state";
 
 export class PosApiError extends Error {
@@ -70,3 +74,19 @@ export function fetchOrder(orderId: string): Promise<OrderStubView> {
 }
 
 export type { TableMapView };
+
+export interface ClockEventView {
+  id: string;
+  type: "clock_in" | "clock_out";
+  occurredAt: string;
+}
+
+/**
+ * CAP-1's explicit "end my shift" action. Clock-in has no equivalent client
+ * call - the real backend records it automatically on login (once per local
+ * calendar day) rather than as a separate toggle, so this is the only clock
+ * write CAP-1's UI ever makes.
+ */
+export function clockOut(): Promise<ClockEventView> {
+  return posApi<ClockEventView>("clock/out", { method: "POST" });
+}
