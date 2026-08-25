@@ -84,6 +84,17 @@ describe("TableMap", () => {
     expect(occupied.dataset.status).toBe("occupied");
   });
 
+  it("links to Open & Held Orders (CAP-5) - reachable from anywhere per EXPERIENCE.md's IA", async () => {
+    stubFetch(() => jsonResponse(view()));
+    render(<TableMap />);
+    await waitFor(() => expect(screen.getByTestId("table-map")).toBeTruthy());
+
+    expect(screen.getByTestId("table-map-open-orders-link")).toHaveProperty(
+      "href",
+      expect.stringContaining("/pos/open-orders"),
+    );
+  });
+
   it("starts a new order when an empty table is tapped", async () => {
     const user = userEvent.setup();
     const startedOrder = {
