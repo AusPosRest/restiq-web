@@ -2,11 +2,15 @@
 
 // OrderPanel (DESIGN.md: "right rail: line items, qty steppers, seat/course
 // tags"). Seat/course tags are CAP-4/group-ordering's addition (story 5,
-// stories.yaml) - out of scope here, this story's Order/OrderLine has no
-// seat field yet. Every line shows who added it (SPEC CAP-3 success
-// criterion: "every line records which staff member added it").
+// stories.yaml) - built here now: EXPERIENCE.md's IA calls this the "Split
+// by seat" action off the order panel, so it's a per-line reveal in this
+// same panel, not a separate P5 route (see order-taking-state.ts's CAP-4
+// header for the full contract reasoning). Every line shows who added it
+// (SPEC CAP-3 success criterion: "every line records which staff member
+// added it").
+import { useState } from "react";
 import { Minus, Plus, Trash2 } from "lucide-react";
-import { computeOrderTotalMinor, formatPriceMinor, type OrderLineView } from "./order-taking-state";
+import { canSendToKitchen, computeOrderTotalMinor, formatPriceMinor, unseatedLineCount, type OrderLineView, type OrderView } from "./order-taking-state";
 
 export interface OrderPanelProps {
   /** The Order's real id - CAP-3 has no gapless bill-number concept (that's CAP-7's Bill), so the header shows a short display slice of the real id, not a fabricated sequence number. */
@@ -14,20 +18,58 @@ export interface OrderPanelProps {
   tableLabel: string;
   currency: string;
   lines: OrderLineView[];
+  /** CAP-4: whether the order has already been fired - null/absent beforehand, see order-taking-state.ts. */
+  firedAt: OrderView["firedAt"];
   busyLineId: string | null;
   onIncrement: (line: OrderLineView) => void;
   onDecrement: (line: OrderLineView) => void;
   onRemove: (line: OrderLineView) => void;
+  onSeatIncrement: (line: OrderLineView) => void;
+  onSeatDecrement: (line: OrderLineView) => void;
+  sendingToKitchen: boolean;
+  onSendToKitchen: () => void;
 }
 
-export function OrderPanel({ orderId, tableLabel, currency, lines, busyLineId, onIncrement, onDecrement, onRemove }: Readonly<OrderPanelProps>) {
+export function OrderPanel({
+  orderId,
+  tableLabel,
+  currency,
+  lines,
+  firedAt,
+  busyLineId,
+  onIncrement,
+  onDecrement,
+  onRemove,
+  onSeatIncrement,
+  onSeatDecrement,
+  sendingToKitchen,
+  onSendToKitchen,
+}: Readonly<OrderPanelProps>) {
   const totalMinor = computeOrderTotalMinor(lines);
+  const [splitBySeat, setSplitBySeat] = useState(false);
+  const unseated = unseatedLineCount(lines);
+  const canSend = canSendToKitchen({ lines, firedAt });
 
   return (
     <aside data-testid="order-panel" className="flex w-80 shrink-0 flex-col border-l border-border/60 bg-card">
-      <header className="border-b border-border/60 px-4 py-3">
-        <p className="font-headline text-sm font-semibold text-foreground">Order #{orderId.slice(-6).toUpperCase()}</p>
-        <p className="text-xs text-muted-foreground">Table {tableLabel}</p>
+      <header className="flex items-start justify-between gap-2 border-b border-border/60 px-4 py-3">
+        <div>
+          <p className="font-headline text-sm font-semibold text-foreground">Order #{orderId.slice(-6).toUpperCase()}</p>
+          <p className="text-xs text-muted-foreground">Table {tableLabel}</p>
+        </div>
+        {lines.length > 0 && (
+          <button
+            type="button"
+            data-testid="split-by-seat-toggle"
+            aria-pressed={splitBySeat}
+            onClick={() => setSplitBySeat((value) => !value)}
+            className={`shrink-0 rounded-md border px-2 py-1 text-xs font-semibold transition-colors ${
+              splitBySeat ? "border-primary bg-primary text-primary-foreground" : "border-border text-muted-foreground hover:bg-accent hover:text-foreground"
+            }`}
+          >
+            Split by seat
+          </button>
+        )}
       </header>
 
       <div data-testid="order-panel-lines" className="flex flex-1 flex-col gap-3 overflow-y-auto p-4">
@@ -91,6 +133,34 @@ export function OrderPanel({ orderId, tableLabel, currency, lines, busyLineId, o
                     <Trash2 className="size-3.5" aria-hidden="true" />
                   </button>
                 </div>
+                {splitBySeat && (
+                  <div className="flex items-center gap-2 border-t border-border/40 pt-1.5">
+                    <span className="font-label text-[11px] font-semibold uppercase tracking-wider text-muted-foreground">Seat</span>
+                    <button
+                      type="button"
+                      data-testid={`order-line-seat-decrement-${line.id}`}
+                      aria-label="Decrease seat"
+                      disabled={isBusy || line.seatNumber == null}
+                      onClick={() => onSeatDecrement(line)}
+                      className="flex size-6 items-center justify-center rounded-md border border-border text-foreground hover:bg-accent disabled:opacity-40"
+                    >
+                      <Minus className="size-3" aria-hidden="true" />
+                    </button>
+                    <span data-testid={`order-line-seat-${line.id}`} className="min-w-16 text-center text-xs font-semibold tabular-nums text-foreground">
+                      {line.seatNumber != null ? `Seat ${line.seatNumber}` : "Unseated"}
+                    </span>
+                    <button
+                      type="button"
+                      data-testid={`order-line-seat-increment-${line.id}`}
+                      aria-label="Increase seat"
+                      disabled={isBusy}
+                      onClick={() => onSeatIncrement(line)}
+                      className="flex size-6 items-center justify-center rounded-md border border-border text-foreground hover:bg-accent disabled:opacity-40"
+                    >
+                      <Plus className="size-3" aria-hidden="true" />
+                    </button>
+                  </div>
+                )}
               </div>
             );
           })
@@ -105,6 +175,27 @@ export function OrderPanel({ orderId, tableLabel, currency, lines, busyLineId, o
           </span>
         </div>
         <p className="mt-1 text-[11px] text-muted-foreground">Tax and discounts apply at Bill &amp; Settle.</p>
+
+        <button
+          type="button"
+          data-testid="send-to-kitchen"
+          disabled={!canSend || sendingToKitchen}
+          onClick={onSendToKitchen}
+          className="mt-3 w-full rounded-lg bg-primary py-2.5 text-sm font-semibold text-primary-foreground transition-colors hover:bg-primary/90 disabled:cursor-not-allowed disabled:opacity-40"
+        >
+          {firedAt ? "Sent to kitchen" : sendingToKitchen ? "Sending…" : "Send to kitchen"}
+        </button>
+        {/* Validation blocks forward progress at the point of the violation, per EXPERIENCE.md - never a later, generic submit error. */}
+        {!firedAt && unseated > 0 && (
+          <p data-testid="send-to-kitchen-blocked" className="mt-2 text-xs text-status-alert">
+            {unseated} item{unseated > 1 ? "s" : ""} need{unseated > 1 ? "" : "s"} a seat before sending to the kitchen.{" "}
+            {!splitBySeat && (
+              <button type="button" onClick={() => setSplitBySeat(true)} className="underline">
+                Split by seat
+              </button>
+            )}
+          </p>
+        )}
       </footer>
     </aside>
   );

@@ -1,6 +1,8 @@
 import { describe, expect, it } from "vitest";
 import {
+  allLinesSeated,
   canConfirmSelection,
+  canSendToKitchen,
   computeOrderTotalMinor,
   computeUnitTotalMinor,
   emptyModifierSelection,
@@ -11,6 +13,7 @@ import {
   resolveSelectedModifiers,
   resolveUnitPriceMinor,
   toggleModifier,
+  unseatedLineCount,
   variantSatisfied,
   type ModifierSelection,
   type OrderLineView,
@@ -202,5 +205,60 @@ describe("computeOrderTotalMinor", () => {
 
   it("is 0 for an empty order", () => {
     expect(computeOrderTotalMinor([])).toBe(0);
+  });
+});
+
+// --- CAP-4 group ordering: seat assignment and the send-to-kitchen gate
+// (SPEC.md success criterion: "Every item is assigned to a seat number
+// before the order can be sent to the kitchen; unassigned items block
+// fire.").
+
+function seatedLine(seatNumber: number | null | undefined): Pick<OrderLineView, "seatNumber"> {
+  return { seatNumber };
+}
+
+describe("allLinesSeated / unseatedLineCount", () => {
+  it("is vacuously true for an order with no lines", () => {
+    expect(allLinesSeated([])).toBe(true);
+    expect(unseatedLineCount([])).toBe(0);
+  });
+
+  it("is true once every line has a seat number", () => {
+    const lines = [seatedLine(1), seatedLine(2)] as OrderLineView[];
+    expect(allLinesSeated(lines)).toBe(true);
+    expect(unseatedLineCount(lines)).toBe(0);
+  });
+
+  it("is false when any line is unseated (null)", () => {
+    const lines = [seatedLine(1), seatedLine(null)] as OrderLineView[];
+    expect(allLinesSeated(lines)).toBe(false);
+    expect(unseatedLineCount(lines)).toBe(1);
+  });
+
+  it("treats a missing seatNumber (story-4 lines that predate CAP-4) the same as null - unseated", () => {
+    const lines = [seatedLine(undefined)] as OrderLineView[];
+    expect(allLinesSeated(lines)).toBe(false);
+    expect(unseatedLineCount(lines)).toBe(1);
+  });
+});
+
+describe("canSendToKitchen", () => {
+  it("blocks an order with no lines - nothing to send", () => {
+    expect(canSendToKitchen({ lines: [], firedAt: null })).toBe(false);
+  });
+
+  it("blocks an order with any unseated line", () => {
+    const lines = [seatedLine(1), seatedLine(null)] as OrderLineView[];
+    expect(canSendToKitchen({ lines, firedAt: null })).toBe(false);
+  });
+
+  it("allows an order once every line is seated", () => {
+    const lines = [seatedLine(1), seatedLine(2)] as OrderLineView[];
+    expect(canSendToKitchen({ lines, firedAt: null })).toBe(true);
+  });
+
+  it("blocks an order that has already been sent to the kitchen", () => {
+    const lines = [seatedLine(1)] as OrderLineView[];
+    expect(canSendToKitchen({ lines, firedAt: "2026-08-25T10:00:00.000Z" })).toBe(false);
   });
 });

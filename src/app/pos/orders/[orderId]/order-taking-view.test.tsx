@@ -288,6 +288,98 @@ describe("OrderTakingView", () => {
     expect(fetchMock.mock.calls.some(([, init]) => (init as RequestInit | undefined)?.method === "DELETE")).toBe(true);
   });
 
+  // --- CAP-4 group ordering: seat assignment and the send-to-kitchen gate.
+
+  function lineFixture(overrides: Partial<import("./order-taking-state").OrderLineView> = {}) {
+    return {
+      id: "line-naan",
+      itemId: "item-naan",
+      itemName: "Butter Naan",
+      variantId: null,
+      variantName: null,
+      quantity: 1,
+      unitPriceMinor: 14000,
+      modifiers: [],
+      lineTotalMinor: 14000,
+      specialInstructions: null,
+      addedByStaffId: "staff-me",
+      addedByStaffName: "Ravi",
+      addedAt: new Date().toISOString(),
+      seatNumber: null,
+      ...overrides,
+    };
+  }
+
+  it("assigning a seat to a line updates it", async () => {
+    const user = userEvent.setup();
+    const unseated = order({ lines: [lineFixture()], totalMinor: 14000 });
+    const seated = { ...unseated, lines: [{ ...unseated.lines[0], seatNumber: 1 }] };
+
+    const fetchMock = stubFetch((url, init) => {
+      if (url.includes("/menu")) return jsonResponse(MENU);
+      if (url.endsWith("/lines/line-naan") && init?.method === "PATCH") return jsonResponse(seated);
+      return jsonResponse(unseated);
+    });
+    render(<OrderTakingView orderId="order-t4-abcdef" />);
+    await waitFor(() => expect(screen.getByTestId("order-line-line-naan")).toBeTruthy());
+
+    await user.click(screen.getByTestId("split-by-seat-toggle"));
+    expect(screen.getByTestId("order-line-seat-line-naan").textContent).toBe("Unseated");
+
+    await user.click(screen.getByTestId("order-line-seat-increment-line-naan"));
+
+    await waitFor(() => expect(screen.getByTestId("order-line-seat-line-naan").textContent).toBe("Seat 1"));
+    const patchCall = fetchMock.mock.calls.find(([url, init]) => (url as string).endsWith("/lines/line-naan") && (init as RequestInit | undefined)?.method === "PATCH");
+    expect(patchCall).toBeTruthy();
+    expect(JSON.parse((patchCall?.[1] as RequestInit).body as string)).toEqual({ seatNumber: 1 });
+  });
+
+  it("blocks sending to the kitchen while any line is unseated, naming the fix inline", async () => {
+    const withUnseatedLine = order({ lines: [lineFixture()], totalMinor: 14000 });
+    stubFetch((url) => (url.includes("/menu") ? jsonResponse(MENU) : jsonResponse(withUnseatedLine)));
+    render(<OrderTakingView orderId="order-t4-abcdef" />);
+    await waitFor(() => expect(screen.getByTestId("order-line-line-naan")).toBeTruthy());
+
+    const sendButton = screen.getByTestId("send-to-kitchen") as HTMLButtonElement;
+    expect(sendButton.disabled).toBe(true);
+    expect(screen.getByTestId("send-to-kitchen-blocked").textContent).toContain("1 item needs a seat");
+  });
+
+  it("sending to the kitchen succeeds once every line is seated", async () => {
+    const user = userEvent.setup();
+    const fullySeated = order({ lines: [lineFixture({ seatNumber: 1 })], totalMinor: 14000 });
+    const sent = { ...fullySeated, firedAt: "2026-08-25T10:00:00.000Z" };
+
+    const fetchMock = stubFetch((url, init) => {
+      if (url.includes("/menu")) return jsonResponse(MENU);
+      if (url.endsWith("/status") && init?.method === "PATCH") return jsonResponse(sent);
+      return jsonResponse(fullySeated);
+    });
+    render(<OrderTakingView orderId="order-t4-abcdef" />);
+    await waitFor(() => expect(screen.getByTestId("order-line-line-naan")).toBeTruthy());
+
+    const sendButton = screen.getByTestId("send-to-kitchen") as HTMLButtonElement;
+    expect(sendButton.disabled).toBe(false);
+    expect(screen.queryByTestId("send-to-kitchen-blocked")).toBeNull();
+
+    await user.click(sendButton);
+
+    await waitFor(() => expect(screen.getByTestId("send-to-kitchen").textContent).toBe("Sent to kitchen"));
+    const statusCall = fetchMock.mock.calls.find(([url, init]) => (url as string).endsWith("/status") && (init as RequestInit | undefined)?.method === "PATCH");
+    expect(JSON.parse((statusCall?.[1] as RequestInit).body as string)).toEqual({ status: "sent" });
+    expect((screen.getByTestId("send-to-kitchen") as HTMLButtonElement).disabled).toBe(true);
+  });
+
+  it("group ordering is invisible for an order with no lines - existing empty-order behavior is unaffected", async () => {
+    stubFetch((url) => (url.includes("/menu") ? jsonResponse(MENU) : jsonResponse(order())));
+    render(<OrderTakingView orderId="order-t4-abcdef" />);
+    await waitFor(() => expect(screen.getByTestId("order-taking-view")).toBeTruthy());
+
+    expect(screen.queryByTestId("split-by-seat-toggle")).toBeNull();
+    expect((screen.getByTestId("send-to-kitchen") as HTMLButtonElement).disabled).toBe(true);
+    expect(screen.queryByTestId("send-to-kitchen-blocked")).toBeNull();
+  });
+
   it("searching finds an item outside the active category tab", async () => {
     const user = userEvent.setup();
     stubFetch((url) => (url.includes("/menu") ? jsonResponse(MENU) : jsonResponse(order())));
