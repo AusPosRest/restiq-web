@@ -12,7 +12,15 @@
 // unlike the login-time guess this mirrors, there is no Clock In state to
 // render here: reaching this shell at all means the staff member is clocked
 // in, and the only action is ending that shift.
-import { LogOut, Wifi } from "lucide-react";
+//
+// CAP-10 (shift & cash management, story 2) folds its "shift gates the main
+// loop" affordance in here as a plain nav link to /pos/shift, not a live
+// status fetch - this component's first test asserts zero client fetches on
+// mount (server-cookie display only), so the actual open/float/closed state
+// renders on /pos/shift itself (which already fetches it for its own
+// dashboard) rather than duplicating that fetch here.
+import { LogOut, Wallet, Wifi } from "lucide-react";
+import Link from "next/link";
 import { useState } from "react";
 import { useRouter } from "next/navigation";
 import { clockOut } from "../api";
@@ -71,6 +79,13 @@ export function ShiftBar({ initial }: Readonly<{ initial: PosStaffDisplay | null
               {initial.outlet.name}
             </p>
           </div>
+          <Link
+            href="/pos/shift"
+            data-testid="pos-shift-bar-shift-link"
+            className="flex items-center gap-1.5 rounded-lg px-2 py-1.5 text-xs font-medium text-muted-foreground transition-colors hover:bg-accent hover:text-foreground focus:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+          >
+            <Wallet className="size-3.5" aria-hidden="true" /> Shift
+          </Link>
           <button
             type="button"
             data-testid="pos-shift-bar-clock-out"

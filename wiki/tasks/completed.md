@@ -238,3 +238,43 @@ faked.
   [wiki/features/pos-cashier-waiter.md](../features/pos-cashier-waiter.md)
   for the full writeup and the parallel-build dedupe note for any other
   in-flight POS story that also touches `/pos` realm plumbing.
+
+- **2026-08-25** - POS Cashier & Waiter story: shift & cash management UI
+  (CAP-10). `/pos/shift` (P11) - open-shift-with-float form, cash movement
+  log with paid-out/bank-drop actions each requiring a reason.
+  `/pos/shift/close` (P12) - `BlindCountKeypad` counted-amount entry, then an
+  immutable counted/expected/over-short reveal, computed server-side and
+  genuinely not sent to the client until after the count is submitted (a real
+  two-step network flow, not a client that already holds the value). Neither
+  issue #38 (base `/pos` shell/PIN login) nor restiq-backend#45 (this story's
+  own backend) had landed any commits when this story started, so it built a
+  self-authored standalone `/pos` auth realm and a provisional API contract,
+  both explicitly flagged for reconciliation. **Reconciled** (this pass,
+  rebasing #39 onto `dev` after #38, #40, and #42 all landed): the entire
+  self-authored auth realm (`dev-session` route, `DevLoginButton`, the
+  placeholder login page/layout copy) is deleted in favor of story 1's real,
+  merged `/pos` shell (`pos_session`/`pos_staff` cookies, real PIN login,
+  `src/app/pos/(shell)/shift-bar.tsx`); the shift bar now also carries a
+  "Shift" nav link into `/pos/shift` (itself moved under `(shell)/` so it
+  renders inside the real persistent bar), folding this story's "shift gates
+  the main loop" affordance into the shared shell instead of a second
+  auth-adjacent screen - the actual open/float/closed status still renders on
+  `/pos/shift` itself rather than in the bar, since the bar's own test
+  asserts zero client fetches on mount. The
+  self-authored `api.ts` contract was replaced against restiq-backend's real
+  `feature/45-shift-cash-management` branch (`shifts.controller.ts`/
+  `.dtos.ts`/`.service.ts`, read directly): `openShift` now takes the
+  session's `outletId` automatically instead of asking for it, movement
+  logging posts to `cash-movements` (not `movements`), `closeShift`'s
+  `countedMinor` request field and response shape match the real DTOs
+  exactly, and `getShift(id)` was added. See
+  [wiki/features/pos-cashier-waiter.md](../features/pos-cashier-waiter.md)
+  for the full reconciliation writeup. The server-side-blindness test for the
+  close flow still deep-scans every response for a populated expected/over-
+  short value, now against the real backend's actual wire shape (which
+  carries those keys as `null` on every pre-close response, not absent
+  entirely) rather than the self-authored guess. Also fixed an unrelated
+  pre-existing date-dependent flaky test in the CAP-8 dashboard suite
+  (missing a fake-clock pin, broke once the real calendar moved past its
+  fixture date) found while getting this story's CI green. Issue
+  AusPosRest/restiq-web#39.

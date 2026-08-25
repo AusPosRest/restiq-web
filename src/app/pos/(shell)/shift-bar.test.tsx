@@ -29,6 +29,7 @@ describe("ShiftBar", () => {
     expect(screen.getByTestId("pos-shift-bar-staff-name").textContent).toBe("Priya Nair");
     expect(screen.getByTestId("pos-shift-bar-clock-status").textContent).toBe("Spice Route - Indiranagar");
     expect(screen.getByTestId("pos-shift-bar-clock-out")).toBeTruthy();
+    expect(screen.getByTestId("pos-shift-bar-shift-link")).toHaveProperty("href", expect.stringContaining("/pos/shift"));
     expect(fetchMock).not.toHaveBeenCalled();
   });
 

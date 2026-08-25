@@ -10,7 +10,9 @@ the task entry to `tasks/completed.md` after every feature or bug fix.
   import, CAP-4 menu management, CAP-5 floor plan & stations, CAP-6 devices
   & printers, CAP-10 branding & capabilities.
 - [POS Cashier & Waiter (Web Prototype) - web](features/pos-cashier-waiter.md) -
-  CAP-1 PIN login and shift clock, CAP-2 table map and order ownership/transfer.
+  CAP-1 PIN login and shift clock, CAP-2 table map and order ownership/transfer,
+  CAP-10 shift & cash management (open shift with float, cash movement log,
+  blind-count close with server-side-blind expected/over-short reveal).
 
 ## Tasks
 

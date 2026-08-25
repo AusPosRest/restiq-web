@@ -168,11 +168,13 @@ actually built here, story by story. Backend counterpart:
 - **`.pos-theme` / `pos-session.ts` / `/pos` proxy wiring / `src/app/pos/layout.tsx`** were
   added independently by both story 1 and story 3 (neither existed when either story
   started) and have since been reconciled into one implementation - see Key decisions.
-- **Table map (and every route outside `src/app/pos/(shell)/`) doesn't get the persistent
-  shift bar** since it isn't nested under the `(shell)` route group story 1 added - whoever
-  builds the real post-login routing (Table Map / QSR Counter replacing the `ComingSoon`
-  placeholder, per EXPERIENCE.md's Information Architecture) should fold `/pos/table-map`
-  under `(shell)` at that point rather than leaving two parallel shells.
+- **Table map still doesn't get the persistent shift bar** since it isn't nested under the
+  `(shell)` route group story 1 added - whoever builds the real post-login routing (Table
+  Map / QSR Counter replacing the `ComingSoon` placeholder, per EXPERIENCE.md's Information
+  Architecture) should fold `/pos/table-map` under `(shell)` at that point rather than
+  leaving parallel shells. `/pos/shift` and `/pos/shift/close` (CAP-10, story 2) already made
+  this move during their own reconciliation - see that section below - as the concrete
+  precedent to follow.
 - **Once restiq-backend#46 lands**, reconcile this story's self-authored table-map/order
   contract in `table-map-state.ts`/`api.ts` against the real DTOs, same as CAP-1's contract
   was reconciled against `feature/44-pos-auth-clock` above.
@@ -245,3 +247,158 @@ Out/Sign out, the API pass-through's cookie/bearer-token mechanics, and both aut
 handlers' success/select-outlet/error branches) is covered by mocked-fetch component
 tests and pure-logic unit tests stubbed against the real DTOs read directly from
 `restiq-backend`'s `feature/44-pos-auth-clock` branch, not a guess.
+
+## CAP-10 - Shift & cash management (story 2)
+
+- **Intent:** staff opens a shift with a starting float, logs cash movements
+  (paid-outs, bank drops) through the shift each with a reason, and closes it
+  with a blind cash count - the counted amount is entered before the system
+  reveals the expected amount computed from the shift's transactions, never
+  the other order (SPEC CAP-10 / ARCHITECTURE-SPINE AD-14).
+- **Built:**
+  - `/pos/shift` (`src/app/pos/shift/shift-screen.tsx`, P11 Shift & Cash
+    Management, now nested under `src/app/pos/(shell)/` so it gets the real
+    persistent shift bar - see Reconciliation below) - five-state pattern:
+    skeleton while `GET /pos/api/shifts/current?outletId=...` is in flight,
+    inline retry on failure, an `OpenShiftForm` (starting float via the
+    shared `AmountKeypad`) when there is no open shift for the session's
+    outlet, and a dashboard (opened time, starting float, cash movement log,
+    "Log cash movement") once one is open. `CashMovementLog` renders every
+    paid-out/bank-drop newest-first with its reason and amount - no per-
+    movement staff name (the real backend returns `createdByStaffId`, not a
+    name, and there's no staff-directory lookup in scope to resolve it).
+    `LogMovementDialog` requires a positive amount and a non-blank reason
+    before submit enables - not one of CAP-8's six manager-gated actions, so
+    no manager PIN here, just the reason requirement.
+  - `/pos/shift/close` (`src/app/pos/shift/close/close-shift-screen.tsx`, P12
+    Close Shift - Blind Count) - the story's climax screen. Step 1,
+    `BlindCountKeypad`: counted-amount entry only, via the same shared
+    `AmountKeypad` component (EXPERIENCE.md: numeric entry never uses the
+    OS's native keyboard) - there is no expected-amount field anywhere in its
+    props, state, or render output. Step 2, `CloseShiftResult`: an immutable
+    reveal (counted/expected/over-short, green for over-or-exact, red for
+    short) shown only once `POST /pos/api/shifts/:id/close`'s response
+    arrives; no edit or recount action (AD-14: a closed shift's over/short
+    record is insert-only once written).
+  - **Server-side blindness, not render-order blindness:** `ShiftView`
+    (`src/app/pos/api.ts`) - the type every pre-close read/write returns -
+    declares no `countedMinor`/`expectedMinor`/`overShortMinor` field at all,
+    so there is no variable anywhere in `close-shift-screen.tsx` that could
+    hold an expected amount before the count is submitted, even though the
+    real backend's actual wire payload carries those three keys as `null` on
+    every pre-close response (see Reconciliation below for why that's still
+    a meaningful guarantee). The only call that can return a populated value
+    is `closeShift()`'s own `POST .../close`, typed as a separate
+    `ClosedShift`, stored in state that starts `null` and is set exactly
+    once, inside that call's `.then`. See `close-shift-screen.tsx`'s file
+    header for the full walkthrough and `close-shift-screen.test.tsx` for the
+    test that deep-scans every mocked network response landed before "Submit
+    count" is clicked and fails if any of them carries a *populated*
+    expected/over-short-shaped field, plus confirms the reveal
+    (`close-shift-result` testid) is entirely absent from the DOM until then.
+  - `data-testid` on every interactive element (`open-shift-*`,
+    `movement-*`, `blind-count-*`, `result-*`, `close-shift-*`); the shared
+    `AmountKeypad`/`BlindCountKeypad` also accepts physical keyboard digit/
+    backspace/escape input for testing and demo purposes per EXPERIENCE.md's
+    Accessibility Floor.
+  - The persistent shift bar (`src/app/pos/(shell)/shift-bar.tsx`, story 1)
+    now also carries a "Shift" nav link to `/pos/shift`, so every `/pos`
+    screen under the shell has a way into shift status and the open/close
+    screens, per EXPERIENCE.md's "shift gates the main loop". It's a plain
+    link, not a live status fetch: `shift-bar.test.tsx`'s first test asserts
+    zero client fetches on mount (staff/outlet display is server-cookie-only,
+    deliberately not refetched), so duplicating a shift-status fetch into the
+    bar would have broken that already-merged guarantee; the actual open/
+    float/closed state instead renders on `/pos/shift` itself, which already
+    fetches it for its own dashboard.
+
+## Reconciliation (this story's placeholder auth -> the real `/pos` shell)
+
+Neither issue #38 (base `/pos` shell + real CAP-1 PIN login) nor
+restiq-backend#45 (this story's own backend) had landed any commits when this
+story started, so it built a self-authored standalone `/pos` auth realm and a
+provisional API contract, both explicitly flagged below for reconciliation
+once #38 and #45 landed. This section replaces the original "Key decisions"
+entries that described that placeholder as forward-looking TODOs - they're
+done now, this is what actually happened:
+
+- **Deleted entirely, in favor of story 1's real, merged `/pos` shell:**
+  `src/app/pos/auth/dev-session/route.ts` (minted an unsigned, unverified
+  session token locally) and `src/app/pos/login/dev-login-button.tsx` (the
+  "Continue as demo cashier" button) - `pos_session` is now only ever issued
+  by story 1's real `POST /pos/auth/login`/`select-outlet` route handlers.
+  `src/app/pos/login/page.tsx` and `src/app/pos/layout.tsx` (this story's
+  "PIN login is on its way" placeholder copy and standalone layout) were
+  replaced outright with story 1's real PIN keypad page and shell-aware
+  layout - nothing from this story's versions survived, since story 1's is
+  the real thing, not something to merge with.
+- **Kept and extended, unchanged in shape:** `src/lib/pos-session.ts`
+  (`pos_session`/`pos_staff` cookies, `decidePosRoute`) and
+  `src/app/pos/api/[...path]/route.ts` (the pass-through) are story 1's real
+  versions - `/pos/shift` and `/pos/shift/close` only ever depended on
+  `POS_SESSION_COOKIE`/`decidePosRoute`/`sanitizePosNextPath` and the
+  pass-through's `/pos/api/*` convention, both of which kept working
+  unchanged.
+- **`src/app/pos/(shell)/shift-bar.tsx` gained a "Shift" nav link and
+  `/pos/shift` + `/pos/shift/close` moved under `src/app/pos/(shell)/`** so
+  they render inside the real persistent shell instead of keeping a second,
+  parallel minimal header - the route group doesn't change the URL, so
+  `/pos/shift` and `/pos/shift/close` are unaffected externally.
+- **API contract reconciled against the real backend.**
+  restiq-backend's `feature/45-shift-cash-management` branch (real, pushed,
+  not yet merged to `restiq-backend/dev` - `src/pos/shifts/shifts.
+  controller.ts`/`.dtos.ts`/`.service.ts`, read directly) replaced this
+  story's self-authored guess in `src/app/pos/api.ts`:
+  - `openShift` now takes `{ outletId, floatMinor }` (was `{
+    openingFloatMinor }` with no outlet) - `outletId` comes from the signed-in
+    session's `pos_staff` cookie, never user-entered.
+  - Cash movements post to `POST /pos/v1/shifts/:id/cash-movements` (was
+    `/movements`).
+  - `closeShift` sends `{ countedMinor }` (was `{ countedCashMinor }`) and
+    its response is the real `ShiftView` shape with `countedMinor`/
+    `expectedMinor`/`overShortMinor` populated, not a bespoke
+    `CloseShiftResult` envelope - typed client-side as `ClosedShift`.
+  - `getShift(id)` (`GET /pos/v1/shifts/:id`) was added - the self-authored
+    contract never had a single-shift read.
+  - `CashMovementView` dropped `staffName` (the real backend returns
+    `createdByStaffId`, no display name) - `CashMovementLog` no longer
+    renders a per-movement staff name.
+  - The blindness guarantee survives in a different, more accurate form: the
+    real backend's `ShiftView` always includes `countedMinor`/
+    `expectedMinor`/`overShortMinor` keys, just `null` until close, rather
+    than omitting them outright. The client-side `ShiftView` type (used by
+    every pre-close call) simply doesn't declare those three fields, so no
+    component can read a value from them even though the wire payload
+    carries the (null) keys - and `close-shift-screen.test.tsx`'s deep-scan
+    was updated to flag a *populated* expected/over-short value pre-close,
+    not merely the key's presence, since the real contract makes bare key
+    presence an expected, harmless artifact rather than a bug signal.
+
+## Key decisions (CAP-10)
+
+- **Money entry never uses the OS numeric keyboard.** `AmountKeypad`
+  (`src/app/pos/shift/amount-keypad.tsx`) is a shared calculator-style digit
+  grid (press digits to build up minor units, cents-first) used for the
+  opening float, a movement's amount, and the blind count - reused rather
+  than three separate `<input type="number">` fields, per EXPERIENCE.md's
+  "numeric entry always via a large on-screen keypad component" rule.
+  `BlindCountKeypad` wraps it with the close-shift-specific submit/error
+  affordances DESIGN.md names it for.
+- **Realm isolation duplicated a few small admin patterns on purpose.**
+  AD-4's lint rule (`app/pos` may not import from `app/admin` or `app/ops`)
+  means `src/app/pos/shift/data-states.tsx` (skeleton + load-error panel) and
+  `shift-state.ts`'s money formatter are pos's own small copies of the
+  equivalent admin/ops helpers, not stray duplication.
+- **Currency defaults to INR**, same convention as CAP-4's menu management
+  (`menu-management.tsx`'s `CURRENCY` constant) - the real backend's
+  `ShiftView` carries no tenant-currency field to read instead.
+- Verified **live** in a browser during this story's original build, against
+  a temporary local mock backend (not committed) standing in for the real,
+  not-yet-landed `restiq-backend#45` - confirmed the full open-shift ->
+  log-movement -> close-shift -> blind-count -> reveal loop end to end,
+  including that the `GET /pos/api/shifts/current` response the UI receives
+  before "Submit count" genuinely carries no *populated* expected/over-short
+  field (inspected via the browser's network panel, not just the rendered
+  DOM). The reconciliation pass above was verified against the real
+  backend's source directly plus the full automated test suite, not a fresh
+  live click-through.
