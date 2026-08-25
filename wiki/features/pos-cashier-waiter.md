@@ -403,6 +403,67 @@ done now, this is what actually happened:
   backend's source directly plus the full automated test suite, not a fresh
   live click-through.
 
+## CAP-11 - Device and staff attendance status (story 11)
+
+- **Intent:** staff or a manager can see who is clocked in on this outlet
+  today (real CAP-1 clock-in/out events, no fabricated staff or times) plus a
+  mocked printer/connectivity status panel, since there is no real hardware
+  in this prototype (SPEC CAP-11).
+- **Built:** `/pos/status` (`src/app/pos/(shell)/status/`, P13 Device Status &
+  Attendance), nested under the real `(shell)` route group from the start so
+  it renders inside the persistent shift bar rather than a parallel header -
+  no reconciliation needed here, unlike CAP-2/CAP-10 above, since the real
+  shell already existed when this story was built.
+  - `device-status-screen.tsx`: five-state pattern (skeleton, inline retry,
+    content) fetching `GET /pos/api/outlets/:outletId/attendance/today` via
+    `usePosLoad`. Two panels: **Attendance today** (`attendance-list.tsx`,
+    name + clock-in time, `Out {time}` once clocked out, a real empty state
+    - "No one has clocked in ... today" - when the list is genuinely empty,
+    never a fabricated row) and **Device status**, DESIGN.md's
+    `PrinterStatusChip`/`OfflineIndicatorPill` components rendered against
+    the response's `device` field.
+  - **The mocked-status honesty pattern is in the DOM, not just a tooltip.**
+    Both `printer-status-chip.tsx` and `offline-indicator-pill.tsx` render a
+    literal `(demo)` text node next to the status label, in addition to a
+    `title="Mocked - no real ... in this prototype (demo)"` attribute -
+    `device-status-screen.test.tsx` asserts on `.textContent` for exactly
+    this reason (EXPERIENCE.md: "always rendered with a small '(demo)'
+    affordance", but this story's own acceptance bar requires the marker be
+    asserted in the DOM, not merely present in a comment or only reachable
+    via hover).
+  - `src/app/pos/(shell)/shift-bar.tsx` gained a "Status" nav link
+    (`pos-shift-bar-status-link`) to `/pos/status`, same plain-link shape as
+    CAP-10's "Shift" link - the shift bar's zero-client-fetch-on-mount test
+    still holds, the actual fetch lives on `/pos/status` itself.
+  - `status/data-states.tsx` is this subtree's own `Skeleton`/`LoadErrorPanel`
+    copy - `(shell)/data-states.tsx` one level up only exports
+    `LoadErrorPanel`, no `Skeleton`, so this follows `shift/data-states.tsx`'s
+    already-established precedent of a per-subtree copy rather than reaching
+    past the shell-level file or refactoring it for an unrelated story.
+- **Backend not available at build time.** The paired backend story
+  (restiq-backend issue #54, branch `feature/54-pos-device-status`) had no
+  branch and no commits - `gh api repos/AusPosRest/restiq-backend/branches`
+  listed only `dev`/`main`/`feature/15-device-fleet`. restiq-backend's `dev`
+  branch does have the real `ClockEvent` model and a real clock-out write
+  (`src/pos/clock/*`, read directly), confirming CAP-1's clock events are the
+  right source of truth, but no endpoint anywhere lists them back out - only
+  the write side exists so far. Self-authored contract (see `api.ts`'s CAP-11
+  file-header comment for the full reasoning): `GET
+  /pos/v1/outlets/:outletId/attendance/today` -> `{ outletId, staff: [{
+  staffId, staffName, clockInAt, clockOutAt }], device: { printer,
+  connectivity } }`. **Must be reconciled against the real
+  restiq-backend#54 DTOs once that lands** - same discipline as CAP-2's
+  table-map contract and CAP-1/CAP-10's now-completed reconciliations above.
+- **Tests:** `device-status-screen.test.tsx` - real staff render from a
+  mocked response (name + clock-in time, plus a clocked-out row rendering
+  "Out {time}"), the empty-attendance state, the `(demo)` marker asserted in
+  both chips' DOM text and `title`, and the load-error/retry path.
+  `shift-bar.test.tsx` extended with the new "Status" link. 534/534 tests
+  passing repo-wide; lint/typecheck/build clean.
+- **Live verification:** none possible (no real backend endpoint to hit,
+  same posture as CAP-2's table map). Verified via the test suite above,
+  stubbing global `fetch` against the self-authored contract.
+
 ## CAP-5 - Open and held orders, outlet-wide (story 6)
 
 - **Intent:** staff sees every open/held order outlet-wide and resumes their own or takes
@@ -456,7 +517,7 @@ done now, this is what actually happened:
   ownership, the reused transfer dialog's confirm/cancel paths including that a cancelled
   transfer fires no network request, and that a missing item-count/total renders `—`
   without crashing while a complete one sums correctly) plus a nav-link assertion added to
-  both `shift-bar.test.tsx` and `table-map.test.tsx`. 552/552 tests passing repo-wide;
+  both `shift-bar.test.tsx` and `table-map.test.tsx`. 556/556 tests passing repo-wide;
   lint/typecheck/build clean.
 - **Live verification:** none possible (no real backend for this story or story 3 to run
   against, same posture as CAP-2). Verified entirely via the test suite above, stubbing
