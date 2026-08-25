@@ -330,6 +330,11 @@ actually built here, story by story. Backend counterpart:
 - **Story 6 (CAP-5, open/held orders) - done, see its own section below.** It calls
   story 3's `transferOrder` action (`src/app/pos/api.ts`) directly for take-over, per
   stories.yaml: "reused, not reimplemented."
+- **Story 7 (CAP-6, QSR counter and token mode) - done, see its own section below.** It
+  composes story 4's item grid and story 8's `BillSummary`/`TenderKeypad` into one screen
+  rather than building new ring-up or settle UI - see that section for the additive
+  `BillSummary` props this required and the real-backend divergence discovered while
+  researching it.
 - **`.pos-theme` / `pos-session.ts` / `/pos` proxy wiring / `src/app/pos/layout.tsx`** were
   added independently by both story 1 and story 3 (neither existed when either story
   started) and have since been reconciled into one implementation - see Key decisions.
@@ -703,11 +708,15 @@ done now, this is what actually happened:
   no distinct "held" state to render. The screen shows every non-closed order (both `open`
   and `sent`) under its real status label instead of inventing a "Held" badge with nothing
   behind it, matching the `needs_bill` honesty precedent CAP-2 already established.
-- **Counter-origin orders render `tableLabel: null` as "Counter", not a blank cell** - CAP-6
-  (QSR counter mode) isn't built yet, so nothing in this prototype can actually produce one
-  today, but the contract models it now since a real Order's `tableId` is nullable (story
-  3's own `OrderView`) and stories.yaml's brief explicitly calls for "table or counter
-  origin".
+- **Counter-origin orders render `tableLabel: null` as "Counter", not a blank cell** - at the
+  time this story was built, CAP-6 (QSR counter mode) didn't exist yet, so nothing in this
+  prototype could actually produce one; the contract modeled it anyway since a real Order's
+  `tableId` is nullable (story 3's own `OrderView`) and stories.yaml's brief explicitly calls
+  for "table or counter origin". **Now real** - story 7/CAP-6 (below) landed
+  `/pos/counter`, whose orders carry `tableId: null` and `tableLabel: "Takeaway"` (not
+  literally `null`, so `open-orders-state.ts`'s own `originLabel` - which branches on a
+  `null` `tableLabel` - still needs a look once someone reconciles the two, flagged here for
+  whoever does).
 - **Item count/total are nullable, not defaulted to 0** - a missing summary must read as
   "not available" (`—`), never as a fabricated real zero, since CAP-3/CAP-4 order-lines and
   pricing may not exist for a given order yet. `summarize()`'s footer total only appears
@@ -715,6 +724,140 @@ done now, this is what actually happened:
 - **No new dialog, no new transfer endpoint.** Take-over reuses story 3's
   `TransferOwnershipDialog` and `transferOrder()` verbatim - stories.yaml is explicit this
   screen is "a list view over existing Order state, not a new ownership mechanism."
+
+## CAP-6 - QSR counter and token mode (story 7)
+
+- **Intent:** for counter-service outlets, one staff member rings up items and takes payment
+  in a single continuous flow, issuing a queue token instead of assigning a table -
+  completing a counter order issues a sequential token number and finalises the bill in the
+  same action, no separate waiter hop (SPEC CAP-6 success criterion; EXPERIENCE.md's Ravi
+  counter-rush flow).
+- **Built:** P7 QSR Counter (`src/app/pos/counter/`, routed at `/pos/counter`) - a genuinely
+  new route, but built almost entirely out of already-merged parts:
+  - **The item grid** - category-tab rail, search, `PosItemTile`, `ModifierSheet`, and every
+    piece of `order-taking-state.ts`'s pure logic (`filterMenuItems`,
+    `itemNeedsModifierSheet`, price/modifier resolution) - reused verbatim from the real,
+    already-merged story 4 order-taking screen. The layout glue (category-tab rail + grid
+    JSX) is a small, deliberate duplication of `order-taking-view.tsx`'s own layout rather
+    than an extraction into a shared component - refactoring that already-shipped, already-
+    tested screen (45 tests) to share a subcomponent wasn't worth the regression risk for a
+    second caller this story is the first to need (YAGNI/ponytail: reuse the substantial
+    pieces, don't risk-refactor already-working code for a few dozen lines of layout).
+  - **The settle half** - `BillSummary` and `TenderKeypad` (`orders/[orderId]/settle/`,
+    story 8/#53) reused directly, keyed off the same order id the ring-up half uses (no
+    separate `/settle` route, no navigation hop - `fetchBill`/`addBillTender`/`finalizeBill`
+    all already take an `orderId`, which this screen never leaves). `BillSummary` gained
+    four **additive, optional** props (`busyLineId`/`onIncrement`/`onDecrement`/`onRemove`) -
+    unused by story 8's own caller (`bill-settle-view.tsx`, which never passes them, so its
+    already-tested read-only rendering is byte-identical to before) - so the exact same
+    line/qty/amount table that renders a dine-in bill read-only can also render a still-being-
+    rung-up counter order's lines with qty steppers and a remove button, rather than building
+    a second, parallel line-item component just for this screen. Discount is not offered here
+    at all (YAGNI - the P7 mock has no discount affordance and this story's brief never asks
+    for one); `onAddDiscount` is now optional on `BillSummary` for exactly this reason (its
+    button simply doesn't render when the prop is omitted).
+  - **`TokenBadge`** (`token-badge.tsx`, new - DESIGN.md names it, nothing built it yet) - a
+    large, high-contrast token number, shown in the header throughout ring-up and settlement
+    (not only after charging), per the P7 mock showing "Order #47"/"Token #47" together from
+    the moment ring-up starts. Only rendered when a real `tokenNumber` is present on the
+    order - never a fabricated placeholder if it's ever missing.
+  - **`startCounterOrder()`** (new, `api.ts`) - the one genuinely new backend action this
+    story needed: opens a table-less order and assigns it a token number in the same call,
+    called once on mount. `OrderView` gained an optional `tokenNumber?: number | null` field
+    (same story-4-compatibility convention as `seatNumber`/`firedAt`) and its `tableId` was
+    widened from `string` to `string | null` (nothing else in the app ever read that field,
+    confirmed by search, so this was a safe widening) - a counter order's `tableId` is
+    genuinely `null`, never a fabricated placeholder id; its `tableLabel` is the real string
+    `"Takeaway"` instead.
+  - **One continuous screen, no navigation hop:** ring up (`addOrderLine`/
+    `updateOrderLineQuantity`/`removeOrderLine`, all from story 4's already-merged `api.ts`)
+    and settle (`addBillTender`/`finalizeBill`, story 8's) both act on the same order id for
+    the lifetime of one counter order; after every line mutation, the bill is re-fetched
+    (`fetchBill`) to refresh the tax/total figures `BillSummary` shows, same "replace the
+    whole view from the server's response, no optimistic local patch" convention every other
+    `/pos` screen already follows (there is a brief lag between a line mutation landing and
+    the refreshed tax total appearing - two sequential round trips, not one - flagged here as
+    a real, minor UX cost of reusing `BillView`-driven `BillSummary` as the single line-item
+    source of truth, rather than building a merged view type nothing else needs).
+  - **Starting the next order:** once a bill finalises, a "Start next order" action calls
+    `startCounterOrder()` again (a fresh token number) and the whole ring-up screen remounts
+    keyed on the new order id, rather than hand-resetting a dozen pieces of in-progress local
+    state (search query, active modifier sheet, busy flags, ...) - EXPERIENCE.md's "the next
+    customer is already at the counter before Ravi looks up."
+  - **Reachable via a direct nav link, not capability-based routing.** EXPERIENCE.md's real
+    IA picks Table Map vs. QSR Counter at login by outlet capability, but nothing in this
+    prototype's session model carries that capability yet (`src/app/pos/(shell)/page.tsx`'s
+    placeholder still flags this as unresolved, predating this story). Solving that is a
+    separate, larger concern (a real capability field would need to exist on the session/
+    outlet somewhere first) - out of this story's scope. Instead, same precedent as CAP-5's
+    direct "Open orders" link on the table map, a reciprocal "Switch to Counter Mode" /
+    "Switch to Table Mode" link pair was added between `/pos/table-map` and `/pos/counter` so
+    both entry points are actually reachable today.
+- **Backend not available at build time.** `restiq-backend#62` ("QSR counter and token mode")
+  had no branch and no commits when this was built (`gh issue view 62`/`gh api
+  repos/AusPosRest/restiq-backend/branches` both confirming only `dev`/`main`/
+  `feature/15-device-fleet` exist) - `startCounterOrder`'s `POST /pos/v1/orders/counter`
+  contract is self-authored from SPEC.md's CAP-6 description and the P7 mock, documented in
+  full in `api.ts`'s header.
+  - **A note on which backend contract this story builds against.** While researching #62,
+    the real, already-merged `restiq-backend` `dev` branch's actual `src/pos/orders/`/
+    `src/pos/bills/` modules were read directly (`orders.controller.ts`/`.dtos.ts`/
+    `.service.ts`, `bills.controller.ts`/`.dtos.ts`) - and they diverge substantially from
+    restiq-web's own self-authored `OrderView`/`BillView` shapes that stories 3/4/5/8 already
+    shipped against and this story reuses: the real `OrderView` has no display names
+    (`tableLabel`/`ownerStaffName`) or computed line totals at all (just raw
+    `itemId`/`variantId`/`unitPriceMinor`), and the real Bill flow is one atomic
+    `POST /bills/:id/finalize {discountMinor?, discountReason?, managerPin?, tenders[]}` call
+    rather than story 8's separate discount/tender/finalize endpoints. Reconciling CAP-3/
+    CAP-4/CAP-7 against those real shapes is a separate, much larger undertaking than this
+    story's own scope (composing already-built UI, per this story's brief) - flagged here,
+    not attempted, same discipline as CAP-3's own out-of-scope CAP-2 status-vocabulary
+    observation. This story's own addition (`tokenNumber`, `startCounterOrder`) is kept
+    consistent with restiq-web's existing self-authored contract rather than the real
+    backend's, for exactly that reason - the real backend's `OrderView.tableId: string | null`
+    does, encouragingly, already confirm a table-less order is structurally sound.
+- **Tests:** 4 new integration tests (`counter-view.test.tsx`, stubbing global `fetch` against
+  this story's self-authored contract, same convention as `order-taking-view.test.tsx`/
+  `bill-settle-view.test.tsx`): starting a counter order on mount and showing its assigned
+  token number, a retryable error panel if starting fails, a full ring-up-then-settle flow
+  with no navigation away from `/pos/counter` (adding an item, filling the exact remaining
+  tender, finalizing, and landing on a read-only settled panel with no mutation UI left), and
+  starting the next order issuing a fresh token number. Deliberately does not re-test
+  `ModifierSheet`/`PosItemTile`/`TenderKeypad`/`BillSummary`'s own internals - those already
+  have dedicated coverage from stories 4/8 - only the composition. 630/630 tests passing
+  repo-wide; lint/typecheck/build clean.
+- **Live verification:** no real backend reachable (same posture as every other not-yet-
+  backed POS story). Checked on a local dev server pointed at this branch with no backend
+  behind it: `/pos/counter` renders and its menu-load failure surfaces the same styled
+  `LoadErrorPanel`/retry affordance every other `/pos` screen uses, rather than crashing -
+  confirming the composition mounts cleanly outside the test harness too. The full ring-up-
+  through-token-through-charge flow is verified entirely by the integration suite above,
+  stubbing `fetch` against the self-authored contract.
+
+## Key decisions (CAP-6)
+
+- **Discount is not offered on the counter screen at all** - the P7 mock has no discount
+  affordance and this story's brief never asks for one (YAGNI); `BillSummary.onAddDiscount`
+  became optional so the button simply doesn't render rather than wiring up an unused
+  `DiscountDialog`.
+- **The token number is a new field on the shared `OrderView`, not a new parallel type** -
+  `tokenNumber?: number | null` follows the exact optional-not-nullable convention
+  `seatNumber`/`firedAt` already established for CAP-4, so story 4/5's own already-shipped
+  literals and tests keep type-checking unchanged.
+- **`BillSummary`'s line-edit steppers are additive opt-in props, not a new component** -
+  reuse over rewrite: the counter screen needed exactly the line/qty/amount table
+  `BillSummary` already renders, just with steppers; a second component would have
+  duplicated that table's markup for no behavioral difference story 8's own dine-in caller
+  needs.
+- **No merged "live" view type blending `Order` and `Bill` state** - line mutations refresh
+  the bill via a second `fetchBill` call rather than optimistically overlaying the order's
+  freshly-returned lines onto the last-known bill figures; the resulting one-round-trip lag
+  before totals refresh is a real, documented cost, accepted for consistency with every
+  other `/pos` screen's "replace the whole view from the server's response" convention
+  rather than inventing a new merge convention only this screen would use.
+- **Capability-based post-login routing (Table Map vs. QSR Counter) is still not wired up** -
+  a pre-existing gap this story didn't create and doesn't attempt to fix (see Built section
+  above); a direct nav link between the two screens is the concrete, working stand-in.
 
 ## CAP-7 - Bill & Settle (story 8)
 

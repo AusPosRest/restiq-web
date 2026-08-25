@@ -4,15 +4,35 @@
 // server-side (the self-authored BillView already carries every computed
 // figure); this component only formats and lays it out, mirroring
 // OrderPanel's split between display and state.
+//
+// CAP-6 QSR counter mode (story 7) additive edit props below:
+// `onIncrement`/`onDecrement`/`onRemove`/`busyLineId` are optional and
+// default to unset, so story 8's own caller (bill-settle-view.tsx, which
+// never passes them) renders exactly as before - a dine-in bill is settled
+// after the order's already been sent to the kitchen, so its lines are never
+// editable here. The QSR counter screen rings up and settles in one
+// continuous screen (SPEC CAP-6), so it needs to keep adjusting quantities
+// right up to Finalize - reusing this same line-item table for that (rather
+// than a second, parallel line-item component) is the ponytail
+// reuse-over-rewrite call: BillSummary already renders exactly the line/qty/
+// amount table a counter order needs, it just needed the steppers wired
+// in as an opt-in.
+import { Minus, Plus, Trash2 } from "lucide-react";
 import { formatMinor } from "../../../(shell)/shift/shift-state";
+import type { OrderLineView } from "../order-taking-state";
 import type { BillView } from "./bill-state";
 
 export interface BillSummaryProps {
   bill: BillView;
-  onAddDiscount: () => void;
+  onAddDiscount?: () => void;
+  busyLineId?: string | null;
+  onIncrement?: (line: OrderLineView) => void;
+  onDecrement?: (line: OrderLineView) => void;
+  onRemove?: (line: OrderLineView) => void;
 }
 
-export function BillSummary({ bill, onAddDiscount }: Readonly<BillSummaryProps>) {
+export function BillSummary({ bill, onAddDiscount, busyLineId, onIncrement, onDecrement, onRemove }: Readonly<BillSummaryProps>) {
+  const editable = Boolean(onIncrement && onDecrement && onRemove);
   return (
     <section data-testid="bill-summary" className="flex w-96 shrink-0 flex-col border-r border-border/60 bg-card">
       <header className="border-b border-border/60 px-4 py-3">
@@ -31,24 +51,72 @@ export function BillSummary({ bill, onAddDiscount }: Readonly<BillSummaryProps>)
               <th className="pb-2">Qty</th>
               <th className="pb-2">Item</th>
               <th className="pb-2 text-right">Amount</th>
+              {editable && <th className="pb-2" aria-hidden="true" />}
             </tr>
           </thead>
           <tbody>
-            {bill.lines.map((line) => (
-              <tr key={line.id} data-testid={`bill-line-${line.id}`} className="align-top">
-                <td className="py-1.5 tabular-nums">{line.quantity}</td>
-                <td className="py-1.5">
-                  <p className="font-medium text-foreground">
-                    {line.itemName}
-                    {line.variantName && <span className="text-muted-foreground"> · {line.variantName}</span>}
-                  </p>
-                  {line.modifiers.length > 0 && (
-                    <p className="text-xs text-muted-foreground">{line.modifiers.map((modifier) => modifier.name).join(", ")}</p>
+            {bill.lines.map((line) => {
+              const isBusy = busyLineId === line.id;
+              return (
+                <tr key={line.id} data-testid={`bill-line-${line.id}`} className="align-top">
+                  <td className="py-1.5 tabular-nums">
+                    {editable ? (
+                      <div className="flex items-center gap-1">
+                        <button
+                          type="button"
+                          data-testid={`bill-line-decrement-${line.id}`}
+                          aria-label="Decrease quantity"
+                          disabled={isBusy}
+                          onClick={() => onDecrement!(line)}
+                          className="flex size-6 items-center justify-center rounded-md border border-border text-foreground hover:bg-accent disabled:opacity-40"
+                        >
+                          <Minus className="size-3" aria-hidden="true" />
+                        </button>
+                        <span data-testid={`bill-line-qty-${line.id}`} className="w-4 text-center tabular-nums">
+                          {line.quantity}
+                        </span>
+                        <button
+                          type="button"
+                          data-testid={`bill-line-increment-${line.id}`}
+                          aria-label="Increase quantity"
+                          disabled={isBusy}
+                          onClick={() => onIncrement!(line)}
+                          className="flex size-6 items-center justify-center rounded-md border border-border text-foreground hover:bg-accent disabled:opacity-40"
+                        >
+                          <Plus className="size-3" aria-hidden="true" />
+                        </button>
+                      </div>
+                    ) : (
+                      line.quantity
+                    )}
+                  </td>
+                  <td className="py-1.5">
+                    <p className="font-medium text-foreground">
+                      {line.itemName}
+                      {line.variantName && <span className="text-muted-foreground"> · {line.variantName}</span>}
+                    </p>
+                    {line.modifiers.length > 0 && (
+                      <p className="text-xs text-muted-foreground">{line.modifiers.map((modifier) => modifier.name).join(", ")}</p>
+                    )}
+                  </td>
+                  <td className="py-1.5 text-right tabular-nums">{formatMinor(line.lineTotalMinor, bill.currency)}</td>
+                  {editable && (
+                    <td className="py-1.5 text-right">
+                      <button
+                        type="button"
+                        data-testid={`bill-line-remove-${line.id}`}
+                        aria-label="Remove line"
+                        disabled={isBusy}
+                        onClick={() => onRemove!(line)}
+                        className="flex size-6 items-center justify-center rounded-md text-muted-foreground hover:bg-accent hover:text-status-alert disabled:opacity-40"
+                      >
+                        <Trash2 className="size-3.5" aria-hidden="true" />
+                      </button>
+                    </td>
                   )}
-                </td>
-                <td className="py-1.5 text-right tabular-nums">{formatMinor(line.lineTotalMinor, bill.currency)}</td>
-              </tr>
-            ))}
+                </tr>
+              );
+            })}
           </tbody>
         </table>
       </div>
@@ -77,7 +145,7 @@ export function BillSummary({ bill, onAddDiscount }: Readonly<BillSummaryProps>)
           </div>
         </dl>
 
-        {bill.status === "draft" && (
+        {bill.status === "draft" && onAddDiscount && (
           <button
             type="button"
             data-testid="bill-add-discount"

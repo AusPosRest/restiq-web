@@ -166,7 +166,8 @@ export interface OrderLineView {
 
 export interface OrderView {
   id: string;
-  tableId: string;
+  /** `null` for a CAP-6 QSR counter order (story 7) - it has no table at all, never a fabricated empty-string id. */
+  tableId: string | null;
   tableLabel: string;
   status: "occupied" | "needs_bill";
   ownerStaffId: string;
@@ -178,6 +179,14 @@ export interface OrderView {
   totalMinor: number;
   /** CAP-4: set once the order has been sent to the kitchen; `null`/absent beforehand. Optional for the same story-4-compatibility reason as `OrderLineView.seatNumber` above. */
   firedAt?: string | null;
+  /**
+   * CAP-6 QSR counter mode (story 7): the sequential token number issued
+   * when this order was opened at the counter; `null`/absent for a dine-in
+   * (table) order. Optional for the same story-4-compatibility reason as
+   * `seatNumber`/`firedAt` above - see `../../api.ts`'s `startCounterOrder`
+   * header for the full contract reasoning.
+   */
+  tokenNumber?: number | null;
 }
 
 export interface AddOrderLineInput {

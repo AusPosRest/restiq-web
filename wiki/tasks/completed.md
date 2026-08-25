@@ -382,6 +382,48 @@ faked.
   [wiki/features/pos-cashier-waiter.md](../features/pos-cashier-waiter.md)
   for the full writeup.
 
+- **2026-08-25** - POS Cashier & Waiter story 7 (CAP-6 QSR counter and token
+  mode), web-only build (`restiq-web`, branch `feature/56-qsr-counter-token`,
+  closes #56): the real P7 QSR Counter screen (`src/app/pos/counter/`,
+  routed at `/pos/counter`) composes the real, already-merged order-taking
+  grid (`PosItemTile`/`ModifierSheet`/`order-taking-state.ts`, story 4/#51)
+  and the real, already-merged `BillSummary`/`TenderKeypad` (story 8/#53)
+  into one continuous ring-up-and-settle screen, per SPEC CAP-6's success
+  criterion - no separate table/order-detail navigation hop, and no separate
+  `/settle` route the way dine-in orders use. A fresh `startCounterOrder()`
+  call opens a table-less order and assigns it a sequential token number
+  (new `OrderView.tokenNumber`, `api.ts`), shown via a new `TokenBadge`
+  (DESIGN.md) throughout ring-up and settlement. `BillSummary` gained
+  additive, opt-in qty-stepper/remove props (unused by story 8's own caller,
+  which renders exactly as before) so the same line-item table serves both
+  the read-only dine-in settle screen and this screen's still-editable
+  counter order. Once the bill finalises, a "Start next order" action opens
+  a brand-new counter order with the next token number, remounting the
+  screen's state fresh rather than hand-resetting it - all still on
+  `/pos/counter`, matching EXPERIENCE.md's "next customer is already at the
+  counter" framing. `restiq-backend#62` ("QSR counter and token mode") had no
+  branch or commits at build time (confirmed via `gh issue view`/`gh api
+  .../branches`) - `startCounterOrder`'s contract is self-authored from
+  SPEC.md and the P7 mock, documented in full in `api.ts`'s header, including
+  why this story keeps building on restiq-web's own already-shipped
+  self-authored `OrderView`/`BillView` shapes rather than the real backend's
+  (substantially different) merged `dev` shapes discovered while researching
+  this story - reconciling CAP-3/CAP-4/CAP-7 against those is flagged as a
+  separate, much larger undertaking, out of this story's scope. Also added a
+  reciprocal "Switch to Counter Mode"/"Switch to Table Mode" link pair
+  between `/pos/table-map` and `/pos/counter`, since neither the login flow
+  nor the post-login shell route by outlet capability yet (a pre-existing
+  gap, not this story's to fix). 4 new integration tests (starting a counter
+  order and showing its token, a retryable start failure, a full ring-up-
+  through-finalize flow with no navigation, and starting the next order
+  issuing a fresh token), 630/630 passing repo-wide; lint/typecheck/build
+  clean. No live backend reachable for CAP-6, so verification is the stubbed-
+  fetch suite above plus a local dev-server check that the screen renders and
+  error-handles cleanly with no backend behind it, same posture as every
+  other POS story built ahead of its own backend. See
+  [wiki/features/pos-cashier-waiter.md](../features/pos-cashier-waiter.md)
+  for the full writeup.
+
 - **2026-08-25** - POS Cashier & Waiter story 8 (CAP-7 bill & settle),
   web-only build (`restiq-web`, branch `feature/53-bill-and-settle`, closes
   #53): the real P8 Bill & Settle screen
