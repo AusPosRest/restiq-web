@@ -806,8 +806,9 @@ done now, this is what actually happened:
   applying with just a reason and no PIN dialog appearing, an above-threshold discount
   routing through the real `ManagerPinDialog` (confirming Approve stays disabled on PIN
   alone until a reason is also picked, then proceeding only once both are present), and
-  that no mutation control of any kind renders once the bill is finalised. 614/614 tests
-  passing repo-wide; lint/typecheck/build clean.
+  that no mutation control of any kind renders once the bill is finalised. 626/626 tests
+  passing repo-wide (after merging story 5's concurrently-landed CAP-4 work);
+  lint/typecheck/build clean.
 - **Live verification:** none possible - same constraint as CAP-3/CAP-5 above, now also
   true of story 9's `ManagerPinDialog` itself (its own wiki entry already noted no screen
   existed yet to verify it live in - this is that screen). Verified entirely via the 15

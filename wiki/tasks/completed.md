@@ -413,8 +413,10 @@ faked.
   both spawned as separate follow-up tasks. 15 new tests (9 pure-logic, 6
   screen integration covering tax breakdown, multi-tender remaining-to-settle,
   finalize gating, both discount paths, and post-finalisation read-only
-  state); lint/typecheck/build clean. No live backend reachable for CAP-7, so
-  verification is entirely the stubbed-fetch suite above, same posture as
-  every other POS story built ahead of its own backend. See
+  state), 626/626 passing repo-wide (after merging story 5's
+  concurrently-landed CAP-4 work); lint/typecheck/build clean. No live
+  backend reachable for CAP-7, so verification is entirely the stubbed-fetch
+  suite above, same posture as every other POS story built ahead of its own
+  backend. See
   [wiki/features/pos-cashier-waiter.md](../features/pos-cashier-waiter.md)
   for the full writeup.
