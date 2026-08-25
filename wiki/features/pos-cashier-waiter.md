@@ -156,14 +156,109 @@ actually built here, story by story. Backend counterpart:
   the self-authored contract - the same convention every other realm's component tests
   already use, so nothing here depends on the proxy or a real cookie.
 
+## CAP-3 - Order taking with modifiers, variants (story 4)
+
+- **Intent:** staff builds an order via grid/category/search, configuring modifier groups
+  per item; a line violating a modifier group's min/max can't be added, and every line
+  records which staff member added it (SPEC CAP-3 success criterion).
+- **Built:** replaced story 3's `order-stub.tsx` placeholder outright, in the same route
+  (`/pos/orders/[orderId]`, `src/app/pos/orders/[orderId]/`) it explicitly told story 4 to
+  build into - no second order route was created.
+  - **`order-taking-state.ts`** - all modifier-group min/max validation, variant/price
+    resolution, and grid search/category filtering as pure functions (unit-tested in
+    `order-taking-state.test.ts`, 28 tests), mirroring `table-map-state.ts`'s split
+    between logic and UI. `itemNeedsModifierSheet(item)` decides the one behavioral fork
+    the task called for: an item with no variant to pick and no modifier group to
+    configure (e.g. Butter Naan) adds straight to the order on a single tap, no sheet;
+    anything with a variant or a modifier group (required or optional) routes through the
+    sheet.
+  - **P4 `ModifierSheet`** (`modifier-sheet.tsx`) - bottom sheet, a variant chip row (if
+    the item has variants) plus one chip-group block per modifier group, each with a
+    visible `Required · choose N` / `Optional · up to N` badge
+    (`modifierGroupBadgeLabel`). A `maxSelections <= 1` group is single-select (a new chip
+    replaces the old one); a `maxSelections > 1` group is a capped multi-select (a tap past
+    the cap is silently ignored, any selected chip can always be removed). The confirm
+    button (`modifier-sheet-confirm`) is disabled, never hidden, until the variant (if any)
+    and every required group are satisfied (`canConfirmSelection`) - EXPERIENCE.md's
+    Component Patterns rule, verified directly by a test that drives the button through
+    unsatisfied -> variant-only -> fully-satisfied. Special instructions (free text) and a
+    quantity stepper round out the sheet; confirm reports `{variantId, modifierIds,
+    quantity, specialInstructions}` back to the caller, which is all the caller needs to
+    build the API's `AddOrderLineInput`.
+  - **P3 order-taking screen** (`order-taking-view.tsx`) - a category-tab rail (left) +
+    item grid (`pos-item-tile.tsx`, `POSItemTile`: name, resolved price, "86'd" label for
+    an unavailable item shown-disabled rather than hidden) + a running `OrderPanel`
+    (right rail: line items, per-line qty +/-/remove, running total, "Added by {staff}" on
+    every line). A search bar searches every category at once (ignoring the active tab)
+    once a query is typed, falling back to the active tab when empty. Two independent GETs
+    (`orders/:id`, `menu`) land the screen through the same five-state
+    skeleton/error/loaded pattern as every other `/pos` screen. Quantity +/- calls
+    `PATCH .../lines/:lineId`; decrementing a qty-1 line calls
+    `DELETE .../lines/:lineId` instead of sending `quantity: 0`.
+  - **`OrderPanel`'s total has no tax/discount line** - CAP-7 Bill & Settle owns tax
+    breakdown and discounts (SPEC.md), so this screen shows a real, honestly-computed sum
+    of line totals and a one-line note ("Tax and discounts apply at Bill & Settle")
+    instead of fabricating a GST rate the P3 mock shows but no tenant setting backs yet -
+    same no-fake-data discipline as the owner dashboard and CAP-1's mocked-status chips.
+  - **`POSItemTile`'s veg/non-veg dot (DESIGN.md) is omitted** - the real `MenuItem` model
+    has no dietary-type field (only free-form tenant-defined `Allergen` tags), so nothing
+    reliable exists to derive it from; guessing from an allergen tag's name would be
+    exactly the kind of fabricated-looking data this codebase's honesty pattern forbids.
+  - **Combos (also named in stories.yaml story 4's title) are out of scope for this
+    pass** - the task's own build list and test plan never call for them, and a combo is a
+    meaningfully different concept (a bundle of items) from a single `OrderLine`. Flagged
+    here as an explicit, documented gap rather than silently dropped.
+- **Backend not available at build time, verified via the real GitHub tree, not a stale
+  local checkout.** `restiq-backend#52` ("Order taking with modifiers, variants, combos")
+  has no branch and no commits (`gh issue view 52`/`gh api .../branches` against
+  `AusPosRest/restiq-backend`, both confirming it's unstarted). The local `restiq-backend`
+  working tree on disk was **6 commits behind** the real `origin/dev` when checked (missing
+  `src/pos` entirely on disk) - reading `gh api repos/AusPosRest/restiq-backend/contents/...
+  ?ref=dev` directly instead confirmed the real, currently-merged state: story 3's `Order`
+  model is exactly base-fields-only as promised (`{id, tenantId, outletId, tableId,
+  ownerId, status: open|sent|closed, createdAt, updatedAt}`, no `OrderLine` anywhere), and
+  `PosOrdersController` only exposes table-map/get/status/transfer - no `/lines` endpoint,
+  no `/pos/v1/menu` read. This story's self-authored contract
+  (`order-taking-state.ts`/`api.ts`'s `fetchMenu`/`fetchOrderDetail`/`addOrderLine`/
+  `updateOrderLineQuantity`/`removeOrderLine`) fills exactly that gap - `OrderView` keeps
+  restiq-web's own already-shipped display shape (`tableLabel`/`ownerStaffName`/
+  `status: occupied|needs_bill`) rather than the real bare `Order` row's raw
+  `tableId`/`ownerId`/`open|sent|closed`, since the real row has no display names to hand
+  back at all (see `order-taking-state.ts`'s file header for the full reasoning, including
+  a flagged-but-out-of-scope observation that story 3's own already-shipped status
+  vocabulary doesn't match the real `Order.status` enum either - a pre-existing CAP-2 gap,
+  not this story's to fix).
+- **Tests:** 45 new tests - pure logic (`order-taking-state.test.ts`, 28: modifier-group
+  min/max, single-vs-multi-select toggling, variant/price resolution, category+search
+  filtering), a full component suite for the sheet (`modifier-sheet.test.tsx`, 7: badge
+  copy, confirm-button gating through every unsatisfied/partial/satisfied state,
+  single-select swap, multi-select cap, the exact confirm payload shape, cancel), and a
+  full integration suite for the screen (`order-taking-view.test.tsx`, 10, stubbing global
+  `fetch` against this story's self-authored contract, same convention as
+  `table-map.test.tsx`): loading/error states for both GETs independently, a no-modifier
+  item adding directly with no sheet, a required-modifier item blocking add until
+  satisfied, the order panel updating as lines are added, qty increment/decrement
+  (including decrement-to-zero calling `DELETE`, not `PATCH .../{quantity:0}`), and search
+  finding an item outside the active category tab. 573/573 tests passing repo-wide;
+  lint/typecheck/build clean.
+- **Live verification:** none possible - same constraint as CAP-2/CAP-10 above, now
+  additionally confirmed by reading the real `dev` branch directly rather than assuming
+  from a stale local checkout (see above): no `/pos/v1/menu` or `/lines` endpoint exists
+  anywhere to verify against yet. Verified entirely via the 45 tests above, stubbing
+  global `fetch`.
+
 ## Integration points for later stories
 
-- **Story 4 (CAP-3, order taking, P3/P4) should build directly into
-  `/pos/orders/[orderId]`** (`src/app/pos/orders/[orderId]/order-stub.tsx` is exactly
-  the placeholder to replace/extend) rather than creating a second order route - the
-  table-map -> order navigation already lands there with a real order id.
-- **Story 6 (CAP-5, open/held orders) - done, see its own section below.** It calls this
-  story's `transferOrder` action (`src/app/pos/api.ts`) directly for take-over, per
+- **Story 4 (CAP-3, order taking, P3/P4) - done, see its own section above.**
+- **Story 5 (CAP-4, group ordering/seats) and story 8 (CAP-7, bill & settle) build
+  directly on story 4's `OrderLine`/`OrderView` shape** (`order-taking-state.ts`) -
+  read that file's actual shape before extending it, per stories.yaml's own warning that
+  field names may have shifted during that story's build.
+- **Story 8 (CAP-7) owns tax breakdown and discounts** - story 4's `OrderPanel`
+  deliberately shows only a line-total sum, no GST/discount line (see CAP-3's Built
+  section above for why).
+- **Story 6 (CAP-5, open/held orders) - done, see its own section below.** It calls
+  story 3's `transferOrder` action (`src/app/pos/api.ts`) directly for take-over, per
   stories.yaml: "reused, not reimplemented."
 - **`.pos-theme` / `pos-session.ts` / `/pos` proxy wiring / `src/app/pos/layout.tsx`** were
   added independently by both story 1 and story 3 (neither existed when either story
@@ -175,9 +270,16 @@ actually built here, story by story. Backend counterpart:
   leaving parallel shells. `/pos/shift` and `/pos/shift/close` (CAP-10, story 2) already made
   this move during their own reconciliation - see that section below - as the concrete
   precedent to follow.
-- **Once restiq-backend#46 lands**, reconcile this story's self-authored table-map/order
-  contract in `table-map-state.ts`/`api.ts` against the real DTOs, same as CAP-1's contract
-  was reconciled against `feature/44-pos-auth-clock` above.
+- **`restiq-backend#46` has since landed** (`feature/46-table-map-ownership`, merged to
+  `dev` as PR #49) but has **not** been reconciled here yet - noticed while reading the
+  real `dev` tree for this story's own CAP-3 work (see that section below), not acted on,
+  since reconciling CAP-2 is outside this story's scope. For whoever picks this up: the
+  real `Order` row is `{id, tenantId, outletId, tableId, ownerId, status: open|sent|
+  closed, ...}` (no display names) and `PosOrdersController`'s table-map read is
+  `GET /pos/v1/outlets/:outletId/table-map` (outlet-scoped in the path, not a query param) -
+  both differ from `table-map-state.ts`/`api.ts`'s current self-authored guess
+  (`ownerStaffName`/`ownerStaffId` inline on the table entry, `occupied`/`needs_bill`
+  status, no outlet segment in the table-map URL).
 - **Real tenant/outlet terminal scope is still an open question.** CAP-1's login has no
   tenant-picker step and a pos session isn't device-bound (AD-13), so the web app has no
   way to learn which tenant a terminal belongs to; `POS_TENANT_ID` (a server-only env var

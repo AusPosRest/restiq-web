@@ -318,3 +318,34 @@ faked.
   [wiki/features/pos-cashier-waiter.md](../features/pos-cashier-waiter.md)'s
   CAP-5 section. 22 new tests, 556/556 passing repo-wide; lint/typecheck/
   build clean. Issue AusPosRest/restiq-web#47.
+
+- **2026-08-25** - POS Cashier & Waiter story 4 (CAP-3 order taking with
+  modifiers/variants), web-only build (`restiq-web`, branch
+  `feature/46-order-taking-modifiers`, closes #46): the real P3 Order Taking
+  screen (`src/app/pos/orders/[orderId]/order-taking-view.tsx`), replacing
+  story 3's `order-stub.tsx` placeholder in place, same route. Category-tab
+  + search item grid (`POSItemTile`, 86'd items shown disabled not hidden);
+  tapping an item with a variant or a modifier group opens P4's
+  `ModifierSheet` (chip groups, a visible "Required - choose N"/"Optional -
+  up to N" badge, confirm disabled - never hidden - until every required
+  group and any variant is satisfied); an item with neither adds straight to
+  the order, no sheet. A running `OrderPanel` (line items, qty +/-/remove,
+  "Added by {staff}" per line, running total) updates live as lines are
+  added. `restiq-backend#52` (this story's own backend) has no branch yet -
+  confirmed against the real GitHub `dev` tree via `gh api` (not the local
+  checkout, which was 6 commits stale and missing `src/pos` entirely on
+  disk): `Order` is genuinely base-fields-only, no `OrderLine`, no `/lines`
+  or `/menu` endpoint anywhere - so this story's menu-read/order-line
+  contract in `order-taking-state.ts`/`api.ts` is self-authored, same
+  discipline as story 3's table-map contract. Also noted, but out of this
+  story's scope to fix: `restiq-backend#46` (story 3's own backend) has since
+  landed and its real `Order`/table-map shape differs from
+  `table-map-state.ts`'s existing self-authored guess - flagged in
+  `wiki/features/pos-cashier-waiter.md`'s Integration points for whoever
+  reconciles CAP-2 next. 45 new tests (28 pure-logic, 7 `ModifierSheet`
+  component, 10 screen integration), 573/573 passing repo-wide;
+  lint/typecheck/build clean. No live backend reachable for CAP-3
+  specifically, so verification is entirely the stubbed-fetch suite above,
+  same posture as every other POS story built ahead of its own backend. See
+  [wiki/features/pos-cashier-waiter.md](../features/pos-cashier-waiter.md)
+  for the full writeup.
