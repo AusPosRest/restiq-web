@@ -113,6 +113,30 @@ export function updateOrderLineQuantity(orderId: string, lineId: string, quantit
   return posApi<OrderView>(`orders/${orderId}/lines/${lineId}`, { method: "PATCH", body: JSON.stringify({ quantity }) });
 }
 
+/**
+ * CAP-4 group ordering: assigns (or, with `null`, clears) a line's seat
+ * number. Reuses story 4's real, merged `PATCH .../lines/:lineId` endpoint
+ * rather than a new route - see order-taking-state.ts's CAP-4 header for
+ * why (issue #58's own framing: "extends story 4's real, merged line
+ * add/edit endpoints with an optional seatNumber field").
+ */
+export function assignSeat(orderId: string, lineId: string, seatNumber: number | null): Promise<OrderView> {
+  return posApi<OrderView>(`orders/${orderId}/lines/${lineId}`, { method: "PATCH", body: JSON.stringify({ seatNumber }) });
+}
+
+/**
+ * CAP-4's "send to kitchen" action - `PATCH .../status {status:'sent'}` is
+ * a real, already-merged endpoint (`orders.controller.ts`/`orders.service.ts`
+ * on restiq-backend `dev`, verified directly); issue #58 (not yet started)
+ * only adds a 400 to it when any line lacks a seat, per SPEC CAP-4's success
+ * criterion - order-taking-state.ts's `canSendToKitchen` mirrors that gate
+ * client-side so this call should only ever be reached once it would
+ * succeed.
+ */
+export function sendOrderToKitchen(orderId: string): Promise<OrderView> {
+  return posApi<OrderView>(`orders/${orderId}/status`, { method: "PATCH", body: JSON.stringify({ status: "sent" }) });
+}
+
 export function removeOrderLine(orderId: string, lineId: string): Promise<OrderView> {
   return posApi<OrderView>(`orders/${orderId}/lines/${lineId}`, { method: "DELETE" });
 }

@@ -247,17 +247,86 @@ actually built here, story by story. Backend counterpart:
   anywhere to verify against yet. Verified entirely via the 45 tests above, stubbing
   global `fetch`.
 
+## CAP-4 - Group ordering (story 5, issue #52)
+
+- **Intent:** staff can split one table's order into named seats/covers for later
+  per-seat billing; every item must be assigned to a seat number before the order can be
+  sent to the kitchen - unassigned items block fire (SPEC CAP-4 success criterion).
+- **Built:** extends story 4's order-taking screen and panel in place - EXPERIENCE.md's
+  IA calls this "optional seat-splitting, reached from the order panel's 'Split by seat'
+  action", not a separate P5 route, so that's exactly what got built (P5's full
+  per-seat-subtotal/split-options screen belongs to CAP-7 Bill & Settle, out of scope
+  here per YAGNI - only the seat picker and the fire-gate were asked for).
+  - **`order-taking-state.ts`** - `OrderLineView.seatNumber?: number | null` and
+    `OrderView.firedAt?: string | null` (both optional, not just nullable, so story 4's
+    already-shipped literals/tests keep type-checking with no edits). Pure logic:
+    `allLinesSeated`/`unseatedLineCount` (vacuously true/0 for an order with no lines -
+    nothing to block yet) and `canSendToKitchen` (also requires at least one line and
+    that the order hasn't already fired), unit-tested in `order-taking-state.test.ts`
+    (12 new tests).
+  - **`OrderPanel`** (`order-panel.tsx`) - a "Split by seat" toggle in the panel header
+    (`split-by-seat-toggle`, hidden on an empty order) reveals a per-line seat stepper
+    (`order-line-seat-{id}`, `-increment-`/`-decrement-`) reusing the exact same
+    Minus/Plus tap-target pattern already built for the quantity stepper, per ponytail's
+    reuse-over-rewrite rung rather than inventing a new control. Decrementing seat 1
+    clears the line back to "Unseated" (`seatNumber: null`) instead of stopping at 1, so
+    a mis-tap is always reversible without a separate "clear" affordance.
+  - **"Send to kitchen"** (`send-to-kitchen`) - a new footer action (this action didn't
+    exist anywhere in the UI before this story). Disabled, never hidden, while
+    `!canSendToKitchen(order)` - EXPERIENCE.md's Component Patterns convention (same as
+    ModifierSheet's confirm button). While blocked by an unseated line, an inline message
+    (`send-to-kitchen-blocked`) names the fix at the point of the violation ("N items need
+    a seat before sending to the kitchen"), with an inline link back to the seat toggle if
+    it isn't already open - Voice and Tone's "name the fix, not the failure mode" and
+    State Patterns' "block forward progress at the point of the violation, not after a
+    later submit". Once fired, the button reads "Sent to kitchen" and stays disabled - a
+    quiet success state, no toast (EXPERIENCE.md State Patterns).
+  - **`OrderView.status` was deliberately left untouched** - it already diverges from the
+    real `Order.status` enum (a pre-existing CAP-2/CAP-3 gap, flagged in story 4's own
+    section above) and piling CAP-4's "sent to kitchen" concept onto that mismatched field
+    would compound the gap instead of isolating this story's addition. `firedAt` is a new
+    field instead, following the same insert-only ISO-string convention already used for
+    `openedAt`/`createdAt`.
+- **Backend contract - built against the real, merged CAP-3 endpoints, anticipating
+  issue #58's still-unbuilt extension.** `restiq-backend#58` ("Group ordering - seats and
+  covers", branch `feature/58-group-ordering`) has no branch or commits as of this build
+  (`gh api repos/AusPosRest/restiq-backend/branches` lists only `dev`/`main`/
+  `feature-15`; `gh issue view 58` confirms open/unstarted - a parallel agent was building
+  it concurrently but hadn't pushed anything). What's real and directly verified off
+  `restiq-backend`'s `dev` (`orders.controller.ts`/`orders.service.ts`/`orders.dtos.ts`,
+  read via `gh api .../contents/...?ref=dev`, story 4's PR #57, merged): `PATCH
+  /pos/v1/orders/:orderId/status {status}` already exists and already accepts
+  `status: 'sent'` (forward-only `open -> sent -> closed`, owner-only) with no seat-gate
+  yet; `PATCH /pos/v1/orders/:orderId/lines/:lineId` is real too, but `UpdateOrderLineDto`
+  today only carries `quantity`/`modifierIds`, no `seatNumber`. Issue #58's own framing
+  ("extends story 4's real, merged line add/edit endpoints with an optional seatNumber
+  field") is taken at face value: this story's `assignSeat`/`sendOrderToKitchen`
+  (`src/app/pos/api.ts`) call those exact same real endpoints/methods, only anticipating
+  the request/response fields (`seatNumber`, `firedAt`) that #58 hasn't added yet. **Must
+  be reconciled once #58 lands** - same discipline as CAP-3's own reconciliation notes.
+- **Tests:** 16 new tests - 12 pure-logic (`order-taking-state.test.ts`:
+  `allLinesSeated`/`unseatedLineCount` across empty/fully-seated/partially-seated/
+  missing-field orders, `canSendToKitchen` across no-lines/unseated/fully-seated/
+  already-fired) and 4 integration (`order-taking-view.test.tsx`, stubbing global `fetch`
+  same convention as story 4): assigning a seat updates the line and posts the exact
+  `{seatNumber}` body; an unseated line disables "Send to kitchen" with the inline
+  message; sending succeeds once every line is seated and the button flips to "Sent to
+  kitchen"; an empty order hides the seat toggle and keeps "Send to kitchen" disabled with
+  no message (nothing to block yet). 611/611 tests passing repo-wide; lint/typecheck/build
+  clean.
+- **Live verification:** none possible - same constraint as CAP-3 above. Verified
+  entirely via the 16 tests above, stubbing global `fetch` against the anticipated
+  contract described above.
+
 ## Integration points for later stories
 
 - **Story 4 (CAP-3, order taking, P3/P4) - done, see its own section above.**
-- **Story 5 (CAP-4, group ordering/seats) builds directly on story 4's
-  `OrderLine`/`OrderView` shape** (`order-taking-state.ts`) - read that file's actual shape
-  before extending it, per stories.yaml's own warning that field names may have shifted
-  during that story's build.
-- **Story 8 (CAP-7, bill & settle) - done, see its own section below.** It reused
-  `order-taking-state.ts`'s `OrderLineView` directly for the bill's line items rather than
-  reshaping them, and owns the tax breakdown/discount line CAP-3's `OrderPanel` explicitly
-  left out (see CAP-3's Built section above for why).
+- **Story 5 (CAP-4, group ordering/seats) - done, see its own section above.**
+- **Story 8 (CAP-7, bill & settle) - done, see its own section below.** It builds directly
+  on story 4/5's `OrderLine`/`OrderView` shape (`order-taking-state.ts`, now including
+  `seatNumber`/`firedAt`), reusing `OrderLineView` verbatim for the bill's line items
+  rather than reshaping them, and owns the tax breakdown/discount line CAP-3's `OrderPanel`
+  explicitly left out (see CAP-3's Built section above for why).
 - **Story 6 (CAP-5, open/held orders) - done, see its own section below.** It calls
   story 3's `transferOrder` action (`src/app/pos/api.ts`) directly for take-over, per
   stories.yaml: "reused, not reimplemented."

@@ -60,6 +60,36 @@
 // Allergen tags, not a dietary-type enum), so it is omitted here rather than
 // guessed at from an allergen tag's name - the same no-fake-data discipline
 // the owner dashboard and table-map's `needs_bill` status already follow.
+//
+// --- CAP-4 group ordering (story 5, issue #52 web / #58 backend) additions
+// below. restiq-backend#58 ("Group ordering - seats and covers", branch
+// feature/58-group-ordering) has no branch yet as of this build (`gh api
+// repos/AusPosRest/restiq-backend/branches` lists only dev/main/feature-15;
+// `gh issue view 58` confirms open/unstarted) - a parallel agent is building
+// it. What *is* real and verified directly off restiq-backend's `dev`
+// (`orders.controller.ts`/`orders.service.ts`/`orders.dtos.ts`, read via `gh
+// api .../contents/...?ref=dev`, PR #57 merged): `PATCH
+// /pos/v1/orders/:orderId/status {status}` (forward-only open->sent->closed,
+// owner-only) already exists and already accepts `status: 'sent'` - CAP-4's
+// job is only to add the seat-gate (a 400 when any line lacks a seat) on top
+// of that already-real transition, not a new endpoint. Likewise `PATCH
+// /pos/v1/orders/:orderId/lines/:lineId` is real (`UpdateOrderLineDto`
+// today only carries `quantity`/`modifierIds`) - issue #58's own framing
+// ("extends story 4's real, merged line add/edit endpoints with an optional
+// seatNumber field") is taken at face value: `seatNumber` rides the same
+// endpoint, not a new one. `seatNumber`/`firedAt` below are this client's
+// anticipated shape for that still-unbuilt extension; reconcile once #58
+// lands.
+//
+// `firedAt` (not a reuse of `OrderView.status`) is a deliberate new field
+// rather than extending the existing `status: "occupied" | "needs_bill"`
+// union - that union already mirrors table-map semantics, not the real
+// `Order.status` enum (a pre-existing, out-of-scope CAP-2/CAP-3 gap flagged
+// in this file's original header above). Piling CAP-4's "sent to kitchen"
+// concept onto that same mismatched field would compound the gap instead of
+// isolating this story's own addition - `firedAt` follows the same
+// insert-only ISO-string convention already used for `openedAt`/`createdAt`
+// elsewhere in this file.
 
 export interface PosMenuVariantView {
   id: string;
@@ -125,6 +155,13 @@ export interface OrderLineView {
   addedByStaffId: string;
   addedByStaffName: string;
   addedAt: string;
+  /**
+   * CAP-4 group ordering: which seat/cover this line belongs to; `null`/
+   * absent means unseated. Optional (not just nullable) so story 4's
+   * already-shipped call sites and tests, which never set this field, keep
+   * type-checking unchanged - see this file's CAP-4 header note above.
+   */
+  seatNumber?: number | null;
 }
 
 export interface OrderView {
@@ -139,6 +176,8 @@ export interface OrderView {
   lines: OrderLineView[];
   /** Sum of every line's total. Tax breakdown is CAP-7 Bill & Settle's job, not this screen's - no rate is fabricated here. */
   totalMinor: number;
+  /** CAP-4: set once the order has been sent to the kitchen; `null`/absent beforehand. Optional for the same story-4-compatibility reason as `OrderLineView.seatNumber` above. */
+  firedAt?: string | null;
 }
 
 export interface AddOrderLineInput {
@@ -261,4 +300,25 @@ export function computeUnitTotalMinor(unitPriceMinor: number, modifiers: readonl
 
 export function computeOrderTotalMinor(lines: readonly OrderLineView[]): number {
   return lines.reduce((sum, line) => sum + line.lineTotalMinor, 0);
+}
+
+// --- CAP-4 group ordering: seat assignment and the fire-gate. SPEC.md's
+// success criterion is literal: "Every item is assigned to a seat number
+// before the order can be sent to the kitchen; unassigned items block
+// fire." `allLinesSeated`/`canSendToKitchen` are this client's mirror of
+// that server-side gate (see this file's CAP-4 header note for why the real
+// 400 doesn't exist to verify against yet).
+
+/** Vacuously true for an order with no lines - nothing to block yet. */
+export function allLinesSeated(lines: readonly OrderLineView[]): boolean {
+  return lines.every((line) => line.seatNumber != null);
+}
+
+export function unseatedLineCount(lines: readonly OrderLineView[]): number {
+  return lines.filter((line) => line.seatNumber == null).length;
+}
+
+/** Gates the "Send to kitchen" action - disabled, never hidden, same EXPERIENCE.md convention as ModifierSheet's confirm button. */
+export function canSendToKitchen(order: Pick<OrderView, "lines" | "firedAt">): boolean {
+  return order.lines.length > 0 && !order.firedAt && allLinesSeated(order.lines);
 }
