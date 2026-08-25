@@ -121,11 +121,22 @@ describe("Dashboard", () => {
   });
 
   it("formats the freshness badge as-of time - always live, since the backend computes it fresh on every request", async () => {
-    stubFetch(MULTI_OUTLET);
-    render(<Dashboard />);
+    // formatAsOf's bare-time vs. dated format depends on whether `asOf` is
+    // "today" - pin the clock to the fixture's own day so this doesn't
+    // silently flip format (and fail) once the real date moves on.
+    // Fake only Date, not timers - RTL's findBy*/waitFor polling relies on
+    // real setTimeout/setInterval and would hang under a fully-faked clock.
+    vi.useFakeTimers({ toFake: ["Date"] });
+    vi.setSystemTime(new Date("2026-08-24T12:00:00.000Z"));
+    try {
+      stubFetch(MULTI_OUTLET);
+      render(<Dashboard />);
 
-    const badge = await screen.findByTestId("dashboard-freshness-badge");
-    expect(badge.textContent).toContain("As of 9:05am");
-    expect(badge.getAttribute("data-stale")).toBe("false");
+      const badge = await screen.findByTestId("dashboard-freshness-badge");
+      expect(badge.textContent).toContain("As of 9:05am");
+      expect(badge.getAttribute("data-stale")).toBe("false");
+    } finally {
+      vi.useRealTimers();
+    }
   });
 });
