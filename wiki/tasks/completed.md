@@ -185,3 +185,30 @@ CAP-7's permission matrix still sources from a static reference pending
 honest "Pending" states until their backends exist - both documented in
 [wiki/features/tenant-admin.md](../features/tenant-admin.md), not silently
 faked.
+
+- **2026-08-25** - POS Cashier & Waiter story 3 (CAP-2 table map and order
+  ownership/transfer), web-only build (`restiq-web`, branch
+  `feature/40-table-map-ownership`, closes #40): P2 Table Map
+  (`src/app/pos/table-map/`), plus the `/pos` realm plumbing that didn't exist
+  yet (`src/lib/pos-session.ts`, `src/proxy.ts` gating `/pos/:path*`,
+  `src/app/pos/api/[...path]/route.ts`, `.pos-theme` in `globals.css`,
+  `src/app/pos/layout.tsx`). A grid of color-coded `TableTile`s
+  (empty/occupied/needs_bill) grouped by floor, each always pairing its
+  status color with a visible text label (Accessibility Floor: color is
+  never the only signal). Tapping an empty table starts a new order; tapping
+  one the current staff member already owns opens it directly; tapping one
+  owned by someone else never opens it silently - it surfaces a named
+  `TransferOwnershipDialog` (owner named, reason optional) per
+  EXPERIENCE.md's Priya flow, and only after confirming does it open.
+  Starting, opening, or transferring all land on `/pos/orders/[orderId]`, a
+  deliberately minimal placeholder proving the id/table/owner round-trip -
+  this is the exact route story 4 (CAP-3 order taking) should build its real
+  screen into, not a second route. `restiq-backend#46` (this story's own
+  backend) and `restiq-web`'s own story 1/#38 (PIN login, so no real
+  `/pos/login` or `pos_session` cookie exists yet) were both unbuilt at the
+  time - self-authored contract and an honest, documented auth gap, same
+  discipline as the CAP-8 dashboard story above. 32 new tests, 467/467
+  passing repo-wide; lint/typecheck/build clean. See
+  [wiki/features/pos-cashier-waiter.md](../features/pos-cashier-waiter.md)
+  for the full writeup and the parallel-build dedupe note for any other
+  in-flight POS story that also touches `/pos` realm plumbing.
