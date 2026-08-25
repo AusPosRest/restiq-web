@@ -381,3 +381,42 @@ faked.
   every other POS story built ahead of its own backend. See
   [wiki/features/pos-cashier-waiter.md](../features/pos-cashier-waiter.md)
   for the full writeup.
+
+- **2026-08-25** - POS Cashier & Waiter story 8 (CAP-7 bill & settle),
+  web-only build (`restiq-web`, branch `feature/53-bill-and-settle`, closes
+  #53): the real P8 Bill & Settle screen
+  (`src/app/pos/orders/[orderId]/settle/`), reached from a new "Settle"
+  button on the real, already-merged order-taking screen. `BillSummary`
+  (left panel) renders line items, subtotal, an optional discount line,
+  CGST/SGST tax lines, round-off, and grand total; `TenderKeypad` (right
+  panel) reuses the already-merged shift `AmountKeypad` for cash/UPI tender
+  entry, supports multiple/split tenders, and shows a running
+  remaining-to-settle figure. A discount below a 10%
+  (self-documented-judgment-call) threshold takes a plain reason field;
+  at/above it, the same flow instead renders the real, already-merged
+  `ManagerPinDialog` (story 9/#42) with discount-specific reason codes - not
+  a second PIN dialog. Finalize is disabled until tenders exactly cover the
+  grand total; once finalised, the whole mutation half of the screen (discount
+  button, keypad, Finalize) stops rendering outright, replaced by a read-only
+  "Bill finalised" panel - no edit path survives (AD-14). `restiq-backend#59`
+  (this story's own backend) had no branch or commits at build time - unlike
+  CAP-3, there was no real schema to read either, since the issue itself
+  calls this a greenfield Bill/Tender build - so the whole bill contract
+  (`GET/POST .../bill*`) plus the CGST/SGST 2.5%+2.5% tax computation is
+  self-authored, documented in full in `settle/bill-state.ts`'s header. Also
+  discovered and flagged (not fixed, out of this story's scope): the
+  `docs/specs/spec-pos-cashier-waiter/` and
+  `docs/ux/ux-pos-cashier-waiter-2026-08-25/` paths this whole wiki doc's
+  header has cited since story 1 do not exist anywhere in the real
+  `restiq-design` repo (checked every branch), and story 9's `ManagerPinDialog`
+  landed without a `wiki/features/pos-cashier-waiter.md` section of its own -
+  both spawned as separate follow-up tasks. 15 new tests (9 pure-logic, 6
+  screen integration covering tax breakdown, multi-tender remaining-to-settle,
+  finalize gating, both discount paths, and post-finalisation read-only
+  state), 626/626 passing repo-wide (after merging story 5's
+  concurrently-landed CAP-4 work); lint/typecheck/build clean. No live
+  backend reachable for CAP-7, so verification is entirely the stubbed-fetch
+  suite above, same posture as every other POS story built ahead of its own
+  backend. See
+  [wiki/features/pos-cashier-waiter.md](../features/pos-cashier-waiter.md)
+  for the full writeup.

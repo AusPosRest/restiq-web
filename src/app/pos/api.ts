@@ -268,3 +268,36 @@ export interface AttendanceView {
 export function getAttendanceToday(outletId: string): Promise<AttendanceView> {
   return posApi<AttendanceView>(`outlets/${encodeURIComponent(outletId)}/attendance/today`);
 }
+
+// --- CAP-7 Bill & Settle (story 8, issue #53 web / #59 backend). See
+// orders/[orderId]/settle/bill-state.ts's file header for the full
+// self-authored-contract reasoning (restiq-backend#59 has no branch yet).
+export type {
+  AddTenderInput,
+  ApplyDiscountInput,
+  BillDiscountView,
+  BillTaxLineView,
+  BillTenderMethod,
+  BillTenderView,
+  BillView,
+} from "./orders/[orderId]/settle/bill-state";
+import type { AddTenderInput, ApplyDiscountInput, BillView } from "./orders/[orderId]/settle/bill-state";
+
+/** GET /pos/v1/orders/:id/bill - the real endpoint should lazily materialise a draft Bill from the Order's current lines on first read if none exists yet (this client never creates one explicitly). */
+export function fetchBill(orderId: string): Promise<BillView> {
+  return posApi<BillView>(`orders/${orderId}/bill`);
+}
+
+/** POST /pos/v1/orders/:id/bill/discount - below CAP-8's threshold this is the whole call; at/above it, `managerPin` carries the ManagerPinDialog-approved PIN alongside the same reasonCode (now sourced from the dialog's reason-code select instead of the plain field). */
+export function applyBillDiscount(orderId: string, input: ApplyDiscountInput): Promise<BillView> {
+  return posApi<BillView>(`orders/${orderId}/bill/discount`, { method: "POST", body: JSON.stringify(input) });
+}
+
+export function addBillTender(orderId: string, input: AddTenderInput): Promise<BillView> {
+  return posApi<BillView>(`orders/${orderId}/bill/tenders`, { method: "POST", body: JSON.stringify(input) });
+}
+
+/** Rejected (409, surfaced via PosApiError) if tenders don't exactly cover the grand total - canFinalizeBill() already keeps the button disabled in that case, this is the server-side backstop. */
+export function finalizeBill(orderId: string): Promise<BillView> {
+  return posApi<BillView>(`orders/${orderId}/bill/finalize`, { method: "POST" });
+}

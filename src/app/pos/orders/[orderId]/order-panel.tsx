@@ -8,8 +8,18 @@
 // header for the full contract reasoning). Every line shows who added it
 // (SPEC CAP-3 success criterion: "every line records which staff member
 // added it").
+//
+// The footer's "Settle" link is CAP-7 Bill & Settle's entry point
+// (story 8/#53) - the order-taking screen itself never computes tax or
+// discounts (see computeOrderTotalMinor's own comment), it only hands off.
+// It sits below Send to kitchen rather than gated behind `firedAt` - this
+// story didn't add that dependency and nothing in either story's task list
+// asked for it; flagged here for whoever reconciles CAP-4/CAP-7 next, same
+// discipline as this doc's other cross-story integration notes.
+import Link from "next/link";
 import { useState } from "react";
 import { Minus, Plus, Trash2 } from "lucide-react";
+import { Button } from "@/components/ui/button";
 import { canSendToKitchen, computeOrderTotalMinor, formatPriceMinor, unseatedLineCount, type OrderLineView, type OrderView } from "./order-taking-state";
 
 export interface OrderPanelProps {
@@ -195,6 +205,16 @@ export function OrderPanel({
               </button>
             )}
           </p>
+        )}
+
+        {lines.length === 0 ? (
+          <Button size="lg" className="mt-3 w-full" data-testid="go-to-settle" disabled>
+            Settle
+          </Button>
+        ) : (
+          <Button asChild size="lg" className="mt-3 w-full" data-testid="go-to-settle">
+            <Link href={`/pos/orders/${orderId}/settle`}>Settle</Link>
+          </Button>
         )}
       </footer>
     </aside>
