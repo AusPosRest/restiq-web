@@ -170,6 +170,10 @@
   --color-status-active: var(--status-active);
   --color-status-error: var(--status-error);
   --color-status-scheduled: var(--status-scheduled);
+  --color-status-available: var(--status-available);
+  --color-status-occupied: var(--status-occupied);
+  --color-status-alert: var(--status-alert);
+  --color-status-reserved: var(--status-reserved);
   --color-error-soft: var(--error);
   --color-error-container: var(--error-container);
   --font-headline: var(--font-hanken-grotesk);
@@ -206,6 +210,46 @@
   --status-pending: #eab308;
   --status-error: #ef4444;
   --status-scheduled: #a855f7;
+  --error: #ffb4ab;
+
+  --font-sans: var(--font-inter);
+  font-family: var(--font-inter), Inter, sans-serif;
+}
+
+/* RESTIQ POS Cashier & Waiter - the /pos surface's theme (ux-pos-cashier-
+   waiter DESIGN.md). Same dark-charcoal-plus-amber ground as Console
+   Dark/Tenant Admin, but its own status vocabulary matching DESIGN.md's
+   frontmatter verbatim (available/occupied/warning/alert/reserved) since a
+   table tile's color is the primary signal a cashier reads across the room -
+   a re-skin is an edit here, not in components. */
+.pos-theme {
+  --background: #131315;
+  --foreground: #f5f5f4;
+  --card: #1c1c1e;
+  --card-foreground: #f5f5f4;
+  --popover: #26262a;
+  --popover-foreground: #f5f5f4;
+  --primary: #f59e0b;
+  --primary-foreground: #472a00;
+  --secondary: #26262a;
+  --secondary-foreground: #f5f5f4;
+  --muted: #1f1f21;
+  --muted-foreground: #a1a1aa;
+  --accent: #26262a;
+  --accent-foreground: #f5f5f4;
+  --destructive: #ef4444;
+  --border: #3f3f46;
+  --input: #26262a;
+  --ring: #f59e0b;
+  --radius: 8px;
+
+  /* status vocabulary - fixed across every POS screen (DESIGN.md: "never
+     repurposed for anything decorative") */
+  --status-available: #22c55e;
+  --status-occupied: #3b82f6;
+  --status-warning: #eab308;
+  --status-alert: #ef4444;
+  --status-reserved: #a855f7;
   --error: #ffb4ab;
 
   --font-sans: var(--font-inter);

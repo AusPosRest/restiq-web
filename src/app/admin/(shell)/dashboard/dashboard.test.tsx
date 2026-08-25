@@ -57,6 +57,7 @@ function stubFetch(view: DashboardView) {
 afterEach(() => {
   cleanup();
   vi.unstubAllGlobals();
+  vi.useRealTimers();
 });
 
 describe("Dashboard", () => {
