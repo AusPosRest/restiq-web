@@ -93,9 +93,17 @@ function BillSettleLoaded({ orderId, initialBill }: Readonly<{ orderId: string; 
             <p className="text-sm text-muted-foreground">
               {bill.tenders.length} tender{bill.tenders.length === 1 ? "" : "s"} captured · no further changes are possible.
             </p>
-            <Button asChild size="sm" variant="outline" className="mt-2" data-testid="bill-finalised-back">
-              <Link href="/pos/table-map">Back to table map</Link>
-            </Button>
+            <div className="mt-2 flex gap-2">
+              <Button asChild size="sm" variant="outline" data-testid="bill-finalised-back">
+                <Link href="/pos/table-map">Back to table map</Link>
+              </Button>
+              {/* CAP-9 entry point (story 10): the only way into P10 Refund &
+                  Adjustments is from here, once a bill is finalised and thus
+                  eligible for refund - see refund-view.tsx's file header. */}
+              <Button asChild size="sm" variant="outline" data-testid="bill-finalised-refund">
+                <Link href={`/pos/orders/${orderId}/refund`}>Refund…</Link>
+              </Button>
+            </div>
           </section>
         ) : (
           <div className="flex flex-1 flex-col">

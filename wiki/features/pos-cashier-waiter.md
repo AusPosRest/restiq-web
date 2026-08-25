@@ -828,3 +828,94 @@ done now, this is what actually happened:
   revisiting once the real backend's tender semantics land, not silently assumed away.
 - **Split-bill (by seat/item/equal/amount) is out of scope** - visible in the P8 mock but
   not named anywhere in this story's task list.
+
+## CAP-9 - Refunds and adjustments (story 10, issue #57)
+
+- **Intent:** staff can refund one or more items (by quantity, up to the original line's
+  quantity) against an already-finalised, immutable Bill, always gated by the CAP-8
+  manager-authorisation dialog, with a proportional tax reversal. Success never mutates
+  the original Bill - it is issued as a separate, linked credit note, matching the real
+  backend's insert-only `CreditNote` design.
+- **Built:** `src/app/pos/orders/[orderId]/refund/`, a new route
+  (`/pos/orders/[orderId]/refund`) reached from a new "Refund…" button on the real,
+  already-merged bill-settle screen's "Bill finalised" panel (`settle/bill-settle-view.tsx`,
+  story 8) - the only entry point, since a bill must already be finalised to be refund-
+  eligible.
+  - **`refund-state.ts`** - `RefundSelection`/`CreditNoteView`/`CreateRefundInput` types plus
+    pure logic (`toggleLineSelected`, `setLineQuantity` clamped to `[1, line.quantity]`,
+    `computeRefundTotals`, `hasRefundSelection`, `toRefundLineInputs`, `canRefundBill`),
+    unit-tested without a DOM, same split as every other `/pos` screen's `*-state.ts`.
+    Refund tax reversal mirrors CAP-7's own forward-direction rule (a flat combined rate -
+    CGST 2.5% + SGST 2.5% = 5% - applied to the refunded subtotal), verified to reproduce
+    the P10 mock's own numbers exactly (2 x Butter Naan @ ₹60 -> ₹120 subtotal, ₹6 tax
+    reversal, ₹126 total).
+  - **Two real, already-merged pieces reused directly, neither rebuilt:**
+    - **`BillSummary`** (CAP-7/story 8, `settle/bill-summary.tsx`) renders the "Original
+      Invoice" read-only, unmodified - passed the fetched finalised `BillView` with a no-op
+      `onAddDiscount`. Because `bill.status` is already `"finalised"`, `BillSummary` itself
+      already hides its discount affordance; nothing new needed wiring for that. This is
+      also *why* the original bill can never look "edited" here - the refund screen never
+      writes to the `BillView` it displays, at all.
+    - **`ManagerPinDialog`** (CAP-8/story 9, `components/manager-pin-dialog.tsx`) gates the
+      one and only path to `createRefund()` - refund has no below-threshold exception (CAP-8
+      lists it as always one of the six gated actions), so unlike CAP-7's discount dialog
+      there is no plain-reason fallback at all; the mandatory reason code always comes from
+      the dialog's own `reasonCodeOptions` (Customer complaint / Order entry error / Quality
+      issue / Duplicate charge / Other).
+  - **`RefundConfigPanel`** (new) - a checkbox + qty-stepper row per original bill line
+    (stepper reuses the same Minus/Plus icon-button convention as `order-panel.tsx`'s line
+    quantity controls, bounded to the line's original quantity), a live refund
+    subtotal/tax-reversal/total readout (`computeRefundTotals`), an optional manager-notes
+    textarea, and a Cash/UPI-Reversal method toggle (same `aria-pressed` button-group
+    pattern as `TenderKeypad`'s method selector). "Process refund" only opens
+    `ManagerPinDialog` - `createRefund()` is called exclusively from its `onApprove`, so
+    there is no code path that issues a refund without a valid PIN + reason.
+  - **`CreditNoteResult`** (new) - the success state: credit note number, refunded lines,
+    subtotal/tax-reversal/total, reason, notes, and refund method. `refund-view.tsx` swaps
+    this in wholesale in place of the two-pane refund UI once `createRefund()` resolves -
+    there is no code path that re-renders the original bill with the refund "applied" to it.
+- **Backend not available at build time.** `restiq-backend#63` ("Refunds and adjustments
+  (CAP-9)") had no branch and no commits when this was built (`gh api
+  repos/AusPosRest/restiq-backend/branches` and `gh pr list --repo AusPosRest/restiq-web`
+  both checked - no `feature/63-refunds-adjustments` branch anywhere, and no PR against
+  `restiq-web` either). Built directly from `docs/specs/spec-pos-cashier-waiter/SPEC.md`'s
+  CAP-9 section and the real P10 mock
+  (`restiq-refund-adjustments-bill-tn1-000482--50f49f87.png`, read from the sibling
+  `restiq-design` repo) - unlike the CAP-7 note above, `SPEC.md` and `screens.md` *did*
+  exist and were readable this time. Self-authored contract (`POST .../bill/refund`,
+  reusing the existing `GET .../bill` read rather than inventing a second one) documented in
+  full in `refund-state.ts`'s and `api.ts`'s file headers. **Must be reconciled against the
+  real restiq-backend#63 DTOs once that lands** - same discipline as every other
+  not-yet-backed story in this doc.
+- **Tests:** 16 new tests - pure logic (`refund-state.test.ts`, 10: selection
+  toggling/clamping, partial- and full-quantity refund totals matching the P10 mock exactly,
+  multi-line selection filtering, and the finalised-only eligibility gate) and a full
+  integration suite (`refund-view.test.tsx`, 6, stubbing global `fetch` against the
+  self-authored contract): selecting items/quantities computes the correct running partial
+  amount while the original invoice's own totals never change, the manager PIN dialog blocks
+  `createRefund()` until both PIN and reason are supplied, a rejected PIN leaves the config
+  panel in place with no credit note issued, a successful refund shows the credit note with
+  only the one original `GET` and no bill-mutating request ever made, and a non-finalised
+  bill shows no refund controls at all. 642/642 tests passing repo-wide; lint/typecheck/build
+  clean.
+- **Live verification:** none possible - same constraint as every other not-yet-backed POS
+  story above. Verified entirely via the 16 tests above, stubbing global `fetch` against the
+  self-authored contract.
+
+## Key decisions (CAP-9)
+
+- **No below-threshold exception for refund's reason code** - CAP-8 lists refund as always
+  gated (unlike CAP-7's discount, which has a below-threshold plain-reason path), so the
+  mandatory reason always comes from `ManagerPinDialog`'s own reason-code select; there is
+  no separate reason field on the main config panel.
+- **Tax reversal is a flat combined rate on the refunded subtotal**, not reproportioned
+  through any discount that was on the original bill - matches the P10 mock exactly and
+  nothing in the task or mock asks for discount-aware reversal (YAGNI, flagged in
+  `refund-state.ts` to revisit once the real backend's reversal rule is read).
+- **No multi-refund history/remaining-quantity tracking across several credit notes** - this
+  screen refunds against the original bill's quantities directly; nothing in the task or the
+  read-only `GET .../bill` response gives it a "already refunded" figure to subtract, and
+  building one wasn't asked for.
+- **The original `BillView` is reused verbatim, never a second read-only rendering** -
+  `BillSummary` needed no changes at all to serve this screen's "read-only, never edited"
+  requirement, since it already renders exactly that for a finalised bill.
