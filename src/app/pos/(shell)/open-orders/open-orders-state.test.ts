@@ -1,20 +1,75 @@
 import { describe, expect, it } from "vitest";
-import { elapsedLabel, isOwnOrder, originLabel, summarize, type OpenOrderEntry } from "./open-orders-state";
+import { elapsedLabel, isOwnOrder, originLabel, summarize, toOpenOrderEntry, type OpenOrderEntry, type RawOpenOrder } from "./open-orders-state";
 
 function order(overrides: Partial<OpenOrderEntry> = {}): OpenOrderEntry {
   return {
     id: "order-1",
     origin: "table",
-    tableLabel: "T4",
+    tableLabel: "table-9",
     ownerStaffId: "staff-priya",
-    ownerStaffName: "Priya",
     status: "open",
     openedAt: new Date().toISOString(),
-    itemCount: null,
-    totalMinor: null,
+    itemCount: 0,
+    totalMinor: 0,
     ...overrides,
   };
 }
+
+function rawOrder(overrides: Partial<RawOpenOrder> = {}): RawOpenOrder {
+  return {
+    id: "order-1",
+    tableId: "table-9",
+    ownerId: "staff-priya",
+    status: "open",
+    createdAt: new Date().toISOString(),
+    lines: [],
+    ...overrides,
+  };
+}
+
+describe("toOpenOrderEntry", () => {
+  it("maps a table order, falling back to the raw table id (no label lookup exists server-side yet)", () => {
+    const entry = toOpenOrderEntry(rawOrder({ tableId: "table-9" }));
+    expect(entry.origin).toBe("table");
+    expect(entry.tableLabel).toBe("table-9");
+  });
+
+  it("maps a counter order (null tableId) with no table label", () => {
+    const entry = toOpenOrderEntry(rawOrder({ tableId: null }));
+    expect(entry.origin).toBe("counter");
+    expect(entry.tableLabel).toBeNull();
+  });
+
+  it("carries the raw owner id through unchanged (no staff-name lookup exists server-side yet)", () => {
+    expect(toOpenOrderEntry(rawOrder({ ownerId: "staff-priya" })).ownerStaffId).toBe("staff-priya");
+  });
+
+  it("sums line quantities into itemCount, zero (not null) when there are no lines", () => {
+    expect(toOpenOrderEntry(rawOrder({ lines: [] })).itemCount).toBe(0);
+    expect(
+      toOpenOrderEntry(
+        rawOrder({
+          lines: [
+            { quantity: 2, unitPriceMinor: 10000, modifiers: [] },
+            { quantity: 1, unitPriceMinor: 5000, modifiers: [] },
+          ],
+        }),
+      ).itemCount,
+    ).toBe(3);
+  });
+
+  it("sums quantity * (unitPriceMinor + modifiers) into totalMinor", () => {
+    const entry = toOpenOrderEntry(
+      rawOrder({
+        lines: [
+          { quantity: 2, unitPriceMinor: 10000, modifiers: [{ priceMinor: 2000 }] },
+          { quantity: 1, unitPriceMinor: 5000, modifiers: [] },
+        ],
+      }),
+    );
+    expect(entry.totalMinor).toBe(2 * (10000 + 2000) + 5000);
+  });
+});
 
 describe("isOwnOrder", () => {
   it("is true when the order's owner matches the current staff id", () => {
@@ -57,14 +112,9 @@ describe("elapsedLabel", () => {
 });
 
 describe("summarize", () => {
-  it("sums totals when every order has one", () => {
+  it("sums totals across every order", () => {
     const orders = [order({ totalMinor: 100000 }), order({ id: "order-2", totalMinor: 50000 })];
     expect(summarize(orders)).toEqual({ count: 2, totalMinor: 150000 });
-  });
-
-  it("reports no total if any order is missing one (no partial/misleading sum)", () => {
-    const orders = [order({ totalMinor: 100000 }), order({ id: "order-2", totalMinor: null })];
-    expect(summarize(orders)).toEqual({ count: 2, totalMinor: null });
   });
 
   it("handles an empty list as a true zero, not a missing value", () => {

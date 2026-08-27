@@ -303,7 +303,7 @@ export function resolveSelectedModifiers(item: Pick<PosMenuItemView, "modifierGr
   return modifiers;
 }
 
-export function computeUnitTotalMinor(unitPriceMinor: number, modifiers: readonly PosModifierView[]): number {
+export function computeUnitTotalMinor(unitPriceMinor: number, modifiers: readonly { priceMinor: number }[]): number {
   return unitPriceMinor + modifiers.reduce((sum, modifier) => sum + modifier.priceMinor, 0);
 }
 
