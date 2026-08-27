@@ -141,6 +141,28 @@ export function removeOrderLine(orderId: string, lineId: string): Promise<OrderV
   return posApi<OrderView>(`orders/${orderId}/lines/${lineId}`, { method: "DELETE" });
 }
 
+/**
+ * CAP-6 QSR counter mode (story 7, issue #56 web / #62 backend). Starts a
+ * fresh counter order - no table, no seat - issuing a new sequential token
+ * number in the same call, per SPEC CAP-6's success criterion. Self-authored:
+ * restiq-backend#62 ("QSR counter and token mode") had no branch or commits
+ * as of this build (`gh issue view 62`/`gh api .../branches` against
+ * AusPosRest/restiq-backend both confirm only dev/main/
+ * feature/15-device-fleet exist) - built from SPEC.md's CAP-6 description and
+ * the P7 mock (`restiq-qsr-counter-token-47--8c470c97.png`: "Order #47" and
+ * "Token #47" both shown from the moment ring-up starts, not deferred to
+ * charge time). The real backend's merged `dev` `OrderView` already models
+ * `tableId: string | null` (read directly from `orders.dtos.ts` while
+ * researching this story) - a counter order is structurally just an Order
+ * with no table, so this is expected to become a thin extension of the real,
+ * merged `openOrClaimTable` flow once #62 lands, not a separate concept.
+ * MUST be reconciled once that branch exists, same discipline as every other
+ * not-yet-backed contract in this file.
+ */
+export function startCounterOrder(): Promise<OrderView> {
+  return posApi<OrderView>("orders/counter", { method: "POST" });
+}
+
 export interface ClockEventView {
   id: string;
   type: "clock_in" | "clock_out";

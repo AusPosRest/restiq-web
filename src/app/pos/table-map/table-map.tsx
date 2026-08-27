@@ -11,6 +11,14 @@
 // get the shell's persistent shift-bar nav. Without this link, Open & Held
 // Orders would only be reachable from the shell's other pages, not from the
 // table map itself - EXPERIENCE.md's IA calls it reachable "from anywhere".
+//
+// Also links to /pos/counter (CAP-6, story 7): EXPERIENCE.md's real IA picks
+// Table Map vs. QSR Counter at login by outlet capability, but nothing in
+// this prototype's session model carries that capability yet (a pre-existing
+// gap - src/app/pos/(shell)/page.tsx's placeholder still notes it). Same
+// precedent as the Open Orders link above: a direct nav link is the concrete
+// way to actually reach the counter screen today, rather than shipping a
+// route nothing links to.
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useState } from "react";
@@ -99,6 +107,13 @@ function TableMapLoaded({ initial, onReload }: Readonly<{ initial: TableMapView;
             className="rounded-md border border-border px-3 py-1.5 text-xs font-semibold uppercase tracking-wider text-muted-foreground hover:bg-accent hover:text-accent-foreground"
           >
             Open orders
+          </Link>
+          <Link
+            href="/pos/counter"
+            data-testid="table-map-counter-link"
+            className="rounded-md border border-border px-3 py-1.5 text-xs font-semibold uppercase tracking-wider text-muted-foreground hover:bg-accent hover:text-accent-foreground"
+          >
+            Switch to Counter Mode
           </Link>
           <button
             type="button"
