@@ -139,7 +139,7 @@ function OpenOrdersLoaded({
       {pendingTransfer && (
         <TransferOwnershipDialog
           open
-          tableLabel={pendingTransfer.label}
+          originLabel={pendingTransfer.label}
           ownerName={pendingTransfer.ownerName}
           busy={busy}
           onCancel={() => setPendingTransfer(null)}

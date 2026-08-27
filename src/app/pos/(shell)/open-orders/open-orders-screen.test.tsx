@@ -110,6 +110,29 @@ describe("OpenOrdersScreen", () => {
     expect(screen.queryByTestId("open-order-resume-order-1")).toBeNull();
   });
 
+  it("labels the transfer dialog by real origin - no double/wrong prefix for a table or counter order", async () => {
+    const user = userEvent.setup();
+    stubFetch(() =>
+      jsonResponse([
+        order({ id: "order-table", tableId: "table-4", ownerId: "staff-priya" }),
+        order({ id: "order-counter", tableId: null, ownerId: "staff-priya" }),
+      ]),
+    );
+    render(<OpenOrdersScreen outletId="outlet-1" currentStaffId={CURRENT_STAFF_ID} />);
+    await waitFor(() => expect(screen.getByTestId("open-orders")).toBeTruthy());
+
+    await user.click(screen.getByTestId("open-order-take-over-order-table"));
+    let dialog = await screen.findByTestId("transfer-ownership-dialog");
+    expect(dialog.textContent).toContain("Table table-4");
+    expect(dialog.textContent).not.toContain("Table Table");
+    await user.click(screen.getByTestId("transfer-cancel"));
+
+    await user.click(screen.getByTestId("open-order-take-over-order-counter"));
+    dialog = await screen.findByTestId("transfer-ownership-dialog");
+    expect(dialog.textContent).toContain("Counter");
+    expect(dialog.textContent).not.toContain("Table Counter");
+  });
+
   it("taking over someone else's order goes through the reused transfer-ownership dialog, never a silent switch", async () => {
     const user = userEvent.setup();
     stubFetch((url) => {

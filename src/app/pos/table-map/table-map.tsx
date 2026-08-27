@@ -159,7 +159,7 @@ function TableMapLoaded({ initial, onReload }: Readonly<{ initial: TableMapView;
       {pendingTransfer && (
         <TransferOwnershipDialog
           open
-          tableLabel={pendingTransfer.tableLabel}
+          originLabel={`Table ${pendingTransfer.tableLabel}`}
           ownerName={pendingTransfer.ownerName}
           busy={busy}
           onCancel={() => setPendingTransfer(null)}
