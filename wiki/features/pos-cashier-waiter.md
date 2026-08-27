@@ -137,6 +137,24 @@ actually built here, story by story. Backend counterpart:
   `GET /pos/v1/orders/:id`. **Must be reconciled against the real restiq-backend#46 DTOs
   once that lands** - same discipline as `wiki/features/tenant-admin.md`'s CAP-8 dashboard
   reconciliation.
+- **Reconciled against the real backend (2026-08-27, restiq-web#61).** The self-authored
+  guess above was wrong on every count once `restiq-backend#46` landed on `dev` and was read
+  directly (`orders.controller.ts`/`orders.dtos.ts`): the real route is outlet-scoped
+  (`GET /pos/v1/outlets/:outletId/table-map`, not the bare `table-map` path this story
+  called - the reported 404), the response is a **flat `TableMapEntry[]`**, not a
+  `{ outletId, currentStaff, floors, tables }` envelope (no floor-name lookup, no
+  currentStaff read anywhere server-side), and each entry is flat too
+  (`tableId`/`floorId`/`label`/`seatCapacity`/`status`/`orderId`/`ownerId`, two-valued
+  status only - `needs_bill` is real but not settable until CAP-7's `Bill` model exists,
+  same TODO the backend's own DTO carries). `table-map-state.ts`'s `toTableMapEntry` now
+  does that mapping; `currentStaff` comes from the `pos_staff` cookie server-side
+  (`table-map/page.tsx`, same pattern `(shell)/open-orders/page.tsx` established for
+  restiq-web#60); floor grouping is derived purely from each table's own `floorId` (no
+  separate floor list exists to group against); the elapsed-time label and `needs_bill`'s
+  UI are dropped outright rather than fabricated, since the backend has no per-table
+  "opened at" or bill-request state to compute them from. `startOrder`/`transferOrder`
+  (`api.ts`) now hit the real outlet/table-scoped POST and send `newOwnerStaffId` (confirmed
+  required live via a real 400, "newOwnerStaffId must be a UUID").
 - **CAP-1 (story 1, PIN login, issue #38) also not available at build time** - its branch
   existed but had zero POS-specific commits when this story was built, so there was no
   real `/pos/login` screen yet to issue a `pos_session` cookie through, and `pos-session.ts`/
@@ -228,6 +246,29 @@ actually built here, story by story. Backend counterpart:
   a flagged-but-out-of-scope observation that story 3's own already-shipped status
   vocabulary doesn't match the real `Order.status` enum either - a pre-existing CAP-2 gap,
   not this story's to fix).
+- **Reconciled against the real backend (2026-08-27, restiq-web#61).** `GET /pos/v1/menu`
+  (`restiq-backend#66`) is now real and verified (`test/pos-menu.e2e-spec.ts`) - the
+  `PosMenuView` shape this story guessed at was never wrong, just unbacked; one real bug
+  surfaced writing that test (an item/variant with no resolvable price was still returned
+  instead of dropped, fixed in `menu.service.ts`). `Order`/`OrderLine` are real too
+  (`restiq-backend#52`/`#58`, `orders.dtos.ts`, read directly): raw ids only
+  (`itemId`/`variantId`/`addedByStaffId`/`tableId`/`ownerId`), no `itemName`/`variantName`/
+  `addedByStaffName`/`tableLabel`/`ownerStaffName`, no `currency` on `Order` at all (it
+  lives on the menu), and a real three-valued forward-only `status`
+  (`open`/`sent`/`closed`) instead of the old `occupied`/`needs_bill` guess or a fabricated
+  `firedAt` timestamp. `order-taking-state.ts`'s new `toOrderView`/`toOrderLineView` join
+  `itemId`/`variantId` against the already-loaded menu for real display names (raw-id
+  fallback if a menu isn't in scope, or the item's since been deleted), derive
+  `lineTotalMinor` via the existing `computeUnitTotalMinor` rather than trusting a wire
+  field that doesn't exist, and `canSendToKitchen` now gates on `status === "open"` - real
+  data the backend already enforces the same way. `specialInstructions` has no backing
+  column anywhere in `OrderLine`; dropped from the read side so nothing displays a value
+  the backend never actually stored (the write-side capture is left in place, unreconciled,
+  only because `counter-view.tsx`/CAP-6 - out of scope for restiq-web#61 - shares the same
+  `ModifierSheetConfirmValue` type). `OrderView.ownerStaffName`/`tableLabel` field names
+  are kept (rather than renamed/removed) purely because `counter-view.tsx` reads
+  `order.ownerStaffName` directly and wasn't touched by this pass - the *value* behind that
+  name is now the real raw owner id, never a fabricated one.
 - **Tests:** 45 new tests - pure logic (`order-taking-state.test.ts`, 28: modifier-group
   min/max, single-vs-multi-select toggling, variant/price resolution, category+search
   filtering), a full component suite for the sheet (`modifier-sheet.test.tsx`, 7: badge

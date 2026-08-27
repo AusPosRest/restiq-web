@@ -1,18 +1,22 @@
 // Typed client-side access to the backend API via the /pos/api pass-through.
 // Mirrors admin/api.ts's shape (AdminApiError -> PosApiError, adminApi ->
-// posApi). See table-map/table-map-state.ts's file header for why the
-// table-map/order endpoints below are a self-authored, not-yet-verified
-// contract. clockOut hits the real, verified restiq-backend contract instead
+// posApi). table-map/table-map-state.ts and orders/[orderId]/
+// order-taking-state.ts's file headers cover the RECONCILED (2026-08-27,
+// restiq-web#61) real backend contracts the table-map/order endpoints below
+// now target. clockOut hits the real, verified restiq-backend contract
 // (feature/44-pos-auth-clock's src/pos/clock/clock.controller.ts, read
 // directly) - see src/app/pos/auth/login/route.ts's header for how the rest
 // of CAP-1's login contract was verified.
 //
 // --- CAP-3 Order taking with modifiers/variants (menu read + order-line
-// writes) - see orders/[orderId]/order-taking-state.ts's file header for the
-// full self-authored-contract reasoning (restiq-backend#52 has no branch
-// yet). fetchOrder/OrderStubView (story 3's placeholder, "enough to prove
-// the id round-trips, nothing about order lines") are replaced outright by
-// fetchOrderDetail/OrderView below, which carry real lines and a total.
+// writes). Every mutation below returns the real wire shape (`RawOrder`)
+// mapped through order-taking-state.ts's `toOrderView` into the display
+// shape (`OrderView`) callers already render - an optional trailing `menu`
+// param lets a caller with a loaded menu in scope (order-taking-view.tsx,
+// counter-view.tsx) get real item/variant names on the mapped lines;
+// callers with no menu in scope (table-map.tsx's startOrder/transferOrder,
+// which never render a line) simply get raw-id-fallback names, since they
+// never look at `.lines` at all.
 //
 // --- CAP-10 Shift & cash management. Verified against restiq-backend's real
 // feature/45-shift-cash-management branch (src/pos/shifts/shifts.controller.ts
@@ -28,8 +32,6 @@
 // carries the (null) keys. closeShift()'s response is typed separately
 // (ClosedShift) precisely because that's the one call where those fields are
 // real, non-null values.
-import type { TableMapEntry, TableMapView } from "./table-map/table-map-state";
-
 export class PosApiError extends Error {
   constructor(
     message: string,
@@ -58,29 +60,9 @@ export async function posApi<T>(path: string, init?: RequestInit): Promise<T> {
   return body as T;
 }
 
-// GET is read via useTableMapLoad() directly (that hook exists precisely for
+// GET is read via usePosLoad() directly (that hook exists precisely for
 // this GET-and-render shape, mirroring useAdminLoad/useOpsLoad).
 
-/** Tap an empty table: opens a new Order owned by the current (session-resolved) staff member. */
-export function startOrder(tableId: string): Promise<TableMapEntry> {
-  return posApi<TableMapEntry>(`tables/${tableId}/start-order`, { method: "POST" });
-}
-
-/**
- * The explicit transfer action (stories.yaml story 3: "a named action, not an
- * implicit reassignment"; SPEC CAP-2: "must go through an explicit transfer
- * action naming the new owner"). Reason is optional - transfer is audited
- * (actor + reason) same as other mutations, but it isn't one of CAP-8's six
- * manager-gated actions, so no PIN and no required reason.
- */
-export function transferOrder(orderId: string, reason?: string): Promise<TableMapEntry> {
-  return posApi<TableMapEntry>(`orders/${orderId}/transfer`, {
-    method: "POST",
-    body: JSON.stringify(reason ? { reason } : {}),
-  });
-}
-
-export type { TableMapView };
 export type {
   AddOrderLineInput,
   OrderLineView,
@@ -91,26 +73,44 @@ export type {
   PosMenuView,
   PosModifierGroupView,
   PosModifierView,
+  RawOrder,
 } from "./orders/[orderId]/order-taking-state";
-import type { AddOrderLineInput, OrderView, PosMenuView } from "./orders/[orderId]/order-taking-state";
+import type { AddOrderLineInput, OrderView, PosMenuView, RawOrder } from "./orders/[orderId]/order-taking-state";
+import { toOrderView } from "./orders/[orderId]/order-taking-state";
+
+/** Tap an empty table: opens (or, per orders.controller.ts's `openOrClaimTable`, returns the existing) Order for that table, owned by the current (session-resolved) staff member. Returns the raw wire shape - table-map.tsx never renders a line, so there's no menu in scope to join item/variant names against. */
+export function startOrder(outletId: string, tableId: string): Promise<RawOrder> {
+  return posApi<RawOrder>(`outlets/${outletId}/tables/${tableId}/order`, { method: "POST" });
+}
+
+/**
+ * The explicit transfer action (stories.yaml story 3: "a named action, not an
+ * implicit reassignment"; SPEC CAP-2: "must go through an explicit transfer
+ * action naming the new owner"). `newOwnerStaffId` is required - the real
+ * `TransferOrderDto` requires it (confirmed live via a real 400,
+ * "newOwnerStaffId must be a UUID"). Reason is optional - transfer is
+ * audited (actor + reason) same as other mutations, but it isn't one of
+ * CAP-8's six manager-gated actions, so no PIN and no required reason.
+ */
+export function transferOrder(orderId: string, newOwnerStaffId: string, reason?: string): Promise<RawOrder> {
+  return posApi<RawOrder>(`orders/${orderId}/transfer`, {
+    method: "POST",
+    body: JSON.stringify(reason ? { newOwnerStaffId, reason } : { newOwnerStaffId }),
+  });
+}
 
 /** GET /pos/v1/menu - items/categories/modifier groups with a single dine-in price already resolved server-side. */
 export function fetchMenu(): Promise<PosMenuView> {
   return posApi<PosMenuView>("menu");
 }
 
-/** GET /pos/v1/orders/:id - the real P3 order-taking screen's read, with lines and a running total (replaces story 3's OrderStubView). */
-export function fetchOrderDetail(orderId: string): Promise<OrderView> {
-  return posApi<OrderView>(`orders/${orderId}`);
+/** POST /pos/v1/orders/:id/lines - rejected server-side (not just client-validated) if a modifier group's min/max is violated (SPEC CAP-3 success criterion). Attribution (which staff member added it) is resolved server-side from the bearer token, never sent from the client. `menu` is optional - see this file's header. */
+export function addOrderLine(orderId: string, input: AddOrderLineInput, menu?: Pick<PosMenuView, "items">): Promise<OrderView> {
+  return posApi<RawOrder>(`orders/${orderId}/lines`, { method: "POST", body: JSON.stringify(input) }).then((raw) => toOrderView(raw, menu));
 }
 
-/** POST /pos/v1/orders/:id/lines - rejected server-side (not just client-validated) if a modifier group's min/max is violated (SPEC CAP-3 success criterion). Attribution (which staff member added it) is resolved server-side from the bearer token, never sent from the client. */
-export function addOrderLine(orderId: string, input: AddOrderLineInput): Promise<OrderView> {
-  return posApi<OrderView>(`orders/${orderId}/lines`, { method: "POST", body: JSON.stringify(input) });
-}
-
-export function updateOrderLineQuantity(orderId: string, lineId: string, quantity: number): Promise<OrderView> {
-  return posApi<OrderView>(`orders/${orderId}/lines/${lineId}`, { method: "PATCH", body: JSON.stringify({ quantity }) });
+export function updateOrderLineQuantity(orderId: string, lineId: string, quantity: number, menu?: Pick<PosMenuView, "items">): Promise<OrderView> {
+  return posApi<RawOrder>(`orders/${orderId}/lines/${lineId}`, { method: "PATCH", body: JSON.stringify({ quantity }) }).then((raw) => toOrderView(raw, menu));
 }
 
 /**
@@ -120,25 +120,24 @@ export function updateOrderLineQuantity(orderId: string, lineId: string, quantit
  * why (issue #58's own framing: "extends story 4's real, merged line
  * add/edit endpoints with an optional seatNumber field").
  */
-export function assignSeat(orderId: string, lineId: string, seatNumber: number | null): Promise<OrderView> {
-  return posApi<OrderView>(`orders/${orderId}/lines/${lineId}`, { method: "PATCH", body: JSON.stringify({ seatNumber }) });
+export function assignSeat(orderId: string, lineId: string, seatNumber: number | null, menu?: Pick<PosMenuView, "items">): Promise<OrderView> {
+  return posApi<RawOrder>(`orders/${orderId}/lines/${lineId}`, { method: "PATCH", body: JSON.stringify({ seatNumber }) }).then((raw) => toOrderView(raw, menu));
 }
 
 /**
- * CAP-4's "send to kitchen" action - `PATCH .../status {status:'sent'}` is
- * a real, already-merged endpoint (`orders.controller.ts`/`orders.service.ts`
- * on restiq-backend `dev`, verified directly); issue #58 (not yet started)
- * only adds a 400 to it when any line lacks a seat, per SPEC CAP-4's success
- * criterion - order-taking-state.ts's `canSendToKitchen` mirrors that gate
- * client-side so this call should only ever be reached once it would
- * succeed.
+ * CAP-4's "send to kitchen" action - `PATCH .../status {status:'sent'}` is a
+ * real, merged endpoint (`orders.controller.ts`/`orders.service.ts`,
+ * verified directly) that 400s when any line lacks a seat, per SPEC CAP-4's
+ * success criterion - order-taking-state.ts's `canSendToKitchen` mirrors
+ * that gate client-side so this call should only ever be reached once it
+ * would succeed.
  */
-export function sendOrderToKitchen(orderId: string): Promise<OrderView> {
-  return posApi<OrderView>(`orders/${orderId}/status`, { method: "PATCH", body: JSON.stringify({ status: "sent" }) });
+export function sendOrderToKitchen(orderId: string, menu?: Pick<PosMenuView, "items">): Promise<OrderView> {
+  return posApi<RawOrder>(`orders/${orderId}/status`, { method: "PATCH", body: JSON.stringify({ status: "sent" }) }).then((raw) => toOrderView(raw, menu));
 }
 
-export function removeOrderLine(orderId: string, lineId: string): Promise<OrderView> {
-  return posApi<OrderView>(`orders/${orderId}/lines/${lineId}`, { method: "DELETE" });
+export function removeOrderLine(orderId: string, lineId: string, menu?: Pick<PosMenuView, "items">): Promise<OrderView> {
+  return posApi<RawOrder>(`orders/${orderId}/lines/${lineId}`, { method: "DELETE" }).then((raw) => toOrderView(raw, menu));
 }
 
 /**

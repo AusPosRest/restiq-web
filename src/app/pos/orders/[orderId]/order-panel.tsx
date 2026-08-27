@@ -20,16 +20,17 @@ import Link from "next/link";
 import { useState } from "react";
 import { Minus, Plus, Trash2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
-import { canSendToKitchen, computeOrderTotalMinor, formatPriceMinor, unseatedLineCount, type OrderLineView, type OrderView } from "./order-taking-state";
+import { canSendToKitchen, computeOrderTotalMinor, formatPriceMinor, orderOriginLabel, unseatedLineCount, type OrderLineView, type OrderView } from "./order-taking-state";
 
 export interface OrderPanelProps {
   /** The Order's real id - CAP-3 has no gapless bill-number concept (that's CAP-7's Bill), so the header shows a short display slice of the real id, not a fabricated sequence number. */
   orderId: string;
-  tableLabel: string;
+  tableId: OrderView["tableId"];
   currency: string;
   lines: OrderLineView[];
-  /** CAP-4: whether the order has already been fired - null/absent beforehand, see order-taking-state.ts. */
-  firedAt: OrderView["firedAt"];
+  status: OrderView["status"];
+  /** The signed-in staff member's own id - shows "You" instead of a raw id on a line this staff member added, same convention as open-orders-screen.tsx's isOwnOrder. */
+  currentStaffId: string;
   busyLineId: string | null;
   onIncrement: (line: OrderLineView) => void;
   onDecrement: (line: OrderLineView) => void;
@@ -42,10 +43,11 @@ export interface OrderPanelProps {
 
 export function OrderPanel({
   orderId,
-  tableLabel,
+  tableId,
   currency,
   lines,
-  firedAt,
+  status,
+  currentStaffId,
   busyLineId,
   onIncrement,
   onDecrement,
@@ -58,14 +60,16 @@ export function OrderPanel({
   const totalMinor = computeOrderTotalMinor(lines);
   const [splitBySeat, setSplitBySeat] = useState(false);
   const unseated = unseatedLineCount(lines);
-  const canSend = canSendToKitchen({ lines, firedAt });
+  const canSend = canSendToKitchen({ lines, status });
+  const alreadySent = status !== "open";
+  const sendButtonLabel = status === "closed" ? "Closed" : status === "sent" ? "Sent to kitchen" : sendingToKitchen ? "Sending…" : "Send to kitchen";
 
   return (
     <aside data-testid="order-panel" className="flex w-80 shrink-0 flex-col border-l border-border/60 bg-card">
       <header className="flex items-start justify-between gap-2 border-b border-border/60 px-4 py-3">
         <div>
           <p className="font-headline text-sm font-semibold text-foreground">Order #{orderId.slice(-6).toUpperCase()}</p>
-          <p className="text-xs text-muted-foreground">Table {tableLabel}</p>
+          <p className="text-xs text-muted-foreground">{orderOriginLabel({ tableId })}</p>
         </div>
         {lines.length > 0 && (
           <button
@@ -101,9 +105,8 @@ export function OrderPanel({
                     {line.modifiers.length > 0 && (
                       <p className="text-xs text-muted-foreground">{line.modifiers.map((modifier) => modifier.name).join(", ")}</p>
                     )}
-                    {line.specialInstructions && <p className="text-xs italic text-muted-foreground">&ldquo;{line.specialInstructions}&rdquo;</p>}
                     <p data-testid={`order-line-added-by-${line.id}`} className="text-[11px] text-muted-foreground/80">
-                      Added by {line.addedByStaffName}
+                      Added by {line.addedByStaffId === currentStaffId ? "You" : line.addedByStaffId}
                     </p>
                   </div>
                   <p className="tabular-nums text-sm font-semibold text-foreground">{formatPriceMinor(line.lineTotalMinor, currency)}</p>
@@ -193,10 +196,10 @@ export function OrderPanel({
           onClick={onSendToKitchen}
           className="mt-3 w-full rounded-lg bg-primary py-2.5 text-sm font-semibold text-primary-foreground transition-colors hover:bg-primary/90 disabled:cursor-not-allowed disabled:opacity-40"
         >
-          {firedAt ? "Sent to kitchen" : sendingToKitchen ? "Sending…" : "Send to kitchen"}
+          {sendButtonLabel}
         </button>
         {/* Validation blocks forward progress at the point of the violation, per EXPERIENCE.md - never a later, generic submit error. */}
-        {!firedAt && unseated > 0 && (
+        {!alreadySent && unseated > 0 && (
           <p data-testid="send-to-kitchen-blocked" className="mt-2 text-xs text-status-alert">
             {unseated} item{unseated > 1 ? "s" : ""} need{unseated > 1 ? "" : "s"} a seat before sending to the kitchen.{" "}
             {!splitBySeat && (

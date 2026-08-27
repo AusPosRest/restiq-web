@@ -2,57 +2,57 @@
 // and grouping are unit-testable without a DOM - mirrors floor-plan-state.ts/
 // menu-state.ts's split between logic and UI.
 //
-// SELF-AUTHORED CONTRACT, not yet verified against a real backend. Two
-// upstream facts this depends on had not landed when this story (issue #40,
-// branch feature/40-table-map-ownership) was built, both confirmed by reading
-// the actual working trees, not a summary:
-//  - restiq-backend issue #46 ("Table map and order ownership/transfer",
-//    branch feature/46-table-map-ownership) had no branch and no commits -
-//    `git log`/`git branch -a` on restiq-backend showed only `dev`, and the
-//    only table-shaped model anywhere is DiningTable (from Tenant Admin's
-//    floor-plan work, CAP-5) - no Order model, no /pos/v1 module at all.
-//  - restiq-web's own CAP-1 story (issue #38, "POS auth realm, PIN login",
-//    branch feature/38-pos-pin-login) was cut from `dev` but had zero
-//    POS-specific commits - no /pos/login screen exists to issue a real
-//    pos_session cookie yet (see src/lib/pos-session.ts's file header).
-//
-// This file's types are this story's best-guess contract, built directly
-// from SPEC.md (CAP-2's three statuses: empty/occupied/needs-bill) and
-// stories.yaml story 3 ("reuse the existing Floor/DiningTable models... a
-// greenfield Order model - base fields only, no lines yet"). Table status is
-// therefore modeled as *derived* from whether an open Order exists for that
-// table, never a stored column on DiningTable itself, so this never
-// duplicates the table model stories.yaml explicitly forbids duplicating.
-// "needs_bill" is included as a real status value the backend can set (once
-// a later story adds a bill-request action) but nothing in this story's own
-// UI ever transitions a table into it - there is no fake trigger for it here.
-// "reserved" (shown in the Stitch mock) is deliberately not modeled: no
-// capability in SPEC.md's eleven capabilities covers reservations, and
-// EXPERIENCE.md's own rule is "spines win on conflict with any mock".
-//
-// MUST be reconciled against the real restiq-backend#46 DTOs once that lands
-// - same discipline as wiki/features/tenant-admin.md's CAP-8 dashboard
-// reconciliation.
+// RECONCILED (2026-08-27, restiq-web#61) against the real, merged
+// restiq-backend `dev` contract (src/pos/orders/orders.controller.ts's
+// `GET /pos/v1/outlets/:outletId/table-map` and orders.dtos.ts's
+// `TableMapEntry`, read directly). This file's original self-authored guess
+// (see git history) got several things wrong, all fixed here:
+//  - the real endpoint is outlet-scoped (`outlets/:outletId/table-map`), not
+//    the bare `table-map` path the old client called - that was this story's
+//    reported 404.
+//  - the real response is a flat `TableMapEntry[]`, not a `{ outletId,
+//    currentStaff, floors, tables }` envelope - there is no floors list and
+//    no currentStaff read anywhere in `getTableMap()`. `currentStaff` now
+//    comes from the pos_staff cookie server-side (table-map/page.tsx, same
+//    pattern open-orders/page.tsx already established), and floor grouping
+//    is derived purely from each table's own `floorId` (see
+//    `groupTablesByFloor` below) - there is no floor-name lookup endpoint
+//    for pos, so a group's heading is the raw floor id, same raw-id-fallback
+//    posture as open-orders-state.ts's tableLabel/ownerStaffId.
+//  - the real entry is flat (`tableId`/`floorId`/`label`/`seatCapacity`/
+//    `status`/`orderId`/`ownerId`), not a nested `{ id, ..., order: {
+//    id, ownerStaffId, ownerStaffName, openedAt } }` - no owner name, no
+//    order-opened timestamp. `order.ownerStaffName`/`order.openedAt` are
+//    gone; `deriveTapAction`'s `transfer_required` branch now names the raw
+//    owner id (never fabricated), and the ageing/elapsed-time label is
+//    dropped outright (`elapsedMinutes`/`formatElapsedLabel`/
+//    `AGEING_THRESHOLD_MINUTES` removed) - the backend has no per-table
+//    "opened at" to compute it from, and SPEC's boundary is explicit: drop
+//    UI for a field the backend genuinely has no data for rather than
+//    fabricate one.
+//  - real `TableMapEntry.status` is two-valued (`occupied`/`empty`) only -
+//    `needs_bill` is a real future status (orders.dtos.ts's own TODO: it
+//    depends on a Bill model AD-14 hasn't introduced yet), so it's dropped
+//    from this client until the backend can actually set it, not modeled as
+//    a permanently-unreachable third case.
 
-export type TableStatus = "empty" | "occupied" | "needs_bill";
+export type TableStatus = "empty" | "occupied";
 
-export interface StaffSummary {
-  id: string;
-  name: string;
-}
-
-export interface FloorView {
-  id: string;
-  name: string;
-  sortOrder: number;
+/** The real, verified wire shape of one entry in `GET /pos/v1/outlets/:outletId/table-map`'s array response. */
+export interface RawTableMapEntry {
+  tableId: string;
+  floorId: string;
+  label: string;
+  seatCapacity: number;
+  status: TableStatus;
+  orderId: string | null;
+  ownerId: string | null;
 }
 
 export interface TableOrderSummary {
   id: string;
+  /** Raw owner id - no staff-name lookup exists server-side yet, see file header. */
   ownerStaffId: string;
-  ownerStaffName: string;
-  /** ISO timestamp - when this order was opened, used for the ageing/elapsed label. */
-  openedAt: string;
 }
 
 export interface TableMapEntry {
@@ -64,34 +64,48 @@ export interface TableMapEntry {
   order: TableOrderSummary | null;
 }
 
-export interface TableMapView {
-  outletId: string;
-  /** Resolved server-side from the pos session (SPEC: no client-side identity). */
-  currentStaff: StaffSummary;
-  floors: FloorView[];
-  tables: TableMapEntry[];
+export function toTableMapEntry(raw: RawTableMapEntry): TableMapEntry {
+  return {
+    id: raw.tableId,
+    floorId: raw.floorId,
+    label: raw.label,
+    seatCapacity: raw.seatCapacity,
+    status: raw.status,
+    order: raw.orderId !== null && raw.ownerId !== null ? { id: raw.orderId, ownerStaffId: raw.ownerId } : null,
+  };
 }
 
 export const TABLE_STATUS_LABEL: Record<TableStatus, string> = {
   empty: "Available",
   occupied: "Occupied",
-  needs_bill: "Bill requested",
 };
 
 /** Tailwind classes keyed by the DESIGN.md status tokens - color is never the only signal, every tile also renders TABLE_STATUS_LABEL as text. */
 export const TABLE_STATUS_CLASS: Record<TableStatus, string> = {
   empty: "border-2 border-status-available bg-transparent text-status-available",
   occupied: "border border-status-occupied bg-status-occupied/90 text-white",
-  needs_bill: "border border-status-warning bg-status-warning/90 text-[#3d2c00]",
 };
 
 export interface FloorGroup {
-  floor: FloorView;
+  /** Raw floor id - no floor-name lookup exists server-side for pos yet, see file header. */
+  floorId: string;
   tables: TableMapEntry[];
 }
 
-export function groupTablesByFloor(floors: readonly FloorView[], tables: readonly TableMapEntry[]): FloorGroup[] {
-  return floors.map((floor) => ({ floor, tables: tables.filter((table) => table.floorId === floor.id) }));
+/** Groups tables by floorId, preserving each floor's first-appearance order - there is no separate floor list to group against. */
+export function groupTablesByFloor(tables: readonly TableMapEntry[]): FloorGroup[] {
+  const order: string[] = [];
+  const byFloor = new Map<string, TableMapEntry[]>();
+  for (const table of tables) {
+    let bucket = byFloor.get(table.floorId);
+    if (!bucket) {
+      bucket = [];
+      byFloor.set(table.floorId, bucket);
+      order.push(table.floorId);
+    }
+    bucket.push(table);
+  }
+  return order.map((floorId) => ({ floorId, tables: byFloor.get(floorId) ?? [] }));
 }
 
 // --- Tap routing. A tile's tap target is one action, decided purely from the
@@ -102,31 +116,10 @@ export function groupTablesByFloor(floors: readonly FloorView[], tables: readonl
 export type TapAction =
   | { type: "start_order" }
   | { type: "open_order"; orderId: string }
-  | { type: "transfer_required"; orderId: string; ownerName: string };
+  | { type: "transfer_required"; orderId: string; ownerId: string };
 
 export function deriveTapAction(table: TableMapEntry, currentStaffId: string): TapAction {
   if (table.status === "empty" || table.order === null) return { type: "start_order" };
   if (table.order.ownerStaffId === currentStaffId) return { type: "open_order", orderId: table.order.id };
-  return { type: "transfer_required", orderId: table.order.id, ownerName: table.order.ownerStaffName };
-}
-
-// --- Elapsed-time label. DESIGN.md/EXPERIENCE.md: "a small elapsed-time
-// label appears once a table has been occupied past a threshold, echoing the
-// 'ageing' semantic". No SPEC-defined threshold exists yet (same kind of gap
-// as SPEC.md's Open Questions on the discount threshold) - 15 minutes is a
-// documented assumption pending a real tenant setting.
-
-export const AGEING_THRESHOLD_MINUTES = 15;
-
-export function elapsedMinutes(openedAt: string, now: Date = new Date()): number {
-  return Math.max(0, Math.floor((now.getTime() - new Date(openedAt).getTime()) / 60000));
-}
-
-export function formatElapsedLabel(openedAt: string, now: Date = new Date()): string | null {
-  const minutes = elapsedMinutes(openedAt, now);
-  if (minutes < AGEING_THRESHOLD_MINUTES) return null;
-  if (minutes < 60) return `${minutes}m`;
-  const hours = Math.floor(minutes / 60);
-  const rest = minutes % 60;
-  return rest === 0 ? `${hours}h` : `${hours}h ${rest}m`;
+  return { type: "transfer_required", orderId: table.order.id, ownerId: table.order.ownerStaffId };
 }

@@ -10,14 +10,20 @@ import {
   formatPriceMinor,
   isGroupSatisfied,
   modifierGroupBadgeLabel,
+  orderOriginLabel,
   resolveSelectedModifiers,
   resolveUnitPriceMinor,
   toggleModifier,
+  toOrderLineView,
+  toOrderView,
   unseatedLineCount,
   variantSatisfied,
   type ModifierSelection,
   type OrderLineView,
   type PosMenuItemView,
+  type PosMenuView,
+  type RawOrder,
+  type RawOrderLine,
 } from "./order-taking-state";
 
 const SPICE_GROUP = {
@@ -213,7 +219,7 @@ describe("computeOrderTotalMinor", () => {
 // before the order can be sent to the kitchen; unassigned items block
 // fire.").
 
-function seatedLine(seatNumber: number | null | undefined): Pick<OrderLineView, "seatNumber"> {
+function seatedLine(seatNumber: number | null): Pick<OrderLineView, "seatNumber"> {
   return { seatNumber };
 }
 
@@ -235,30 +241,129 @@ describe("allLinesSeated / unseatedLineCount", () => {
     expect(unseatedLineCount(lines)).toBe(1);
   });
 
-  it("treats a missing seatNumber (story-4 lines that predate CAP-4) the same as null - unseated", () => {
-    const lines = [seatedLine(undefined)] as OrderLineView[];
-    expect(allLinesSeated(lines)).toBe(false);
-    expect(unseatedLineCount(lines)).toBe(1);
-  });
 });
 
 describe("canSendToKitchen", () => {
   it("blocks an order with no lines - nothing to send", () => {
-    expect(canSendToKitchen({ lines: [], firedAt: null })).toBe(false);
+    expect(canSendToKitchen({ lines: [], status: "open" })).toBe(false);
   });
 
   it("blocks an order with any unseated line", () => {
     const lines = [seatedLine(1), seatedLine(null)] as OrderLineView[];
-    expect(canSendToKitchen({ lines, firedAt: null })).toBe(false);
+    expect(canSendToKitchen({ lines, status: "open" })).toBe(false);
   });
 
   it("allows an order once every line is seated", () => {
     const lines = [seatedLine(1), seatedLine(2)] as OrderLineView[];
-    expect(canSendToKitchen({ lines, firedAt: null })).toBe(true);
+    expect(canSendToKitchen({ lines, status: "open" })).toBe(true);
   });
 
   it("blocks an order that has already been sent to the kitchen", () => {
     const lines = [seatedLine(1)] as OrderLineView[];
-    expect(canSendToKitchen({ lines, firedAt: "2026-08-25T10:00:00.000Z" })).toBe(false);
+    expect(canSendToKitchen({ lines, status: "sent" })).toBe(false);
+  });
+});
+
+// --- RECONCILED (restiq-web#61): mapping the real restiq-backend wire
+// shapes (RawOrder/RawOrderLine, orders.dtos.ts's OrderView/OrderLineView)
+// into this screen's display shapes.
+
+const MENU_FOR_MAPPING: Pick<PosMenuView, "items"> = {
+  items: [
+    {
+      id: "item-paneer",
+      categoryId: "cat-tandoor",
+      name: "Paneer Tikka",
+      shortName: "Paneer Tikka",
+      available: true,
+      priceMinor: null,
+      variants: [{ id: "v-half", name: "Half", priceMinor: 34000 }],
+      modifierGroups: [],
+    },
+  ],
+};
+
+function rawLine(overrides: Partial<RawOrderLine> = {}): RawOrderLine {
+  return {
+    id: "line-1",
+    orderId: "order-1",
+    itemId: "item-paneer",
+    variantId: "v-half",
+    quantity: 2,
+    unitPriceMinor: 34000,
+    seatNumber: null,
+    addedByStaffId: "staff-1",
+    createdAt: "2026-08-24T14:22:00.000Z",
+    modifiers: [{ id: "olm-1", modifierId: "m-medium", name: "Medium", priceMinor: 0 }],
+    ...overrides,
+  };
+}
+
+function rawOrder(overrides: Partial<RawOrder> = {}): RawOrder {
+  return {
+    id: "order-1",
+    tenantId: "tenant-1",
+    outletId: "outlet-1",
+    tableId: "table-4",
+    ownerId: "staff-1",
+    status: "open",
+    tokenNumber: null,
+    createdAt: "2026-08-24T14:00:00.000Z",
+    updatedAt: "2026-08-24T14:22:00.000Z",
+    lines: [],
+    ...overrides,
+  };
+}
+
+describe("toOrderLineView", () => {
+  it("joins itemId/variantId against the menu for real display names", () => {
+    const line = toOrderLineView(rawLine(), MENU_FOR_MAPPING);
+    expect(line.itemName).toBe("Paneer Tikka");
+    expect(line.variantName).toBe("Half");
+  });
+
+  it("falls back to the raw id when the item isn't in the loaded menu - never a fabricated name", () => {
+    const line = toOrderLineView(rawLine({ itemId: "item-deleted", variantId: null }), MENU_FOR_MAPPING);
+    expect(line.itemName).toBe("item-deleted");
+    expect(line.variantName).toBeNull();
+  });
+
+  it("falls back to raw ids with no menu given at all", () => {
+    const line = toOrderLineView(rawLine());
+    expect(line.itemName).toBe("item-paneer");
+    expect(line.variantName).toBe("v-half");
+  });
+
+  it("derives lineTotalMinor via computeUnitTotalMinor, not a wire field", () => {
+    const line = toOrderLineView(rawLine({ quantity: 2, unitPriceMinor: 34000, modifiers: [{ id: "olm-1", modifierId: "m", name: "Medium", priceMinor: 0 }] }));
+    expect(line.lineTotalMinor).toBe(68000);
+  });
+
+  it("carries the raw addedByStaffId through untouched - no name-lookup endpoint exists server-side", () => {
+    const line = toOrderLineView(rawLine({ addedByStaffId: "staff-9" }));
+    expect(line.addedByStaffId).toBe("staff-9");
+  });
+});
+
+describe("toOrderView", () => {
+  it("maps every real field and derives totalMinor from the mapped lines", () => {
+    const order = toOrderView(rawOrder({ lines: [rawLine({ quantity: 1 })] }), MENU_FOR_MAPPING);
+    expect(order).toMatchObject({ id: "order-1", tableId: "table-4", status: "open", ownerStaffName: "staff-1", tokenNumber: null });
+    expect(order.totalMinor).toBe(34000);
+  });
+
+  it("carries a null tableId through for a CAP-6 counter order, never a fabricated id", () => {
+    const order = toOrderView(rawOrder({ tableId: null }));
+    expect(order.tableId).toBeNull();
+  });
+});
+
+describe("orderOriginLabel", () => {
+  it("labels a table order by its raw table id", () => {
+    expect(orderOriginLabel({ tableId: "table-4" })).toBe("Table table-4");
+  });
+
+  it("labels a counter order (null tableId)", () => {
+    expect(orderOriginLabel({ tableId: null })).toBe("Counter");
   });
 });

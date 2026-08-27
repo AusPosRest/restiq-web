@@ -19,10 +19,21 @@ import { usePosLoad } from "../../use-pos-load";
 import { ModifierSheet, type ModifierSheetConfirmValue } from "./modifier-sheet";
 import { OrderPanel } from "./order-panel";
 import { PosItemTile } from "./pos-item-tile";
-import { canSendToKitchen, filterMenuItems, itemNeedsModifierSheet, type OrderLineView, type OrderView, type PosMenuItemView, type PosMenuView } from "./order-taking-state";
+import {
+  canSendToKitchen,
+  filterMenuItems,
+  itemNeedsModifierSheet,
+  orderOriginLabel,
+  toOrderView,
+  type OrderLineView,
+  type OrderView,
+  type PosMenuItemView,
+  type PosMenuView,
+  type RawOrder,
+} from "./order-taking-state";
 
-export function OrderTakingView({ orderId }: Readonly<{ orderId: string }>) {
-  const orderLoad = usePosLoad<OrderView>(`orders/${orderId}`);
+export function OrderTakingView({ orderId, currentStaffId }: Readonly<{ orderId: string; currentStaffId: string }>) {
+  const orderLoad = usePosLoad<RawOrder>(`orders/${orderId}`);
   const menuLoad = usePosLoad<PosMenuView>("menu");
 
   if (orderLoad.loading || menuLoad.loading) return <LoadingShell />;
@@ -34,10 +45,22 @@ export function OrderTakingView({ orderId }: Readonly<{ orderId: string }>) {
     return <LoadErrorPanel testId="order-taking-menu-error" message="Couldn't load the menu." onRetry={menuLoad.retry} />;
   }
 
-  return <OrderTakingLoaded orderId={orderId} initialOrder={orderLoad.data} menu={menuLoad.data} />;
+  return (
+    <OrderTakingLoaded
+      orderId={orderId}
+      currentStaffId={currentStaffId}
+      initialOrder={toOrderView(orderLoad.data, menuLoad.data)}
+      menu={menuLoad.data}
+    />
+  );
 }
 
-function OrderTakingLoaded({ orderId, initialOrder, menu }: Readonly<{ orderId: string; initialOrder: OrderView; menu: PosMenuView }>) {
+function OrderTakingLoaded({
+  orderId,
+  currentStaffId,
+  initialOrder,
+  menu,
+}: Readonly<{ orderId: string; currentStaffId: string; initialOrder: OrderView; menu: PosMenuView }>) {
   const [order, setOrder] = useState(initialOrder);
   const [selectedCategoryId, setSelectedCategoryId] = useState<string | null>(null);
   const [query, setQuery] = useState("");
@@ -55,13 +78,17 @@ function OrderTakingLoaded({ orderId, initialOrder, menu }: Readonly<{ orderId: 
   function submitLine(itemId: string, value: ModifierSheetConfirmValue, onSettled: () => void) {
     setAddingLine(true);
     setActionError(null);
-    addOrderLine(orderId, {
-      itemId,
-      variantId: value.variantId ?? undefined,
-      quantity: value.quantity,
-      modifierIds: value.modifierIds,
-      specialInstructions: value.specialInstructions || undefined,
-    })
+    addOrderLine(
+      orderId,
+      {
+        itemId,
+        variantId: value.variantId ?? undefined,
+        quantity: value.quantity,
+        modifierIds: value.modifierIds,
+        specialInstructions: value.specialInstructions || undefined,
+      },
+      menu,
+    )
       .then((updated) => {
         setOrder(updated);
         onSettled();
@@ -90,7 +117,7 @@ function OrderTakingLoaded({ orderId, initialOrder, menu }: Readonly<{ orderId: 
   function handleIncrement(line: OrderLineView) {
     setBusyLineId(line.id);
     setActionError(null);
-    updateOrderLineQuantity(orderId, line.id, line.quantity + 1)
+    updateOrderLineQuantity(orderId, line.id, line.quantity + 1, menu)
       .then(setOrder)
       .catch((error: unknown) => setActionError(errorMessage(error, "Couldn't update that line.")))
       .finally(() => setBusyLineId(null));
@@ -99,7 +126,7 @@ function OrderTakingLoaded({ orderId, initialOrder, menu }: Readonly<{ orderId: 
   function handleDecrement(line: OrderLineView) {
     setBusyLineId(line.id);
     setActionError(null);
-    const request = line.quantity <= 1 ? removeOrderLine(orderId, line.id) : updateOrderLineQuantity(orderId, line.id, line.quantity - 1);
+    const request = line.quantity <= 1 ? removeOrderLine(orderId, line.id, menu) : updateOrderLineQuantity(orderId, line.id, line.quantity - 1, menu);
     request
       .then(setOrder)
       .catch((error: unknown) => setActionError(errorMessage(error, "Couldn't update that line.")))
@@ -109,7 +136,7 @@ function OrderTakingLoaded({ orderId, initialOrder, menu }: Readonly<{ orderId: 
   function handleRemove(line: OrderLineView) {
     setBusyLineId(line.id);
     setActionError(null);
-    removeOrderLine(orderId, line.id)
+    removeOrderLine(orderId, line.id, menu)
       .then(setOrder)
       .catch((error: unknown) => setActionError(errorMessage(error, "Couldn't remove that line.")))
       .finally(() => setBusyLineId(null));
@@ -119,7 +146,7 @@ function OrderTakingLoaded({ orderId, initialOrder, menu }: Readonly<{ orderId: 
   function handleSeatIncrement(line: OrderLineView) {
     setBusyLineId(line.id);
     setActionError(null);
-    assignSeat(orderId, line.id, (line.seatNumber ?? 0) + 1)
+    assignSeat(orderId, line.id, (line.seatNumber ?? 0) + 1, menu)
       .then(setOrder)
       .catch((error: unknown) => setActionError(errorMessage(error, "Couldn't assign a seat to that line.")))
       .finally(() => setBusyLineId(null));
@@ -129,7 +156,7 @@ function OrderTakingLoaded({ orderId, initialOrder, menu }: Readonly<{ orderId: 
     if (line.seatNumber == null) return;
     setBusyLineId(line.id);
     setActionError(null);
-    assignSeat(orderId, line.id, line.seatNumber <= 1 ? null : line.seatNumber - 1)
+    assignSeat(orderId, line.id, line.seatNumber <= 1 ? null : line.seatNumber - 1, menu)
       .then(setOrder)
       .catch((error: unknown) => setActionError(errorMessage(error, "Couldn't update that line's seat.")))
       .finally(() => setBusyLineId(null));
@@ -142,7 +169,7 @@ function OrderTakingLoaded({ orderId, initialOrder, menu }: Readonly<{ orderId: 
     if (!canSendToKitchen(order)) return;
     setSendingToKitchen(true);
     setActionError(null);
-    sendOrderToKitchen(orderId)
+    sendOrderToKitchen(orderId, menu)
       .then(setOrder)
       .catch((error: unknown) => setActionError(errorMessage(error, "Couldn't send this order to the kitchen.")))
       .finally(() => setSendingToKitchen(false));
@@ -153,7 +180,7 @@ function OrderTakingLoaded({ orderId, initialOrder, menu }: Readonly<{ orderId: 
       <header className="flex items-center gap-4 border-b border-border/60 px-6 py-3">
         <div>
           <p className="font-headline text-lg font-bold text-primary">RESTIQ POS</p>
-          <p className="font-label text-xs font-semibold uppercase tracking-wider text-muted-foreground">Table {order.tableLabel}</p>
+          <p className="font-label text-xs font-semibold uppercase tracking-wider text-muted-foreground">{orderOriginLabel(order)}</p>
         </div>
         <Link href="/pos/table-map" data-testid="back-to-table-map" className="text-sm text-primary underline-offset-4 hover:underline">
           ← Back to table map
@@ -170,7 +197,7 @@ function OrderTakingLoaded({ orderId, initialOrder, menu }: Readonly<{ orderId: 
           />
         </div>
         <p data-testid="order-owner" className="text-sm text-muted-foreground">
-          Owned by <span className="font-semibold text-foreground">{order.ownerStaffName}</span>
+          Owned by <span className="font-semibold text-foreground">{order.ownerStaffName === currentStaffId ? "You" : order.ownerStaffName}</span>
         </p>
       </header>
 
@@ -223,10 +250,11 @@ function OrderTakingLoaded({ orderId, initialOrder, menu }: Readonly<{ orderId: 
 
         <OrderPanel
           orderId={order.id}
-          tableLabel={order.tableLabel}
-          currency={order.currency}
+          tableId={order.tableId}
+          currency={menu.currency}
           lines={order.lines}
-          firedAt={order.firedAt}
+          status={order.status}
+          currentStaffId={currentStaffId}
           busyLineId={busyLineId}
           onIncrement={handleIncrement}
           onDecrement={handleDecrement}

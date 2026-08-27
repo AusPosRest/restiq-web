@@ -56,7 +56,7 @@ function OpenOrdersLoaded({
   function handleTransferConfirm(reason: string) {
     if (!pendingTransfer) return;
     setBusy(true);
-    transferOrder(pendingTransfer.orderId, reason || undefined)
+    transferOrder(pendingTransfer.orderId, currentStaffId, reason || undefined)
       .then(() => {
         setPendingTransfer(null);
         router.push(`/pos/orders/${pendingTransfer.orderId}`);

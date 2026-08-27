@@ -1,15 +1,16 @@
 "use client";
 
 // TableShape (DESIGN.md component patterns): "floor-map tile: number, seat
-// count, status color, elapsed time". Color is the primary signal but never
+// count, status color, elapsed time". The elapsed-time part is dropped here -
+// see table-map-state.ts's RECONCILED header: the real backend's
+// TableMapEntry carries no per-table "opened at" to compute it from, and
+// nothing is fabricated in its place. Color is the primary signal but never
 // the only one (Accessibility Floor: "each TableShape status also carries a
 // text label under standard contrast") - every tile renders TABLE_STATUS_LABEL
 // as visible text alongside its color, not just as an aria-label.
-import { formatElapsedLabel, TABLE_STATUS_CLASS, TABLE_STATUS_LABEL, type TableMapEntry } from "./table-map-state";
+import { TABLE_STATUS_CLASS, TABLE_STATUS_LABEL, type TableMapEntry } from "./table-map-state";
 
 export function TableTile({ table, onTap }: Readonly<{ table: TableMapEntry; onTap: () => void }>) {
-  const elapsed = table.order ? formatElapsedLabel(table.order.openedAt) : null;
-
   return (
     <button
       type="button"
@@ -22,11 +23,7 @@ export function TableTile({ table, onTap }: Readonly<{ table: TableMapEntry; onT
       <span data-testid={`table-tile-status-${table.id}`} className="font-label text-xs font-semibold uppercase tracking-wider opacity-90">
         {TABLE_STATUS_LABEL[table.status]}
       </span>
-      {table.status === "empty" ? (
-        <span className="text-xs tabular-nums opacity-80">{table.seatCapacity} seats</span>
-      ) : elapsed ? (
-        <span className="text-xs tabular-nums opacity-80">{elapsed}</span>
-      ) : null}
+      <span className="text-xs tabular-nums opacity-80">{table.seatCapacity} seats</span>
     </button>
   );
 }
