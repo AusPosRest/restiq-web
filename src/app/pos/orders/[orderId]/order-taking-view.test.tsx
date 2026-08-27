@@ -175,6 +175,55 @@ describe("OrderTakingView", () => {
     expect(within(screen.getByTestId("order-line-line-1")).getByTestId("order-line-added-by-line-1").textContent).toBe("Added by You");
   });
 
+  it("tapping the same plain item again increments its existing line instead of adding a duplicate (regression for #63)", async () => {
+    const user = userEvent.setup();
+    const afterAdd = order({
+      lines: [
+        {
+          id: "line-1",
+          orderId: ORDER_ID,
+          itemId: "item-naan",
+          variantId: null,
+          quantity: 1,
+          unitPriceMinor: 14000,
+          seatNumber: null,
+          addedByStaffId: CURRENT_STAFF_ID,
+          createdAt: new Date().toISOString(),
+          modifiers: [],
+        },
+      ],
+    });
+    const afterIncrement = order({ lines: afterAdd.lines.map((line) => ({ ...line, quantity: 2 })) });
+    let addCalls = 0;
+    let patchCalls = 0;
+    const fetchMock = stubFetch((url, init) => {
+      if (url.includes("/menu")) return jsonResponse(MENU);
+      if (url.endsWith("/lines")) {
+        addCalls += 1;
+        return jsonResponse(afterAdd);
+      }
+      if (url.endsWith("/lines/line-1") && init?.method === "PATCH") {
+        patchCalls += 1;
+        return jsonResponse(afterIncrement);
+      }
+      return jsonResponse(order());
+    });
+    renderView();
+    await waitFor(() => expect(screen.getByTestId("order-taking-view")).toBeTruthy());
+
+    await user.click(screen.getByTestId("category-tab-cat-breads"));
+    await user.click(screen.getByTestId("item-tile-item-naan"));
+    await waitFor(() => expect(screen.getByTestId("order-line-line-1")).toBeTruthy());
+
+    await user.click(screen.getByTestId("item-tile-item-naan"));
+    await waitFor(() => expect(screen.getByTestId("order-line-qty-line-1").textContent).toBe("2"));
+
+    expect(addCalls).toBe(1);
+    expect(patchCalls).toBe(1);
+    expect(screen.queryByTestId("order-line-line-2")).toBeNull();
+    void fetchMock;
+  });
+
   it("an item with a required modifier group blocks add until it's satisfied", async () => {
     const user = userEvent.setup();
     stubFetch((url) => (url.includes("/menu") ? jsonResponse(MENU) : jsonResponse(order())));

@@ -98,9 +98,18 @@ function OrderTakingLoaded({
   }
 
   function handleTapItem(item: PosMenuItemView) {
-    if (addingLine) return;
+    if (addingLine || busyLineId !== null) return;
     if (itemNeedsModifierSheet(item)) {
       setActiveItem(item);
+      return;
+    }
+    // A plain item (no variant, no modifiers) already on the order just gets
+    // its quantity bumped - the same effect as pressing the line's own "+"
+    // stepper - rather than a second, redundant line for the same item
+    // (restiq-web#63: repeat taps were always POSTing a brand-new line).
+    const existingLine = order.lines.find((line) => line.itemId === item.id && line.variantId === null && line.modifiers.length === 0);
+    if (existingLine) {
+      handleIncrement(existingLine);
       return;
     }
     // No variant to pick, no modifier group to configure - add it straight
