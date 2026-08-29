@@ -16,6 +16,10 @@ the task entry to `tasks/completed.md` after every feature or bug fix.
 - [QR Self-Order (Guest Mobile Web) - web](features/qr-self-order.md) -
   CAP-1 QR entry and table session (welcome + session PIN, start/join, the
   fifth `guest` auth realm, qr_ordering capability gate).
+- [Kitchen Display (KDS) - web](features/kitchen-display.md) - CAP-2 `/kds`
+  shell (reuses the pos auth realm), station picker, and the K1 station
+  queue (oldest-left ticket columns, client-computed ageing colors, ADD-ON
+  separation, struck-through void lines, bump/recall/refire).
 
 ## Tasks
 

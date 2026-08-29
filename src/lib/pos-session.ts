@@ -47,9 +47,16 @@ export const POS_LOGIN_PATH = "/pos/login";
 /** Reachable without a session: the login page and its two route handlers (PIN verify, outlet select). */
 const PUBLIC_POS_PATHS = new Set([POS_LOGIN_PATH, "/pos/auth/login", "/pos/auth/select-outlet"]);
 
-/** Return-to targets must stay inside the POS surface - anything else is dropped. */
+/**
+ * Return-to targets must stay inside the POS surface - anything else is
+ * dropped. Also accepts `/kds` (issue #66): the KDS surface reuses this same
+ * pos_session cookie and the existing /pos/login page verbatim (SPEC's
+ * "kitchen staff PIN in exactly as POS staff do" - AD-4's proxy pattern
+ * extends, no new realm/login screen), so a KDS redirect's `next=` must
+ * round-trip back through here too.
+ */
 export function sanitizePosNextPath(next: string | undefined): string {
-  if (next && /^\/pos(\/|$|\?)/.test(next)) return next;
+  if (next && /^\/(pos|kds)(\/|$|\?)/.test(next)) return next;
   return "/pos";
 }
 

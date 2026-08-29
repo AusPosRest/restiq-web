@@ -40,12 +40,29 @@ describe("decidePosRoute", () => {
     const decision = decidePosRoute("/pos/table-map", "", "not-a-jwt");
     expect(decision.allow).toBe(false);
   });
+
+  it("redirects an unauthenticated /kds request to /pos/login with a /kds return URL (issue #66 - proxy.ts calls this straight for both prefixes)", () => {
+    const decision = decidePosRoute("/kds/station/tandoor", "", undefined);
+    expect(decision).toEqual({
+      allow: false,
+      redirectTo: `/pos/login?next=${encodeURIComponent("/kds/station/tandoor")}`,
+    });
+  });
+
+  it("allows /kds with a live session token", () => {
+    expect(decidePosRoute("/kds", "", fakeToken(inOneHour))).toEqual({ allow: true });
+  });
 });
 
 describe("sanitizePosNextPath", () => {
   it("keeps in-surface paths", () => {
     expect(sanitizePosNextPath("/pos/table-map")).toBe("/pos/table-map");
     expect(sanitizePosNextPath("/pos")).toBe("/pos");
+  });
+
+  it("also keeps /kds paths (issue #66 - KDS reuses this same login page)", () => {
+    expect(sanitizePosNextPath("/kds")).toBe("/kds");
+    expect(sanitizePosNextPath("/kds/station/tandoor")).toBe("/kds/station/tandoor");
   });
 
   it("drops external and other-realm targets", () => {

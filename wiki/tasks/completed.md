@@ -553,3 +553,31 @@ faked.
   [wiki/features/qr-self-order.md](../features/qr-self-order.md)'s "Reconciliation"
   section for the full writeup. 6 new/changed test files, 692/692 passing repo-wide;
   lint/typecheck/build clean. PR AusPosRest/restiq-web#65 (issue #64).
+
+- **2026-08-29** - Kitchen Display (KDS) story 2: `/kds` shell and K1 station
+  queue (CAP-2). New sixth surface that reuses the `pos` auth realm verbatim
+  (`src/proxy.ts` routes `/kds/:path*` through the same `decidePosRoute` as
+  `/pos`, redirecting to the existing `/pos/login?next=/kds/...`;
+  `sanitizePosNextPath` widened to accept `/kds`), plus
+  `/kds/api/[...path]` passing through to the real, merged
+  `/kitchen/v1/*` (restiq-backend PR #70, issue #67 - read directly, not
+  guessed). Station picker persisted per browser (`localStorage`), a quiet
+  shared header (`KdsHeader`) with Station/Expo/Bumped/All-Day nav (the
+  latter three are real routes rendering `ComingSoon` placeholders for
+  stories 3-5), and K1: oldest-left `TicketCard` columns on a ~5s poll,
+  client-computed ageing colors (blue/yellow/red) that flip between polls,
+  ADD-ON section separation, struck-through red VOID lines, a real-data
+  RECALLED banner, and single-tap Bump/Recall/Refire with a per-ticket
+  pending lock and one automatic retry on failure. Stale board stays on
+  screen through poll failures with a "Reconnecting - last updated Xs ago"
+  notice. See [wiki/features/kitchen-display.md](../features/kitchen-display.md)
+  for the full shell/poll/API conventions established for K2-K4, and its Key
+  decisions for the documented gaps (no second ageing threshold field in the
+  real schema, no server-attribution or per-ADD-ON-batch fired time in the
+  real `TicketView`, no live-backend run available in this build's
+  environment). 6 new test files (pure ageing/grouping/sort logic, the
+  station-picker persistence flow, the API pass-through route, and a
+  fake-timer integration suite covering oldest-left rendering, ageing
+  threshold crossings, ADD-ON/void rendering, bump/recall/refire wiring, and
+  poll-failure stale-board behavior), 737/737 passing repo-wide;
+  lint/typecheck/build clean. PR AusPosRest/restiq-web#69 (issue #66).
