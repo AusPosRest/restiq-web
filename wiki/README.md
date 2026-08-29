@@ -3,6 +3,12 @@
 Living documentation for this repo. Update the relevant feature doc and move
 the task entry to `tasks/completed.md` after every feature or bug fix.
 
+## Testing
+
+- [Demo credentials & surface testing rules](testing-credentials.md) - every
+  demo login (ops, owner, POS PINs, KDS, guest QR URLs), shared demo IDs, and
+  the rules for testing each surface locally.
+
 ## Features
 
 - [Tenant Admin (Owner Web Console) - web](features/tenant-admin.md) -
