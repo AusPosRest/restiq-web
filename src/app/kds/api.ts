@@ -89,6 +89,18 @@ export function stationQueue(outletId: string, stationId: string): Promise<Ticke
   return kdsApi<TicketView[]>(`outlets/${encodeURIComponent(outletId)}/stations/${encodeURIComponent(stationId)}/queue`);
 }
 
+/** One item's live production count across all open (queued) tickets - server-aggregated from real ticket lines, never fabricated (SPEC CAP-5). */
+export interface AllDaySummaryEntryView {
+  itemId: string;
+  itemName: string;
+  quantity: number;
+}
+
+/** GET /kitchen/v1/outlets/:outletId/all-day-summary - server-computed per-item counts from queued ticket lines, alphabetical by item name (K4 sorts client-side). */
+export function allDaySummary(outletId: string): Promise<AllDaySummaryEntryView[]> {
+  return kdsApi<AllDaySummaryEntryView[]>(`outlets/${encodeURIComponent(outletId)}/all-day-summary`);
+}
+
 export function bumpTicket(ticketId: string): Promise<TicketView> {
   return kdsApi<TicketView>(`tickets/${encodeURIComponent(ticketId)}/bump`, { method: "POST" });
 }
