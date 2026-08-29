@@ -13,6 +13,9 @@ the task entry to `tasks/completed.md` after every feature or bug fix.
   CAP-1 PIN login and shift clock, CAP-2 table map and order ownership/transfer,
   CAP-10 shift & cash management (open shift with float, cash movement log,
   blind-count close with server-side-blind expected/over-short reveal).
+- [QR Self-Order (Guest Mobile Web) - web](features/qr-self-order.md) -
+  CAP-1 QR entry and table session (welcome + session PIN, start/join, the
+  fifth `guest` auth realm, qr_ordering capability gate).
 
 ## Tasks
 

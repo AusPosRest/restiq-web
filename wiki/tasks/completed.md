@@ -503,3 +503,32 @@ faked.
   every other POS story built ahead of its own backend. See
   [wiki/features/pos-cashier-waiter.md](../features/pos-cashier-waiter.md)
   for the full writeup.
+
+- **2026-08-29** - QR Self-Order story 1: guest welcome and session PIN
+  screens (CAP-1). New fifth auth realm `/qr` (`aud: guest`, `guest_session`
+  httpOnly cookie, `src/lib/guest-session.ts`'s `decideGuestRoute` wired into
+  `src/proxy.ts`) - the first RESTIQ realm whose principals aren't staff.
+  Table-QR entry URL `/qr/t/[outletId]/[tableId]` resolves the `qr_ordering`
+  capability gate and session-open status server-side before rendering
+  anything, so a disabled outlet always gets the warm "please order with our
+  staff" page (`unavailable-view.tsx`), never the menu. Q1 Welcome + Q2
+  Session PIN ship as one client component (`welcome-flow.tsx`) with a
+  single mode picked by live session state - name+phone "Start ordering"
+  (auto-proceeding straight to a large shareable PIN, no ceremony) when no
+  session is open, or name + 4-digit auto-submitting keypad "Join your
+  table" when one is - plain inline errors on a wrong PIN, WCAG 2.1 AA
+  basics (labeled fields, focus rings, `aria-live` convergence region).
+  `src/app/qr/auth/{start,join}/route.ts` and `src/app/qr/api/[...path]/route.ts`
+  mirror the POS realm's auth-exchange and pass-through patterns. Backend
+  counterpart (issue #68/`feature/68-guest-session`) had no reachable branch
+  at build time and this worktree has no access to the `restiq-backend`
+  checkout, so the `/guest/v1/*` contract is built against
+  `spec-qr-self-order/SPEC.md` alone and flagged NOT YET RECONCILED - see
+  [wiki/features/qr-self-order.md](../features/qr-self-order.md)'s
+  "Backend contract" section for the exact assumed shapes and the
+  reconciliation action for the next Q-screen story. 39 new tests (route
+  handlers, `decideGuestRoute`, pure flow-state helpers, `fetchTableStatus`,
+  the server-rendered entry page's capability/not-found branches, and the
+  `WelcomeFlow` component covering start-lands-on-PIN, join
+  success/wrong-PIN, and a11y basics), 685/685 passing repo-wide;
+  lint/typecheck/build clean. Issue AusPosRest/restiq-web#64.
