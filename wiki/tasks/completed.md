@@ -580,4 +580,4 @@ faked.
   fake-timer integration suite covering oldest-left rendering, ageing
   threshold crossings, ADD-ON/void rendering, bump/recall/refire wiring, and
   poll-failure stale-board behavior), 737/737 passing repo-wide;
-  lint/typecheck/build clean. PR AusPosRest/restiq-web#TBD (issue #66).
+  lint/typecheck/build clean. PR AusPosRest/restiq-web#69 (issue #66).
