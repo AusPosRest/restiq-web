@@ -19,6 +19,10 @@ export interface GuestSessionDisplay {
   tableId: string;
   guestName: string;
   pin: string;
+  // The signed-in guest's own id (JWT `sub`, stamped in by guestSessionResponse
+  // - see session-cookies.ts). CAP-3's shared cart needs it to tell "my line"
+  // from everyone else's without a second round trip or a backend /me lookup.
+  guestId: string;
 }
 
 /** Parses the guest_display cookie value, or null for anything missing/malformed. */
@@ -27,16 +31,17 @@ export function parseGuestSessionDisplay(value: string | undefined): GuestSessio
   try {
     const parsed: unknown = JSON.parse(value);
     if (typeof parsed !== "object" || parsed === null) return null;
-    const { outletId, tableId, guestName, pin } = parsed as Record<string, unknown>;
+    const { outletId, tableId, guestName, pin, guestId } = parsed as Record<string, unknown>;
     if (
       typeof outletId !== "string" ||
       typeof tableId !== "string" ||
       typeof guestName !== "string" ||
-      typeof pin !== "string"
+      typeof pin !== "string" ||
+      typeof guestId !== "string"
     ) {
       return null;
     }
-    return { outletId, tableId, guestName, pin };
+    return { outletId, tableId, guestName, pin, guestId };
   } catch {
     return null;
   }
@@ -62,16 +67,23 @@ export function decideGuestRoute(
   sessionToken: string | undefined,
 ): GuestRouteDecision {
   void _search;
-  // The QR entry surface (welcome/session-PIN screens and their auth route
-  // handlers) is always reachable - it's how a session starts in the first
-  // place, and a guest with an expired token must be able to land back here
-  // to rejoin rather than hit a dead end.
-  if (/^\/qr\/t\/[^/]+\/[^/]+(\/|$)/.test(pathname) || pathname.startsWith("/qr/auth/")) {
+  // The QR entry surface itself (welcome/session-PIN, exactly
+  // /qr/t/:outletId/:tableId with no further segment) is always reachable -
+  // it's how a session starts in the first place, and a guest with an
+  // expired token must be able to land back here to rejoin rather than hit a
+  // dead end. Anchored at the end (no trailing path allowed) - CAP-3 found
+  // that an unanchored version of this regex would also match anything
+  // *nested* under the entry point (e.g. /qr/t/o1/t1/cart), which would have
+  // left every later Q-screen unintentionally reachable with no session at
+  // all if it were ever routed that way. Later screens are flat gated paths
+  // instead (/qr/cart, matching this function's own pre-existing test
+  // literal /qr/menu) precisely so they fall through to the session check
+  // below rather than needing to dodge this regex.
+  if (/^\/qr\/t\/[^/]+\/[^/]+\/?$/.test(pathname) || pathname.startsWith("/qr/auth/")) {
     return { allow: true };
   }
-  // Nothing else exists under /qr yet in this story; once menu/cart/checkout/
-  // status screens land, they gate on a live (non-expired) session token
-  // here, same pattern as decidePosRoute.
+  // Every other /qr/* path (menu/cart/checkout/status) gates on a live
+  // (non-expired) session token, same pattern as decidePosRoute.
   if (sessionToken === undefined || tokenIsExpired(sessionToken)) {
     return { allow: false, redirectTo: "/qr" };
   }

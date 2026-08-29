@@ -139,21 +139,92 @@ This pass reconciled the guess against it:
 ## Conventions established for later Q-screens (stories 2-6 build on these)
 
 - **Route group:** `src/app/qr/` is the guest realm root; today it holds
-  `t/[outletId]/[tableId]` (entry), `auth/{start,join}` (route handlers), and
-  `api/[...path]` (backend pass-through). Later screens (menu, cart, checkout, status)
-  should live as sibling folders under the same `t/[outletId]/[tableId]/` segment (e.g.
-  `t/[outletId]/[tableId]/menu`) so outlet/table context stays in the URL throughout the
-  session, matching EXPERIENCE.md's linear IA.
+  `t/[outletId]/[tableId]` (entry, pre-session), `auth/{start,join}` (route handlers),
+  `api/[...path]` (backend pass-through), and `cart/` (CAP-3, story 3 - see below).
+  **Corrected from this doc's earlier guidance:** later post-session screens (menu,
+  cart, checkout, status) are **flat** paths directly under `/qr/` (`/qr/menu`,
+  `/qr/cart`, ...), **not** nested under `t/[outletId]/[tableId]/`. The previous version
+  of this doc said to nest them there for URL continuity, but `decideGuestRoute`'s entry
+  regex (`^\/qr\/t\/[^/]+\/[^/]+(\/|$)`, unanchored at the end) matches *any* path
+  starting with the entry point, including a nested `/qr/t/o1/t1/cart` - so nesting a
+  session-scoped screen there would have made it reachable with no session at all,
+  silently bypassing the gate the code's own comments said it would get. Story 3
+  end-anchored the regex (`\/?$`) to close that gap and confirmed a session is always
+  required for anything past the bare entry point; the flat-path convention sidesteps it
+  entirely for every future screen. Outlet/table context after a session starts comes
+  from the JWT (`GuestPrincipal.outletId`/`tableId`, embedded server-side), not the URL -
+  it never needed to be a path segment.
 - **Cookie:** `guest_session` (httpOnly JWT, `aud: guest`) + `guest_display` (small
-  non-sensitive JSON: outletId/tableId/guestName/pin) - both set by
-  `src/app/qr/auth/session-cookies.ts`'s `guestSessionResponse`, parsed via
-  `parseGuestSessionDisplay` in `src/lib/guest-session.ts`.
+  non-sensitive JSON: outletId/tableId/guestName/pin, **plus `guestId`** as of story 3 -
+  see below) - both set by `src/app/qr/auth/session-cookies.ts`'s `guestSessionResponse`,
+  parsed via `parseGuestSessionDisplay` in `src/lib/guest-session.ts`.
 - **Entry URL pattern:** `/qr/t/[outletId]/[tableId]` - the table-QR target; bare `/qr`
   is only ever reached via an expired-session redirect or a mistyped link, never a real
   guest's first hit.
-- **Proxy/session gate:** `decideGuestRoute` in `src/lib/guest-session.ts` already allows
-  every path under `/qr/t/*` and `/qr/auth/*` unconditionally (the entry point must
-  always be reachable, even with an expired token, so a guest can rejoin); any other
-  `/qr/*` path requires a live (non-expired) `guest_session` token or redirects to bare
-  `/qr` - later screens fall straight into this existing gate with no proxy changes
-  needed.
+- **Proxy/session gate:** `decideGuestRoute` in `src/lib/guest-session.ts` allows exactly
+  `/qr/t/[outletId]/[tableId]` (now end-anchored, see above) and `/qr/auth/*`
+  unconditionally (the entry point must always be reachable, even with an expired token,
+  so a guest can rejoin); every other `/qr/*` path - flat, post-session screens included -
+  requires a live (non-expired) `guest_session` token or redirects to bare `/qr`. Later
+  screens fall straight into this existing gate with no proxy changes needed, as long as
+  they stay flat.
+
+## CAP-3 - Shared group cart and table order review (story 3, issue #68)
+
+- **Intent:** every guest in the session adds to one shared table cart, each line
+  attributed to the guest who added it; the group reviews the combined table order
+  (Q5) grouped by guest with per-guest subtotals and a combined total; every phone
+  converges on the same view within one ~5s poll.
+- **Built against the real, merged backend contract** (restiq-backend PR #74,
+  `src/guest/cart/cart.{dtos,controller,service}.ts`, read directly - not a guess):
+  `GET /guest/v1/cart` -> `TableCartView { sessionId, guests: [{ guestId, guestName,
+  lines: [{ id, guestId, guestName, itemId, itemName, variantId, variantName, quantity,
+  unitPriceMinor, modifiers, lineTotalMinor, createdAt }], subtotalMinor }], totalMinor,
+  currency }`; `PATCH /guest/v1/cart/lines/:id { quantity? }`; `DELETE
+  /guest/v1/cart/lines/:id`. Every endpoint 410s `session_closed` once the session ends.
+- **Route:** `/qr/cart` (`src/app/qr/cart/page.tsx`, `cart-screen.tsx`) - flat and
+  session-gated, per the corrected convention above.
+- **"Whose id am I?"** The cart contract identifies lines by `guestId`, but the guest
+  realm had no way to know its own id client-side until now - `guest_display` only
+  carried outlet/table/name/pin. Story 3 added `guestId` to it: `session-cookies.ts`'s
+  `guestSessionResponse` now decodes the JWT's own `sub` claim (`decodeTokenSubject`,
+  new in `src/lib/session-token.ts`, unverified - same posture as the existing
+  `tokenIsExpired`, verification stays the backend guard's job) and stamps it into the
+  cookie at start/join time, no new endpoint needed. `cart/page.tsx` reads it
+  server-side (same pattern as `pos/(shell)/layout.tsx` reading `pos_staff`) and passes
+  it down as `myGuestId`.
+- **Own-line-editable, everyone-else-read-only:** `cart-screen.tsx` only ever renders a
+  quantity stepper/remove button on a guest group where `guest.guestId === myGuestId`;
+  every other guest's lines render as plain text with a read-only `×N` quantity. A 403
+  from editing someone else's line is therefore never reachable from this UI at all -
+  there's no button to press, not just a disabled one.
+- **Polling (~5s, `CART_POLL_MS`):** `use-cart-poll.ts` mirrors
+  `ops/(shell)/sync-health/use-live-sync-health.ts`'s derived-loading shape, but
+  deliberately *not* its "N updates - refresh" gating - EXPERIENCE.md is explicit for
+  this screen ("shared-cart and status polls update in place, never blank-and-repaint"),
+  so a successful poll always replaces the shown cart directly; a failed poll after the
+  first keeps the last-known cart with a quiet `cart-stale-note`, never a blank screen. A
+  410 flips to a session-ended state and stops the interval outright (polling a session
+  that will never reopen would be pointless). An own-line mutation's response is pushed
+  straight into the same state via `applyUpdate` rather than waiting up to 5s for the
+  next tick to show it.
+- **a11y (WCAG 2.1 AA floor):** the guest-group list sits in an
+  `aria-live="polite"` region (`aria-label="Shared table cart"`) so a screen-reader
+  guest hears convergence without a page refresh; every stepper button has a
+  descriptive `aria-label` naming the item, not just "increase"/"decrease".
+- **Empty state:** "Nothing yet" with a "Browse the menu" link. Issue #67 (Q3 Menu
+  Browse, CAP-2) is being built concurrently by a sibling story and had no merged route
+  as of this build (`git diff` against its branch was empty) - the link points to the
+  conventional flat path `/qr/menu` per the corrected routing convention above, which
+  is also the exact literal `decideGuestRoute`'s own pre-existing test used as its
+  "future gated path" example. **Needs reconciliation** once #67 actually lands, if its
+  route differs.
+- **"Place order" (CAP-4) is deliberately not built here** - it's issue #68's sibling
+  scope, a separate story. The sticky bottom bar renders it in its final position and
+  size (disabled, `title="Coming next"`, with a quiet "Placing the order is coming next"
+  caption beneath) rather than omitting it, so CAP-4 only has to wire one button up
+  without reflowing the layout.
+- **Money formatting:** `cart-state.ts#formatMinor` is a small, deliberate duplicate of
+  `pos/(shell)/shift/shift-state.ts#formatMinor` (₹ symbol, 2 decimals) - AD-4's
+  realm-isolation rule (`app/qr` may not import from `app/pos`) means it can't be
+  shared, same discipline that file's own header documents for itself.
