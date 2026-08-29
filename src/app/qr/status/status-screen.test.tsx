@@ -51,6 +51,15 @@ describe("StatusScreen", () => {
     expect(orderNodes[1].getAttribute("data-testid")).toBe(`status-order-${READY_ORDER.orderId}`);
   });
 
+  it("links each order's Request bill to its own checkout bill (CAP-5)", async () => {
+    vi.stubGlobal("fetch", vi.fn().mockResolvedValue(jsonResponse(200, TWO_ORDERS)));
+    render(<StatusScreen />);
+    await screen.findByTestId(`status-order-${PREPARING_ORDER.orderId}`);
+
+    const link = screen.getByTestId(`status-request-bill-${PREPARING_ORDER.orderId}`) as HTMLAnchorElement;
+    expect(link.getAttribute("href")).toBe(`/qr/checkout?orderId=${PREPARING_ORDER.orderId}`);
+  });
+
   it("highlights the order's furthest reached step as active, marks earlier steps done, and leaves later steps upcoming", async () => {
     vi.stubGlobal("fetch", vi.fn().mockResolvedValue(jsonResponse(200, { sessionId: "s1", orders: [PREPARING_ORDER] })));
     render(<StatusScreen />);

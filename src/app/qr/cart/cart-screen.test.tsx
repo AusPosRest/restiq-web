@@ -266,6 +266,8 @@ describe("CartScreen - Place order (CAP-4)", () => {
     expect(screen.getByTestId("cart-placed-line-ol2").textContent).toContain("Garlic Naan");
     const track = screen.getByTestId("cart-track-order") as HTMLAnchorElement;
     expect(track.getAttribute("href")).toBe("/qr/status");
+    const requestBill = screen.getByTestId("cart-request-bill") as HTMLAnchorElement;
+    expect(requestBill.getAttribute("href")).toBe(`/qr/checkout?orderId=${PLACED_ORDER.orderId}`);
 
     const [, init] = fetchMock.mock.calls.find(([url]) => url === "/qr/api/orders") as [string, RequestInit];
     expect(init.method).toBe("POST");

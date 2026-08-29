@@ -48,6 +48,12 @@ const MENU_ROUTE = "/qr/menu";
 // reconciliation was needed.
 const STATUS_ROUTE = "/qr/status";
 
+// Q6 Checkout (CAP-5, issue #84) - the other of this story's two entry
+// points (the other is status-screen.tsx's per-order "Request bill"). The
+// just-placed order's id is already in hand from PlacedOrderView, so this
+// confirmation can link straight to its bill.
+const CHECKOUT_ROUTE = "/qr/checkout";
+
 export function CartScreen({ myGuestId }: Readonly<{ myGuestId: string }>) {
   const poll = useCartPoll();
   const [placedOrder, setPlacedOrder] = useState<PlacedOrderView | null>(null);
@@ -420,7 +426,10 @@ function PlacedConfirmation({ order }: Readonly<{ order: PlacedOrderView }>) {
         ))}
       </div>
 
-      <TrackOrderLink />
+      <div className="mt-8 flex gap-3">
+        <RequestBillLink orderId={order.orderId} />
+        <TrackOrderLink />
+      </div>
     </main>
   );
 }
@@ -436,8 +445,22 @@ function OrderPlacedElsewhere() {
     <main data-testid="cart-order-placed-elsewhere" className="flex min-h-screen flex-1 flex-col items-center justify-center px-6 py-12 text-center">
       <h1 className="font-headline text-2xl font-semibold text-foreground">Sent to the kitchen</h1>
       <p className="mt-3 max-w-sm text-sm text-muted-foreground">Someone at your table already placed it.</p>
-      <TrackOrderLink />
+      <div className="mt-8">
+        <TrackOrderLink />
+      </div>
     </main>
+  );
+}
+
+function RequestBillLink({ orderId }: Readonly<{ orderId: string }>) {
+  return (
+    <Link
+      href={`${CHECKOUT_ROUTE}?orderId=${orderId}`}
+      data-testid="cart-request-bill"
+      className="rounded-lg border border-border px-4 py-2.5 text-sm font-medium text-foreground focus-visible:outline focus-visible:outline-2 focus-visible:outline-ring"
+    >
+      Request bill
+    </Link>
   );
 }
 
@@ -446,7 +469,7 @@ function TrackOrderLink() {
     <Link
       href={STATUS_ROUTE}
       data-testid="cart-track-order"
-      className="mt-8 rounded-lg border border-border px-4 py-2.5 text-sm font-medium text-foreground focus-visible:outline focus-visible:outline-2 focus-visible:outline-ring"
+      className="rounded-lg border border-border px-4 py-2.5 text-sm font-medium text-foreground focus-visible:outline focus-visible:outline-2 focus-visible:outline-ring"
     >
       Track your order
     </Link>
