@@ -189,6 +189,12 @@
   --color-ticket-urgent: var(--ticket-urgent);
   --color-ticket-bumped: var(--ticket-bumped);
   --color-ticket-recalled: var(--ticket-recalled);
+
+  /* Q7 Order Status (CAP-6) stepper vocabulary - registered globally so the
+     bg-step-active/bg-step-done utilities work, values fixed in .qr-theme
+     only (DESIGN.md: amber active, green done, never tenant-branded). */
+  --color-step-active: var(--step-active);
+  --color-step-done: var(--step-done);
 }
 
 /* RESTIQ POS Cashier & Waiter - the /pos surface's theme (ux-pos-cashier-

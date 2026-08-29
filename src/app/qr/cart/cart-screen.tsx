@@ -42,12 +42,10 @@ import { CART_POLL_MS, useCartPoll } from "./use-cart-poll";
 // wiki/features/qr-self-order.md for the reconciliation note once #67 lands.
 const MENU_ROUTE = "/qr/menu";
 
-// Q7 Order Status (story 6, issue #78's sibling scope) is being built
-// concurrently and has no merged route as of this build - `/qr/status` is
-// the conventional flat, session-gated path per the same routing convention
-// MENU_ROUTE above documents. The link may 404 until that story lands; this
-// story does not build the stepper itself. Needs reconciliation once #78's
-// sibling story actually merges, if its route differs.
+// Q7 Order Status (story 6, issue #82) now has a real, merged route at this
+// exact flat, session-gated path - see src/app/qr/status/. The guess this
+// comment used to document (before that story landed) matched, so no
+// reconciliation was needed.
 const STATUS_ROUTE = "/qr/status";
 
 export function CartScreen({ myGuestId }: Readonly<{ myGuestId: string }>) {
