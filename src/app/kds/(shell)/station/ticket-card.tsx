@@ -56,6 +56,7 @@ export function TicketCard({
   onBump,
   onRecall,
   onRefire,
+  recallTimes,
 }: Readonly<{
   ticket: TicketView;
   ageingThresholdMinutes: number;
@@ -65,6 +66,13 @@ export function TicketCard({
   onBump: () => void;
   onRecall: () => void;
   onRefire: () => void;
+  /**
+   * K3-only (bumped view, CAP-4): formatted local-time labels for this
+   * ticket's full recall history, from the `/bumped` endpoint's
+   * `recallHistory`. Omitted everywhere else (K1's `/queue` read carries no
+   * such history) - undefined renders nothing, same TicketCard either way.
+   */
+  recallTimes?: string[];
 }>) {
   const level = ageingLevel(ticket.firedAt, ageingThresholdMinutes, nowMs);
   const batches = groupLinesByBatch(ticket.lines);
@@ -95,6 +103,12 @@ export function TicketCard({
           {formatElapsed(ticket.firedAt, nowMs)}
         </p>
       </header>
+
+      {recallTimes && recallTimes.length > 0 && (
+        <p data-testid={`kds-ticket-${ticket.id}-recall-history`} className="mx-3 mt-2 rounded bg-ticket-recalled/10 px-2 py-1 text-xs font-medium text-ticket-recalled">
+          Recalled {recallTimes.length}x - {recallTimes.join(", ")}
+        </p>
+      )}
 
       <div className="flex-1 space-y-3 px-3 py-3">
         {batches.map(({ batch, lines }) => (

@@ -1,14 +1,7 @@
-import { Undo2 } from "lucide-react";
-import { KdsHeader } from "../kds-header";
-import { ComingSoon } from "../coming-soon";
+import { BumpedViewScreen } from "./bumped-view-screen";
 
-// K3 Bumped View and recall (CAP-4) - a later sibling story. This story
-// (CAP-2) only establishes the header/nav slot for it, per issue #66's scope.
+// K3 Bumped View and Recall (CAP-4, issue #71) - real screen, replacing the
+// shell story's (#66) ComingSoon placeholder.
 export default function KdsBumpedPage() {
-  return (
-    <div className="flex flex-1 flex-col">
-      <KdsHeader activeMode="bumped" />
-      <ComingSoon testId="kds-bumped-coming-soon" title="Bumped view" icon={Undo2} description="Bumped tickets and recall (returning a ticket to its station marked RECALLED) land in a later story." />
-    </div>
-  );
+  return <BumpedViewScreen />;
 }

@@ -595,3 +595,23 @@ faked.
   threshold crossings, ADD-ON/void rendering, bump/recall/refire wiring, and
   poll-failure stale-board behavior), 737/737 passing repo-wide;
   lint/typecheck/build clean. PR AusPosRest/restiq-web#69 (issue #66).
+
+- **2026-08-29** - Kitchen Display story 3: bumped view and recall (CAP-4).
+  `/kds/bumped` (`src/app/kds/(shell)/bumped/`) replaces the shell story's
+  `ComingSoon` placeholder: bumped tickets newest-bumped-first (the real,
+  merged `GET /kitchen/v1/outlets/:outletId/bumped` already returns
+  `bumpedAt desc` - a defensive client re-sort, same precedent as K1's
+  oldest-first), rendered through the same `TicketCard` K1 established (one
+  new optional `recallTimes` prop renders a "Recalled Nx - <times>" strip
+  from the real `recallHistory` the endpoint returns, K1's own rendering
+  untouched), and single-tap recall with no confirmation via K1's existing
+  `useTicketActions`. Same ~5s poll, stale-on-failure shape as K1. See
+  [wiki/features/kitchen-display.md](../features/kitchen-display.md) for the
+  full decision log (ordering, recall-history rendering vs the DESIGN.md
+  mock's unavailable per-cook attribution, why the elapsed clock and RECALLED
+  banner stay as-is). 3 new test files (pure sort/format logic, a
+  fake-timer integration suite covering newest-first rendering, recall
+  history, single-tap recall with the ticket dropping off the list on the
+  next poll, and poll-failure stale-board behavior), 746/746 passing
+  repo-wide; lint/typecheck/build clean. PR AusPosRest/restiq-web#74 (issue
+  #71).
