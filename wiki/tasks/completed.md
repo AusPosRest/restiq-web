@@ -651,3 +651,26 @@ faked.
   merge); lint/typecheck/build clean. No live-backend run available in this
   build's environment (same documented gap as K1). PR
   AusPosRest/restiq-web#75 (issue #70).
+- **2026-08-29** - QR Self-Order CAP-2 (Menu browse and item detail): built
+  `src/app/qr/menu/` (`/qr/menu`, Q3 category tabs/search + item cards) and
+  `src/app/qr/menu/[itemId]/` (`/qr/menu/[itemId]`, Q4 variant chips, modifier groups
+  with visible min/max badges, qty stepper, sticky "Add to Cart") against the real,
+  merged backend contract
+  (`GET /guest/v1/menu`, `GET /guest/v1/menu/items/:id`, `POST /guest/v1/cart/lines` -
+  restiq-backend PRs #73/#74, read directly). An unavailable item stays visible,
+  desaturated, and labeled "Unavailable today" but is never clickable/addable, matching
+  the real `item_unavailable` server rule; a modifier selection violating min/max is
+  blocked client-side by the same gate the server enforces
+  (`modifier_selection_invalid`). Added a shared `src/app/qr/cart-summary.ts`
+  (`useCartSummary`/`summarizeCart`, polling the real `GET /guest/v1/cart` every 5s) and
+  `cart-pill.tsx` for the floating CartPill - a real count/total, not a fabricated stub,
+  explicitly left for issue #68's concurrent Table Order screen to adopt rather than
+  re-derive. Added a shared `session-ended-view.tsx` for the 410 `session_closed` case
+  every CAP-2 fetch can hit. Rebased to the corrected flat QR convention: post-session
+  screens live under `/qr` and use `decideGuestRoute`'s existing flat session gate,
+  while the table entry regex stays end-anchored so nested `/qr/t/...` paths cannot
+  bypass authentication. Honest about the schema gap: no photos, no
+  bilingual names, no veg/non-veg marker, no ratings/bestseller badge, no dish
+  description - all omitted, none fabricated (initial-letter tile stands in for a
+  photo). 46 new tests; 738/738 passing repo-wide; lint/typecheck/build clean. PR
+  AusPosRest/restiq-web#77 (issue #67).

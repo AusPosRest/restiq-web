@@ -29,6 +29,21 @@ describe("decideGuestRoute", () => {
     const live = `x.${Buffer.from(JSON.stringify({ exp: Math.floor(Date.now() / 1000) + 3600 })).toString("base64")}.x`;
     expect(decideGuestRoute("/qr/menu", "", live)).toEqual({ allow: true });
   });
+
+  it("keeps nested table menu routes behind the generic QR session gate", () => {
+    expect(decideGuestRoute("/qr/t/o1/t1/menu", "", undefined)).toEqual({ allow: false, redirectTo: "/qr" });
+  });
+
+  it("redirects a nested table menu route to /qr when the token is expired", () => {
+    const expired = `x.${Buffer.from(JSON.stringify({ exp: 1 })).toString("base64")}.x`;
+    expect(decideGuestRoute("/qr/t/o1/t1/menu", "", expired)).toEqual({ allow: false, redirectTo: "/qr" });
+  });
+
+  it("allows flat menu and item-detail routes with a live session token", () => {
+    const live = `x.${Buffer.from(JSON.stringify({ exp: Math.floor(Date.now() / 1000) + 3600 })).toString("base64")}.x`;
+    expect(decideGuestRoute("/qr/menu", "", live)).toEqual({ allow: true });
+    expect(decideGuestRoute("/qr/menu/item-9", "", live)).toEqual({ allow: true });
+  });
 });
 
 describe("parseGuestSessionDisplay", () => {
