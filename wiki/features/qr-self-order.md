@@ -228,3 +228,68 @@ This pass reconciled the guess against it:
   `pos/(shell)/shift/shift-state.ts#formatMinor` (₹ symbol, 2 decimals) - AD-4's
   realm-isolation rule (`app/qr` may not import from `app/pos`) means it can't be
   shared, same discipline that file's own header documents for itself.
+
+## CAP-2 - Menu browse and item detail (story 2, issue #67)
+
+- **Intent:** guests browse the real outlet menu (categories, item cards with price and
+  allergen tags) and configure variants/modifiers under exactly the POS's min/max rules;
+  an unavailable item stays visible but can't be added.
+- **Built:**
+  - **`src/app/qr/menu/`** (`/qr/menu`) - Q3 Menu Browse
+    (`page.tsx`/`menu-view.tsx`) and **`src/app/qr/menu/[itemId]/`**
+    (`/qr/menu/[itemId]`) - Q4 Item Detail (`page.tsx`/`item-detail-view.tsx`), both
+    flat session-gated routes per the corrected convention above.
+    `menu-state.ts` holds every pure rule (price resolution, search/category filtering,
+    modifier min/max validation, the sticky bar's confirm gate) - a fresh, small copy of
+    the same discipline as `pos/orders/[orderId]/order-taking-state.ts`'s ModifierSheet
+    logic (AD-4 forbids importing across `app/pos`/`app/qr`, and the two realms' menu
+    DTOs genuinely differ - see below).
+  - **Real contract, read directly off restiq-backend `dev`** (`src/guest/menu/
+    menu.dtos.ts` + `cart.dtos.ts`, PRs #73/#74 merged): `GET /guest/v1/menu` ->
+    `GuestMenuView { outletId, categories: [{ id, name, sortOrder, items: [...] }] }` -
+    items nest inside categories already, no separate flat list/categoryId join needed
+    client-side. `GET /guest/v1/menu/items/:itemId` powers Q4 directly. Notably,
+    `GuestMenuView` has **no top-level currency** (unlike the POS realm's menu view) -
+    every item/variant carries its own nullable `priceMinor`/`currency`, so this client
+    never assumes one global currency.
+  - **Add to cart:** Q4's sticky bar posts the real `POST /guest/v1/cart/lines`
+    (`{ itemId, variantId?, quantity, modifierIds? }`) through the existing `/qr/api`
+    pass-through. `item_unavailable` and `modifier_selection_invalid` (the exact codes
+    the real `cart.service.ts` throws) render as an inline error at the action, per
+    EXPERIENCE.md's error state pattern - never a raw crash. A successful add refreshes
+    the shared cart summary and returns the guest to the menu.
+  - **Session end (410):** every CAP-2 fetch (menu, item, add-to-cart) that gets back a
+    410 `session_closed` (the real `loadActiveSession` guard in `cart.service.ts`)
+    routes to a new shared `src/app/qr/session-ended-view.tsx` ("This table's session
+    has ended - scan again to start a new one") - no such shared state existed before
+    this story.
+  - **CartPill (shared with issue #68):** `src/app/qr/cart-summary.ts` exports
+    `useCartSummary()`/`summarizeCart()`/`TableCartView` wrapping the real
+    `GET /guest/v1/cart` - a real count/total, not a fabricated stub, polled every 5s
+    (EXPERIENCE.md Foundation). `src/app/qr/cart-pill.tsx` renders it (hidden while the
+    cart is empty, per EXPERIENCE.md's empty-state pattern). **Issue #68 (CAP-3's Table
+    Order/Q5 review screen), building concurrently, should adopt this hook/shape rather
+    than re-deriving count/total from its own parallel read of the same endpoint** -
+    the pill's `onClick` is presently a no-op placeholder since Q5 has no route on this
+    branch yet; #68 should wire it to `/qr/cart` once that lands.
+  - **`welcome-flow.tsx`** gained a "Browse Menu" sticky-bar CTA on both the
+    session-started and joined panels, linking to the new menu route - closing the gap
+    where CAP-1 had nowhere for a guest to go next.
+  - **Known, deliberate gaps - be honest, don't fabricate** (schema doesn't support
+    these; see `menu-state.ts`'s header comment for the full reasoning): no dish photos
+    (an initial-letter tile stands in), no bilingual (Hindi) names, no veg/non-veg FSSAI
+    marker, no star ratings, no "bestseller" badge, no dish description on Q4 - the real
+    `MenuItemView` has none of these fields. All are simply omitted, never invented.
+  - **a11y (WCAG 2.1 AA floor):** labeled search input, `role="tablist"` category tabs,
+    `aria-live` on the item list and the cart pill, unavailable items carry an explicit
+    "Unavailable today" text label (never color/opacity alone as the sole signal),
+    visible focus rings throughout, disabled-not-hidden confirm buttons.
+- **Test coverage:** 46 new tests across `menu-state.test.ts` (24, pure logic - price
+  resolution, filtering, min/max gating), `menu-view.test.tsx` (6 - category tabs skip
+  empty categories, unavailable items block the tap, search crosses categories,
+  410/network error states), `item-detail-view.test.tsx` (7 - confirm gated on
+  variant+modifier selection, posts the exact real cart-line body, inline error on
+  `item_unavailable`, 410 handling), `cart-summary.test.ts` (4), `cart-pill.test.tsx`
+  (2), plus `decideGuestRoute` coverage for flat menu/item routes and the anchored table
+  entry regex. 738/738 passing repo-wide at the time of the original CAP-2 branch;
+  rebase verification is tracked in the PR/build summary.

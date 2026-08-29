@@ -52,12 +52,12 @@ export const GUEST_DISPLAY_COOKIE = "guest_display";
 /**
  * Routing decision for a request under the /qr prefix. Other realms never
  * reach this - the proxy matcher is scoped to /qr (mirrors AD-4/AD-10/AD-13).
- * This story only ships the entry point (welcome + session PIN), which is
- * reachable by every guest regardless of session state - a session-gated
- * redirect only matters once later Q-screens (menu, cart, checkout, status)
- * land, so this stays a pass-through today with the same shape those
- * screens will need (expired-token redirect back to the table's welcome
- * page, never a dead end).
+ *
+ * The table entry point itself (welcome + session PIN, `/qr/t/{o}/{t}` with
+ * no further segments) is reachable by every guest regardless of session
+ * state - it's how a session starts in the first place. Later guest screens
+ * are flat routes under `/qr` (`/qr/menu`, `/qr/cart`, etc.) and require a
+ * live, non-expired session token.
  */
 export type GuestRouteDecision = { allow: true } | { allow: false; redirectTo: string };
 

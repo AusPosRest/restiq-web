@@ -21,6 +21,7 @@
 // started / joined / mode flip), inline errors via role="alert", solo-friendly
 // (starting auto-proceeds to the PIN screen with no extra ceremony).
 import { Check, Copy } from "lucide-react";
+import Link from "next/link";
 import { useState } from "react";
 import {
   appendDigit,
@@ -50,6 +51,7 @@ export function WelcomeFlow({
   outletId: string;
   tableId: string;
 }>) {
+  const menuHref = "/qr/menu";
   const [state, setState] = useState<WelcomeFlowState>(initialFlowState);
   // Bumped on every failed join attempt (or a mode flip) to remount JoinForm,
   // clearing its locally-tracked PIN digits back to blank (React key reset,
@@ -162,11 +164,11 @@ export function WelcomeFlow({
         {state.step === "start-form" ? (
           <StartForm state={state} onSubmit={startSession} onSwitchToJoin={switchToJoin} />
         ) : state.step === "started" ? (
-          <StartedPanel pin={state.pin} />
+          <StartedPanel pin={state.pin} menuHref={menuHref} />
         ) : state.step === "join-form" ? (
           <JoinForm key={joinAttempt} state={state} onSubmit={joinSession} onSwitchToStart={switchToStart} />
         ) : (
-          <JoinedPanel guestName={state.guestName} />
+          <JoinedPanel guestName={state.guestName} menuHref={menuHref} />
         )}
       </div>
     </main>
@@ -263,7 +265,7 @@ function StartForm({
   );
 }
 
-function StartedPanel({ pin }: Readonly<{ pin: string }>) {
+function StartedPanel({ pin, menuHref }: Readonly<{ pin: string; menuHref: string }>) {
   const [copied, setCopied] = useState(false);
 
   async function copyPin() {
@@ -310,6 +312,16 @@ function StartedPanel({ pin }: Readonly<{ pin: string }>) {
       <p className="mt-6 text-center text-xs text-muted-foreground">
         Everyone at the table adds to one shared order - the bill can be split at payment.
       </p>
+
+      <div className="fixed inset-x-0 bottom-0 border-t border-border bg-background/95 p-4 backdrop-blur">
+        <Link
+          href={menuHref}
+          data-testid="qr-browse-menu"
+          className="flex w-full items-center justify-center rounded-xl bg-primary px-4 py-4 text-base font-semibold text-primary-foreground transition-opacity focus-visible:outline focus-visible:outline-2 focus-visible:outline-ring"
+        >
+          Browse Menu
+        </Link>
+      </div>
     </div>
   );
 }
@@ -443,12 +455,22 @@ function JoinForm({
   );
 }
 
-function JoinedPanel({ guestName }: Readonly<{ guestName: string }>) {
+function JoinedPanel({ guestName, menuHref }: Readonly<{ guestName: string; menuHref: string }>) {
   return (
     <div data-testid="qr-joined" className="flex flex-col items-center text-center">
       <Check className="size-8 rounded-full bg-status-available/20 p-1.5 text-status-available" aria-hidden="true" />
       <h2 className="mt-3 font-headline text-xl font-semibold text-foreground">You&apos;re in, {guestName}</h2>
       <p className="mt-1 text-sm text-muted-foreground">You&apos;ve joined your table&apos;s shared order.</p>
+
+      <div className="fixed inset-x-0 bottom-0 border-t border-border bg-background/95 p-4 backdrop-blur">
+        <Link
+          href={menuHref}
+          data-testid="qr-browse-menu"
+          className="flex w-full items-center justify-center rounded-xl bg-primary px-4 py-4 text-base font-semibold text-primary-foreground transition-opacity focus-visible:outline focus-visible:outline-2 focus-visible:outline-ring"
+        >
+          Browse Menu
+        </Link>
+      </div>
     </div>
   );
 }
