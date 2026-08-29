@@ -646,7 +646,8 @@ faked.
   roll-up/progress/ageing/sort/waiting-on logic, and a fake-timer
   integration suite covering two-station consolidation, the Waiting-On
   panel, a readiness chip flipping Cooking->Ready on bump, an order going
-  fully Ready, and poll-failure stale-board behavior), 754/754 passing
-  repo-wide; lint/typecheck/build clean. No live-backend run available in
-  this build's environment (same documented gap as K1). PR
+  fully Ready, and poll-failure stale-board behavior), 762/762 passing
+  repo-wide (after rebasing onto sibling story #72's K4 all-day-summary
+  merge); lint/typecheck/build clean. No live-backend run available in this
+  build's environment (same documented gap as K1). PR
   AusPosRest/restiq-web#75 (issue #70).
