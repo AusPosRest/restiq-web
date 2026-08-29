@@ -5,11 +5,14 @@
 - **CAP-2** Station queue - a cook sees their station's queued tickets
   oldest-left, with ageing colors from the station's own threshold, and can
   bump, recall, or refire.
+- **CAP-5** All-day production summary - the kitchen sees live per-item
+  production counts across all open (queued) tickets, sorted highest-count-
+  first, that decrement as items bump within the same ~5s poll cycle.
 
 CAP-1 (ticket domain, routing, fire-on-send) is backend-only, shipped in
 restiq-backend PR #70 (issue #67) - this story consumes it verbatim. CAP-3
-(Expo), CAP-4 (Bumped/recall), CAP-5 (All-day summary) are later sibling
-stories; this story only establishes the shell/nav slots for them.
+(Expo), CAP-4 (Bumped/recall) are later sibling stories; those still only get
+the shell/nav slots established by issue #66.
 
 ## What's built
 
@@ -43,10 +46,11 @@ stories; this story only establishes the shell/nav slots for them.
   - that's what the header's "Change station" control links to.
 - `src/app/kds/(shell)/kds-header.tsx` - the shared quiet header every mode
   renders: current station/mode title, Station/Expo/Bumped/All-Day nav,
-  Change station, Sign out. Expo/Bumped/All-Day
-  (`src/app/kds/(shell)/{expo,bumped,all-day}/page.tsx`) are real routes
-  rendering a `ComingSoon` placeholder - inert until stories 3-5 replace
-  them.
+  Change station, Sign out. Expo/Bumped
+  (`src/app/kds/(shell)/{expo,bumped}/page.tsx`) are real routes rendering a
+  `ComingSoon` placeholder - inert until stories 3-4 replace them. All-Day
+  (`src/app/kds/(shell)/all-day/page.tsx`) is real as of this story (K4,
+  issue #72).
 - K1 Station Queue (`src/app/kds/(shell)/station/`):
   - `station-queue-state.ts` - pure logic: `ageingLevel` (blue/yellow/red),
     `formatElapsed`, `sortOldestFirst`, `orderTypeLabel`,
@@ -65,6 +69,21 @@ stories; this story only establishes the shell/nav slots for them.
     poll failure, skeleton on first load, calm "No open tickets" empty
     state, the oldest-left ticket rail.
 
+- K4 All-Day Production Summary (`src/app/kds/(shell)/all-day/`, CAP-5,
+  issue #72):
+  - `all-day-summary-state.ts` - pure logic: `sortHighestCountFirst`
+    (highest-count-first; this story's documented sort choice - the
+    backend's `GET .../all-day-summary` returns alphabetical-by-name, see
+    Key decisions below).
+  - `use-all-day-summary.ts` - the same ~5s poll shape as K1's
+    `use-station-queue.ts` (stale-on-failure, never blank-and-repaint).
+  - `all-day-summary-screen.tsx` - the `AllDayCountGrid`: one tile per item
+    (large tabular-numeral count + item name), reconnecting/load-failed
+    notices identical in wording to K1's, skeleton on first load, calm
+    "No open tickets" empty state.
+  - `page.tsx` renders the screen directly, mirroring K1's
+    `station/[stationId]/page.tsx` shape.
+
 ## Integration points for later stories
 
 - **The shell (issue #66) is the contract for K2-K4.** `KdsHeader`,
@@ -77,18 +96,23 @@ stories; this story only establishes the shell/nav slots for them.
   against `GET .../bumped` results, not build its own ticket rendering.
 - **Poll convention:** a `~5s` interval hook shaped like
   `use-station-queue.ts` (stale-on-failure, `refresh()` for post-mutation
-  immediacy) - K2/K4 should copy this shape for their own reads
-  (`/expo`, `/all-day-summary`) rather than inventing a different polling
-  pattern.
+  immediacy) - K2/K3 should copy this shape for their own reads (`/expo`,
+  `/bumped`) rather than inventing a different polling pattern. K4's
+  `use-all-day-summary.ts` already does this (no `refresh()` - the all-day
+  screen has no mutating actions of its own).
 - **API convention:** every kitchen read/write goes through
   `src/app/kds/api.ts`'s `kdsApi()` helper and the `/kds/api/[...path]`
-  pass-through - no new proxy route is needed for K2-K5, only new functions
+  pass-through - no new proxy route is needed for K2-K3, only new functions
   in `api.ts` mirroring the backend's already-committed
-  `tickets.dtos.ts`/`tickets.controller.ts` shapes.
+  `tickets.dtos.ts`/`tickets.controller.ts` shapes. K4 added
+  `AllDaySummaryEntryView`/`allDaySummary()` this way, verbatim from
+  restiq-backend's `tickets.dtos.ts`/`tickets.controller.ts` (`GET
+  outlets/:outletId/all-day-summary`).
 - **KdsHeader's `activeMode`** already has `"expo" | "bumped" | "all-day"`
-  cases wired to real (placeholder) routes - a sibling story's page.tsx
-  just needs to replace its `ComingSoon` body with the real screen and pass
-  its own `activeMode`.
+  cases wired to real routes - a sibling story's page.tsx just needs to
+  replace its `ComingSoon` body with the real screen and pass its own
+  `activeMode` (K4 did exactly this for `"all-day"`; K2/K3 still owe it for
+  `"expo"`/`"bumped"`).
 
 ## Key decisions
 
@@ -134,6 +158,22 @@ stories; this story only establishes the shell/nav slots for them.
   (SPEC.md's CAP-2 success line doesn't mention it). Flagged here as a
   known simplification for a future visual-polish pass, not a missed
   requirement.
+- **The all-day grid sorts highest-count-first, not the backend's
+  alphabetical order.** `GET .../all-day-summary` (restiq-backend's real,
+  merged `tickets.service.ts`) returns entries alphabetical-by-`itemName`.
+  SPEC.md's CAP-5 success line only requires counts to derive from real
+  queued lines and decrement on bump within a poll cycle - it names no
+  order. This client's call: a wall display exists to be scanned in
+  passing, so what's busiest belongs first, not what starts with "A".
+  `all-day-summary-state.ts`'s `sortHighestCountFirst` re-sorts client-side;
+  ties keep the backend's alphabetical order (`Array.sort` is stable) so the
+  grid doesn't jitter between polls when two counts happen to match.
+  Revisit if a future story wants this configurable.
+- **No `refresh()` escape hatch on `use-all-day-summary.ts`.** K1's
+  `use-station-queue.ts` exposes `refresh()` so a just-issued bump/recall/
+  refire can force an immediate re-poll. The all-day screen has no mutating
+  actions of its own (SPEC's CAP-5 scope is read-only), so there is nothing
+  to force a re-poll after - keeping it out avoids dead API surface.
 - **Bump/recall/refire have no automated live-backend verification in this
   story.** No local restiq-backend/Postgres instance was available in this
   build's environment, so the fire->queue->bump loop is covered only by
