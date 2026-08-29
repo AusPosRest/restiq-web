@@ -178,6 +178,17 @@
   --color-error-container: var(--error-container);
   --font-headline: var(--font-hanken-grotesk);
   --font-label: var(--font-public-sans);
+
+  /* KDS ticket-state vocabulary (issue #66) - registered globally so the
+     bg-ticket, text-ticket, and border-ticket utility families work, but
+     the values themselves are set only inside .kds-theme below: DESIGN.md
+     is explicit these are fixed safety colors, never themeable, so no
+     other surface should ever define them. */
+  --color-ticket-new: var(--ticket-new);
+  --color-ticket-ageing: var(--ticket-ageing);
+  --color-ticket-urgent: var(--ticket-urgent);
+  --color-ticket-bumped: var(--ticket-bumped);
+  --color-ticket-recalled: var(--ticket-recalled);
 }
 
 /* RESTIQ POS Cashier & Waiter - the /pos surface's theme (ux-pos-cashier-
@@ -292,6 +303,48 @@
   --nonveg-marker: #ef4444;
   --step-active: #f59e0b;
   --step-done: #22c55e;
+  --error: #ffb4ab;
+
+  --font-sans: var(--font-inter);
+  font-family: var(--font-inter), Inter, sans-serif;
+}
+
+/* RESTIQ Kitchen Display (KDS) - the /kds surface's theme (issue #66,
+   ux-kitchen-display DESIGN.md). Deliberately its own, darker ground
+   (#0E0E10, not the #131315 the other staff surfaces share) - DESIGN.md
+   resolves the design-system file's internal background conflict "in favor
+   of the writeup": maximizing ticket-card contrast under bright kitchen
+   lighting. The ticket-state colors are safety-critical and fixed - never
+   themeable, never reused for anything decorative, never touched by tenant
+   branding tokens (Tenant Admin CAP-10) - so unlike every other surface's
+   status vocabulary above, a re-skin must NOT touch these five values. */
+.kds-theme {
+  --background: #0e0e10;
+  --foreground: #f5f5f4;
+  --card: #1c1c1e;
+  --card-foreground: #f5f5f4;
+  --popover: #26262a;
+  --popover-foreground: #f5f5f4;
+  --primary: #f59e0b;
+  --primary-foreground: #472a00;
+  --secondary: #26262a;
+  --secondary-foreground: #f5f5f4;
+  --muted: #1f1f21;
+  --muted-foreground: #a1a1aa;
+  --accent: #26262a;
+  --accent-foreground: #f5f5f4;
+  --destructive: #ef4444;
+  --border: #3f3f46;
+  --input: #26262a;
+  --ring: #f59e0b;
+  --radius: 8px;
+
+  /* Fixed ticket-state safety colors (DESIGN.md) - never themeable. */
+  --ticket-new: #3b82f6;
+  --ticket-ageing: #eab308;
+  --ticket-urgent: #ef4444;
+  --ticket-bumped: #22c55e;
+  --ticket-recalled: #ef4444;
   --error: #ffb4ab;
 
   --font-sans: var(--font-inter);
