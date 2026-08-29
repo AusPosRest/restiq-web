@@ -649,4 +649,4 @@ faked.
   fully Ready, and poll-failure stale-board behavior), 754/754 passing
   repo-wide; lint/typecheck/build clean. No live-backend run available in
   this build's environment (same documented gap as K1). PR
-  AusPosRest/restiq-web#TBD (issue #70).
+  AusPosRest/restiq-web#75 (issue #70).
