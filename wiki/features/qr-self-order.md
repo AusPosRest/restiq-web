@@ -219,15 +219,77 @@ This pass reconciled the guess against it:
   is also the exact literal `decideGuestRoute`'s own pre-existing test used as its
   "future gated path" example. **Needs reconciliation** once #67 actually lands, if its
   route differs.
-- **"Place order" (CAP-4) is deliberately not built here** - it's issue #68's sibling
-  scope, a separate story. The sticky bottom bar renders it in its final position and
-  size (disabled, `title="Coming next"`, with a quiet "Placing the order is coming next"
-  caption beneath) rather than omitting it, so CAP-4 only has to wire one button up
-  without reflowing the layout.
 - **Money formatting:** `cart-state.ts#formatMinor` is a small, deliberate duplicate of
   `pos/(shell)/shift/shift-state.ts#formatMinor` (₹ symbol, 2 decimals) - AD-4's
   realm-isolation rule (`app/qr` may not import from `app/pos`) means it can't be
   shared, same discipline that file's own header documents for itself.
+
+## CAP-4 - Place order into the real pipeline (story 4, issue #78)
+
+- **Intent:** Q5's "Place order" CTA - previously permanently disabled with a
+  "coming next" caption (story 3's placeholder, same position/size so this story only
+  had to wire one button) - converts the session's shared cart into a real order fired
+  to the kitchen, per EXPERIENCE.md's "Place order is the surface's biggest commitment".
+- **Built against the real, merged backend contract** (restiq-backend PR #79,
+  `src/guest/orders/orders.{controller,dtos,service}.ts`, read directly - the local
+  checkout of `restiq-backend`'s `dev` was stale and needed a fetch to reach it):
+  `POST /guest/v1/orders` (guest token, no body) -> 201 `PlacedOrderView { orderId,
+  tableId, status: 'sent', source: 'qr', sessionId, lines: PlacedOrderLineView[] }`
+  where each line carries `{ id, itemId, itemName, variantId, variantName, quantity,
+  unitPriceMinor, seatNumber, guestId, guestName, modifiers }`; 400 `empty_cart`
+  (nothing in the session's cart); 400 `no_price` (an item's price disappeared between
+  cart-add and placement); 410 `session_closed`.
+- **`cart-api.ts`** gained `placeOrder()` (posts through the existing `/qr/api`
+  pass-through, same `guestApi` wrapper every other cart call uses) plus the
+  `PlacedOrderView`/`PlacedOrderLineView`/`PlacedOrderLineModifierView` types, copied
+  field-for-field from the real `orders.dtos.ts`.
+- **The CTA** (`cart-screen.tsx`) is enabled exactly when `isCartEmpty(cart)` is false -
+  the same pure helper story 3 already had, no new gating logic. A tap posts
+  `placeOrder()`; while in flight the button reads "Placing order…" and is disabled to
+  prevent a double-tap from this same guest queuing a second request.
+- **Success:** there is no Q6 Checkout or Q7 Order Status route on this branch yet
+  (separate stories, story 6/issue #78's own sibling scope is Q7), so a placed order
+  swaps Q5 for a small, un-numbered confirmation state rather than navigating into
+  either - the order id (last 6 characters, uppercased, since nothing in the response
+  is meant to be a human-facing order number), "Sent to the kitchen", and a per-guest
+  line summary grouped straight from the real `PlacedOrderView.lines` (`cart-state.ts`'s
+  new `groupPlacedOrderLinesByGuest`, a pure, tested helper - first-appearance order,
+  no framework dependency, same discipline as `isCartEmpty`/`isOwnLine`). A "Track your
+  order" link points at the conventional flat path `/qr/status` (session-gated,
+  matching the same routing convention `MENU_ROUTE`'s comment documents) - issue #78's
+  sibling story (Q7 stepper) had no merged route as of this build, so the link may 404
+  until it lands; **this story does not build the stepper**, per its own scope.
+- **Errors, each handled per EXPERIENCE.md's "Error" state pattern (named inline at the
+  action, never a raw crash):**
+  - `empty_cart` on a *literally* empty cart is unreachable from this UI - the CTA is
+    disabled first. The only way this code actually surfaces is the race below.
+  - 410 `session_closed` (the session ended between page load and the tap) routes to
+    the same `SessionEndedPanel` a stale poll would have reached anyway - no new state.
+  - `no_price` renders the backend's own message inline at the sticky bar, untouched -
+    same convention as CAP-1's PIN errors and CAP-2's `item_unavailable`.
+- **Concurrent placement (EXPERIENCE.md's own named state): "if two guests hit 'Place
+  order' near-simultaneously, one succeeds and the other converges to the placed state
+  ... no error shown for the race."** Read the real `orders.service.ts` transaction to
+  find out what the loser actually gets back, rather than guessing: placement loads the
+  session's `CartLine`s inside one transaction, 400s `empty_cart` if none exist, and
+  deletes every `CartLine` on success. A second guest's `placeOrder()` that starts after
+  the first has committed therefore reads zero `CartLine`s and gets back the **exact
+  same 400 `empty_cart`** a genuinely empty cart would - the backend has no distinct
+  "someone already placed this" error code. Since the CTA is only ever tappable against
+  a locally-known non-empty cart, any `empty_cart` response to an actual tap is by
+  construction this race, not a real validation failure. `cart-screen.tsx`'s
+  `handlePlaceOrder` treats it that way: on `empty_cart`, re-fetch `GET /guest/v1/cart`
+  to confirm convergence (push the fresh cart into the existing poll state either way);
+  if it now reads empty, land on the same "Sent to the kitchen" outcome the winner
+  sees (`OrderPlacedElsewhere`, no order-specific detail since the loser's own request
+  never got a `PlacedOrderView` to show) - never the plain-inline-error path. If the
+  re-fetch somehow still shows a non-empty cart (not reachable in practice against the
+  real transaction above), it falls back to a plain "couldn't place the order" inline
+  error rather than silently pretending convergence.
+- **a11y:** the placement error reuses the sticky bar's existing `role="alert"`
+  pattern; the confirmation and race-convergence states are plain landmark `<main>`s
+  with a real `<h1>`, no live region needed since they fully replace the screen (no
+  partial update for a screen reader to catch mid-flight).
 
 ## CAP-2 - Menu browse and item detail (story 2, issue #67)
 

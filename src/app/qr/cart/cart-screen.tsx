@@ -8,16 +8,29 @@
 // reachable from this UI at all (a friend's phone simply has no button to
 // press), matching CAP-3's success criterion.
 //
-// "Place order" (CAP-4) is the next story (issue #68's sibling scope, not
-// this one) - it renders disabled with a quiet "coming next" note rather
-// than being omitted outright, so Q5's layout and sticky bar are already in
-// their final shape and CAP-4 only has to wire one button up.
+// "Place order" (CAP-4, issue #77): posts the real `POST /guest/v1/orders`
+// (restiq-backend PR #79, read directly - src/guest/orders/orders.{dtos,
+// service}.ts) through the existing /qr/api pass-through. There is no Q6
+// Checkout or Q7 Order Status route on this branch yet (separate stories),
+// so success swaps Q5 for a small, un-numbered confirmation state rather
+// than navigating into either - order id, "Sent to the kitchen", and a
+// per-guest line summary straight from the real `PlacedOrderView`, plus a
+// "Track your order" link to the conventional `/qr/status` path (see
+// STATUS_ROUTE below).
 import { Minus, Plus, Trash2 } from "lucide-react";
 import Link from "next/link";
 import { useState } from "react";
 import { GuestApiError } from "../api-client";
-import { removeCartLine, updateCartLineQuantity, type CartLineView, type TableCartView } from "./cart-api";
-import { formatMinor, isCartEmpty } from "./cart-state";
+import {
+  fetchCart,
+  placeOrder,
+  removeCartLine,
+  updateCartLineQuantity,
+  type CartLineView,
+  type PlacedOrderView,
+  type TableCartView,
+} from "./cart-api";
+import { formatMinor, groupPlacedOrderLinesByGuest, isCartEmpty } from "./cart-state";
 import { CART_POLL_MS, useCartPoll } from "./use-cart-poll";
 
 // Conventional route for Q3 Menu Browse (CAP-2, issue #67 - built
@@ -29,16 +42,47 @@ import { CART_POLL_MS, useCartPoll } from "./use-cart-poll";
 // wiki/features/qr-self-order.md for the reconciliation note once #67 lands.
 const MENU_ROUTE = "/qr/menu";
 
+// Q7 Order Status (story 6, issue #78's sibling scope) is being built
+// concurrently and has no merged route as of this build - `/qr/status` is
+// the conventional flat, session-gated path per the same routing convention
+// MENU_ROUTE above documents. The link may 404 until that story lands; this
+// story does not build the stepper itself. Needs reconciliation once #78's
+// sibling story actually merges, if its route differs.
+const STATUS_ROUTE = "/qr/status";
+
 export function CartScreen({ myGuestId }: Readonly<{ myGuestId: string }>) {
   const poll = useCartPoll();
+  const [placedOrder, setPlacedOrder] = useState<PlacedOrderView | null>(null);
+  // Set when this guest's own "Place order" tap raced another guest's and
+  // lost - the backend's real response for that race is 400 `empty_cart`
+  // (the cart the loser tried to place had already been consumed by the
+  // winner's transaction), which converges here rather than reading as a
+  // generic failure (EXPERIENCE.md "Concurrent placement").
+  const [placedElsewhere, setPlacedElsewhere] = useState(false);
+  // Set only when placing itself 410s (the session closed between page load
+  // and the tap) - the ongoing cart poll would eventually reach the same
+  // state, but there's no reason to wait for the next tick.
+  const [sessionEndedByPlacement, setSessionEndedByPlacement] = useState(false);
 
-  if (poll.sessionClosed) return <SessionEndedPanel />;
+  if (placedOrder) return <PlacedConfirmation order={placedOrder} />;
+  if (placedElsewhere) return <OrderPlacedElsewhere />;
+  if (poll.sessionClosed || sessionEndedByPlacement) return <SessionEndedPanel />;
   if (poll.loading) return <LoadingSkeleton />;
   if (poll.failed || !poll.data) {
     return <ErrorPanel onRetry={poll.retry} />;
   }
 
-  return <CartLoaded cart={poll.data} myGuestId={myGuestId} stale={poll.stale} onUpdate={poll.applyUpdate} />;
+  return (
+    <CartLoaded
+      cart={poll.data}
+      myGuestId={myGuestId}
+      stale={poll.stale}
+      onUpdate={poll.applyUpdate}
+      onPlaced={setPlacedOrder}
+      onPlacedElsewhere={() => setPlacedElsewhere(true)}
+      onSessionEnded={() => setSessionEndedByPlacement(true)}
+    />
+  );
 }
 
 function CartLoaded({
@@ -46,14 +90,22 @@ function CartLoaded({
   myGuestId,
   stale,
   onUpdate,
+  onPlaced,
+  onPlacedElsewhere,
+  onSessionEnded,
 }: Readonly<{
   cart: TableCartView;
   myGuestId: string;
   stale: boolean;
   onUpdate: (next: TableCartView) => void;
+  onPlaced: (order: PlacedOrderView) => void;
+  onPlacedElsewhere: () => void;
+  onSessionEnded: () => void;
 }>) {
   const [busyLineId, setBusyLineId] = useState<string | null>(null);
   const [actionError, setActionError] = useState<string | null>(null);
+  const [placing, setPlacing] = useState(false);
+  const [placeError, setPlaceError] = useState<string | null>(null);
 
   function runMutation(lineId: string, request: Promise<TableCartView>) {
     setActionError(null);
@@ -74,6 +126,50 @@ function CartLoaded({
 
   function remove(line: CartLineView) {
     runMutation(line.id, removeCartLine(line.id));
+  }
+
+  async function handlePlaceOrder() {
+    setPlaceError(null);
+    setPlacing(true);
+    try {
+      const order = await placeOrder();
+      onPlaced(order);
+      return;
+    } catch (error) {
+      if (error instanceof GuestApiError) {
+        if (error.status === 410) {
+          onSessionEnded();
+          return;
+        }
+        if (error.code === "empty_cart") {
+          // The only way this UI can reach `empty_cart` is a race: the CTA
+          // is disabled whenever the locally-known cart is empty, so a
+          // non-empty cart that 400s this way means another guest's place
+          // already consumed it first. Re-fetch to confirm convergence
+          // (EXPERIENCE.md "Concurrent placement": no error shown for the
+          // race) rather than trusting the error alone.
+          const fresh = await fetchCart().catch(() => null);
+          if (fresh) {
+            onUpdate(fresh);
+            if (isCartEmpty(fresh)) {
+              onPlacedElsewhere();
+              return;
+            }
+          }
+          setPlaceError("Couldn't place the order - please try again.");
+          setPlacing(false);
+          return;
+        }
+        // no_price and any other real error code: the backend's own
+        // message, passed through untouched (same convention as the PIN
+        // errors in welcome-flow.tsx).
+        setPlaceError(error.message);
+        setPlacing(false);
+        return;
+      }
+      setPlaceError("Couldn't place the order - please try again.");
+      setPlacing(false);
+    }
   }
 
   const empty = isCartEmpty(cart);
@@ -116,6 +212,11 @@ function CartLoaded({
       </div>
 
       <div className="fixed inset-x-0 bottom-0 border-t border-border bg-background/95 p-4 backdrop-blur">
+        {placeError ? (
+          <p role="alert" data-testid="cart-place-order-error" className="mb-2 text-sm text-error-soft">
+            {placeError}
+          </p>
+        ) : null}
         <div className="flex items-baseline justify-between">
           <span className="text-sm font-medium text-muted-foreground">Table total</span>
           <span data-testid="cart-total" className="font-headline text-2xl font-bold tabular-nums text-foreground">
@@ -125,14 +226,13 @@ function CartLoaded({
         <button
           type="button"
           data-testid="cart-place-order"
-          disabled
-          aria-disabled="true"
-          title="Coming next"
-          className="mt-3 w-full rounded-xl bg-primary px-4 py-4 text-base font-semibold text-primary-foreground opacity-50"
+          disabled={empty || placing}
+          aria-disabled={empty || placing}
+          onClick={handlePlaceOrder}
+          className="mt-3 w-full rounded-xl bg-primary px-4 py-4 text-base font-semibold text-primary-foreground transition-opacity disabled:opacity-50"
         >
-          Place order
+          {placing ? "Placing order…" : "Place order"}
         </button>
-        <p className="mt-2 text-center text-xs text-muted-foreground">Placing the order is coming next</p>
       </div>
     </main>
   );
@@ -282,6 +382,76 @@ function EmptyState() {
         Browse the menu
       </Link>
     </div>
+  );
+}
+
+// Un-numbered confirmation state (not one of screens.md's Q1-Q7): Q6
+// Checkout and Q7 Order Status don't have routes on this branch yet
+// (separate stories), so a successful placement lands here instead of
+// navigating into either - order id, "Sent to the kitchen", and the real
+// per-guest line summary straight from the response body PlacedOrderView
+// carries, per EXPERIENCE.md's "Place order is the surface's biggest
+// commitment".
+function PlacedConfirmation({ order }: Readonly<{ order: PlacedOrderView }>) {
+  const groups = groupPlacedOrderLinesByGuest(order);
+  return (
+    <main data-testid="cart-placed" className="flex min-h-screen flex-1 flex-col items-center px-6 pb-12 pt-16 text-center">
+      <h1 className="font-headline text-2xl font-semibold text-foreground">Sent to the kitchen</h1>
+      <p data-testid="cart-placed-order-id" className="mt-2 text-sm text-muted-foreground">
+        Order #{order.orderId.slice(-6).toUpperCase()}
+      </p>
+
+      <div className="mt-8 flex w-full max-w-sm flex-col gap-4 text-left">
+        {groups.map((group) => (
+          <section key={group.guestId} data-testid={`cart-placed-guest-${group.guestId}`} className="rounded-xl border border-border bg-card p-4">
+            <span className="inline-flex items-center gap-1.5 rounded-full bg-accent px-2.5 py-1 text-xs font-medium text-accent-foreground">
+              {group.guestName}
+            </span>
+            <ul className="mt-3 flex flex-col gap-1.5">
+              {group.lines.map((line) => (
+                <li key={line.id} data-testid={`cart-placed-line-${line.id}`} className="flex items-center justify-between text-sm">
+                  <span className="text-foreground">
+                    {line.itemName}
+                    {line.variantName ? <span className="text-muted-foreground"> · {line.variantName}</span> : null}
+                  </span>
+                  <span className="text-muted-foreground">×{line.quantity}</span>
+                </li>
+              ))}
+            </ul>
+          </section>
+        ))}
+      </div>
+
+      <TrackOrderLink />
+    </main>
+  );
+}
+
+// The convergence half of EXPERIENCE.md's "Concurrent placement" state: this
+// guest's own place attempt raced another guest's and lost (the real
+// backend's `empty_cart` on an already-consumed cart, confirmed by a
+// re-fetch - see cart-screen.tsx's handlePlaceOrder). There is no
+// `PlacedOrderView` to show for this guest's own request, so this renders
+// the same warm outcome without order-specific detail rather than an error.
+function OrderPlacedElsewhere() {
+  return (
+    <main data-testid="cart-order-placed-elsewhere" className="flex min-h-screen flex-1 flex-col items-center justify-center px-6 py-12 text-center">
+      <h1 className="font-headline text-2xl font-semibold text-foreground">Sent to the kitchen</h1>
+      <p className="mt-3 max-w-sm text-sm text-muted-foreground">Someone at your table already placed it.</p>
+      <TrackOrderLink />
+    </main>
+  );
+}
+
+function TrackOrderLink() {
+  return (
+    <Link
+      href={STATUS_ROUTE}
+      data-testid="cart-track-order"
+      className="mt-8 rounded-lg border border-border px-4 py-2.5 text-sm font-medium text-foreground focus-visible:outline focus-visible:outline-2 focus-visible:outline-ring"
+    >
+      Track your order
+    </Link>
   );
 }
 
