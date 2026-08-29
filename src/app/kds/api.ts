@@ -74,9 +74,31 @@ export interface TicketView {
   lines: TicketLineView[];
 }
 
+/** One station's slice of an expo order - `ready` is true only once every ticket at this station for this order has been bumped. */
+export interface ExpoStationEntryView {
+  stationId: string | null;
+  stationName: string | null;
+  ready: boolean;
+  tickets: TicketView[];
+}
+
+/** One consolidated order for K2 Expo (CAP-3) - `waitingOn` is exactly the not-yet-bumped, non-voided lines across every station for this order (backend-computed, not re-derived client-side). */
+export interface ExpoOrderView {
+  orderId: string;
+  tableLabel: string | null;
+  tokenNumber: number | null;
+  stations: ExpoStationEntryView[];
+  waitingOn: TicketLineView[];
+}
+
 /** GET /kitchen/v1/outlets/:outletId/stations - the station-picker list. */
 export function listStations(outletId: string): Promise<StationView[]> {
   return kdsApi<StationView[]>(`outlets/${encodeURIComponent(outletId)}/stations`);
+}
+
+/** GET /kitchen/v1/outlets/:outletId/expo - every still-in-flight ("sent") order, consolidated across stations (CAP-3). */
+export function expoBoard(outletId: string): Promise<ExpoOrderView[]> {
+  return kdsApi<ExpoOrderView[]>(`outlets/${encodeURIComponent(outletId)}/expo`);
 }
 
 /**
