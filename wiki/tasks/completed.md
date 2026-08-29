@@ -1,5 +1,35 @@
 # Completed
 
+- **2026-08-29** - QR self-order story 4: wire Place order to the real
+  placement endpoint (CAP-4). `/qr/cart` (`cart-screen.tsx`) - the "Place
+  order" CTA (previously permanently disabled, a placeholder from story 3)
+  now posts the real `POST /guest/v1/orders` (restiq-backend PR #79, read
+  directly - `src/guest/orders/orders.{controller,dtos,service}.ts`) through
+  the existing `/qr/api` pass-through: enabled only while the cart has
+  items, success swaps the screen for a small un-numbered confirmation
+  state (order id, "Sent to the kitchen", a per-guest line summary straight
+  from the real `PlacedOrderView`, and a "Track your order" link to the
+  conventional `/qr/status` path - story 6/issue #78's sibling scope, not
+  yet merged, so the link may 404 until it lands; no stepper built here).
+  Errors: `empty_cart` on a genuinely empty cart can't be reached (the CTA
+  is disabled first), 410 `session_closed` routes to the existing
+  session-ended state, `no_price` renders the backend's own message inline.
+  **Concurrent placement** (EXPERIENCE.md): the real backend has no
+  separate "already placed" error - a second guest's place attempt that
+  races and loses gets back the identical `empty_cart` 400 a genuinely
+  empty cart would, because `orders.service.ts`'s transaction has already
+  deleted the winner's `CartLine`s by the time the loser's request reads
+  them. The UI treats any `empty_cart` response to a tap on a
+  locally-known-non-empty cart as that race, re-fetches the cart to confirm
+  convergence, and - if it now reads empty - lands the loser on the same
+  warm "Sent to the kitchen" outcome (without order-specific detail, since
+  the loser's own request never got a `PlacedOrderView`) instead of an
+  error tone. Added `placeOrder()` + `PlacedOrderView`/`PlacedOrderLineView`
+  types to `cart-api.ts` and a pure `groupPlacedOrderLinesByGuest` helper to
+  `cart-state.ts`. See
+  [wiki/features/qr-self-order.md](../features/qr-self-order.md). Issue
+  AusPosRest/restiq-web#78.
+
 - **2026-08-29** - QR self-order story 3: shared group cart and table order
   review (CAP-3). `/qr/cart` (`src/app/qr/cart/`) - grouped by guest with
   per-guest subtotals and a combined total, own lines editable (quantity
