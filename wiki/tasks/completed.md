@@ -1,5 +1,26 @@
 # Completed
 
+- **2026-08-29** - QR self-order story 6: guest order status stepper
+  (CAP-6). `/qr/status` (`src/app/qr/status/`) - every order the table's
+  session has placed, newest first, each with a `StatusStepper` (Placed,
+  Accepted, Preparing, Ready - amber active, green done) against the real,
+  merged `GET /guest/v1/session/orders` (restiq-backend PR #83, read
+  directly - `src/guest/orders/orders.{controller,dtos,service}.ts`). The
+  highlight is a plain index comparison against the backend's own "furthest
+  reached" `step` field, never a re-derivation from `reachedAt` - the two
+  agree by construction per `buildOrderStatusView`'s own invariant. `~5s`
+  polling (`STATUS_POLL_MS`) mirrors `use-cart-poll.ts` exactly: updates in
+  place, a failed poll after the first keeps the last-known list with a
+  quiet staleness note, a 410 flips to the existing `SessionEndedView` and
+  stops the interval. Empty state ("No orders yet") links back to
+  `/qr/menu`. Wired `--color-step-active`/`--color-step-done` into the
+  global Tailwind theme (previously declared in `.qr-theme` by story 1 but
+  never mapped to a utility class - this is the first story to use them).
+  Verified story 4's "Track your order" link resolves for real now (no
+  longer the documented 404-risk guess its comment carried). See
+  [wiki/features/qr-self-order.md](../features/qr-self-order.md). Issue
+  AusPosRest/restiq-web#82.
+
 - **2026-08-29** - QR self-order story 4: wire Place order to the real
   placement endpoint (CAP-4). `/qr/cart` (`cart-screen.tsx`) - the "Place
   order" CTA (previously permanently disabled, a placeholder from story 3)

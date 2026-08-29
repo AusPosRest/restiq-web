@@ -291,6 +291,91 @@ This pass reconciled the guess against it:
   with a real `<h1>`, no live region needed since they fully replace the screen (no
   partial update for a screen reader to catch mid-flight).
 
+## CAP-6 - Guest order status stepper (story 6, issue #82)
+
+- **Intent:** Q7's live stepper (Placed, Accepted, Preparing, Ready - amber active,
+  green done), server-derived from the order's real ticket lifecycle by polling,
+  reaching Ready when the kitchen bumps the last ticket - never showing a state the
+  data doesn't support (EXPERIENCE.md, stories.yaml story 6).
+- **Route:** `/qr/status` (`src/app/qr/status/`) - flat and session-gated, per the
+  established convention; falls straight into the existing `decideGuestRoute` gate
+  with no proxy changes needed.
+- **Built against the real, merged backend contract** (restiq-backend PR #83,
+  `src/guest/orders/orders.{dtos,controller,service}.ts`, read directly): `GET
+  /guest/v1/session/orders` -> `GuestSessionOrdersView { sessionId, orders:
+  GuestOrderStatusView[] }` where each `GuestOrderStatusView` is `{ orderId,
+  tableId, step, steps: [{ step, reachedAt }] }`, `step`/`steps[].step` one of
+  `'placed' | 'accepted' | 'preparing' | 'ready'`. Every endpoint 410s
+  `session_closed` once the session ends, same as every other `/guest/v1/*` call.
+  This screen only calls the session-wide list endpoint - the real backend's
+  sibling per-order `GET /guest/v1/orders/:orderId/status` exists but has no caller
+  here, since the list already returns every order's full stepper state in one poll.
+- **The honest step mapping, read straight off the real service (not re-derived
+  client-side):** `orders.service.ts`'s `buildOrderStatusView` maps the ticket model
+  directly - `placed` reaches at order creation; `accepted` and `preparing` reach at
+  the exact same instant (the earliest ticket `firedAt`) because the real `Ticket`
+  model has no separate "started cooking" state, so **a freshly placed guest order
+  already reads `step: 'preparing'`** the instant it's placed (placement fires
+  tickets synchronously - see CAP-4's `fireOnSend` call); `ready` reaches only once
+  *every* ticket on the order is bumped, at the latest `bumpedAt`. `status-state.ts`'s
+  `stepState(step, furthestStep)` highlights purely by comparing each step's index in
+  `STEP_ORDER` against the order's own `step` field (the backend's "furthest reached"
+  value) - never by checking whether `reachedAt` is non-null, though the two always
+  agree by construction per the backend's own invariant. `reachedAt` is rendered
+  wherever non-null and omitted (not fabricated) wherever null.
+- **Polling (`STATUS_POLL_MS`, 5s):** `use-status-poll.ts` is a near-verbatim copy of
+  `cart/use-cart-poll.ts`'s shape (EXPERIENCE.md's Foundation: "~5s polling for
+  anything shared (cart, status)") - a successful poll always replaces the shown
+  order list in place, a failed poll after the first keeps the last-known list with a
+  quiet `qr-status-stale-note`, and a 410 flips to the shared `SessionEndedView` and
+  stops the interval outright (a closed session's orders will never change again).
+- **Newest-first:** the real endpoint returns orders `createdAt`-ascending
+  (`orders.service.ts`'s `listSessionOrders`); `status-state.ts`'s
+  `sortOrdersNewestFirst` reverses by each order's own `placed` step `reachedAt`
+  (always non-null) rather than trusting array order, in case that ever changes
+  server-side.
+- **Empty state:** "No orders yet" with a "Browse the menu" link to the conventional
+  `/qr/menu` path - this is the first guest hasn't placed anything yet, distinct from
+  the shared cart's own "Nothing yet" empty state.
+- **Theming:** `--step-active`/`--step-done` were declared in `.qr-theme` back in
+  story 1's CAP-1 build for exactly this later screen, but never mapped to a Tailwind
+  utility class. This story adds `--color-step-active`/`--color-step-done` to the
+  global `@theme inline` block (`globals.css`, alongside the KDS ticket-color
+  convention it mirrors) so `bg-step-active`/`bg-step-done` work - the first story to
+  actually consume them.
+- **Story 4's link now resolves:** CAP-4's `PlacedConfirmation`/`OrderPlacedElsewhere`
+  states both link "Track your order" to `/qr/status`, built at the time against a
+  documented guess (the route didn't exist yet, comment flagged a possible 404). That
+  guess matched exactly - no route change was needed, only the stale comment updated
+  to remove the 404 caveat.
+- **a11y (WCAG 2.1 AA floor):** the order list sits in an `aria-live="polite"` region
+  (`aria-label="Your orders' status"`) so a screen-reader guest hears convergence
+  without a refresh, per EXPERIENCE.md's explicit call-out for the status stepper.
+  Each step carries `aria-current="step"` when active plus an `sr-only` " - done" /
+  " - in progress" / " - not yet reached" suffix, so state is never color-only (done
+  also carries a checkmark glyph, not just the green fill) and is announced by name,
+  not just position.
+- **Verified live:** the real `orders.dtos.ts`/`orders.service.ts` were read directly
+  off restiq-backend's `dev` branch (pulled fresh - the checkout was one commit
+  behind and PR #83 hadn't been pulled yet). The dev server was run directly (a
+  synthetic, non-expired `guest_session` cookie was enough to clear the proxy gate,
+  which only checks expiry, never the signature) to confirm: an unauthenticated or
+  malformed-token hit on `/qr/status` 307s to `/qr` same as every other post-session
+  screen, and a live session reaches the real page (confirmed via its SSR'd loading
+  shell in the `.qr-theme` wrapper). A full click-through against a running backend
+  + seeded order was not performed in this pass (would need Postgres + migrations +
+  a seeded session/order) - the stepper's actual state rendering (all four
+  highlighted states, `reachedAt` display, empty/410/error states) is instead
+  covered by `status-screen.test.tsx`'s full-component-tree tests against the real
+  response shape.
+- **Test coverage:** `status-state.test.ts` (pure step-highlighting/sort/format
+  logic), `use-status-poll.test.ts` (fake-timer polling: initial load, ~5s
+  convergence, staleness on a failed poll, 410 stopping the interval - mirrors
+  `use-cart-poll.test.ts`), `status-screen.test.tsx` (newest-first ordering, correct
+  step highlighted including the "freshly placed = preparing active" case,
+  `reachedAt` shown only where non-null, empty state, 410 session-ended state, error
+  + retry, the `aria-live` region).
+
 ## CAP-2 - Menu browse and item detail (story 2, issue #67)
 
 - **Intent:** guests browse the real outlet menu (categories, item cards with price and
