@@ -599,5 +599,5 @@ faked.
   fake-timer integration suite covering newest-first rendering, recall
   history, single-tap recall with the ticket dropping off the list on the
   next poll, and poll-failure stale-board behavior), 746/746 passing
-  repo-wide; lint/typecheck/build clean. PR AusPosRest/restiq-web#TBD (issue
+  repo-wide; lint/typecheck/build clean. PR AusPosRest/restiq-web#74 (issue
   #71).

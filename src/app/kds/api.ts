@@ -89,7 +89,6 @@ export function stationQueue(outletId: string, stationId: string): Promise<Ticke
   return kdsApi<TicketView[]>(`outlets/${encodeURIComponent(outletId)}/stations/${encodeURIComponent(stationId)}/queue`);
 }
 
-<<<<<<< HEAD
 /** One item's live production count across all open (queued) tickets - server-aggregated from real ticket lines, never fabricated (SPEC CAP-5). */
 export interface AllDaySummaryEntryView {
   itemId: string;
@@ -100,7 +99,8 @@ export interface AllDaySummaryEntryView {
 /** GET /kitchen/v1/outlets/:outletId/all-day-summary - server-computed per-item counts from queued ticket lines, alphabetical by item name (K4 sorts client-side). */
 export function allDaySummary(outletId: string): Promise<AllDaySummaryEntryView[]> {
   return kdsApi<AllDaySummaryEntryView[]>(`outlets/${encodeURIComponent(outletId)}/all-day-summary`);
-=======
+}
+
 /**
  * A bumped ticket plus its full recall history (CAP-4: "the bumped view
  * retains it with its recall history") - ISO timestamps of every recall
@@ -120,7 +120,6 @@ export interface BumpedTicketView extends TicketView {
  */
 export function bumpedTickets(outletId: string): Promise<BumpedTicketView[]> {
   return kdsApi<BumpedTicketView[]>(`outlets/${encodeURIComponent(outletId)}/bumped`);
->>>>>>> a89fe71 (Bumped view and recall (kitchen-display CAP-4))
 }
 
 export function bumpTicket(ticketId: string): Promise<TicketView> {
