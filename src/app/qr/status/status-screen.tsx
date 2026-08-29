@@ -19,6 +19,12 @@ import { useStatusPoll } from "./use-status-poll";
 // for the same literal) - the empty state's way back to ordering.
 const MENU_ROUTE = "/qr/menu";
 
+// Q6 Checkout (CAP-5, issue #84) - one of this story's two entry points
+// (the other is cart-screen.tsx's placed-confirmation). orderId travels as a
+// query param, not a path segment - checkout is scoped to one specific
+// order's bill, unlike this screen's own session-wide order list.
+const CHECKOUT_ROUTE = "/qr/checkout";
+
 export function StatusScreen() {
   const poll = useStatusPoll();
 
@@ -52,6 +58,13 @@ function OrderCard({ order }: Readonly<{ order: GuestOrderStatusView }>) {
         Order #{order.orderId.slice(-6).toUpperCase()}
       </p>
       <Stepper order={order} />
+      <Link
+        href={`${CHECKOUT_ROUTE}?orderId=${order.orderId}`}
+        data-testid={`status-request-bill-${order.orderId}`}
+        className="mt-4 inline-flex items-center justify-center rounded-lg border border-border px-3 py-2 text-xs font-medium text-foreground focus-visible:outline focus-visible:outline-2 focus-visible:outline-ring"
+      >
+        Request bill
+      </Link>
     </section>
   );
 }

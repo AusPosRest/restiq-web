@@ -1,5 +1,35 @@
 # Completed
 
+- **2026-08-29** - QR self-order story 5: guest checkout and split payment,
+  simulated (CAP-5). `/qr/checkout` (`src/app/qr/checkout/`) - a bill for
+  the session's placed order, created-or-fetched (409 `bill_already_exists`
+  converges to a `GET`) against the real, merged `POST`/`GET
+  /guest/v1/orders/:orderId/bill` and `POST /guest/v1/bills/:id/{shares/
+  :guestId/pay,pay-all}` (restiq-backend PR #84, read directly -
+  `src/guest/bills/bills.{controller,dtos,service}.ts`). Two modes: "Split
+  by guest" (each guest's own row is the only one with a Pay action) and
+  "Pay for the table" (a single button that disables itself with an
+  explanation the moment any share is already paid individually, mirroring
+  the backend's own `partial_payment_exists` rule client-side). The payment
+  step is
+  explicitly demo-marked in the DOM ("Demo payment simulation … (demo)",
+  same honesty convention as pos's PrinterStatusChip) with a Simulate
+  success/failure choice mapped straight onto the real `simulatedOutcome`
+  field; a simulated failure (UJ-5's own acceptance narrative) renders a
+  calm, non-alert retry note and leaves the share outstanding, never an
+  error. Settling (own action finalizing the bill) swaps straight to an
+  inline "Bill settled" state from the response body; once the table's
+  session actually settles, every other guest's next bill call 410s, now
+  routed through a `variant="settled"` addition to the shared
+  `SessionEndedView` ("Thanks for dining with us!") rather than the generic
+  closed-session copy. Two new "Request bill" entry points wired in
+  (`/qr/status`'s per-order card, `/qr/cart`'s placed-confirmation). 21 new
+  tests (`checkout-state.test.ts`, `checkout-screen.test.tsx`) plus link
+  coverage in `status-screen.test.tsx`/`cart-screen.test.tsx`; 898/898
+  passing repo-wide, typecheck/lint/build all clean. See
+  [wiki/features/qr-self-order.md](../features/qr-self-order.md). Issue
+  AusPosRest/restiq-web#84.
+
 - **2026-08-29** - QR self-order story 6: guest order status stepper
   (CAP-6). `/qr/status` (`src/app/qr/status/`) - every order the table's
   session has placed, newest first, each with a `StatusStepper` (Placed,

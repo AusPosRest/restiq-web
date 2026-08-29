@@ -291,6 +291,140 @@ This pass reconciled the guess against it:
   with a real `<h1>`, no live region needed since they fully replace the screen (no
   partial update for a screen reader to catch mid-flight).
 
+## CAP-5 - Guest checkout and split payment, simulated (story 5, issue #84)
+
+- **Intent:** the table settles as one payment or split per guest, through an
+  explicitly demo-marked simulated payment step (SPEC-qr-self-order CAP-5's
+  own non-goal: "no real payment integration"). UJ-5's invariant is this
+  story's acceptance narrative: one guest's simulated payment failure leaves
+  every other guest's already-paid share intact and only that one share
+  outstanding; the bill cannot complete while any share is outstanding.
+- **Route:** `/qr/checkout` (`src/app/qr/checkout/`) - flat and
+  session-gated, per the established convention; `decideGuestRoute`'s own
+  comment had already anticipated this exact path by name, so no proxy/gating
+  change was needed. Unlike `/qr/status`'s session-wide list, checkout is
+  scoped to one specific order's bill, so `orderId` travels as a query param
+  (`?orderId=`) rather than a path segment - `page.tsx` reads it server-side
+  alongside the `guest_display` cookie's `guestId` (same pattern `/qr/cart`'s
+  page already established, no invented `/me` lookup).
+- **Entry points (this story's two, both new):** a "Request bill" link on
+  each order card in `/qr/status` (`status-screen.tsx`), and a "Request bill"
+  link on the placed-order confirmation in `/qr/cart` (`cart-screen.tsx`,
+  alongside the existing "Track your order" link) - both point at
+  `/qr/checkout?orderId=<that order's id>`. Neither the Stitch Q6 mock nor
+  EXPERIENCE.md names an exact "Request bill" entry point (the mock instead
+  draws a payment-mode picker on Q5 itself, feeding straight into checkout,
+  which this branch's Q5 doesn't yet expose) - this is a documented,
+  reasonable placement filling that gap, not a re-derivation of a spec'd flow.
+- **Built against the real, merged backend contract** (restiq-backend PR #84,
+  `src/guest/bills/bills.{dtos,controller,service}.ts` +
+  `src/pos/bills/bill-core.ts`, read directly - the local checkout of
+  `restiq-backend`'s `dev` was stale and needed a fetch to reach it):
+  - `POST /guest/v1/orders/:orderId/bill` -> 201 `GuestBillView`; 409
+    `bill_already_exists`; 409 `conflict` (order already closed); 410
+    `session_closed`; 404 `not_found`.
+  - `GET /guest/v1/orders/:orderId/bill` -> 200 `GuestBillView`; 404
+    `not_found`.
+  - `POST /guest/v1/bills/:id/shares/:guestId/pay`
+    `{ simulatedOutcome: 'success' | 'failure', payerPhone? }` -> **200
+    `GuestBillView` for both outcomes** - a simulated failure is a valid,
+    demo-marked result, never an HTTP error (the targeted share simply stays
+    `'outstanding'`); 409 `share_already_paid`; 409 `already_finalized`; 410;
+    404.
+  - `POST /guest/v1/bills/:id/pay-all` `{ simulatedOutcome, payerPhone? }` ->
+    200 `GuestBillView`; 409 `partial_payment_exists` if any share was
+    already paid individually; 409 `already_finalized`; 410.
+  - `GuestBillView` = `BillView` (`id, orderId, billNumber, subtotalMinor,
+    taxMinor, discountMinor, discountReason, totalMinor, status: 'open' |
+    'finalized', createdAt, finalizedAt, tenders`) plus `shares:
+    BillShareView[]` where `BillShareView = { guestId, guestName,
+    amountMinor, status: 'outstanding' | 'paid', payerPhone, paidAt }`.
+    `BillView` carries no `currency` field at all - `checkout-state.ts`'s
+    `formatRupees` is therefore INR-only by construction, a documented
+    departure from `cart-state.ts`'s multi-currency-capable `formatMinor`
+    (there is simply no currency to read off this response).
+- **`checkout-api.ts`** - the four calls above plus `createOrFetchBill`,
+  which is the actual convergence logic this story's tests hinge on: any
+  guest at the table may be first to request the bill, so a race's loser
+  gets back 409 `bill_already_exists` - rather than surfacing that as an
+  error, it falls back to `GET` the real bill the winner just created (same
+  convergence posture as CAP-4's `empty_cart` race handling on Place order).
+  Every other error (410 once the session ends, 409 `conflict`, 404)
+  propagates untouched.
+- **`checkout-state.ts`** - pure, unit-tested helpers: `formatRupees`,
+  `findShare`, `sortSharesOwnFirst` (own share first, everyone else in
+  response order - the own-share-emphasis rule below), and `canPayAll`,
+  which mirrors the backend's `partial_payment_exists` rule exactly (`!
+  shares.some(paid)`) so the UI never offers a "Pay for the table" control
+  the API would reject.
+- **Own-share emphasis, other guests read-only:** the signed-in guest's own
+  row (`checkout-share-<guestId>`) is the only one this screen ever renders a
+  Pay action for. This is a UI choice, not a backend restriction - the real
+  `payShare`/`payAll` place no ownership check on the `:guestId` in the URL,
+  so any guest could technically pay any other guest's share (or pay-all);
+  this UI simply never exposes that button for someone else's row, matching
+  the split-share model EXPERIENCE.md describes.
+- **Two payment modes**, a `role="tablist"` toggle above the share list:
+  - **Split by guest** (default): each `SplitShareRow` shows the guest's
+    name, amount, and settlement state - a green "Paid" badge, or (own row
+    only, while outstanding) a "Pay your share" button.
+  - **Pay for the table**: one button for the bill's full total, **disabled
+    with an explanation** (`checkout-payall-blocked`) the moment any share is
+    already paid individually - `canPayAll` above, checked client-side
+    before the tap so the 409 `partial_payment_exists` case is normally
+    unreachable from this UI, not just handled after the fact.
+- **The payment sheet is explicitly demo-marked in the DOM**, not just a
+  tooltip - `checkout-demo-badge` ("Demo payment simulation … (demo)"),
+  same honesty convention as `pos`'s `PrinterStatusChip`/`OfflineIndicatorPill`
+  ("(demo)" visible in the DOM, per EXPERIENCE.md's no-fake-telemetry rule).
+  It states plainly that no real money moves, shows the amount, an optional
+  "Phone number for updates" field (FR-42: captured at payment only, no
+  validation theater - an empty field simply omits `payerPhone` from the
+  request), and two buttons that map directly onto `simulatedOutcome`:
+  "Simulate successful payment" / "Simulate failed payment".
+- **A simulated failure is rendered in a calm, non-error tone** - UJ-5's
+  point is that this is a normal, expected demo outcome, not a server error,
+  so the retry note (`checkout-share-failed-<guestId>` / `-payall-failed`,
+  "Payment didn't go through - try again.") is plain muted text, never
+  `role="alert"` or the red `text-error-soft` used for genuine failures
+  elsewhere in this realm. The share/bill simply stays as it was; the Pay
+  button remains for another attempt.
+- **Settlement, rendered inline, not routed away:** a successful pay-own that
+  clears the last outstanding share, or a successful pay-all, returns a
+  `GuestBillView` with `status: 'finalized'` directly in that response body -
+  this guest's own screen swaps straight to `SettledPanel` ("Bill settled -
+  thanks!" plus the paid total) without waiting for a poll or a reload, since
+  the finalizing guest already holds the finalized view in hand.
+- **410 -> settled framing for everyone else:** once the table's session
+  settles, every *other* guest's next bill action (a fresh page load's
+  create-or-fetch, or an in-flight payment) 410s `session_closed` - the
+  backend reports a staff abort and a normal settlement identically (no
+  distinguishing code, see `bills.service.ts`'s `assertSessionActive`), but
+  checkout is specifically the money-settling screen, so this story extends
+  the shared `session-ended-view.tsx` with a `variant` prop:
+  `variant="settled"` renders "Thanks for dining with us! Your table's bill
+  is settled…" instead of the generic "This table's session has ended".
+  Every pre-existing caller (`status-screen.tsx`, `menu`/`item-detail`) keeps
+  rendering the original `variant="closed"` copy unchanged (the prop
+  defaults to it).
+- **a11y (WCAG 2.1 AA floor):** the mode toggle is a real `role="tablist"`
+  with `aria-selected`; the payment sheet is `role="dialog"
+  aria-modal="true"` with an `aria-label`; the phone input carries a
+  `<label htmlFor>`; every interactive element has a visible focus ring;
+  genuine errors (sheet-level 409s/network failures) use `role="alert"`,
+  while the non-error failure note deliberately does not.
+- **Test coverage:** `checkout-state.test.ts` (11 - money formatting,
+  own-share-first sorting, `canPayAll`'s partial-payment mirror,
+  `isSettled`), `checkout-screen.test.tsx` (10 - create-or-fetch convergence
+  on 409, own-share-emphasis rendering, a successful pay-own marking a share
+  paid, a simulated failure's calm retry note with no `role="alert"`
+  anywhere on the page, pay-all settling the bill, pay-all blocked once a
+  share is already paid, the 410 settled-framing route, money formatting in
+  the bill summary, the no-`orderId` state, and error+retry on a failed
+  initial load), plus one new assertion each in `status-screen.test.tsx` and
+  `cart-screen.test.tsx` covering the two "Request bill" entry-point links'
+  hrefs. 898/898 passing repo-wide (typecheck, lint, test, build all clean).
+
 ## CAP-6 - Guest order status stepper (story 6, issue #82)
 
 - **Intent:** Q7's live stepper (Placed, Accepted, Preparing, Ready - amber active,
