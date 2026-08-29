@@ -10,8 +10,14 @@ import {
   GUEST_SESSION_MAX_AGE_SECONDS,
   type GuestSessionDisplay,
 } from "@/lib/guest-session";
+import { decodeTokenSubject } from "@/lib/session-token";
 
-export function guestSessionResponse(token: string, display: GuestSessionDisplay): NextResponse {
+// `display` omits guestId - it's derived here from the token's own `sub`
+// claim (decodeTokenSubject) rather than threaded through both start.ts and
+// join.ts call sites, since the token already carries it and this is the one
+// place both routes funnel through.
+export function guestSessionResponse(token: string, display: Omit<GuestSessionDisplay, "guestId">): NextResponse {
+  const guestId = decodeTokenSubject(token) ?? "";
   const response = NextResponse.json({ pin: display.pin });
   const cookieOptions = {
     httpOnly: true,
@@ -21,6 +27,6 @@ export function guestSessionResponse(token: string, display: GuestSessionDisplay
     maxAge: GUEST_SESSION_MAX_AGE_SECONDS,
   };
   response.cookies.set(GUEST_SESSION_COOKIE, token, cookieOptions);
-  response.cookies.set(GUEST_DISPLAY_COOKIE, JSON.stringify(display), cookieOptions);
+  response.cookies.set(GUEST_DISPLAY_COOKIE, JSON.stringify({ ...display, guestId }), cookieOptions);
   return response;
 }

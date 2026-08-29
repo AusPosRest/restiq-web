@@ -1,5 +1,19 @@
 # Completed
 
+- **2026-08-29** - QR self-order story 3: shared group cart and table order
+  review (CAP-3). `/qr/cart` (`src/app/qr/cart/`) - grouped by guest with
+  per-guest subtotals and a combined total, own lines editable (quantity
+  stepper, remove), everyone else's read-only, ~5s polling that converges
+  in place with `aria-live="polite"`, a 410 session-closed state, and a
+  disabled "Place order" CTA for the next story (CAP-4). Added `guestId` to
+  the `guest_display` cookie (decoded from the guest JWT's `sub` claim) so
+  the cart can tell "my line" from everyone else's. Corrected the guest
+  realm's routing convention from nested to flat post-session paths and
+  end-anchored `decideGuestRoute`'s entry regex, closing a gap where a
+  nested screen route would have bypassed the session gate entirely. See
+  [wiki/features/qr-self-order.md](../features/qr-self-order.md). Issue
+  AusPosRest/restiq-web#68.
+
 - **2026-08-24** - Tenant Admin story 1: owner invite acceptance (CAP-1) and
   go-live checklist UI (CAP-2). `/admin/invite/[token]`, `/admin/onboarding`,
   new `/admin` auth realm in `src/proxy.ts` (AD-10, `aud:"admin"`,
