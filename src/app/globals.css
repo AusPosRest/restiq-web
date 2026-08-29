@@ -258,3 +258,43 @@
   font-family: var(--font-inter), Inter, sans-serif;
 }
 
+/* RESTIQ QR Self-Order - the /qr surface's theme (ux-qr-self-order
+   DESIGN.md). Same charcoal-and-amber ground as the staff surfaces, but this
+   is the guest's own phone: a softer 12px radius (the one radius exception
+   in the family - every staff surface uses 8px), and its own FSSAI/stepper
+   status vocabulary. A re-skin is an edit here, not in components. */
+.qr-theme {
+  --background: #131315;
+  --foreground: #f5f5f4;
+  --card: #1c1c1e;
+  --card-foreground: #f5f5f4;
+  --popover: #26262a;
+  --popover-foreground: #f5f5f4;
+  --primary: #f59e0b;
+  --primary-foreground: #472a00;
+  --secondary: #26262a;
+  --secondary-foreground: #f5f5f4;
+  --muted: #1f1f21;
+  --muted-foreground: #a1a1aa;
+  --accent: #26262a;
+  --accent-foreground: #f5f5f4;
+  --destructive: #ef4444;
+  --border: #3f3f46;
+  --input: #26262a;
+  --ring: #f59e0b;
+  --radius: 12px;
+
+  /* FSSAI + stepper status vocabulary - fixed, never repurposed decoratively
+     (DESIGN.md: veg/non-veg carried by glyph, never color alone; stepper
+     done-green never tinted by tenant branding). */
+  --status-available: #22c55e;
+  --veg-marker: #22c55e;
+  --nonveg-marker: #ef4444;
+  --step-active: #f59e0b;
+  --step-done: #22c55e;
+  --error: #ffb4ab;
+
+  --font-sans: var(--font-inter);
+  font-family: var(--font-inter), Inter, sans-serif;
+}
+

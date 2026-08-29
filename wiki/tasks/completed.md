@@ -503,3 +503,53 @@ faked.
   every other POS story built ahead of its own backend. See
   [wiki/features/pos-cashier-waiter.md](../features/pos-cashier-waiter.md)
   for the full writeup.
+
+- **2026-08-29** - QR Self-Order story 1: guest welcome and session PIN
+  screens (CAP-1). New fifth auth realm `/qr` (`aud: guest`, `guest_session`
+  httpOnly cookie, `src/lib/guest-session.ts`'s `decideGuestRoute` wired into
+  `src/proxy.ts`) - the first RESTIQ realm whose principals aren't staff.
+  Table-QR entry URL `/qr/t/[outletId]/[tableId]` resolves the `qr_ordering`
+  capability gate and session-open status server-side before rendering
+  anything, so a disabled outlet always gets the warm "please order with our
+  staff" page (`unavailable-view.tsx`), never the menu. Q1 Welcome + Q2
+  Session PIN ship as one client component (`welcome-flow.tsx`) with a
+  single mode picked by live session state - name+phone "Start ordering"
+  (auto-proceeding straight to a large shareable PIN, no ceremony) when no
+  session is open, or name + 4-digit auto-submitting keypad "Join your
+  table" when one is - plain inline errors on a wrong PIN, WCAG 2.1 AA
+  basics (labeled fields, focus rings, `aria-live` convergence region).
+  `src/app/qr/auth/{start,join}/route.ts` and `src/app/qr/api/[...path]/route.ts`
+  mirror the POS realm's auth-exchange and pass-through patterns. Backend
+  counterpart (issue #68/`feature/68-guest-session`) had no reachable branch
+  at build time and this worktree has no access to the `restiq-backend`
+  checkout, so the `/guest/v1/*` contract is built against
+  `spec-qr-self-order/SPEC.md` alone and flagged NOT YET RECONCILED - see
+  [wiki/features/qr-self-order.md](../features/qr-self-order.md)'s
+  "Backend contract" section for the exact assumed shapes and the
+  reconciliation action for the next Q-screen story. 39 new tests (route
+  handlers, `decideGuestRoute`, pure flow-state helpers, `fetchTableStatus`,
+  the server-rendered entry page's capability/not-found branches, and the
+  `WelcomeFlow` component covering start-lands-on-PIN, join
+  success/wrong-PIN, and a11y basics), 685/685 passing repo-wide;
+  lint/typecheck/build clean. Issue AusPosRest/restiq-web#64.
+
+- **2026-08-29** - QR Self-Order CAP-1: reconciled against the real, merged guest
+  backend contract (restiq-backend PR #69). The biggest guess was wrong: there is no
+  per-table session-status endpoint, only a per-outlet `GET /guest/v1/outlets/:id/
+  availability` gate check - `table-status.ts` deleted, replaced with `availability.ts`.
+  `welcome-flow.tsx`/`welcome-flow-state.ts` now show both "Start ordering" and "Join
+  your table" affordances up front and flip modes reactively from real error codes
+  (start 409 `session_already_open` -> join mode; join 404 `no_open_session` -> start
+  mode), each with an explicit test. Fixed real status/code mismatches throughout
+  (`types.ts`, routes, tests): wrong PIN is 403 `invalid_pin` not 401, join lockout is
+  429 `locked_out` (5/30s), capability gate is `qr_ordering_disabled` not
+  `capability_disabled`, `TableSessionView` matches the real richer shape. Confirmed
+  permanent gap: the real contract has no outlet-name/table-label lookup pre-session, so
+  the welcome screen's header and `unavailable-view.tsx`'s outlet name are gone, not
+  retrofitted. Live-verified against restiq-backend's `dev` branch running locally
+  (Postgres `restiq_demo`) - start, the real 409->join flip, wrong-PIN 403, successful
+  join, the real 404->start flip, and the qr_ordering-disabled unavailable page all
+  exercised through the browser against genuine backend responses, not mocks. See
+  [wiki/features/qr-self-order.md](../features/qr-self-order.md)'s "Reconciliation"
+  section for the full writeup. 6 new/changed test files, 692/692 passing repo-wide;
+  lint/typecheck/build clean. PR AusPosRest/restiq-web#65 (issue #64).
