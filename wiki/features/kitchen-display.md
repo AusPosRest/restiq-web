@@ -13,6 +13,14 @@ CAP-1 (ticket domain, routing, fire-on-send) is backend-only, shipped in
 restiq-backend PR #70 (issue #67) - this story consumes it verbatim. CAP-3
 (Expo), CAP-4 (Bumped/recall) are later sibling stories; those still only get
 the shell/nav slots established by issue #66.
+- **CAP-4** Bumped view and recall - bumped tickets remain visible,
+  newest-bumped-first, with their full recall history, and a single tap
+  recalls one back to its source station.
+
+CAP-1 (ticket domain, routing, fire-on-send) is backend-only, shipped in
+restiq-backend PR #70 (issue #67) - this story consumes it verbatim. CAP-3
+(Expo), CAP-5 (All-day summary) are later sibling stories; the shell story
+(#66) only established the shell/nav slots for them.
 
 ## What's built
 
@@ -83,6 +91,67 @@ the shell/nav slots established by issue #66.
     "No open tickets" empty state.
   - `page.tsx` renders the screen directly, mirroring K1's
     `station/[stationId]/page.tsx` shape.
+## What's built (continued: K3 Bumped View and recall, issue #71)
+
+- `src/app/kds/api.ts` gained `BumpedTicketView` (`TicketView & { recallHistory:
+  string[] }`) and `bumpedTickets(outletId)` (`GET
+  /kitchen/v1/outlets/:outletId/bumped`, restiq-backend#70's real, merged
+  `bumped()` - shapes read directly from `tickets.service.ts`/`tickets.dtos.ts`,
+  not guessed).
+- `src/app/kds/(shell)/bumped/`:
+  - `bumped-view-state.ts` - pure logic: `sortBumpedNewestFirst` (defensive
+    client re-sort, same precedent as K1's `sortOldestFirst`),
+    `formatRecallTimes` (ISO timestamps -> local clock-time labels).
+  - `use-bumped-queue.ts` - the ~5s poll, stale-on-failure, `refresh()` for
+    immediate re-polling after a recall - identical shape to K1's
+    `use-station-queue.ts`, per the shell story's documented poll convention.
+  - `bumped-view-screen.tsx` - ties it together: reconnecting/failed notices,
+    skeleton, calm "No bumped tickets" empty state, and the newest-bumped-left
+    rail. Recall reuses K1's `useTicketActions` (same one-tap, one-retry
+    contract); bump/refire are no-ops here since `TicketCard` only renders
+    Recall for a `status: "bumped"` ticket.
+  - `page.tsx` - replaces the shell story's `ComingSoon` placeholder.
+- `TicketCard` (`station/ticket-card.tsx`) gained one new optional prop,
+  `recallTimes?: string[]` - when present and non-empty, renders a small
+  "Recalled Nx - <times>" strip below the header. Undefined everywhere else
+  (K1's `/queue` read carries no recall history), so K1's own rendering and
+  tests are unaffected. This is the "reuse `TicketCard` directly" contract
+  the shell story asked for: no forked ticket rendering for K3, one additive
+  prop instead.
+
+## Key decisions (continued: K3, issue #71)
+
+- **Bumped-newest-first, not a client-invented ordering.** CAP-4's SPEC/
+  screens.md success line doesn't state an order; restiq-backend#70's real
+  `bumped()` (`tickets.service.ts`) already returns `orderBy: { bumpedAt:
+  'desc' }` with a doc comment saying so ("most-recently-bumped first").
+  `bumped-view-state.ts`'s `sortBumpedNewestFirst` is a defensive
+  client-side re-sort of that documented order - the same precedent K1 set
+  with `sortOldestFirst` re-sorting an already-`firedAt asc` response,
+  not an independent client decision.
+- **Recall history renders as a compact strip, not the DESIGN.md mock's
+  per-cook attribution.** The bumped-view screenshot
+  (`bumped-view-spice-route--a3cc216b.png`) shows "Bumped by <name>" -
+  unavailable, per the shell story's own documented decision that the real,
+  merged `TicketView` carries no staff attribution anywhere (FR-34, no
+  actor attribution). `recallHistory` (ISO timestamps from the backend's
+  append-only `TicketEvent` log) is real data the mock doesn't show; K3
+  renders that instead - "Recalled Nx - <time>, <time>" - real facts, not a
+  fabricated name.
+- **No time-since-bumped clock on `TicketCard`; the elapsed figure still
+  reads time-since-fired.** Reusing `TicketCard` as-is (per the shell
+  story's explicit instruction) means the header's elapsed time keeps its
+  existing meaning rather than gaining a second, forked clock for this one
+  screen. The ageing color is moot here regardless - `TicketCard` already
+  forces the green bumped frame for any `status: "bumped"` ticket, ignoring
+  the ageing level entirely.
+- **`ticket.recalled` (the RECALLED banner) does not appear in the bumped
+  view.** Per the real DTO's own doc comment, `recalled` is true only while
+  a ticket is `queued` as the direct result of a recall - a bumped ticket
+  is never in that state, so the banner correctly never renders here. The
+  banner belongs to K1's station queue (where a just-recalled ticket lands),
+  not K3 - consistent with SPEC's "recalling... returns it to its source
+  station's queue marked RECALLED", not the bumped view itself.
 
 ## Integration points for later stories
 
