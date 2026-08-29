@@ -673,4 +673,4 @@ faked.
   bilingual names, no veg/non-veg marker, no ratings/bestseller badge, no dish
   description - all omitted, none fabricated (initial-letter tile stands in for a
   photo). 46 new tests; 738/738 passing repo-wide; lint/typecheck/build clean. PR
-  AusPosRest/restiq-web#TBD (issue #67).
+  AusPosRest/restiq-web#77 (issue #67).
