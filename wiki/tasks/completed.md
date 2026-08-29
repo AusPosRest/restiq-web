@@ -615,3 +615,38 @@ faked.
   next poll, and poll-failure stale-board behavior), 746/746 passing
   repo-wide; lint/typecheck/build clean. PR AusPosRest/restiq-web#74 (issue
   #71).
+- **2026-08-29** - Kitchen Display (KDS) story 3: K2 Expo view (CAP-3).
+  Replaces `/kds/expo`'s `ComingSoon` placeholder with the real screen,
+  reusing K1's shell/poll/state-split conventions verbatim (`KdsHeader`,
+  `KdsOutletProvider`, `use-kds-load.ts`'s station lookup, K1's `ageingLevel`/
+  `formatElapsed`/`orderTypeLabel`/`ticketDisplayNumber`) rather than
+  re-implementing them. New `expoBoard()` in `src/app/kds/api.ts`
+  (`GET /kitchen/v1/outlets/:outletId/expo`, `ExpoOrderView`/
+  `ExpoStationEntryView` - shapes read directly from restiq-backend's
+  already-merged `src/kitchen/tickets.dtos.ts`, not guessed) and a
+  `use-expo-board.ts` poll hook copying K1's stale-on-failure shape. Pure
+  consolidation logic lives in `(shell)/expo/expo-state.ts`: `rollUpItems`
+  (quantity-summed per-station item list, voided lines dropped),
+  `readyProgress` ("X of Y ready" from the real per-station `ready` flag -
+  no per-item ready state exists in the API), `oldestUnbumpedTicket` (drives
+  each order row's own ageing clock, client-computed like K1), and
+  `buildWaitingOnEntries` (flattens every order's authoritative `waitingOn`
+  lines into panel rows, station/table/firedAt context looked up from the
+  same order's station tickets). `ExpoOrderRow` renders per-station
+  readiness chips (green + the word "Ready" once every ticket at that
+  station is bumped, "Cooking" otherwise - color never stands alone) and the
+  item roll-up; `WaitingOnPanel` lists exactly the not-yet-bumped,
+  non-voided items, oldest-first, each with its own ageing-colored elapsed
+  clock. No "Serve all" action was built - the real API has no such
+  endpoint (CAP-3 is a read-only consolidation view; bump/recall stay
+  station-scoped actions on K1), a documented simplification against
+  DESIGN.md's richer mockup rather than a missed requirement. See
+  [wiki/features/kitchen-display.md](../features/kitchen-display.md) for
+  the updated CAP-3 entry and key decisions. 2 new test files (pure
+  roll-up/progress/ageing/sort/waiting-on logic, and a fake-timer
+  integration suite covering two-station consolidation, the Waiting-On
+  panel, a readiness chip flipping Cooking->Ready on bump, an order going
+  fully Ready, and poll-failure stale-board behavior), 754/754 passing
+  repo-wide; lint/typecheck/build clean. No live-backend run available in
+  this build's environment (same documented gap as K1). PR
+  AusPosRest/restiq-web#TBD (issue #70).

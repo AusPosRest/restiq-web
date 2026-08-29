@@ -5,6 +5,9 @@
 - **CAP-2** Station queue - a cook sees their station's queued tickets
   oldest-left, with ageing colors from the station's own threshold, and can
   bump, recall, or refire.
+- **CAP-3** Expo view - the expo sees each order re-consolidated across every
+  station it touched: per-station readiness, an item roll-up, and a
+  Waiting-On panel listing exactly the not-yet-bumped items.
 - **CAP-5** All-day production summary - the kitchen sees live per-item
   production counts across all open (queued) tickets, sorted highest-count-
   first, that decrement as items bump within the same ~5s poll cycle.
@@ -21,6 +24,9 @@ CAP-1 (ticket domain, routing, fire-on-send) is backend-only, shipped in
 restiq-backend PR #70 (issue #67) - this story consumes it verbatim. CAP-3
 (Expo), CAP-5 (All-day summary) are later sibling stories; the shell story
 (#66) only established the shell/nav slots for them.
+restiq-backend PR #70 (issue #67) - this story consumes it verbatim. CAP-4
+(Bumped/recall) is a later sibling story; it still only gets the shell/nav
+slot established by issue #66.
 
 ## What's built
 
@@ -54,11 +60,12 @@ restiq-backend PR #70 (issue #67) - this story consumes it verbatim. CAP-3
   - that's what the header's "Change station" control links to.
 - `src/app/kds/(shell)/kds-header.tsx` - the shared quiet header every mode
   renders: current station/mode title, Station/Expo/Bumped/All-Day nav,
-  Change station, Sign out. Expo/Bumped
-  (`src/app/kds/(shell)/{expo,bumped}/page.tsx`) are real routes rendering a
-  `ComingSoon` placeholder - inert until stories 3-4 replace them. All-Day
-  (`src/app/kds/(shell)/all-day/page.tsx`) is real as of this story (K4,
-  issue #72).
+  Change station, Sign out. Bumped
+  (`src/app/kds/(shell)/bumped/page.tsx`) is still a real route rendering a
+  `ComingSoon` placeholder - inert until story 4 (issue #71) replaces it.
+  Expo (`src/app/kds/(shell)/expo/page.tsx`) is real as of this story (K2,
+  issue #70); All-Day (`src/app/kds/(shell)/all-day/page.tsx`) is real as of
+  K4 (issue #72).
 - K1 Station Queue (`src/app/kds/(shell)/station/`):
   - `station-queue-state.ts` - pure logic: `ageingLevel` (blue/yellow/red),
     `formatElapsed`, `sortOldestFirst`, `orderTypeLabel`,
@@ -76,6 +83,29 @@ restiq-backend PR #70 (issue #67) - this story consumes it verbatim. CAP-3
   - `station-queue-screen.tsx` - ties it together: reconnecting notice on
     poll failure, skeleton on first load, calm "No open tickets" empty
     state, the oldest-left ticket rail.
+- K2 Expo View (`src/app/kds/(shell)/expo/`), CAP-3, issue #70:
+  - `expo-state.ts` - pure logic: `rollUpItems` (quantity-summed items per
+    station, across the original fire and any ADD-ON batches, voided lines
+    dropped), `readyProgress` ("X of Y ready" from the real per-station
+    `ready` flag), `oldestUnbumpedTicket` (the order's own ageing clock -
+    the firedAt/stationId of its oldest still-queued ticket across every
+    station, null once fully ready), `buildWaitingOnEntries` (flattens each
+    order's authoritative `waitingOn` lines into panel rows with
+    station/table/firedAt context looked up from that order's own station
+    tickets), and `sortOrdersOldestFirst`.
+  - `use-expo-board.ts` - the same ~5s poll shape as `use-station-queue.ts`
+    (stale-on-failure), polling `GET .../expo` instead of a station queue.
+  - `expo-order-row.tsx` - `ExpoOrderRow`: one order's header (number,
+    table/type, elapsed clock from `oldestUnbumpedTicket` or a "Ready"
+    badge once fully bumped), per-station readiness chips (green + the word
+    "Ready" once `ExpoStationEntryView.ready`, "Cooking" otherwise - color
+    never stands alone), and the per-station item roll-up.
+  - `waiting-on-panel.tsx` - `WaitingOnPanel`: oldest-first list of exactly
+    the not-yet-bumped, non-voided items, each with its own ageing-colored
+    elapsed clock and station/order/table context.
+  - `expo-screen.tsx` - ties it together: same reconnecting-notice/skeleton/
+    empty-state shapes as `station-queue-screen.tsx`, an order rail plus the
+    Waiting-On sidebar.
 
 - K4 All-Day Production Summary (`src/app/kds/(shell)/all-day/`, CAP-5,
   issue #72):
@@ -165,23 +195,23 @@ restiq-backend PR #70 (issue #67) - this story consumes it verbatim. CAP-3
   against `GET .../bumped` results, not build its own ticket rendering.
 - **Poll convention:** a `~5s` interval hook shaped like
   `use-station-queue.ts` (stale-on-failure, `refresh()` for post-mutation
-  immediacy) - K2/K3 should copy this shape for their own reads (`/expo`,
-  `/bumped`) rather than inventing a different polling pattern. K4's
-  `use-all-day-summary.ts` already does this (no `refresh()` - the all-day
-  screen has no mutating actions of its own).
+  immediacy) - K3 should copy this shape for its own read (`/bumped`)
+  rather than inventing a different polling pattern. K2's
+  `use-expo-board.ts` and K4's `use-all-day-summary.ts` already do this (no
+  `refresh()` on either - neither screen has mutating actions of its own).
 - **API convention:** every kitchen read/write goes through
   `src/app/kds/api.ts`'s `kdsApi()` helper and the `/kds/api/[...path]`
-  pass-through - no new proxy route is needed for K2-K3, only new functions
-  in `api.ts` mirroring the backend's already-committed
-  `tickets.dtos.ts`/`tickets.controller.ts` shapes. K4 added
-  `AllDaySummaryEntryView`/`allDaySummary()` this way, verbatim from
-  restiq-backend's `tickets.dtos.ts`/`tickets.controller.ts` (`GET
-  outlets/:outletId/all-day-summary`).
+  pass-through - no new proxy route is needed for K3, only new functions in
+  `api.ts` mirroring the backend's already-committed
+  `tickets.dtos.ts`/`tickets.controller.ts` shapes. K2 added
+  `ExpoOrderView`/`ExpoStationEntryView`/`expoBoard()` this way, and K4
+  added `AllDaySummaryEntryView`/`allDaySummary()`, both verbatim from
+  restiq-backend's `tickets.dtos.ts`/`tickets.controller.ts`.
 - **KdsHeader's `activeMode`** already has `"expo" | "bumped" | "all-day"`
   cases wired to real routes - a sibling story's page.tsx just needs to
   replace its `ComingSoon` body with the real screen and pass its own
-  `activeMode` (K4 did exactly this for `"all-day"`; K2/K3 still owe it for
-  `"expo"`/`"bumped"`).
+  `activeMode` (K2/K4 did exactly this for `"expo"`/`"all-day"`; K3 still
+  owes it for `"bumped"`).
 
 ## Key decisions
 
@@ -227,6 +257,33 @@ restiq-backend PR #70 (issue #67) - this story consumes it verbatim. CAP-3
   (SPEC.md's CAP-2 success line doesn't mention it). Flagged here as a
   known simplification for a future visual-polish pass, not a missed
   requirement.
+- **No "Serve all" action on K2's expo rows.** DESIGN.md's expo mockup shows
+  a "SERVE ALL" button once an order's stations are all ready, but the real,
+  merged kitchen API (restiq-backend#70) exposes no such endpoint - bump/
+  recall/refire stay station-scoped actions the cook performs on K1, and
+  expo (CAP-3's own success criterion) is a read-only consolidation view.
+  Building a button with nothing real to call would be exactly the kind of
+  fabricated action this codebase avoids elsewhere; the order row instead
+  shows a plain "Ready" badge once every station bumps. A good follow-up if
+  product wants a real serve action: a dedicated `/expo/orders/:id/serve`
+  endpoint (order-level, not per-line - there's nothing left to serve
+  partially once every station is ready).
+- **No per-item ready state on K2 - only per-station.** DESIGN.md's expo
+  mockup shows individual items with their own cooking/ready/error states
+  (e.g. "COOKING - OVER"), but `ExpoStationEntryView.ready` is the only
+  readiness signal the real API exposes, computed as "every ticket at this
+  station is bumped" - there's no per-line status anywhere in `TicketView`/
+  `TicketLineView`. Every item in a station's roll-up shares that one
+  station's readiness (rendered as the station's chip, not repeated per
+  item) rather than inventing finer-grained states from data that doesn't
+  exist.
+- **K2's Waiting-On panel gets its station/table/firedAt context by
+  cross-referencing, not from `waitingOn` itself.** `ExpoOrderView.waitingOn`
+  is exactly `TicketLineView[]` - no station name, table, or timestamp
+  attached. `expo-state.ts`'s `buildWaitingOnEntries` looks that context up
+  from the same order's `stations[].tickets` (the queued ticket a waiting
+  line came from is structurally guaranteed to exist there), rather than
+  asking the backend to duplicate ticket data onto every waiting line.
 - **The all-day grid sorts highest-count-first, not the backend's
   alphabetical order.** `GET .../all-day-summary` (restiq-backend's real,
   merged `tickets.service.ts`) returns entries alphabetical-by-`itemName`.
@@ -243,10 +300,12 @@ restiq-backend PR #70 (issue #67) - this story consumes it verbatim. CAP-3
   refire can force an immediate re-poll. The all-day screen has no mutating
   actions of its own (SPEC's CAP-5 scope is read-only), so there is nothing
   to force a re-poll after - keeping it out avoids dead API surface.
-- **Bump/recall/refire have no automated live-backend verification in this
-  story.** No local restiq-backend/Postgres instance was available in this
-  build's environment, so the fire->queue->bump loop is covered only by
+- **Bump/recall/refire (K1), the expo consolidation (K2), and the all-day
+  summary (K4) have no automated live-backend verification.** No local
+  restiq-backend/Postgres instance was available in any of these builds'
+  environments, so the fire->queue->bump loop, the `/expo` consolidation,
+  and the `/all-day-summary` read are covered only by
   mocked-fetch integration tests against the real, merged
-  `tickets.dtos.ts`/`tickets.controller.ts` shapes (read directly, not
-  guessed) - not exercised against a live server. Flagged for whoever next
-  has a running backend to spot-check.
+  `tickets.dtos.ts`/`tickets.controller.ts`/`tickets.service.ts` shapes
+  (read directly, not guessed) - not exercised against a live server.
+  Flagged for whoever next has a running backend to spot-check.
