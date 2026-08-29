@@ -72,15 +72,28 @@ describe("POST /qr/auth/start", () => {
     expect(cookie?.httpOnly).toBe(true);
   });
 
-  it("passes through an upstream capability-disabled error untouched", async () => {
+  it("passes through an upstream qr_ordering-disabled error untouched", async () => {
     vi.stubGlobal(
       "fetch",
-      vi.fn().mockResolvedValue(upstreamJson(403, { error: { code: "capability_disabled", message: "Ordering is off" } })),
+      vi.fn().mockResolvedValue(upstreamJson(403, { error: { code: "qr_ordering_disabled", message: "Ordering is off" } })),
     );
     const res = await POST(jsonRequest({ outletId: "o1", tableId: "t1", name: "Rahul", phone: "9876543210" }));
     expect(res.status).toBe(403);
     const body = (await res.json()) as { error: { code: string } };
-    expect(body.error.code).toBe("capability_disabled");
+    expect(body.error.code).toBe("qr_ordering_disabled");
+  });
+
+  it("passes through a session-already-open error (409) untouched - the welcome flow reads this to flip into join mode", async () => {
+    vi.stubGlobal(
+      "fetch",
+      vi.fn().mockResolvedValue(
+        upstreamJson(409, { error: { code: "session_already_open", message: "This table already has an open session - join it with its PIN instead" } }),
+      ),
+    );
+    const res = await POST(jsonRequest({ outletId: "o1", tableId: "t1", name: "Rahul", phone: "9876543210" }));
+    expect(res.status).toBe(409);
+    const body = (await res.json()) as { error: { code: string } };
+    expect(body.error.code).toBe("session_already_open");
   });
 
   it("returns 502 when the backend is unreachable", async () => {

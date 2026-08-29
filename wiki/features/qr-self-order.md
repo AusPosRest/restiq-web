@@ -7,9 +7,9 @@ staff - guests with no account, no app, no login, ever. See
 (CAP-1..6), `screens.md` for the seven designed screens (Q1-Q7), and
 `restiq-design/docs/ux/ux-qr-self-order-2026-08-27/` (DESIGN.md, EXPERIENCE.md) for the
 design system and behavioral spine; this doc tracks what's actually built here, story by
-story. Backend counterpart: `restiq-backend/wiki/features/guest-session.md` (once it
-exists - issue #68/`feature/68-guest-session` was building in parallel and hadn't
-pushed a reachable branch at the time story 1 shipped).
+story. Backend counterpart: `restiq-backend`'s guest realm (issue #68, merged to `dev`
+as PR #69 - `src/guest/sessions/`) - see CAP-1's Reconciliation section below for what
+changed once it landed.
 
 ## CAP-1 - QR entry and table session (story 1, issue #64)
 
@@ -30,30 +30,33 @@ pushed a reachable branch at the time story 1 shipped).
   - **Table-QR entry URL:** `/qr/t/[outletId]/[tableId]` (SPEC Assumptions: "a
     documented per-table URL pattern suffices for the demo" - physical QR generation is
     Tenant Admin territory, out of scope here). `src/app/qr/t/[outletId]/[tableId]/page.tsx`
-    is a server component: it resolves the capability gate and session-open status
-    *before* any guest-facing UI renders (`table-status.ts`'s `fetchTableStatus`), so the
-    menu is never reachable when ordering is off, and a not-found/unreachable table fails
-    the same warm way (`unavailable-view.tsx`) rather than a raw error.
+    is a server component: it resolves the `qr_ordering` capability gate *before* any
+    guest-facing UI renders (`availability.ts`'s `checkAvailability`), so the menu is
+    never reachable when ordering is off, and an unavailable/unreachable outlet fails the
+    same warm way (`unavailable-view.tsx`) rather than a raw error. See Reconciliation
+    below - this replaced a pre-merge `table-status.ts` that also resolved a per-table
+    session-open status, which the real backend doesn't expose.
   - **Q1 Welcome + Q2 Session PIN** (`welcome-flow.tsx`, `welcome-flow-state.ts`): one
     client component covering both designed screens as view states, not separate routes
     - EXPERIENCE.md's IA treats them as one linear step and nothing yet needs to
-      deep-link into the middle of starting/joining. A session binds to exactly one
-      table (SPEC CAP-1 success signal), so the table's live `sessionOpen` status picks
-      a single mode up front - "Start ordering" (name+phone form) when no session is
-      open, "Join your table" (name field + 4-digit keypad, auto-submitting at 4 digits
-      like the POS PIN pad) when one is - never both, and never a mode switch, since
-      starting a second session on an already-open table isn't valid.
+      deep-link into the middle of starting/joining. There is no backend lookup that
+      says whether a table already has an open session, so the screen shows both
+      affordances up front - "Start ordering" (name+phone form) primary, "Join your
+      table" (name field + 4-digit keypad, auto-submitting at 4 digits like the POS PIN
+      pad) secondary - and discovers the truth reactively from the start/join responses
+      themselves (see Reconciliation below).
     - **Starting** proceeds straight to the PIN screen with no extra ceremony
       (EXPERIENCE.md "The solo lunch") - the PIN is shown large with a "share this PIN"
       caption and a copy-to-clipboard action.
     - **Joining** shows a plain inline error on a wrong PIN ("That PIN didn't match -
       ask your table for the 4-digit code" - the backend's own message, passed through
-      untouched) and clears the PIN dots for another attempt; no lockout drama, since
-      this PIN gates a cart, not money (SPEC Constraints).
+      untouched) and clears the PIN dots for another attempt; no lockout drama on a
+      merely-wrong PIN, since this PIN gates a cart, not money (SPEC Constraints) - a
+      real 5-attempts/30s lockout (429 `locked_out`) still renders its own plain message.
     - **a11y (WCAG 2.1 AA floor):** labeled inputs, visible focus rings on every
       interactive control, inline errors via `role="alert"`, and an `aria-live="polite"`
       region wrapping the whole state area so a screen-reader guest hears the
-      start→PIN or join→joined convergence.
+      start→PIN, join→joined, or mode-flip convergence.
   - **Auth route handlers** (`src/app/qr/auth/start/route.ts`,
     `src/app/qr/auth/join/route.ts`): exchange name+phone or PIN+name for a guest JWT,
     stored in an httpOnly `guest_session` cookie the browser never reads directly
@@ -70,29 +73,68 @@ pushed a reachable branch at the time story 1 shipped).
     uses 8px) plus its own FSSAI veg/non-veg and stepper-status color vocabulary, set up
     now for the menu/status screens that will use it.
 
-### Backend contract - NOT YET RECONCILED
+### Reconciliation (pre-merge guessed contract -> the real `/guest/v1/*`)
 
-Issue #68 (`feature/68-guest-session`) was building in parallel and hadn't pushed a
-reachable branch when this story shipped, and this worktree has no access to the
-`restiq-backend` checkout to verify directly (worktree isolation blocks cross-repo git
-commands). Everything here is built against `spec-qr-self-order/SPEC.md`'s stated
-contract, not a verified backend response shape - flagged the same way
-`pos-cashier-waiter.md` flags its own pre-merge contract reads, except here the source
-branch was simply unreachable rather than read-and-verified. Assumed endpoints (see
-`src/app/qr/auth/types.ts` and `src/app/qr/t/[outletId]/[tableId]/table-status.ts` for
-the full assumed shapes):
+Issue #68 (`feature/68-guest-session`) hadn't pushed a reachable branch when story 1
+shipped, so it built against `spec-qr-self-order/SPEC.md`'s stated contract alone and
+flagged the result NOT YET RECONCILED, same discipline `pos-cashier-waiter.md` uses for
+its own pre-merge contract reads. That branch has since merged to `restiq-backend/dev`
+as PR #69 (`src/guest/sessions/sessions.{controller,dtos,service}.ts`, read directly).
+This pass reconciled the guess against it:
 
-- `GET /guest/v1/tables/{outletId}/{tableId}` -> `{ outlet, table, qrOrderingEnabled, sessionOpen }`
-  (used by the server-rendered entry page to decide start-vs-join and the capability
-  gate; **not** explicitly named in the SPEC/issue text, invented to make the "single
-  CTA based on live state" behavior possible - highest-risk assumption to reconcile).
-- `POST /guest/v1/sessions` `{ outletId, tableId, name, phone }` -> `{ token, pin, session }`
-- `POST /guest/v1/sessions/join` `{ outletId, tableId, pin, name }` -> `{ token, session }`
-  (401/404 invalid PIN or no active session, 429 rate-limited, 403 `capability_disabled`)
-
-**Action for whoever picks up the next Q-screen story:** re-fetch `feature/68-guest-session`
-once it's pushed, diff its real DTOs against `src/app/qr/auth/types.ts` and
-`table-status.ts`, and update both files' contract comments plus this section.
+- **There is no per-table session-status lookup - the biggest assumption was wrong.**
+  The guessed `GET /guest/v1/tables/{outletId}/{tableId}` (`{ outlet, table,
+  qrOrderingEnabled, sessionOpen }`) does not exist on the real backend at all. The only
+  public pre-session endpoint is per-*outlet*, not per-table, and says nothing about
+  session state: `GET /guest/v1/outlets/:outletId/availability` -> `{ available: boolean,
+  reason?: "not_found" | "qr_ordering_disabled" }`. `table-status.ts` and its test were
+  deleted outright and replaced with `availability.ts`/`availability.test.ts`, which only
+  resolve the `qr_ordering` gate.
+- **Consequence: the Welcome screen can no longer pick a single mode server-side.**
+  `welcome-flow-state.ts`'s `initialFlowState` dropped its `sessionOpen` parameter and
+  always starts in `start-form`; `welcome-flow.tsx` shows both affordances up front
+  ("Start ordering" primary, a "Join your table" link secondary) and discovers the truth
+  reactively from the real error codes: a start that 409s with `session_already_open`
+  flips into `join-form` with a friendly notice line ("Your table already has an order
+  going - join it with the PIN below") instead of surfacing it as a failed submission;
+  a join that 404s with `no_open_session` flips back to `start-form` the same way
+  ("This table doesn't have an order started yet..."). Manual switch links exist too, so
+  a guest isn't forced through a failed attempt just to change mode. Both flip paths and
+  the underlying state machine got explicit tests (`welcome-flow.test.tsx`,
+  `welcome-flow-state.test.ts`).
+- **Real error codes/statuses differ from the SPEC-only guess and were fixed
+  throughout** (`types.ts`, the route handlers' comments, `welcome-flow.tsx`'s
+  status/code branching, and every affected test): a wrong PIN is **403** `invalid_pin`
+  (guessed 401), joining a table with no open session is **404** `no_open_session`
+  (guessed a generic "no active session" without a stable code), the join lockout is
+  **429** `locked_out` at 5 attempts/30s per outlet+table (guessed a looser "rate
+  limited"), and the capability gate's code is `qr_ordering_disabled` (guessed
+  `capability_disabled`). Every error still follows the house `{ error: { code, message
+  } }` envelope, which the pre-merge guess had already gotten right (`GuestApiError`),
+  so the route handlers' pass-through logic needed no change - only their types and
+  comments did.
+- **`TableSessionView` is richer than the guessed `{ outletId, tableId }`** - real shape
+  is `{ sessionId, status, table: { id, label }, outletId, guests: [{ id, name,
+  joinedAt }], createdAt, expiresAt, closedAt }`. `types.ts` now matches it exactly, but
+  nothing in this story's UI consumes the extra fields yet (later Q-screens will, once
+  `GET /guest/v1/session` has a caller).
+- **A confirmed, permanent gap, not a bug:** the real contract has no endpoint that
+  returns an outlet's display name or a table's label before a session exists - not
+  `availability` (`{ available, reason }` only) and not even `TableSessionView` (it
+  carries a table `label`, but no outlet name at all, anywhere). The pre-merge welcome
+  screen's `qr-outlet-name`/`qr-table-label` header was built on the assumed
+  `table-status` endpoint and is gone along with it; `unavailable-view.tsx` similarly
+  lost its `outletName` prop (it never has a real one to show now) and always renders
+  "This restaurant". Whoever builds CAP-2's menu screen should expect to source outlet
+  branding from wherever the menu-fetch endpoint (not yet built) puts it, not retrofit a
+  pre-session outlet-name lookup here.
+- **Live-verified**, not just mocked: `restiq-backend`'s `dev` branch was run locally
+  (Postgres `restiq_demo`, `GUEST_JWT_SECRET` set) against this build's dev server for a
+  full click-through - start a session (real PIN returned), a second start on the same
+  table 409ing into join mode with the real message, joining with the wrong PIN (403,
+  real message), joining with the right PIN (200, real guest added to the real session),
+  joining a table with no session 404ing back into start mode, and the outlet-disabled
+  unavailable page - all against the genuine `sessions.controller.ts`, not a stub.
 
 ## Conventions established for later Q-screens (stories 2-6 build on these)
 

@@ -3,16 +3,23 @@
 // Q1 Welcome + Q2 Session PIN (CAP-1). One client component covering both
 // designed screens as view states (no separate route - EXPERIENCE.md's IA
 // treats them as one linear step and nothing else needs to deep-link into
-// the middle of starting/joining a session yet). A session binds to exactly
-// one table (SPEC CAP-1 success signal), so the table's live status decides
-// a single mode up front: "start" when no session is open, "join" when one
-// is - never both, and never a mode switch, since starting a second session
-// on an already-open table isn't a valid action.
+// the middle of starting/joining a session yet).
+//
+// RECONCILED (restiq-backend PR #69, merged to `dev`): the real backend has
+// no per-table session-status lookup, only a per-outlet `qr_ordering`
+// availability check (availability.ts). There is no way to know ahead of
+// time whether this table already has an open session, so this screen shows
+// BOTH affordances - "Start ordering" primary, "Join your table" secondary -
+// and discovers the truth reactively: a start that 409s with
+// `session_already_open` flips into join mode with a friendly line; a join
+// that 404s with `no_open_session` flips back to start mode the same way.
+// See welcome-flow-state.ts and wiki/features/qr-self-order.md's
+// "Reconciliation" section for the full story.
 //
 // WCAG 2.1 AA floor (EXPERIENCE.md): labeled fields, visible focus (default
 // browser/Tailwind focus rings), aria-live on the state transition (session
-// started / joined), inline errors via role="alert", solo-friendly (starting
-// auto-proceeds to the PIN screen with no extra ceremony).
+// started / joined / mode flip), inline errors via role="alert", solo-friendly
+// (starting auto-proceeds to the PIN screen with no extra ceremony).
 import { Check, Copy } from "lucide-react";
 import { useState } from "react";
 import {
@@ -33,23 +40,20 @@ function errorMessage(body: ApiErrorBody, fallback: string): string {
   return body.error?.message ?? fallback;
 }
 
+const JOIN_INVITE_NOTICE = "Your table already has an order going - join it with the PIN below.";
+const START_INVITE_NOTICE = "This table doesn't have an order started yet - you can start one below.";
+
 export function WelcomeFlow({
   outletId,
   tableId,
-  outletName,
-  tableLabel,
-  sessionOpen,
 }: Readonly<{
   outletId: string;
   tableId: string;
-  outletName: string;
-  tableLabel: string;
-  sessionOpen: boolean;
 }>) {
-  const [state, setState] = useState<WelcomeFlowState>(() => initialFlowState(sessionOpen));
-  // Bumped on every failed join attempt to remount JoinForm, clearing its
-  // locally-tracked PIN digits back to blank (React key reset, simpler than
-  // threading digit-entry state back up through WelcomeFlowState).
+  const [state, setState] = useState<WelcomeFlowState>(initialFlowState);
+  // Bumped on every failed join attempt (or a mode flip) to remount JoinForm,
+  // clearing its locally-tracked PIN digits back to blank (React key reset,
+  // simpler than threading digit-entry state back up through WelcomeFlowState).
   const [joinAttempt, setJoinAttempt] = useState(0);
 
   async function startSession(name: string, phone: string) {
@@ -62,12 +66,34 @@ export function WelcomeFlow({
         body: JSON.stringify({ outletId, tableId, name, phone }),
       });
     } catch {
-      setState({ step: "start-form", name, phone, error: "Couldn't reach the restaurant - check your connection and try again", pending: false });
+      setState({
+        step: "start-form",
+        name,
+        phone,
+        error: "Couldn't reach the restaurant - check your connection and try again",
+        notice: null,
+        pending: false,
+      });
       return;
     }
     const body = (await res.json().catch(() => ({}))) as ApiErrorBody & { pin?: string };
     if (!res.ok || typeof body.pin !== "string") {
-      setState({ step: "start-form", name, phone, error: errorMessage(body, "Couldn't start your table session - please try again"), pending: false });
+      if (body.error?.code === "session_already_open") {
+        // The truth was "join", not "start" - flip modes with a friendly
+        // line rather than an error tone (this isn't a mistake, just a
+        // guess the screen couldn't make ahead of time).
+        setState({ step: "join-form", name, pin: "", error: null, notice: JOIN_INVITE_NOTICE, pending: false });
+        setJoinAttempt((n) => n + 1);
+        return;
+      }
+      setState({
+        step: "start-form",
+        name,
+        phone,
+        error: errorMessage(body, "Couldn't start your table session - please try again"),
+        notice: null,
+        pending: false,
+      });
       return;
     }
     // Solo-friendly: starting proceeds straight to the PIN screen, no
@@ -85,44 +111,60 @@ export function WelcomeFlow({
         body: JSON.stringify({ outletId, tableId, pin, name }),
       });
     } catch {
-      setState({ step: "join-form", name, pin: "", error: "Couldn't reach the restaurant - check your connection and try again", pending: false });
+      setState({
+        step: "join-form",
+        name,
+        pin: "",
+        error: "Couldn't reach the restaurant - check your connection and try again",
+        notice: null,
+        pending: false,
+      });
       setJoinAttempt((n) => n + 1);
       return;
     }
     if (!res.ok) {
       const body = (await res.json().catch(() => ({}))) as ApiErrorBody;
+      if (body.error?.code === "no_open_session") {
+        // The truth was "start", not "join" - flip modes with a friendly
+        // line, same discipline as the start->join flip above.
+        setState({ step: "start-form", name, phone: "", error: null, notice: START_INVITE_NOTICE, pending: false });
+        return;
+      }
       const fallback =
-        res.status === 401 || res.status === 404
-          ? "That PIN didn't match - ask your table for the 4-digit code"
-          : "Couldn't join the table - please try again";
-      setState({ step: "join-form", name, pin: "", error: errorMessage(body, fallback), pending: false });
+        res.status === 429
+          ? "Too many incorrect attempts - try again shortly"
+          : body.error?.code === "invalid_pin"
+            ? "That PIN didn't match - ask your table for the 4-digit code"
+            : "Couldn't join the table - please try again";
+      setState({ step: "join-form", name, pin: "", error: errorMessage(body, fallback), notice: null, pending: false });
       setJoinAttempt((n) => n + 1);
       return;
     }
     setState({ step: "joined", guestName: name });
   }
 
+  function switchToJoin() {
+    setState((s) =>
+      s.step === "start-form" ? { step: "join-form", name: s.name, pin: "", error: null, notice: null, pending: false } : s,
+    );
+    setJoinAttempt((n) => n + 1);
+  }
+
+  function switchToStart() {
+    setState((s) =>
+      s.step === "join-form" ? { step: "start-form", name: s.name, phone: "", error: null, notice: null, pending: false } : s,
+    );
+  }
+
   return (
     <main className="flex min-h-screen flex-1 flex-col px-6 pb-28 pt-8">
-      <header className="flex items-center justify-between">
-        <h1 data-testid="qr-outlet-name" className="font-headline text-lg font-semibold text-foreground">
-          {outletName}
-        </h1>
-        <span
-          data-testid="qr-table-label"
-          className="rounded-full bg-card px-3 py-1 text-xs font-medium text-muted-foreground"
-        >
-          Table {tableLabel}
-        </span>
-      </header>
-
       <div className="mt-8" role="region" aria-live="polite" aria-label="Table session status">
         {state.step === "start-form" ? (
-          <StartForm state={state} onSubmit={startSession} />
+          <StartForm state={state} onSubmit={startSession} onSwitchToJoin={switchToJoin} />
         ) : state.step === "started" ? (
           <StartedPanel pin={state.pin} />
         ) : state.step === "join-form" ? (
-          <JoinForm key={joinAttempt} state={state} onSubmit={joinSession} />
+          <JoinForm key={joinAttempt} state={state} onSubmit={joinSession} onSwitchToStart={switchToStart} />
         ) : (
           <JoinedPanel guestName={state.guestName} />
         )}
@@ -134,9 +176,11 @@ export function WelcomeFlow({
 function StartForm({
   state,
   onSubmit,
+  onSwitchToJoin,
 }: Readonly<{
   state: Extract<WelcomeFlowState, { step: "start-form" }>;
   onSubmit: (name: string, phone: string) => void;
+  onSwitchToJoin: () => void;
 }>) {
   const [name, setName] = useState(state.name);
   const [phone, setPhone] = useState(state.phone);
@@ -184,11 +228,26 @@ function StartForm({
         </div>
       </div>
 
+      {state.notice ? (
+        <p data-testid="qr-start-notice" className="mt-4 text-sm text-muted-foreground">
+          {state.notice}
+        </p>
+      ) : null}
+
       {state.error ? (
         <p role="alert" data-testid="qr-start-error" className="mt-4 text-sm text-error-soft">
           {state.error}
         </p>
       ) : null}
+
+      <button
+        type="button"
+        data-testid="qr-switch-to-join"
+        onClick={onSwitchToJoin}
+        className="mt-4 text-sm font-medium text-primary underline-offset-2 hover:underline"
+      >
+        Already at a table with an order started? Join it
+      </button>
 
       <div className="fixed inset-x-0 bottom-0 border-t border-border bg-background/95 p-4 backdrop-blur">
         <button
@@ -258,9 +317,11 @@ function StartedPanel({ pin }: Readonly<{ pin: string }>) {
 function JoinForm({
   state,
   onSubmit,
+  onSwitchToStart,
 }: Readonly<{
   state: Extract<WelcomeFlowState, { step: "join-form" }>;
   onSubmit: (name: string, pin: string) => void;
+  onSwitchToStart: () => void;
 }>) {
   const [name, setName] = useState(state.name);
   const [nameError, setNameError] = useState<string | null>(null);
@@ -291,6 +352,12 @@ function JoinForm({
     <div data-testid="qr-join-form">
       <h2 className="font-headline text-2xl font-semibold text-foreground">Join your table.</h2>
       <p className="mt-1 text-sm text-muted-foreground">A friend already started this table. Ask them for the 4-digit table PIN.</p>
+
+      {state.notice ? (
+        <p data-testid="qr-join-notice" className="mt-4 text-sm text-muted-foreground">
+          {state.notice}
+        </p>
+      ) : null}
 
       <div className="mt-6">
         <label htmlFor="qr-join-name" className="text-xs font-medium text-muted-foreground">
@@ -363,6 +430,15 @@ function JoinForm({
           ),
         )}
       </div>
+
+      <button
+        type="button"
+        data-testid="qr-switch-to-start"
+        onClick={onSwitchToStart}
+        className="mt-6 w-full text-center text-sm font-medium text-primary underline-offset-2 hover:underline"
+      >
+        Starting a new table instead? Start ordering
+      </button>
     </div>
   );
 }

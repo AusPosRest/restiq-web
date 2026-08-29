@@ -22,19 +22,23 @@ export function isValidPhone(phone: string): boolean {
 }
 
 /**
- * The screen's state machine. `sessionOpen` (from the server-side table
- * status lookup) decides the starting step: a fresh table starts in
- * "start-form" ("Start ordering" per SPEC/EXPERIENCE.md IA), a table with a
- * session already open starts in "join-form" ("Join your table").
+ * The screen's state machine. There is no backend lookup that says whether a
+ * table already has a session open (the real contract only exposes a
+ * per-outlet `qr_ordering` availability check - see availability.ts), so
+ * both affordances are offered up front and the screen discovers the truth
+ * reactively from the start/join responses themselves: a start that 409s
+ * with `session_already_open` flips into "join-form" with a friendly
+ * `notice`; a join that 404s with `no_open_session` flips back to
+ * "start-form" the same way. `notice` is a non-error informational line
+ * (distinct from `error`, which is a failed submission on the *current*
+ * mode) shown once, right after such a flip.
  */
 export type WelcomeFlowState =
-  | { step: "start-form"; name: string; phone: string; error: string | null; pending: boolean }
+  | { step: "start-form"; name: string; phone: string; error: string | null; notice: string | null; pending: boolean }
   | { step: "started"; pin: string; guestName: string }
-  | { step: "join-form"; name: string; pin: string; error: string | null; pending: boolean }
+  | { step: "join-form"; name: string; pin: string; error: string | null; notice: string | null; pending: boolean }
   | { step: "joined"; guestName: string };
 
-export function initialFlowState(sessionOpen: boolean): WelcomeFlowState {
-  return sessionOpen
-    ? { step: "join-form", name: "", pin: "", error: null, pending: false }
-    : { step: "start-form", name: "", phone: "", error: null, pending: false };
+export function initialFlowState(): WelcomeFlowState {
+  return { step: "start-form", name: "", phone: "", error: null, notice: null, pending: false };
 }

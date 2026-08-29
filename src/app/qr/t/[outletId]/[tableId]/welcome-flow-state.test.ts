@@ -2,12 +2,8 @@ import { describe, expect, it } from "vitest";
 import { appendDigit, backspacePin, initialFlowState, isValidName, isValidPhone, PIN_LENGTH } from "./welcome-flow-state";
 
 describe("welcome-flow-state", () => {
-  it("starts in start-form when no session is open", () => {
-    expect(initialFlowState(false)).toEqual({ step: "start-form", name: "", phone: "", error: null, pending: false });
-  });
-
-  it("starts in join-form when a session is already open", () => {
-    expect(initialFlowState(true)).toEqual({ step: "join-form", name: "", pin: "", error: null, pending: false });
+  it("always starts in start-form - there is no per-table session-status lookup to pick a mode from", () => {
+    expect(initialFlowState()).toEqual({ step: "start-form", name: "", phone: "", error: null, notice: null, pending: false });
   });
 
   it("appendDigit stops at PIN_LENGTH", () => {

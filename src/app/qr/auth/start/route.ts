@@ -3,7 +3,12 @@
 // - the token never reaches client-side JS, mirroring pos/auth/login's
 // credential-exchange shape (AD-13, extended to the guest realm).
 //
-// Contract assumed from SPEC.md pending reconciliation - see ../types.ts.
+// Real contract (restiq-backend PR #69, merged - see ../types.ts): a second
+// start on a table that already has one open 409s with `session_already_open`
+// rather than an error the client should surface as a failure - welcome-
+// flow.tsx reads that code and flips into join mode instead of showing it as
+// a submission error, so this route passes the upstream body through
+// untouched either way, same discipline as join's wrong-PIN passthrough.
 import { NextResponse } from "next/server";
 import { guestSessionResponse } from "../session-cookies";
 import type { GuestApiError, GuestStartResult } from "../types";

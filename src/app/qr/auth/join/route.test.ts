@@ -55,19 +55,46 @@ describe("POST /qr/auth/join", () => {
     expect(cookie?.httpOnly).toBe(true);
   });
 
-  it("passes through a wrong-pin error untouched, without setting a cookie", async () => {
+  it("passes through a wrong-pin error (403 invalid_pin) untouched, without setting a cookie", async () => {
     vi.stubGlobal(
       "fetch",
       vi.fn().mockResolvedValue(
-        upstreamJson(401, { error: { code: "invalid_pin", message: "That PIN didn't match - ask your table for the 4-digit code" } }),
+        upstreamJson(403, { error: { code: "invalid_pin", message: "That PIN didn't match - ask your table for the 4-digit code" } }),
       ),
     );
 
     const res = await POST(jsonRequest({ outletId: "o1", tableId: "t1", pin: "0000", name: "Priya" }));
-    expect(res.status).toBe(401);
+    expect(res.status).toBe(403);
     expect(res.cookies.get(GUEST_SESSION_COOKIE)).toBeUndefined();
     const body = (await res.json()) as { error: { code: string } };
     expect(body.error.code).toBe("invalid_pin");
+  });
+
+  it("passes through a no-open-session error (404) untouched, without setting a cookie", async () => {
+    vi.stubGlobal(
+      "fetch",
+      vi.fn().mockResolvedValue(
+        upstreamJson(404, { error: { code: "no_open_session", message: "This table has no open session to join - start one instead" } }),
+      ),
+    );
+
+    const res = await POST(jsonRequest({ outletId: "o1", tableId: "t1", pin: "4729", name: "Priya" }));
+    expect(res.status).toBe(404);
+    expect(res.cookies.get(GUEST_SESSION_COOKIE)).toBeUndefined();
+    const body = (await res.json()) as { error: { code: string } };
+    expect(body.error.code).toBe("no_open_session");
+  });
+
+  it("passes through a lockout error (429 locked_out) untouched", async () => {
+    vi.stubGlobal(
+      "fetch",
+      vi.fn().mockResolvedValue(upstreamJson(429, { error: { code: "locked_out", message: "Too many incorrect attempts - try again shortly" } })),
+    );
+
+    const res = await POST(jsonRequest({ outletId: "o1", tableId: "t1", pin: "0000", name: "Priya" }));
+    expect(res.status).toBe(429);
+    const body = (await res.json()) as { error: { code: string } };
+    expect(body.error.code).toBe("locked_out");
   });
 
   it("returns 502 when the backend is unreachable", async () => {

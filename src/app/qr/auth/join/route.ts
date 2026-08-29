@@ -1,10 +1,15 @@
 // Joins an already-open table session (CAP-1, later guests): exchanges a
 // 4-digit PIN + name for a guest JWT, storing it the same way start does.
-// The PIN gates joining a cart, not money, so this is rate-limited but not
+// The PIN gates joining a cart, not money, so this is rate-limited (5/30s
+// per outlet+table, real contract's `locked_out` 429) but not
 // credential-grade (SPEC Constraints) - a wrong PIN gets a plain inline
 // error, never a lockout with drama.
 //
-// Contract assumed from SPEC.md pending reconciliation - see ../types.ts.
+// Real contract (restiq-backend PR #69, merged - see ../types.ts): a wrong
+// PIN is 403 `invalid_pin` (not 401), and joining a table with no open
+// session is 404 `no_open_session` - welcome-flow.tsx reads that code and
+// flips into start mode rather than showing it as a submission error, so
+// this route passes the upstream body through untouched either way.
 import { NextResponse } from "next/server";
 import { guestSessionResponse } from "../session-cookies";
 import type { GuestApiError, GuestJoinResult } from "../types";
