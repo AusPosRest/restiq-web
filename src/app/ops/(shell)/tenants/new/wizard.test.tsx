@@ -199,7 +199,7 @@ describe("OnboardingWizard", () => {
       status: 201,
       body: {
         tenant: { id: "t-1", name: "Spice Route", status: "provisioning" },
-        invite: { email: "owner@d.example", expiresAt: new Date(Date.now() + 7 * 86400000).toISOString() },
+        invite: { email: "owner@d.example", expiresAt: new Date(Date.now() + 7 * 86400000).toISOString(), inviteToken: "a".repeat(64) },
       },
     };
 
@@ -212,6 +212,8 @@ describe("OnboardingWizard", () => {
 
     await screen.findByTestId("onb-success");
     expect(screen.getByTestId("onb-success-invite-email").textContent).toBe("owner@d.example");
+    // Issue #85: the accept link must be visible and carry the raw token.
+    expect(screen.getByTestId("invite-link-url").textContent).toContain(`/admin/invite/${"a".repeat(64)}`);
     expect(screen.getByTestId("onb-success-tenants-link").getAttribute("href")).toBe("/ops/tenants");
   });
 });

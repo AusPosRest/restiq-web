@@ -152,7 +152,7 @@ export function TenantDetailPage() {
         {tab === "subscription" && <SubscriptionTab tenantId={tenant.id} />}
         {tab === "capabilities" && <CapabilitiesTab tenantId={tenant.id} capabilities={detail.capabilities} />}
         {tab === "branding" && <BrandingTab detail={detail} onMutated={load} />}
-        {tab === "owners" && <OwnersTab detail={detail} onMutated={load} />}
+        {tab === "owners" && <OwnersTab detail={detail} />}
       </div>
 
       <ConfirmReasonDialog

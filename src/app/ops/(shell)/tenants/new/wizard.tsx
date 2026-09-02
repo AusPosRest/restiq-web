@@ -8,6 +8,7 @@ import { AlertTriangle, Check, MailCheck } from "lucide-react";
 import Link from "next/link";
 import { useCallback, useEffect, useRef, useState } from "react";
 import { Button } from "@/components/ui/button";
+import { InviteLinkChip } from "../invite-link";
 import { BusinessStep, OutletsStep, OwnerInviteStep, SubscriptionStep, TaxStep } from "./steps";
 import {
   STEP_COUNT,
@@ -28,7 +29,7 @@ type Phase =
   | { name: "loading" }
   | { name: "resume-prompt"; draftUpdatedAt: string; draftData: WizardData }
   | { name: "editing" }
-  | { name: "success"; tenantName: string; inviteEmail: string; inviteExpiresAt: string };
+  | { name: "success"; tenantName: string; inviteEmail: string; inviteExpiresAt: string; inviteToken: string };
 
 type DraftStatus = { state: "idle" } | { state: "saved"; at: string } | { state: "error" };
 
@@ -168,13 +169,14 @@ export function OnboardingWizard() {
       if (res.ok) {
         const body = (await res.json()) as {
           tenant: { id: string; name: string; status: string };
-          invite: { email: string; expiresAt: string };
+          invite: { email: string; expiresAt: string; inviteToken: string };
         };
         setPhase({
           name: "success",
           tenantName: body.tenant.name,
           inviteEmail: body.invite.email,
           inviteExpiresAt: body.invite.expiresAt,
+          inviteToken: body.invite.inviteToken,
         });
         return;
       }
@@ -217,6 +219,7 @@ export function OnboardingWizard() {
             <p className="mt-1 text-xs text-muted-foreground">
               Expires {new Date(phase.inviteExpiresAt).toLocaleDateString()}
             </p>
+            <InviteLinkChip token={phase.inviteToken} />
           </div>
         </div>
         <div className="mt-10 flex items-center justify-center gap-4">
