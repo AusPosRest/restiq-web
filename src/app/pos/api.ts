@@ -8,6 +8,14 @@
 // directly) - see src/app/pos/auth/login/route.ts's header for how the rest
 // of CAP-1's login contract was verified.
 //
+// RECONCILED (2026-09-02, restiq-web#98) - every remaining self-authored
+// path below (bill/settle, refund, counter order, attendance) against the
+// real, merged restiq-backend contract (src/pos/{bills,orders,clock}/*, read
+// directly). See each section's own comment for what specifically was
+// wrong; ./orders/[orderId]/settle/bill-state.ts and
+// ./orders/[orderId]/refund/refund-state.ts's file headers cover the full
+// bill/refund reasoning.
+//
 // --- CAP-3 Order taking with modifiers/variants (menu read + order-line
 // writes). Every mutation below returns the real wire shape (`RawOrder`)
 // mapped through order-taking-state.ts's `toOrderView` into the display
@@ -143,23 +151,19 @@ export function removeOrderLine(orderId: string, lineId: string, menu?: Pick<Pos
 /**
  * CAP-6 QSR counter mode (story 7, issue #56 web / #62 backend). Starts a
  * fresh counter order - no table, no seat - issuing a new sequential token
- * number in the same call, per SPEC CAP-6's success criterion. Self-authored:
- * restiq-backend#62 ("QSR counter and token mode") had no branch or commits
- * as of this build (`gh issue view 62`/`gh api .../branches` against
- * AusPosRest/restiq-backend both confirm only dev/main/
- * feature/15-device-fleet exist) - built from SPEC.md's CAP-6 description and
- * the P7 mock (`restiq-qsr-counter-token-47--8c470c97.png`: "Order #47" and
- * "Token #47" both shown from the moment ring-up starts, not deferred to
- * charge time). The real backend's merged `dev` `OrderView` already models
- * `tableId: string | null` (read directly from `orders.dtos.ts` while
- * researching this story) - a counter order is structurally just an Order
- * with no table, so this is expected to become a thin extension of the real,
- * merged `openOrClaimTable` flow once #62 lands, not a separate concept.
- * MUST be reconciled once that branch exists, same discipline as every other
- * not-yet-backed contract in this file.
+ * number in the same call, per SPEC CAP-6's success criterion.
+ *
+ * RECONCILED (2026-09-02, restiq-web#98) against the real, merged
+ * restiq-backend `createCounterOrder` (`orders.controller.ts`, read
+ * directly): the real route is outlet-scoped
+ * (`POST outlets/:outletId/counter-orders`, 201) - the old guess
+ * (`POST orders/counter`, no outlet) never existed. Returns the same raw
+ * wire shape (`RawOrder`) every other order mutation in this file does, not
+ * an already-mapped `OrderView` - callers map it with `toOrderView` exactly
+ * like `startOrder` above.
  */
-export function startCounterOrder(): Promise<OrderView> {
-  return posApi<OrderView>("orders/counter", { method: "POST" });
+export function startCounterOrder(outletId: string): Promise<RawOrder> {
+  return posApi<RawOrder>(`outlets/${outletId}/counter-orders`, { method: "POST" });
 }
 
 export interface ClockEventView {
@@ -239,99 +243,149 @@ export function closeShift(shiftId: string, countedMinor: number): Promise<Close
 
 // --- CAP-11 Device and staff attendance status (story 11, issue #48).
 //
-// SELF-AUTHORED CONTRACT, not yet verified against a real backend. The
-// paired backend story (issue #54, branch feature/54-pos-device-status) had
-// no branch and no commits at the time this was built - `gh api
-// repos/AusPosRest/restiq-backend/branches` listed only dev/main/
-// feature/15-device-fleet. restiq-backend's dev branch does have the real
-// ClockEvent model and clock-out endpoint (src/pos/clock/*, verified by
-// reading the actual tree) but no endpoint that lists clock events back out -
-// only the write side exists so far.
-//
-// This shape is this story's best guess, built directly from SPEC CAP-11
-// ("who is clocked in on this device today" - "no fabricated staff or
-// times") and stories.yaml story 11 ("real ClockEvent rows from story 1...
-// static 'connected' placeholder, clearly not a live peripheral check"):
-// one GET returning today's attendance (derived server-side from ClockEvent
-// rows the same way CAP-1 already writes them - staffId/type/occurredAt) and
-// a `device` object that is deliberately never anything but a static mock,
-// never presented as live telemetry (DESIGN.md/EXPERIENCE.md's honesty
-// pattern for PrinterStatusChip/OfflineIndicatorPill).
-//
-// MUST be reconciled against the real restiq-backend#54 DTOs once that
-// lands - same discipline as table-map-state.ts's file header.
-
+// RECONCILED (2026-09-02, restiq-web#98) against the real, merged
+// restiq-backend contract (src/pos/clock/{attendance.controller.ts,
+// attendance.service.ts,attendance.dtos.ts}, read directly). What the
+// original self-authored guess got wrong:
+//  - the real route is `GET outlets/:outletId/attendance`, not
+//    `.../attendance/today`.
+//  - `staff` only ever lists staff *currently* clocked in (the latest
+//    ClockEvent per staff member, today, being a clock_in with no later
+//    clock_out - `attendance.service.ts`'s own filter, read directly) - there
+//    is no clocked-out entry to show, ever, so there's no `clockOutAt` field
+//    to carry. Sorted by name, not newest-first.
+//  - the mocked printer placeholder is `printerStatus: {status, mocked}` at
+//    the top level (`MockedPrinterStatus`), not nested under a `device`
+//    object, and `status` is a true literal type - `"connected"` is the only
+//    value the real backend can ever send (SPEC.md: "no real ESC/POS printer
+//    ... integration").
+//  - there is no connectivity/offline signal anywhere in this response (or
+//    anywhere else in pos/*) - the old `device.connectivity` field had no
+//    backing data at all, not even a mocked one. `status/device-status-
+//    screen.tsx` now passes `OfflineIndicatorPill` a permanently-static
+//    "online" prop instead of reading a fabricated response field, keeping
+//    DESIGN.md's two-chip layout without inventing a wire value for it.
 export interface AttendanceEntry {
   staffId: string;
-  staffName: string;
-  /** ISO timestamp of today's clock-in (outlet-local calendar day, per CAP-1's clock.util.ts convention). */
-  clockInAt: string;
-  /** null while still clocked in - the only clock write CAP-1's UI makes is clock-out. */
-  clockOutAt: string | null;
+  name: string;
+  /** ISO timestamp of today's clock-in (outlet-local calendar day, per CAP-1's clock.util.ts convention). Always present - see file header, only currently-clocked-in staff appear here at all. */
+  clockedInAt: string;
 }
 
-export type PrinterStatus = "connected" | "disconnected";
-export type ConnectivityStatus = "online" | "offline";
-
-/** Always mocked (SPEC CAP-11, DESIGN.md): no real printer or connectivity signal exists in this prototype. */
-export interface PosDeviceStatus {
-  printer: PrinterStatus;
-  connectivity: ConnectivityStatus;
-}
+/** The real backend can only ever report "connected" (attendance.dtos.ts's `MockedPrinterStatus`, read directly) - no real printer integration exists in this prototype. */
+export type PrinterStatus = "connected";
 
 export interface AttendanceView {
   outletId: string;
-  /** Newest first. Empty is a real, valid state (no one clocked in yet today), never fabricated rows. */
+  asOf: string;
+  /** Sorted by name. Empty is a real, valid state (no one clocked in yet today), never fabricated rows. */
   staff: AttendanceEntry[];
-  device: PosDeviceStatus;
+  printerStatus: { status: PrinterStatus; mocked: true };
 }
 
 export function getAttendanceToday(outletId: string): Promise<AttendanceView> {
-  return posApi<AttendanceView>(`outlets/${encodeURIComponent(outletId)}/attendance/today`);
+  return posApi<AttendanceView>(`outlets/${encodeURIComponent(outletId)}/attendance`);
 }
 
 // --- CAP-7 Bill & Settle (story 8, issue #53 web / #59 backend). See
 // orders/[orderId]/settle/bill-state.ts's file header for the full
-// self-authored-contract reasoning (restiq-backend#59 has no branch yet).
+// reconciliation reasoning (restiq-web#98) against the real, merged
+// restiq-backend `src/pos/bills/*`.
 export type {
-  AddTenderInput,
-  ApplyDiscountInput,
-  BillDiscountView,
-  BillTaxLineView,
+  BillStatus,
   BillTenderMethod,
   BillTenderView,
   BillView,
+  FinalizeBillInput,
+  PendingDiscount,
+  PendingTender,
 } from "./orders/[orderId]/settle/bill-state";
-import type { AddTenderInput, ApplyDiscountInput, BillView } from "./orders/[orderId]/settle/bill-state";
+import type { FinalizeBillInput, BillView } from "./orders/[orderId]/settle/bill-state";
 
-/** GET /pos/v1/orders/:id/bill - the real endpoint should lazily materialise a draft Bill from the Order's current lines on first read if none exists yet (this client never creates one explicitly). */
-export function fetchBill(orderId: string): Promise<BillView> {
-  return posApi<BillView>(`orders/${orderId}/bill`);
+const BILL_ID_CACHE_PREFIX = "pos.billId.";
+
+/**
+ * Client-side memory of an order's Bill id, keyed by orderId - sessionStorage,
+ * same posture as admin/(shell)/outlet-context.tsx's outlet-id cache. Needed
+ * only because the real `bills.controller.ts` (read directly) exposes no
+ * lookup-by-orderId route: a 409 from `POST orders/:orderId/bill` carries no
+ * id in its body (`bill-core.ts`'s `createBillRecord` just throws
+ * `{code:'bill_already_exists'}`), and `OrderView` itself carries no billId
+ * (`orders.dtos.ts`, read directly). Once this tab has seen a bill's real id
+ * (from a create or an earlier fetch), it's remembered for the life of the
+ * tab's session so a reload doesn't strand the screen on a 409 with nothing
+ * to fetch.
+ */
+function rememberBillId(orderId: string, billId: string): void {
+  try {
+    sessionStorage.setItem(BILL_ID_CACHE_PREFIX + orderId, billId);
+  } catch {
+    // ignore - a lost cache just means a later 409 for this order falls
+    // through to the honest "no id to recover" branch below, not a crash.
+  }
 }
 
-/** POST /pos/v1/orders/:id/bill/discount - below CAP-8's threshold this is the whole call; at/above it, `managerPin` carries the ManagerPinDialog-approved PIN alongside the same reasonCode (now sourced from the dialog's reason-code select instead of the plain field). */
-export function applyBillDiscount(orderId: string, input: ApplyDiscountInput): Promise<BillView> {
-  return posApi<BillView>(`orders/${orderId}/bill/discount`, { method: "POST", body: JSON.stringify(input) });
+function recallBillId(orderId: string): string | null {
+  try {
+    return sessionStorage.getItem(BILL_ID_CACHE_PREFIX + orderId);
+  } catch {
+    return null;
+  }
 }
 
-export function addBillTender(orderId: string, input: AddTenderInput): Promise<BillView> {
-  return posApi<BillView>(`orders/${orderId}/bill/tenders`, { method: "POST", body: JSON.stringify(input) });
+/**
+ * Create-or-fetch the Bill for an order. `POST orders/:orderId/bill`
+ * (bills.controller.ts's `create`, read directly) is the only way in - there
+ * is no `GET` keyed by orderId. A bill that already exists 409s
+ * (`{code:'bill_already_exists'}`, no id); this falls back to the id
+ * remembered from this tab's own earlier create/fetch and re-`GET`s it via
+ * `bills/:id`. A fresh tab hitting an order another device already billed,
+ * with nothing cached, rethrows that 409 honestly rather than guessing at an
+ * id - see this file's `rememberBillId`/`recallBillId` above.
+ */
+export async function fetchOrCreateBill(orderId: string): Promise<BillView> {
+  try {
+    const bill = await posApi<BillView>(`orders/${orderId}/bill`, { method: "POST" });
+    rememberBillId(orderId, bill.id);
+    return bill;
+  } catch (error) {
+    if (error instanceof PosApiError && error.status === 409) {
+      const billId = recallBillId(orderId);
+      if (billId) {
+        const bill = await posApi<BillView>(`bills/${billId}`);
+        rememberBillId(orderId, bill.id);
+        return bill;
+      }
+    }
+    throw error;
+  }
 }
 
-/** Rejected (409, surfaced via PosApiError) if tenders don't exactly cover the grand total - canFinalizeBill() already keeps the button disabled in that case, this is the server-side backstop. */
-export function finalizeBill(orderId: string): Promise<BillView> {
-  return posApi<BillView>(`orders/${orderId}/bill/finalize`, { method: "POST" });
+export function getBill(billId: string): Promise<BillView> {
+  return posApi<BillView>(`bills/${billId}`);
+}
+
+/**
+ * Submits every pending discount + tender together (`FinalizeBillDto`) -
+ * the real backend has no separate discount/tender endpoints, see
+ * bill-state.ts's file header. Rejected (400 `tender_mismatch`) if the
+ * tenders don't exactly sum to the total - `canFinalizeBill()` already keeps
+ * the button disabled in that case, this is the server-side backstop.
+ */
+export function finalizeBill(billId: string, input: FinalizeBillInput): Promise<BillView> {
+  return posApi<BillView>(`bills/${billId}/finalize`, { method: "POST", body: JSON.stringify(input) });
 }
 
 // --- CAP-9 Refunds and adjustments (story 10, issue #57 web / #63 backend).
 // See orders/[orderId]/refund/refund-state.ts's file header for the full
-// self-authored-contract reasoning (restiq-backend#63 has no branch yet).
-// The original bill is read via the fetchBill() GET above - no separate read
-// endpoint exists for it.
-export type { CreateRefundInput, CreditNoteView, RefundMethod } from "./orders/[orderId]/refund/refund-state";
+// reconciliation reasoning (restiq-web#98) against the real, merged
+// restiq-backend `src/pos/bills/*`. The original bill is read via
+// `getBill()`/`fetchOrCreateBill()` above - no separate read endpoint exists
+// for it.
+export type { CreateRefundInput, CreditNoteView } from "./orders/[orderId]/refund/refund-state";
 import type { CreateRefundInput, CreditNoteView } from "./orders/[orderId]/refund/refund-state";
 
-/** POST /pos/v1/orders/:id/bill/refund - CAP-8-gated (managerPin always required, see refund-state.ts). Never mutates the original Bill (AD-14/CAP-9) - returns a new, separate CreditNoteView instead of a BillView. */
-export function createRefund(orderId: string, input: CreateRefundInput): Promise<CreditNoteView> {
-  return posApi<CreditNoteView>(`orders/${orderId}/bill/refund`, { method: "POST", body: JSON.stringify(input) });
+/** POST /pos/v1/bills/:id/refund (bills.controller.ts's `refund`, read directly - targets the Bill, not the Order). CAP-8-gated (managerPin always required, see refund-state.ts). Never mutates the original Bill (AD-14/CAP-9) - returns a new, separate CreditNoteView instead of a BillView. */
+export function createRefund(billId: string, input: CreateRefundInput): Promise<CreditNoteView> {
+  return posApi<CreditNoteView>(`bills/${billId}/refund`, { method: "POST", body: JSON.stringify(input) });
 }

@@ -1,3 +1,8 @@
+// Reconciled (restiq-web#98) against the real, merged restiq-backend
+// `attendance.controller.ts`/`attendance.dtos.ts` contract: the route is
+// `outlets/:outletId/attendance` (no `/today`), the response has no
+// `clockOutAt` (only currently-clocked-in staff are ever listed) and no
+// `device` object - just a top-level `printerStatus`.
 import { cleanup, render, screen } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { afterEach, describe, expect, it, vi } from "vitest";
@@ -11,11 +16,9 @@ function jsonResponse(body: unknown, status = 200): Response {
 
 const ATTENDANCE_VIEW = {
   outletId: OUTLET_ID,
-  staff: [
-    { staffId: "s1", staffName: "Priya Nair", clockInAt: "2026-08-25T03:32:00.000Z", clockOutAt: null },
-    { staffId: "s2", staffName: "Ravi Kumar", clockInAt: "2026-08-25T02:00:00.000Z", clockOutAt: "2026-08-25T09:00:00.000Z" },
-  ],
-  device: { printer: "connected", connectivity: "online" },
+  asOf: "2026-08-25T09:32:00.000Z",
+  staff: [{ staffId: "s1", name: "Priya Nair", clockedInAt: "2026-08-25T03:32:00.000Z" }],
+  printerStatus: { status: "connected", mocked: true },
 };
 
 afterEach(() => {
@@ -24,11 +27,11 @@ afterEach(() => {
 });
 
 describe("DeviceStatusScreen", () => {
-  it("renders the real clocked-in staff from the mocked backend response, with name and clock-in time", async () => {
+  it("renders the real clocked-in staff from the real backend response, with name and clock-in time", async () => {
     vi.stubGlobal(
       "fetch",
       vi.fn((input: RequestInfo | URL) => {
-        expect(String(input)).toBe(`/pos/api/outlets/${OUTLET_ID}/attendance/today`);
+        expect(String(input)).toBe(`/pos/api/outlets/${OUTLET_ID}/attendance`);
         return Promise.resolve(jsonResponse(ATTENDANCE_VIEW));
       }),
     );
@@ -38,8 +41,6 @@ describe("DeviceStatusScreen", () => {
     expect(await screen.findByTestId("device-status-content")).toBeTruthy();
     expect(screen.getByTestId("attendance-row-s1").textContent).toContain("Priya Nair");
     expect(screen.getByTestId("attendance-row-s1").textContent).toContain("Clocked in");
-    expect(screen.getByTestId("attendance-row-s2").textContent).toContain("Ravi Kumar");
-    expect(screen.getByTestId("attendance-row-s2").textContent).toContain("Out");
   });
 
   it("shows the empty-attendance state when no one has clocked in today - never fabricated rows", async () => {

@@ -1,12 +1,13 @@
-// Component tests for the real P8 bill & settle screen. No live
-// restiq-backend to verify against yet (see bill-state.ts's file header), so
-// every network call is stubbed against this story's own self-authored
-// contract, same convention as order-taking-view.test.tsx/shift-screen.test.tsx.
+// Component tests for the real P8 bill & settle screen, reconciled
+// (restiq-web#98) against the real, merged restiq-backend `src/pos/bills/*`
+// contract - every stubbed route/shape below is the real one (bills.dtos.ts/
+// bills.controller.ts, read directly), not a self-authored guess.
 import { cleanup, render, screen, waitFor, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { BillSettleView } from "./bill-settle-view";
 import type { BillView } from "./bill-state";
+import type { PosMenuView, RawOrder } from "../order-taking-state";
 
 const ORDER_ID = "order-1042";
 
@@ -14,46 +15,69 @@ function jsonResponse(body: unknown, status = 200): Response {
   return new Response(JSON.stringify(body), { status, headers: { "content-type": "application/json" } });
 }
 
-function makeBill(overrides: Partial<BillView> = {}): BillView {
+const MENU: PosMenuView = {
+  currency: "INR",
+  categories: [{ id: "cat-mains", name: "Mains", sortOrder: 0 }],
+  items: [
+    {
+      id: "item-risotto",
+      categoryId: "cat-mains",
+      name: "Truffle Mushroom Risotto",
+      shortName: "Risotto",
+      available: true,
+      priceMinor: 39000,
+      variants: [],
+      modifierGroups: [],
+    },
+  ],
+};
+
+function rawOrder(overrides: Partial<RawOrder> = {}): RawOrder {
   return {
-    id: "bill-1",
-    billNumber: "TN1-000482",
-    orderId: ORDER_ID,
-    tableLabel: "T4",
-    currency: "INR",
-    status: "draft",
+    id: ORDER_ID,
+    tenantId: "tenant-1",
+    outletId: "outlet-1",
+    tableId: "table-4",
+    ownerId: "staff-1",
+    status: "sent",
+    tokenNumber: null,
+    createdAt: "2026-08-25T09:00:00.000Z",
+    updatedAt: "2026-08-25T09:30:00.000Z",
     lines: [
       {
         id: "line-1",
+        orderId: ORDER_ID,
         itemId: "item-risotto",
-        itemName: "Truffle Mushroom Risotto",
         variantId: null,
-        variantName: null,
         quantity: 2,
         unitPriceMinor: 39000,
-        modifiers: [],
-        lineTotalMinor: 78000,
+        seatNumber: 1,
         addedByStaffId: "staff-1",
-        seatNumber: null,
+        createdAt: "2026-08-25T09:05:00.000Z",
+        modifiers: [],
       },
     ],
-    subtotalMinor: 78000,
-    discount: null,
-    taxLines: [
-      { label: "CGST", ratePercent: 2.5, amountMinor: 1950 },
-      { label: "SGST", ratePercent: 2.5, amountMinor: 1950 },
-    ],
-    roundOffMinor: 0,
-    grandTotalMinor: 81900,
-    tenders: [],
-    tenderedMinor: 0,
-    remainingMinor: 81900,
-    finalisedAt: null,
     ...overrides,
   };
 }
 
-let bill: BillView;
+function makeBill(overrides: Partial<BillView> = {}): BillView {
+  return {
+    id: "bill-1",
+    orderId: ORDER_ID,
+    billNumber: null,
+    status: "open",
+    subtotalMinor: 78000,
+    taxMinor: 3900, // bill-core.ts's flat 5% placeholder
+    discountMinor: null,
+    discountReason: null,
+    totalMinor: 81900,
+    createdAt: "2026-08-25T10:00:00.000Z",
+    finalizedAt: null,
+    tenders: [],
+    ...overrides,
+  };
+}
 
 function stubFetch(handlers: Partial<Record<string, (init?: RequestInit) => Response>> = {}) {
   const fetchMock = vi.fn((input: RequestInfo | URL, init?: RequestInit) => {
@@ -62,39 +86,9 @@ function stubFetch(handlers: Partial<Record<string, (init?: RequestInit) => Resp
     const key = `${method} ${url.replace(/^.*\/pos\/api\//, "")}`;
 
     if (handlers[key]) return Promise.resolve(handlers[key]!(init));
-
-    if (key === `GET orders/${ORDER_ID}/bill`) return Promise.resolve(jsonResponse(bill));
-    if (key === `POST orders/${ORDER_ID}/bill/tenders`) {
-      const body = JSON.parse(String(init?.body)) as { method: "cash" | "upi"; amountMinor: number };
-      bill = {
-        ...bill,
-        tenders: [...bill.tenders, { id: `tender-${bill.tenders.length + 1}`, method: body.method, amountMinor: body.amountMinor, capturedAt: "2026-08-25T10:00:00.000Z" }],
-        tenderedMinor: bill.tenderedMinor + body.amountMinor,
-        remainingMinor: Math.max(0, bill.remainingMinor - body.amountMinor),
-      };
-      return Promise.resolve(jsonResponse(bill));
-    }
-    if (key === `POST orders/${ORDER_ID}/bill/discount`) {
-      const body = JSON.parse(String(init?.body)) as { percentValue: number; reasonCode: string; managerPin?: string };
-      const amountMinor = Math.round((bill.subtotalMinor * body.percentValue) / 100);
-      bill = {
-        ...bill,
-        discount: {
-          percentValue: body.percentValue,
-          amountMinor,
-          reasonCode: body.reasonCode,
-          reasonLabel: body.reasonCode,
-          managerApproved: Boolean(body.managerPin),
-        },
-        grandTotalMinor: bill.grandTotalMinor - amountMinor,
-        remainingMinor: Math.max(0, bill.remainingMinor - amountMinor),
-      };
-      return Promise.resolve(jsonResponse(bill));
-    }
-    if (key === `POST orders/${ORDER_ID}/bill/finalize`) {
-      bill = { ...bill, status: "finalised", finalisedAt: "2026-08-25T10:05:00.000Z" };
-      return Promise.resolve(jsonResponse(bill));
-    }
+    if (key === `GET orders/${ORDER_ID}`) return Promise.resolve(jsonResponse(rawOrder()));
+    if (key === "GET menu") return Promise.resolve(jsonResponse(MENU));
+    if (key === `POST orders/${ORDER_ID}/bill`) return Promise.resolve(jsonResponse(makeBill(), 201));
     return Promise.resolve(jsonResponse({ error: { code: "not_found", message: `unhandled ${key}` } }, 404));
   });
   vi.stubGlobal("fetch", fetchMock);
@@ -104,63 +98,103 @@ function stubFetch(handlers: Partial<Record<string, (init?: RequestInit) => Resp
 afterEach(() => {
   cleanup();
   vi.unstubAllGlobals();
+  sessionStorage.clear();
 });
 
-describe("BillSettleView - tax breakdown", () => {
-  it("shows the tax breakdown and grand total from the loaded bill", async () => {
-    bill = makeBill();
+describe("BillSettleView - loading", () => {
+  it("creates the bill for this order and shows its subtotal/tax/total", async () => {
     stubFetch();
     render(<BillSettleView orderId={ORDER_ID} />);
 
     await screen.findByTestId("bill-summary");
-    expect(screen.getByText("CGST 2.5%")).toBeTruthy();
-    expect(screen.getByText("SGST 2.5%")).toBeTruthy();
+    expect(screen.getByTestId("bill-line-line-1")).toBeTruthy();
     expect(screen.getByTestId("bill-grand-total").textContent).toBe("₹819.00");
+  });
+
+  it("falls back to the cached bill id and GETs it when creation 409s (a bill already exists for this order)", async () => {
+    const fetchMock = stubFetch({
+      [`POST orders/${ORDER_ID}/bill`]: () => jsonResponse({ error: { code: "bill_already_exists", message: "A bill already exists for this order" } }, 409),
+      "GET bills/bill-1": () => jsonResponse(makeBill()),
+    });
+    sessionStorage.setItem(`pos.billId.${ORDER_ID}`, "bill-1");
+
+    render(<BillSettleView orderId={ORDER_ID} />);
+
+    await screen.findByTestId("bill-summary");
+    expect(fetchMock.mock.calls.some(([input]) => String(input).endsWith("/bills/bill-1"))).toBe(true);
   });
 });
 
 describe("BillSettleView - tenders", () => {
-  it("updates the remaining-to-settle figure as tenders are added, across multiple tenders", async () => {
-    bill = makeBill();
-    stubFetch();
+  it("accumulates tenders locally (no network call per tap) and updates the remaining figure", async () => {
+    const fetchMock = stubFetch();
     render(<BillSettleView orderId={ORDER_ID} />);
 
     await screen.findByTestId("bill-summary");
     expect(screen.getByTestId("tender-remaining").textContent).toBe("₹819.00");
 
-    // Add a ₹500.00 cash tender (AmountKeypad digits are minor units - paise - so ₹500.00 is "50000").
     for (const digit of ["5", "0", "0", "0", "0"]) {
       await userEvent.click(screen.getByTestId(`tender-keypad-amount-digit-${digit}`));
     }
     await userEvent.click(screen.getByTestId("tender-add"));
 
-    await waitFor(() => expect(screen.getByTestId("tender-remaining").textContent).toBe("₹319.00"));
+    expect(screen.getByTestId("tender-remaining").textContent).toBe("₹319.00");
     expect(screen.getByTestId("tender-captured-list").textContent).toContain("₹500.00");
+    // Purely local - no finalize/tender endpoint hit yet.
+    expect(fetchMock.mock.calls.some(([input]) => String(input).includes("/finalize") || String(input).includes("/tenders"))).toBe(false);
 
-    // Settle the rest exactly.
     await userEvent.click(screen.getByTestId("tender-fill-remaining"));
-    await waitFor(() => expect(screen.getByTestId("tender-remaining").textContent).toBe("₹0.00"));
+    expect(screen.getByTestId("tender-remaining").textContent).toBe("₹0.00");
+  });
+
+  it("removes a pending tender before finalizing", async () => {
+    stubFetch();
+    render(<BillSettleView orderId={ORDER_ID} />);
+    await screen.findByTestId("bill-summary");
+
+    await userEvent.click(screen.getByTestId("tender-fill-remaining"));
+    expect(screen.getByTestId("tender-remaining").textContent).toBe("₹0.00");
+
+    await userEvent.click(screen.getByTestId("tender-remove-0"));
+    expect(screen.getByTestId("tender-remaining").textContent).toBe("₹819.00");
   });
 });
 
-describe("BillSettleView - finalize gating", () => {
-  it("disables Finalize until tenders exactly cover the grand total, then enables it", async () => {
-    bill = makeBill();
-    stubFetch();
+describe("BillSettleView - finalize", () => {
+  it("disables Finalize until pending tenders exactly cover the total, then submits discount + tenders together", async () => {
+    const fetchMock = stubFetch({
+      "POST bills/bill-1/finalize": (init) => {
+        const body = JSON.parse(String(init?.body)) as { tenders: { method: string; amountMinor: number }[] };
+        return jsonResponse(
+          makeBill({
+            status: "finalized",
+            finalizedAt: "2026-08-25T10:05:00.000Z",
+            tenders: body.tenders.map((t, i) => ({ id: `tender-${i}`, method: t.method as "cash" | "upi_manual", amountMinor: t.amountMinor, createdAt: "2026-08-25T10:05:00.000Z" })),
+          }),
+        );
+      },
+    });
     render(<BillSettleView orderId={ORDER_ID} />);
 
     await screen.findByTestId("bill-summary");
     expect(screen.getByTestId("finalize-bill")).toHaveProperty("disabled", true);
 
     await userEvent.click(screen.getByTestId("tender-fill-remaining"));
-    await waitFor(() => expect(screen.getByTestId("finalize-bill")).toHaveProperty("disabled", false));
+    expect(screen.getByTestId("finalize-bill")).toHaveProperty("disabled", false);
+
+    await userEvent.click(screen.getByTestId("finalize-bill"));
+    await screen.findByTestId("bill-finalised-panel");
+
+    const finalizeCall = fetchMock.mock.calls.find(([input]) => String(input).endsWith("/bills/bill-1/finalize"));
+    expect(finalizeCall).toBeTruthy();
+    const body = JSON.parse(String(finalizeCall![1]?.body)) as { tenders: unknown[] };
+    expect(body.tenders).toHaveLength(1);
   });
 });
 
 describe("BillSettleView - discount", () => {
-  it("applies a below-threshold discount with just a plain reason, no manager PIN dialog", async () => {
-    bill = makeBill();
-    stubFetch();
+  it("applies a below-threshold discount locally with just a plain reason, no manager PIN dialog, no network call", async () => {
+    const fetchMock = stubFetch();
     render(<BillSettleView orderId={ORDER_ID} />);
 
     await screen.findByTestId("bill-summary");
@@ -173,12 +207,13 @@ describe("BillSettleView - discount", () => {
     await userEvent.click(screen.getByTestId("discount-apply"));
 
     await waitFor(() => expect(screen.queryByTestId("discount-dialog")).toBeNull());
-    expect(screen.getByText(/Discount 5% — Regular guest/)).toBeTruthy();
-    expect(screen.queryByText(/Manager approved/)).toBeNull();
+    // 5% of ₹780.00 subtotal = ₹39.00 off.
+    expect(screen.getByText(/Discount — Regular guest/)).toBeTruthy();
+    expect(screen.getByTestId("bill-grand-total").textContent).toBe("₹780.00");
+    expect(fetchMock.mock.calls.some(([input]) => String(input).includes("/discount"))).toBe(false);
   });
 
-  it("routes an above-threshold discount through the reused ManagerPinDialog and only proceeds on approval", async () => {
-    bill = makeBill();
+  it("routes an above-threshold discount through the reused ManagerPinDialog, applied locally until Finalize", async () => {
     stubFetch();
     render(<BillSettleView orderId={ORDER_ID} />);
 
@@ -186,8 +221,9 @@ describe("BillSettleView - discount", () => {
     await userEvent.click(screen.getByTestId("bill-add-discount"));
     await screen.findByTestId("discount-dialog");
 
-    await userEvent.click(screen.getByTestId("discount-amount-digit-1"));
-    await userEvent.click(screen.getByTestId("discount-amount-digit-0"));
+    // 25% of ₹780.00 = ₹195.00, above the real 20%-of-subtotal threshold.
+    await userEvent.click(screen.getByTestId("discount-amount-digit-2"));
+    await userEvent.click(screen.getByTestId("discount-amount-digit-5"));
     expect(screen.getByTestId("discount-requires-approval")).toBeTruthy();
     expect(screen.queryByTestId("discount-reason")).toBeNull();
 
@@ -195,7 +231,6 @@ describe("BillSettleView - discount", () => {
     const dialog = await screen.findByTestId("manager-pin-dialog");
     expect(within(dialog).getByTestId("manager-pin-dialog-title").textContent).toContain("Discount above threshold");
 
-    // PIN entry alone isn't enough - Approve stays disabled until a reason is also picked.
     await userEvent.click(within(dialog).getByTestId("manager-pin-dialog-digit-1"));
     await userEvent.click(within(dialog).getByTestId("manager-pin-dialog-digit-2"));
     await userEvent.click(within(dialog).getByTestId("manager-pin-dialog-digit-3"));
@@ -206,24 +241,22 @@ describe("BillSettleView - discount", () => {
     await userEvent.click(within(dialog).getByTestId("manager-pin-dialog-confirm"));
 
     await waitFor(() => expect(screen.queryByTestId("manager-pin-dialog")).toBeNull());
-    expect(screen.getByText(/Discount 10% — regular-guest \(Manager approved\)/)).toBeTruthy();
+    expect(screen.getByText(/Discount — Regular guest/)).toBeTruthy();
+    expect(screen.getByTestId("bill-grand-total").textContent).toBe("₹624.00");
   });
 });
 
-describe("BillSettleView - after finalisation", () => {
-  it("leaves no mutation UI reachable once the bill is finalised", async () => {
-    bill = makeBill({ tenders: [{ id: "t1", method: "cash", amountMinor: 81900, capturedAt: "2026-08-25T10:00:00.000Z" }], tenderedMinor: 81900, remainingMinor: 0 });
-    stubFetch();
+describe("BillSettleView - after finalization", () => {
+  it("leaves no mutation UI reachable once the bill is finalized, and links to refund with the bill id", async () => {
+    stubFetch({
+      [`POST orders/${ORDER_ID}/bill`]: () => jsonResponse(makeBill({ status: "finalized", finalizedAt: "2026-08-25T10:05:00.000Z", tenders: [{ id: "t1", method: "cash", amountMinor: 81900, createdAt: "2026-08-25T10:00:00.000Z" }] }), 201),
+    });
     render(<BillSettleView orderId={ORDER_ID} />);
-
-    await screen.findByTestId("bill-summary");
-    await userEvent.click(screen.getByTestId("finalize-bill"));
 
     await screen.findByTestId("bill-finalised-panel");
     expect(screen.queryByTestId("tender-keypad")).toBeNull();
     expect(screen.queryByTestId("finalize-bill")).toBeNull();
-    // BillSummary only renders the discount trigger at all in draft status -
-    // no mutation control of any kind survives finalisation.
     expect(screen.queryByTestId("bill-add-discount")).toBeNull();
+    expect(screen.getByTestId("bill-finalised-refund").getAttribute("href")).toBe(`/pos/orders/${ORDER_ID}/refund?billId=bill-1`);
   });
 });

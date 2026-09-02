@@ -23,6 +23,34 @@
   [wiki/features/tenant-admin.md](../features/tenant-admin.md) (CAP-6
   section). Issue AusPosRest/restiq-web#99.
 
+- **2026-09-02** - POS client reconciliation sweep (restiq-web#98): every
+  remaining self-authored `src/app/pos/api.ts` path verified against the
+  real, merged restiq-backend and fixed. Bill & Settle (CAP-7) turned out to
+  be only four endpoints (`POST orders/:orderId/bill` create,
+  `GET bills/:id`, `POST bills/:id/finalize`, `POST bills/:id/refund`) with
+  discount+every tender submitted together in the one finalize call, a flat
+  5% tax (no CGST/SGST split), and a 20%-of-subtotal manager-approval
+  threshold - `settle/bill-state.ts`/`bill-settle-view.tsx`/
+  `tender-keypad.tsx`/`discount-dialog.tsx`/`bill-summary.tsx` rewritten to
+  accumulate discount/tenders locally and submit once; `api.ts`'s new
+  `fetchOrCreateBill()` works around the real backend having no
+  lookup-by-orderId route (a 409 carries no id) via a small
+  `sessionStorage` cache. Refunds (CAP-9) now target `bills/:id/refund`
+  (not the order) with the real `{managerPin, reason, lines?}` shape - no
+  `refundMethod` field exists at all, so that picker is gone. QSR Counter
+  (CAP-6)'s `startCounterOrder` now hits the real, outlet-scoped
+  `POST outlets/:outletId/counter-orders`. Device & staff attendance status
+  (CAP-11) now reads `GET outlets/:outletId/attendance` (no `/today`) with
+  the real shape (only currently-clocked-in staff, no `clockOutAt`, a
+  top-level `printerStatus`, and no connectivity field at all - that pill is
+  now a permanently-static demo prop, not a fabricated response field).
+  Every touched test file (`bill-state`, `bill-settle-view`, `refund-state`,
+  `refund-view`, `counter-view`, `device-status-screen`) rewritten against
+  the real contracts. 924/924 tests passing repo-wide; typecheck/lint/build
+  all clean. See
+  [wiki/features/pos-cashier-waiter.md](../features/pos-cashier-waiter.md)'s
+  Reconciliation section. Issue AusPosRest/restiq-web#98.
+
 - **2026-08-29** - QR self-order story 5: guest checkout and split payment,
   simulated (CAP-5). `/qr/checkout` (`src/app/qr/checkout/`) - a bill for
   the session's placed order, created-or-fetched (409 `bill_already_exists`

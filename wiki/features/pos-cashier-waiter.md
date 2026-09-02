@@ -669,9 +669,10 @@ done now, this is what actually happened:
   file-header comment for the full reasoning): `GET
   /pos/v1/outlets/:outletId/attendance/today` -> `{ outletId, staff: [{
   staffId, staffName, clockInAt, clockOutAt }], device: { printer,
-  connectivity } }`. **Must be reconciled against the real
-  restiq-backend#54 DTOs once that lands** - same discipline as CAP-2's
-  table-map contract and CAP-1/CAP-10's now-completed reconciliations above.
+  connectivity } }`. **RECONCILED (2026-09-02, restiq-web#98)** against the
+  real, merged `attendance.controller.ts`/`attendance.dtos.ts` - see the
+  Reconciliation section near the end of this doc for what was actually
+  wrong and fixed.
 - **Tests:** `device-status-screen.test.tsx` - real staff render from a
   mocked response (name + clock-in time, plus a clocked-out row rendering
   "Out {time}"), the empty-attendance state, the `(demo)` marker asserted in
@@ -866,6 +867,11 @@ done now, this is what actually happened:
     consistent with restiq-web's existing self-authored contract rather than the real
     backend's, for exactly that reason - the real backend's `OrderView.tableId: string | null`
     does, encouragingly, already confirm a table-less order is structurally sound.
+  - **RECONCILED (2026-09-02, restiq-web#98).** `startCounterOrder` now hits the real,
+    merged `POST outlets/:outletId/counter-orders` (`orders.controller.ts`'s
+    `createCounterOrder`) instead of the guessed `POST orders/counter` - see the
+    Reconciliation section near the end of this doc for the full accounting, including the
+    Bill/settle rewrite this screen's `BillSummary`/`TenderKeypad` reuse inherited.
 - **Tests:** 4 new integration tests (`counter-view.test.tsx`, stubbing global `fetch` against
   this story's self-authored contract, same convention as `order-taking-view.test.tsx`/
   `bill-settle-view.test.tsx`): starting a counter order on mount and showing its assigned
@@ -986,9 +992,13 @@ done now, this is what actually happened:
   including the CGST/SGST 2.5%+2.5% tax computation (the only concrete tax rule available
   anywhere - `TenantTaxRegistration.taxProfile` exists in the real merged schema but has no
   computation logic yet) and the bill-numbering convention (`TN1-000482` in the mock; this
-  client only ever displays whatever the response carries, never fabricates one). **Must be
-  reconciled against the real restiq-backend#59 DTOs once that lands** - same discipline as
-  every other not-yet-backed story in this doc.
+  client only ever displays whatever the response carries, never fabricates one).
+  **RECONCILED (2026-09-02, restiq-web#98)** against the real, merged
+  `src/pos/bills/*` (`bills.controller.ts`/`.service.ts`/`.dtos.ts`/`bill-core.ts`) - the
+  real contract turned out to be only four endpoints (create/get/finalize/refund), a flat
+  5% tax with no CGST/SGST split, and a 20%-of-subtotal manager-approval threshold, not the
+  above guesses. See the Reconciliation section near the end of this doc for the full
+  accounting.
 - **Tests:** 15 new tests - pure logic (`bill-state.test.ts`, 9: discount threshold
   boundary at/above/below, finalize-gating including the never-over-settle case, read-only
   detection) and a full integration suite (`bill-settle-view.test.tsx`, 6, stubbing global
@@ -1077,9 +1087,12 @@ done now, this is what actually happened:
   `restiq-design` repo) - unlike the CAP-7 note above, `SPEC.md` and `screens.md` *did*
   exist and were readable this time. Self-authored contract (`POST .../bill/refund`,
   reusing the existing `GET .../bill` read rather than inventing a second one) documented in
-  full in `refund-state.ts`'s and `api.ts`'s file headers. **Must be reconciled against the
-  real restiq-backend#63 DTOs once that lands** - same discipline as every other
-  not-yet-backed story in this doc.
+  full in `refund-state.ts`'s and `api.ts`'s file headers.
+  **RECONCILED (2026-09-02, restiq-web#98)** against the real, merged `POST
+  bills/:id/refund` (`bills.controller.ts`/`.service.ts`/`.dtos.ts`) - the real endpoint
+  targets the Bill (not the Order), has no `refundMethod` field at all, and takes one plain
+  `reason` string rather than a reason code + notes pair. See the Reconciliation section
+  near the end of this doc for the full accounting.
 - **Tests:** 16 new tests - pure logic (`refund-state.test.ts`, 10: selection
   toggling/clamping, partial- and full-quantity refund totals matching the P10 mock exactly,
   multi-line selection filtering, and the finalised-only eligibility gate) and a full
@@ -1112,3 +1125,85 @@ done now, this is what actually happened:
 - **The original `BillView` is reused verbatim, never a second read-only rendering** -
   `BillSummary` needed no changes at all to serve this screen's "read-only, never edited"
   requirement, since it already renders exactly that for a finalised bill.
+
+## Reconciliation (2026-09-02, restiq-web#98)
+
+Every remaining self-authored `src/app/pos/api.ts` path (everything CAP-1/CAP-2/CAP-3/
+CAP-4/CAP-10's earlier reconciliation, restiq-web#61, hadn't already covered) verified
+against the real, merged `restiq-backend` and fixed. Read directly, not guessed: `src/pos/
+{bills,orders,clock}/*.controller.ts`/`.service.ts`/`.dtos.ts`, `bill-core.ts`.
+
+- **CAP-7 Bill & Settle** - the real contract is only four endpoints:
+  `POST orders/:orderId/bill` (create), `GET bills/:id`, `POST bills/:id/finalize`,
+  `POST bills/:id/refund` - there is no per-order `GET`, and no separate discount/tender
+  endpoints at all. Every tender and any discount now ride together inside the one
+  `finalize` call (`FinalizeBillDto`); `settle/bill-settle-view.tsx`/`counter/counter-view.tsx`
+  accumulate them locally (`PendingTender`/`PendingDiscount`, `bill-state.ts`) and submit once.
+  Tax is one flat 5% figure (`bill-core.ts`'s `TAX_RATE_PLACEHOLDER_PERCENT`), not a CGST/SGST
+  split with a round-off line - neither exists anywhere in the schema. The manager-approval
+  threshold is 20% of the subtotal (`bills.service.ts`'s `DISCOUNT_THRESHOLD_PERCENT`), not
+  the old flat-10%-of-percent guess. `BillStatus` is `"open"`/`"finalized"`, not
+  `"draft"`/`"finalised"`. A Bill carries no order lines, table label, or currency of its own
+  - `bill-settle-view.tsx`/`counter-view.tsx`/`refund-view.tsx` now read the real Order
+    (for lines) and Menu (for currency) separately and pass them into `BillSummary`.
+  - **No lookup-by-orderId exists.** `POST orders/:orderId/bill` 409s
+    (`{code:'bill_already_exists'}`) with no id in the body when a bill already exists
+    (`bill-core.ts`'s `createBillRecord`, read directly - it never looks the existing row
+    up), and `OrderView` carries no `billId` field either. `api.ts`'s new
+    `fetchOrCreateBill()` works around this the only way a client can: it remembers a
+    bill's real id in `sessionStorage` (keyed by orderId, same pattern as
+    `admin/(shell)/outlet-context.tsx`'s outlet-id cache) the moment it's ever seen one, and
+    falls back to that cache on a 409. A fresh tab hitting an order another device already
+    billed, with nothing cached, gets an honest error rather than a guess.
+  - `settle/bill-settle-view.tsx`'s "Refund…" link now carries `?billId=` in the query
+    string - the one place that already has a finalized bill's real id in hand - since the
+    real refund endpoint targets the Bill, not the Order, and there's no other way to
+    recover it (`refund/page.tsx` reads it back out).
+- **CAP-9 Refunds** - `POST bills/:id/refund` (not `orders/:id/bill/refund`), body
+  `{managerPin, reason, lines?}` (`RefundBillDto`) - one plain required `reason` string, no
+  `refundMethod` field at all (a refund only ever produces a credit note, it doesn't choose
+  how money moves - the old Cash/UPI-Reversal picker had nothing to bind to and is dropped).
+  `refund-config-panel.tsx` composes `reason` from the reused `ManagerPinDialog`'s picked
+  label plus any free-text manager notes. Tax reversal is still the same flat 5% placeholder
+  and still folds a line's selected modifiers into its refundable unit price
+  (`bills.service.ts`'s `refund()`) - the math the original self-authored guess used turned
+  out to already be the right shape, just needed the field names (`orderLineId`, not
+  `lineId`) and the endpoint/target fixed.
+- **CAP-6 QSR Counter** - `startCounterOrder` now hits the real, merged
+  `POST outlets/:outletId/counter-orders` (`orders.controller.ts`'s `createCounterOrder`),
+  outlet-scoped like every other order-mutation route, not the guessed table-less
+  `POST orders/counter`. `counter/page.tsx` now reads `outletId` server-side from the
+  session cookie (same pattern as `table-map/page.tsx`/`shift/page.tsx`) and passes it down.
+  Returns the same raw `RawOrder` wire shape every other order mutation does, mapped through
+  `toOrderView` - not an already-mapped `OrderView`. Inherits every CAP-7 bill/settle fix
+  above since this screen composes `BillSummary`/`TenderKeypad` directly.
+- **CAP-11 Device & staff attendance status** - the real route is
+  `GET outlets/:outletId/attendance` (no `/today`), and the response shape is entirely
+  different: `staff` only ever lists staff *currently* clocked in (the latest `ClockEvent`
+  per staff member today being a clock-in with no later clock-out -
+  `attendance.service.ts`'s own filter) - there's no clocked-out entry to show, ever, so
+  `clockOutAt` is gone. The mocked printer placeholder is a top-level `printerStatus: {
+  status, mocked }` (`MockedPrinterStatus`), not nested under a `device` object, and
+  `status` is a true `"connected"`-only literal type. There is no connectivity/offline
+  signal anywhere in this response, or anywhere else in `pos/*` - not even a mocked one,
+  unlike the printer's real field - so `device-status-screen.tsx` now passes
+  `OfflineIndicatorPill` a permanently-static `"online"` prop instead of a fabricated
+  response field, keeping DESIGN.md's two-chip layout honest about what's real (the printer
+  chip) vs. purely decorative (this one). `printer-status-chip.tsx`'s dead "disconnected"
+  branch (a state the real backend can structurally never send) was dropped along with it.
+- **Everything else in `api.ts` was already correct** (table-map/order-taking/transfer/menu/
+  clock-out/shifts, reconciled in restiq-web#61, plus `addOrderLine`'s DTO shape) - re-verified
+  against the real controllers/DTOs during this pass, no changes needed. The one accepted,
+  documented exception: `AddOrderLineInput.specialInstructions` is still sent on every add-line
+  call and silently dropped server-side (`ValidationPipe({whitelist:true})`, no backing
+  `OrderLine` column) - a harmless, already-flagged gap (`order-taking-state.ts`'s CAP-3
+  header) left as-is, since removing the capture UI itself is a product/UX call outside an
+  API-contract reconciliation's scope, not a wire mismatch.
+- **Tests:** every test file touched by the above rewritten against the real contracts, not
+  weakened - `bill-state.test.ts`, `bill-settle-view.test.tsx`, `refund-state.test.ts`,
+  `refund-view.test.tsx`, `counter-view.test.tsx`, `device-status-screen.test.tsx`. Full
+  suite green (924/924), `tsc --noEmit`/lint/build all clean.
+- **Live verification:** none possible - no reachable restiq-backend instance from this
+  environment, same constraint as every other not-yet-backed story in this doc. Verified by
+  reading the real controller/service/DTO source directly (cited per bullet above) rather
+  than guessing from a spec, plus the full rewritten test suite.

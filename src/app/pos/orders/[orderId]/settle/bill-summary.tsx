@@ -1,9 +1,20 @@
 // BillSummary (DESIGN.md's component name, per the pos-core-loop
 // design-system.md's component list: "subtotal, tax lines, discount, grand
 // total"). Read-only line-item + totals rendering - all math happens
-// server-side (the self-authored BillView already carries every computed
-// figure); this component only formats and lays it out, mirroring
-// OrderPanel's split between display and state.
+// server-side (the real BillView already carries every computed figure this
+// component displays); this component only formats and lays it out,
+// mirroring OrderPanel's split between display and state.
+//
+// RECONCILED (2026-09-02, restiq-web#98): the real `BillView` (bills.dtos.ts,
+// read directly) carries no order lines, table label, or currency of its own
+// - `lines`/`currency`/`originLabel` are now separate props the caller reads
+// off the real Order/Menu instead (`bill-settle-view.tsx`/`counter-view.tsx`/
+// `refund-view.tsx`). Tax is one flat figure (`taxMinor`), not a CGST/SGST
+// split, and there's no round-off line - neither exists anywhere in the
+// schema. `pendingDiscount` renders a discount that's been entered but not
+// yet submitted (the real backend only ever applies one inside the single
+// finalize call - see bill-state.ts's file header) alongside the bill's own
+// `discountMinor` once it actually has one.
 //
 // CAP-6 QSR counter mode (story 7) additive edit props below:
 // `onIncrement`/`onDecrement`/`onRemove`/`busyLineId` are optional and
@@ -14,16 +25,18 @@
 // continuous screen (SPEC CAP-6), so it needs to keep adjusting quantities
 // right up to Finalize - reusing this same line-item table for that (rather
 // than a second, parallel line-item component) is the ponytail
-// reuse-over-rewrite call: BillSummary already renders exactly the line/qty/
-// amount table a counter order needs, it just needed the steppers wired
-// in as an opt-in.
+// reuse-over-rewrite call.
 import { Minus, Plus, Trash2 } from "lucide-react";
 import { formatMinor } from "../../../(shell)/shift/shift-state";
 import type { OrderLineView } from "../order-taking-state";
-import type { BillView } from "./bill-state";
+import { billTotalMinor, type BillView, type PendingDiscount } from "./bill-state";
 
 export interface BillSummaryProps {
   bill: BillView;
+  lines: OrderLineView[];
+  currency: string;
+  originLabel: string;
+  pendingDiscount?: PendingDiscount | null;
   onAddDiscount?: () => void;
   busyLineId?: string | null;
   onIncrement?: (line: OrderLineView) => void;
@@ -31,16 +44,31 @@ export interface BillSummaryProps {
   onRemove?: (line: OrderLineView) => void;
 }
 
-export function BillSummary({ bill, onAddDiscount, busyLineId, onIncrement, onDecrement, onRemove }: Readonly<BillSummaryProps>) {
+export function BillSummary({
+  bill,
+  lines,
+  currency,
+  originLabel,
+  pendingDiscount,
+  onAddDiscount,
+  busyLineId,
+  onIncrement,
+  onDecrement,
+  onRemove,
+}: Readonly<BillSummaryProps>) {
   const editable = Boolean(onIncrement && onDecrement && onRemove);
+  const discountMinor = bill.discountMinor ?? pendingDiscount?.amountMinor ?? 0;
+  const discountReason = bill.discountReason ?? pendingDiscount?.reason ?? null;
+  const totalMinor = billTotalMinor(bill, pendingDiscount?.amountMinor ?? 0);
+
   return (
     <section data-testid="bill-summary" className="flex w-96 shrink-0 flex-col border-r border-border/60 bg-card">
       <header className="border-b border-border/60 px-4 py-3">
         <p className="font-headline text-sm font-semibold text-foreground">
-          Bill · Order #{bill.billNumber} · {bill.tableLabel}
+          Bill {bill.billNumber !== null ? `· #${bill.billNumber} ` : ""}· {originLabel}
         </p>
         <p data-testid="bill-status" className="text-xs text-muted-foreground">
-          {bill.status === "finalised" ? "Finalised" : "Draft"}
+          {bill.status === "finalized" ? "Finalized" : "Draft"}
         </p>
       </header>
 
@@ -55,7 +83,7 @@ export function BillSummary({ bill, onAddDiscount, busyLineId, onIncrement, onDe
             </tr>
           </thead>
           <tbody>
-            {bill.lines.map((line) => {
+            {lines.map((line) => {
               const isBusy = busyLineId === line.id;
               return (
                 <tr key={line.id} data-testid={`bill-line-${line.id}`} className="align-top">
@@ -99,7 +127,7 @@ export function BillSummary({ bill, onAddDiscount, busyLineId, onIncrement, onDe
                       <p className="text-xs text-muted-foreground">{line.modifiers.map((modifier) => modifier.name).join(", ")}</p>
                     )}
                   </td>
-                  <td className="py-1.5 text-right tabular-nums">{formatMinor(line.lineTotalMinor, bill.currency)}</td>
+                  <td className="py-1.5 text-right tabular-nums">{formatMinor(line.lineTotalMinor, currency)}</td>
                   {editable && (
                     <td className="py-1.5 text-right">
                       <button
@@ -123,36 +151,31 @@ export function BillSummary({ bill, onAddDiscount, busyLineId, onIncrement, onDe
 
       <footer className="border-t border-border/60 p-4">
         <dl className="flex flex-col gap-1.5 text-sm">
-          <Row label="Subtotal" value={formatMinor(bill.subtotalMinor, bill.currency)} />
-          {bill.discount && (
+          <Row label="Subtotal" value={formatMinor(bill.subtotalMinor, currency)} />
+          {discountMinor > 0 && (
             <Row
-              label={`Discount ${bill.discount.percentValue}% — ${bill.discount.reasonLabel}${
-                bill.discount.managerApproved ? " (Manager approved)" : ""
-              }`}
-              value={`-${formatMinor(bill.discount.amountMinor, bill.currency)}`}
+              label={`Discount${discountReason ? ` — ${discountReason}` : ""}`}
+              value={`-${formatMinor(discountMinor, currency)}`}
               tone="available"
             />
           )}
-          {bill.taxLines.map((tax) => (
-            <Row key={tax.label} label={`${tax.label} ${tax.ratePercent}%`} value={formatMinor(tax.amountMinor, bill.currency)} />
-          ))}
-          {bill.roundOffMinor !== 0 && <Row label="Round-off" value={formatMinor(bill.roundOffMinor, bill.currency)} />}
+          <Row label="Tax" value={formatMinor(bill.taxMinor, currency)} />
           <div className="mt-1 flex items-center justify-between border-t border-border/60 pt-2">
-            <span className="font-label text-sm font-semibold uppercase tracking-wider text-foreground">Grand Total</span>
+            <span className="font-label text-sm font-semibold uppercase tracking-wider text-foreground">Total</span>
             <span data-testid="bill-grand-total" className="tabular-nums text-lg font-bold text-primary">
-              {formatMinor(bill.grandTotalMinor, bill.currency)}
+              {formatMinor(totalMinor, currency)}
             </span>
           </div>
         </dl>
 
-        {bill.status === "draft" && onAddDiscount && (
+        {bill.status === "open" && onAddDiscount && (
           <button
             type="button"
             data-testid="bill-add-discount"
             onClick={onAddDiscount}
             className="mt-3 w-full rounded-lg border border-border px-3 py-2 text-sm font-semibold text-foreground hover:bg-accent"
           >
-            {bill.discount ? "Change discount" : "Add discount"}
+            {pendingDiscount ? "Change discount" : "Add discount"}
           </button>
         )}
       </footer>
