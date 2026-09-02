@@ -1,75 +1,132 @@
 "use client";
 
-// P8 Bill & Settle (CAP-7, story 8) - see bill-state.ts's file header for the
-// full self-authored-contract reasoning (restiq-backend#59 has no branch
-// yet) and the design-basis note (no SPEC.md/DESIGN.md/EXPERIENCE.md exist
-// for this capability in restiq-design; built from the P8 mock and
-// design-system.md alone). Reached from order-taking-view.tsx's new
-// "Settle" link. Same five-state GET-and-render pattern as every other /pos
-// screen (usePosLoad), with every mutation (discount, tender, finalize)
-// replacing the whole BillView from the response rather than an optimistic
-// local patch - matches order-taking-view.tsx's line-mutation pattern.
+// P8 Bill & Settle (CAP-7, story 8). Reached from order-taking-view.tsx's
+// "Settle" link.
 //
-// AD-14 (insert-only past finalisation): once `bill.status === "finalised"`,
-// this view renders BillSummaryReadOnly instead of any of the mutation UI
-// (discount button, TenderKeypad, Finalize) - there is no code path back to
-// the mutable view for a finalised bill, matching the task's "after
-// finalising, no edit UI at all" requirement.
+// RECONCILED (2026-09-02, restiq-web#98) against the real, merged
+// restiq-backend `src/pos/bills/*` (see bill-state.ts's file header for the
+// full reasoning). What changed about this screen specifically:
+//  - the Bill is created-or-fetched (`fetchOrCreateBill`), not GET-and-render
+//    via usePosLoad - there is no GET keyed by orderId.
+//  - a Bill carries no order lines/currency of its own, so this screen also
+//    loads the real Order (for its lines) and the Menu (for currency + item
+//    names, same as order-taking-view.tsx) and passes both to BillSummary.
+//  - discount and every tender accumulate locally (`pendingDiscount`/
+//    `pendingTenders`) and are only ever sent together, in the one Finalize
+//    call - AD-14's "no mutation UI after finalization" rule still holds,
+//    it's just that "mutation" now means "local state" until that one call.
 import Link from "next/link";
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { Button } from "@/components/ui/button";
-import { addBillTender, applyBillDiscount, finalizeBill, PosApiError, type BillTenderMethod } from "../../../api";
+import {
+  fetchOrCreateBill,
+  finalizeBill,
+  PosApiError,
+  type BillTenderMethod,
+  type PendingDiscount,
+  type PendingTender,
+} from "../../../api";
 import { LoadErrorPanel, Skeleton } from "../../../data-states";
 import { usePosLoad } from "../../../use-pos-load";
-import type { ManagerApprovalResult } from "../../../components/manager-pin-dialog";
+import { orderOriginLabel, toOrderView, type PosMenuView, type RawOrder } from "../order-taking-state";
 import { BillSummary } from "./bill-summary";
 import { TenderKeypad } from "./tender-keypad";
 import { DiscountDialog } from "./discount-dialog";
-import { canFinalizeBill, isBillReadOnly, type ApplyDiscountInput, type BillView } from "./bill-state";
+import { billTotalMinor, canFinalizeBill, isBillReadOnly, pendingTenderedMinor, type BillView } from "./bill-state";
 
-export function BillSettleView({ orderId }: Readonly<{ orderId: string }>) {
-  const { loading, failed, data, retry } = usePosLoad<BillView>(`orders/${orderId}/bill`);
-
-  if (loading) return <LoadingShell />;
-  if (failed || !data) {
-    return <LoadErrorPanel testId="bill-settle-error" message="Couldn't load this bill." onRetry={retry} />;
-  }
-  return <BillSettleLoaded orderId={orderId} initialBill={data} />;
+interface BillLanded {
+  attempt: number;
+  bill: BillView | null;
+  failed: boolean;
 }
 
-function BillSettleLoaded({ orderId, initialBill }: Readonly<{ orderId: string; initialBill: BillView }>) {
+/** Same "landed keyed by attempt" shape use-pos-load.ts's hook uses - `fetchOrCreateBill` is a POST, not a GET, so it can't just reuse that hook directly, but retry/loading derive the same way (no synchronous setState in the effect body). */
+function useBill(orderId: string) {
+  const [attempt, setAttempt] = useState(0);
+  const [landed, setLanded] = useState<BillLanded | null>(null);
+
+  useEffect(() => {
+    let cancelled = false;
+    fetchOrCreateBill(orderId)
+      .then((value) => {
+        if (!cancelled) setLanded({ attempt, bill: value, failed: false });
+      })
+      .catch(() => {
+        if (!cancelled) setLanded({ attempt, bill: null, failed: true });
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [orderId, attempt]);
+
+  const current = landed !== null && landed.attempt === attempt ? landed : null;
+  return {
+    loading: current === null,
+    failed: current?.failed ?? false,
+    bill: current?.bill ?? null,
+    retry: () => setAttempt((n) => n + 1),
+  };
+}
+
+export function BillSettleView({ orderId }: Readonly<{ orderId: string }>) {
+  const menuLoad = usePosLoad<PosMenuView>("menu");
+  const orderLoad = usePosLoad<RawOrder>(`orders/${orderId}`);
+  const billLoad = useBill(orderId);
+
+  if (menuLoad.loading || orderLoad.loading || billLoad.loading) return <LoadingShell />;
+  if (billLoad.failed || !billLoad.bill) {
+    return <LoadErrorPanel testId="bill-settle-error" message="Couldn't load this bill." onRetry={billLoad.retry} />;
+  }
+  if (menuLoad.failed || !menuLoad.data || orderLoad.failed || !orderLoad.data) {
+    return (
+      <LoadErrorPanel
+        testId="bill-settle-error"
+        message="Couldn't load this bill."
+        onRetry={() => {
+          menuLoad.retry();
+          orderLoad.retry();
+        }}
+      />
+    );
+  }
+  return <BillSettleLoaded orderId={orderId} initialBill={billLoad.bill} menu={menuLoad.data} rawOrder={orderLoad.data} />;
+}
+
+function BillSettleLoaded({
+  orderId,
+  initialBill,
+  menu,
+  rawOrder,
+}: Readonly<{ orderId: string; initialBill: BillView; menu: PosMenuView; rawOrder: RawOrder }>) {
   const [bill, setBill] = useState(initialBill);
   const [discountDialogOpen, setDiscountDialogOpen] = useState(false);
-  const [tenderBusy, setTenderBusy] = useState(false);
-  const [tenderError, setTenderError] = useState<string | null>(null);
+  const [pendingDiscount, setPendingDiscount] = useState<PendingDiscount | null>(null);
+  const [pendingTenders, setPendingTenders] = useState<PendingTender[]>([]);
   const [finalizeBusy, setFinalizeBusy] = useState(false);
   const [finalizeError, setFinalizeError] = useState<string | null>(null);
 
+  const order = toOrderView(rawOrder, menu);
   const readOnly = isBillReadOnly(bill);
-
-  async function handleApplyDiscount(input: ApplyDiscountInput): Promise<ManagerApprovalResult> {
-    try {
-      const updated = await applyBillDiscount(orderId, input);
-      setBill(updated);
-      return { ok: true };
-    } catch (error) {
-      return { ok: false, error: errorMessage(error, "Couldn't apply the discount.") };
-    }
-  }
+  const totalMinor = billTotalMinor(bill, pendingDiscount?.amountMinor ?? 0);
+  const remainingMinor = Math.max(0, totalMinor - pendingTenderedMinor(pendingTenders));
 
   function handleAddTender(method: BillTenderMethod, amountMinor: number) {
-    setTenderBusy(true);
-    setTenderError(null);
-    addBillTender(orderId, { method, amountMinor })
-      .then(setBill)
-      .catch((error: unknown) => setTenderError(errorMessage(error, "Couldn't add that tender.")))
-      .finally(() => setTenderBusy(false));
+    setPendingTenders((current) => [...current, { method, amountMinor }]);
+  }
+
+  function handleRemoveTender(index: number) {
+    setPendingTenders((current) => current.filter((_, i) => i !== index));
   }
 
   function handleFinalize() {
     setFinalizeBusy(true);
     setFinalizeError(null);
-    finalizeBill(orderId)
+    finalizeBill(bill.id, {
+      discountMinor: pendingDiscount?.amountMinor,
+      discountReason: pendingDiscount?.reason,
+      managerPin: pendingDiscount?.managerPin,
+      tenders: pendingTenders,
+    })
       .then(setBill)
       .catch((error: unknown) => setFinalizeError(errorMessage(error, "Couldn't finalise this bill.")))
       .finally(() => setFinalizeBusy(false));
@@ -85,7 +142,14 @@ function BillSettleLoaded({ orderId, initialBill }: Readonly<{ orderId: string; 
       </header>
 
       <div className="flex flex-1 overflow-hidden">
-        <BillSummary bill={bill} onAddDiscount={() => setDiscountDialogOpen(true)} />
+        <BillSummary
+          bill={bill}
+          lines={order.lines}
+          currency={menu.currency}
+          originLabel={orderOriginLabel(order)}
+          pendingDiscount={pendingDiscount}
+          onAddDiscount={() => setDiscountDialogOpen(true)}
+        />
 
         {readOnly ? (
           <section data-testid="bill-finalised-panel" className="flex flex-1 flex-col items-center justify-center gap-2 p-6 text-center">
@@ -99,21 +163,23 @@ function BillSettleLoaded({ orderId, initialBill }: Readonly<{ orderId: string; 
               </Button>
               {/* CAP-9 entry point (story 10): the only way into P10 Refund &
                   Adjustments is from here, once a bill is finalised and thus
-                  eligible for refund - see refund-view.tsx's file header. */}
+                  eligible for refund - see refund-view.tsx's file header.
+                  `billId` rides along in the query string because the real
+                  refund endpoint targets the Bill, not the Order, and this
+                  screen is the one place that already has it in hand. */}
               <Button asChild size="sm" variant="outline" data-testid="bill-finalised-refund">
-                <Link href={`/pos/orders/${orderId}/refund`}>Refund…</Link>
+                <Link href={`/pos/orders/${orderId}/refund?billId=${bill.id}`}>Refund…</Link>
               </Button>
             </div>
           </section>
         ) : (
           <div className="flex flex-1 flex-col">
             <TenderKeypad
-              currency={bill.currency}
-              remainingMinor={bill.remainingMinor}
-              tenders={bill.tenders}
-              busy={tenderBusy}
-              error={tenderError}
+              currency={menu.currency}
+              remainingMinor={remainingMinor}
+              tenders={pendingTenders}
               onAddTender={handleAddTender}
+              onRemoveTender={handleRemoveTender}
             />
             <footer className="border-t border-border/60 p-4">
               {finalizeError && (
@@ -125,7 +191,7 @@ function BillSettleLoaded({ orderId, initialBill }: Readonly<{ orderId: string; 
                 size="lg"
                 className="w-full"
                 data-testid="finalize-bill"
-                disabled={!canFinalizeBill(bill) || finalizeBusy}
+                disabled={!canFinalizeBill(bill, totalMinor, pendingTenders) || finalizeBusy}
                 onClick={handleFinalize}
               >
                 {finalizeBusy ? "Finalising…" : "Finalise"}
@@ -135,7 +201,12 @@ function BillSettleLoaded({ orderId, initialBill }: Readonly<{ orderId: string; 
         )}
       </div>
 
-      <DiscountDialog open={discountDialogOpen} onCancel={() => setDiscountDialogOpen(false)} onApply={handleApplyDiscount} />
+      <DiscountDialog
+        open={discountDialogOpen}
+        subtotalMinor={bill.subtotalMinor}
+        onCancel={() => setDiscountDialogOpen(false)}
+        onApply={setPendingDiscount}
+      />
     </div>
   );
 }

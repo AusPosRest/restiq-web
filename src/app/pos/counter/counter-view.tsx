@@ -6,50 +6,36 @@
 // BillSummary/TenderKeypad (story 8/#55) into one continuous ring-up-and-
 // settle flow - SPEC CAP-6's success criterion: "Completing a counter order
 // issues a sequential token number and finalises the bill in the same
-// action - no separate waiter hop." Neither reused component's own tested
-// behavior changes here: BillSummary's line-edit steppers are new, additive,
-// opt-in props (see bill-summary.tsx's header) that story 8's own caller
-// (bill-settle-view.tsx) never passes, and TenderKeypad/ModifierSheet/
-// PosItemTile are used completely unmodified. This file is composition glue
-// plus the one genuinely new action CAP-6 needs: starting a table-less order
-// that carries a token number (`startCounterOrder`, `../api.ts`).
+// action - no separate waiter hop." No separate `/settle` navigation hop,
+// unlike the dine-in flow: ringing up and charging both happen right here,
+// on `/pos/counter`, for the whole life of one counter order. Once a bill
+// finalizes, "Start next order" swaps in a brand new counter order (a fresh
+// token number) without ever leaving this route.
 //
-// No separate `/settle` navigation hop, unlike the dine-in flow
-// (order-taking-view.tsx's OrderPanel links out to orders/[id]/settle):
-// ringing up and charging both happen right here, on `/pos/counter`, for the
-// whole life of one counter order. Once a bill finalises, "Start next order"
-// swaps in a brand new counter order (a fresh token number) without ever
-// leaving this route - EXPERIENCE.md's "the next customer is already at the
-// counter before Ravi looks up."
-//
-// SELF-AUTHORED CONTRACT, not yet verified against a real backend -
-// restiq-backend#62 ("QSR counter and token mode") had no branch or commits
-// as of this build (confirmed via `gh issue view 62` / `gh api .../branches`
-// against AusPosRest/restiq-backend - only dev/main/feature/15-device-fleet
-// exist). See `../api.ts`'s `startCounterOrder` header for the full
-// reasoning, including what the real, merged backend `dev` branch's
-// `OrderView`/`Bill` shapes actually look like (read directly while
-// researching this story) and why this story deliberately keeps building
-// against restiq-web's own already-shipped self-authored contract
-// (order-taking-state.ts/bill-state.ts) rather than the real backend shapes -
-// reconciling CAP-3/CAP-4/CAP-7 against those is a separate, much larger
-// undertaking outside this story's scope, already flagged in
-// wiki/features/pos-cashier-waiter.md's Integration points for CAP-2/CAP-3.
-// `tokenNumber` (order-taking-state.ts) and `startCounterOrder` (api.ts) are
-// this story's own additions on top of that existing contract.
-//
-// Discount is deliberately not offered here (YAGNI) - the P7 mock has no
-// discount affordance and this story's own brief never asks for one;
-// BillSummary's `onAddDiscount` prop is optional precisely so omitting it
-// here doesn't render a non-functional button.
+// RECONCILED (2026-09-02, restiq-web#98) against the real, merged
+// restiq-backend contract:
+//  - `startCounterOrder` is outlet-scoped (`POST
+//    outlets/:outletId/counter-orders`, `orders.controller.ts`'s
+//    `createCounterOrder`, read directly) and returns the same raw wire
+//    shape (`RawOrder`) every other order mutation does - `outletId` now
+//    comes from `page.tsx` (server-resolved from the session cookie, same
+//    pattern as table-map/shift), and the raw order is mapped through
+//    `toOrderView` exactly like order-taking-view.tsx.
+//  - the Bill is created-or-fetched (`fetchOrCreateBill`), not GET-and-render
+//    - see settle/bill-state.ts's file header for why there's no per-order
+//    GET. A Bill carries no lines of its own, but this screen already has
+//    the Order's real lines in state, so BillSummary reads `order.lines`
+//    directly rather than a second fetch.
+//  - tenders accumulate locally and only ever submit together with Finalize
+//    (`FinalizeBillDto` has no per-tender endpoint) - discount stays
+//    deliberately unoffered here (YAGNI, unchanged from the original story).
 import { useEffect, useMemo, useRef, useState } from "react";
 import Link from "next/link";
 import { Search } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import {
   addOrderLine,
-  addBillTender,
-  fetchBill,
+  fetchOrCreateBill,
   finalizeBill,
   PosApiError,
   removeOrderLine,
@@ -57,22 +43,28 @@ import {
   updateOrderLineQuantity,
   type BillTenderMethod,
   type BillView,
-  type OrderLineView,
-  type OrderView,
-  type PosMenuItemView,
-  type PosMenuView,
+  type PendingTender,
 } from "../api";
 import { LoadErrorPanel, Skeleton } from "../data-states";
 import { usePosLoad } from "../use-pos-load";
 import { ModifierSheet, type ModifierSheetConfirmValue } from "../orders/[orderId]/modifier-sheet";
 import { PosItemTile } from "../orders/[orderId]/pos-item-tile";
-import { filterMenuItems, itemNeedsModifierSheet } from "../orders/[orderId]/order-taking-state";
+import {
+  filterMenuItems,
+  itemNeedsModifierSheet,
+  orderOriginLabel,
+  toOrderView,
+  type OrderLineView,
+  type OrderView,
+  type PosMenuItemView,
+  type PosMenuView,
+} from "../orders/[orderId]/order-taking-state";
 import { BillSummary } from "../orders/[orderId]/settle/bill-summary";
 import { TenderKeypad } from "../orders/[orderId]/settle/tender-keypad";
-import { canFinalizeBill, isBillReadOnly } from "../orders/[orderId]/settle/bill-state";
+import { billTotalMinor, canFinalizeBill, isBillReadOnly, pendingTenderedMinor } from "../orders/[orderId]/settle/bill-state";
 import { TokenBadge } from "./token-badge";
 
-export function CounterView() {
+export function CounterView({ outletId }: Readonly<{ outletId: string }>) {
   const menuLoad = usePosLoad<PosMenuView>("menu");
   const [order, setOrder] = useState<OrderView | null>(null);
   const [orderStarting, setOrderStarting] = useState(true);
@@ -83,8 +75,8 @@ export function CounterView() {
     setOrderStarting(true);
     setOrderError(false);
     setOrder(null);
-    startCounterOrder()
-      .then(setOrder)
+    startCounterOrder(outletId)
+      .then((raw) => setOrder(toOrderView(raw, menuLoad.data ?? undefined)))
       .catch(() => setOrderError(true))
       .finally(() => setOrderStarting(false));
   }
@@ -93,6 +85,7 @@ export function CounterView() {
     if (startedRef.current) return;
     startedRef.current = true;
     beginNewOrder();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   if (menuLoad.loading || orderStarting) return <LoadingShell />;
@@ -125,15 +118,14 @@ function CounterLoaded({
   const [addingLine, setAddingLine] = useState(false);
   const [busyLineId, setBusyLineId] = useState<string | null>(null);
   const [actionError, setActionError] = useState<string | null>(null);
-  const [tenderBusy, setTenderBusy] = useState(false);
-  const [tenderError, setTenderError] = useState<string | null>(null);
+  const [pendingTenders, setPendingTenders] = useState<PendingTender[]>([]);
   const [finalizeBusy, setFinalizeBusy] = useState(false);
   const [finalizeError, setFinalizeError] = useState<string | null>(null);
 
   function loadBill() {
     setBillLoading(true);
     setBillError(false);
-    fetchBill(order.id)
+    fetchOrCreateBill(order.id)
       .then(setBill)
       .catch(() => setBillError(true))
       .finally(() => setBillLoading(false));
@@ -143,17 +135,10 @@ function CounterLoaded({
   // see the `key={order.id}` above - rather than re-running for the same
   // order), same "no optimistic local patch, always replace from the
   // server's response" convention order-taking-view.tsx/bill-settle-view.tsx
-  // already use. Fetches directly (mirroring use-pos-load.ts's own effect)
-  // rather than calling the `loadBill` helper above, so the effect's own
-  // synchronous body never calls setState itself - only the async
-  // then/catch/finally callbacks do, same react-hooks/set-state-in-effect
-  // shape use-pos-load.ts's hook already satisfies.
+  // already use.
   useEffect(() => {
     let cancelled = false;
-    // No synchronous setState here (billLoading/billError already start at
-    // their correct mount-time values) - only the async callbacks below set
-    // state, same shape use-pos-load.ts's hook already satisfies.
-    fetchBill(initialOrder.id)
+    fetchOrCreateBill(initialOrder.id)
       .then((value) => {
         if (!cancelled) setBill(value);
       })
@@ -245,18 +230,18 @@ function CounterLoaded({
   }
 
   function handleAddTender(method: BillTenderMethod, amountMinor: number) {
-    setTenderBusy(true);
-    setTenderError(null);
-    addBillTender(order.id, { method, amountMinor })
-      .then(setBill)
-      .catch((error: unknown) => setTenderError(errorMessage(error, "Couldn't add that tender.")))
-      .finally(() => setTenderBusy(false));
+    setPendingTenders((current) => [...current, { method, amountMinor }]);
+  }
+
+  function handleRemoveTender(index: number) {
+    setPendingTenders((current) => current.filter((_, i) => i !== index));
   }
 
   function handleFinalize() {
+    if (!bill) return;
     setFinalizeBusy(true);
     setFinalizeError(null);
-    finalizeBill(order.id)
+    finalizeBill(bill.id, { tenders: pendingTenders })
       .then(setBill)
       .catch((error: unknown) => setFinalizeError(errorMessage(error, "Couldn't finalise this bill.")))
       .finally(() => setFinalizeBusy(false));
@@ -268,6 +253,8 @@ function CounterLoaded({
   if (billLoading || !bill) return <LoadingShell />;
 
   const readOnly = isBillReadOnly(bill);
+  const totalMinor = billTotalMinor(bill);
+  const remainingMinor = Math.max(0, totalMinor - pendingTenderedMinor(pendingTenders));
 
   return (
     <div data-testid="counter-view" className="flex flex-1 flex-col">
@@ -353,6 +340,9 @@ function CounterLoaded({
 
         <BillSummary
           bill={bill}
+          lines={order.lines}
+          currency={menu.currency}
+          originLabel={orderOriginLabel(order)}
           busyLineId={busyLineId}
           onIncrement={readOnly ? undefined : handleIncrement}
           onDecrement={readOnly ? undefined : handleDecrement}
@@ -372,12 +362,11 @@ function CounterLoaded({
         ) : (
           <div className="flex flex-1 flex-col">
             <TenderKeypad
-              currency={bill.currency}
-              remainingMinor={bill.remainingMinor}
-              tenders={bill.tenders}
-              busy={tenderBusy}
-              error={tenderError}
+              currency={menu.currency}
+              remainingMinor={remainingMinor}
+              tenders={pendingTenders}
               onAddTender={handleAddTender}
+              onRemoveTender={handleRemoveTender}
             />
             <footer className="border-t border-border/60 p-4">
               {finalizeError && (
@@ -385,7 +374,13 @@ function CounterLoaded({
                   {finalizeError}
                 </p>
               )}
-              <Button size="lg" className="w-full" data-testid="finalize-bill" disabled={!canFinalizeBill(bill) || finalizeBusy} onClick={handleFinalize}>
+              <Button
+                size="lg"
+                className="w-full"
+                data-testid="finalize-bill"
+                disabled={!canFinalizeBill(bill, totalMinor, pendingTenders) || finalizeBusy}
+                onClick={handleFinalize}
+              >
                 {finalizeBusy ? "Charging…" : "Charge"}
               </Button>
             </footer>

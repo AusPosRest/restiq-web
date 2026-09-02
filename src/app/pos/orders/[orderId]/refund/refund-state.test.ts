@@ -1,23 +1,19 @@
-// Pure-logic tests for P10 Refund & Adjustments (CAP-9, story 10). Mirrors
-// the P10 mock's own numbers exactly (2 x Butter Naan @ Rs60 -> Rs120
-// subtotal, Rs6 tax reversal at the combined 5% rate, Rs126 total) so a
-// regression here is easy to spot against the design source of truth.
+// Pure-logic tests for P10 Refund & Adjustments (CAP-9, story 10), against
+// the real, reconciled contract (restiq-web#98) - see refund-state.ts's file
+// header. Tax reversal is bill-core.ts's own flat 5% placeholder
+// (TAX_RATE_PLACEHOLDER_PERCENT), and a line's refundable per-unit amount
+// includes its selected modifiers (bills.service.ts's refund(), read
+// directly).
 import { describe, expect, it } from "vitest";
 import type { OrderLineView } from "../order-taking-state";
-import type { BillTaxLineView } from "../settle/bill-state";
 import {
   canRefundBill,
   computeRefundTotals,
   hasRefundSelection,
   setLineQuantity,
-  toRefundLineInputs,
   toggleLineSelected,
+  toRefundLineInputs,
 } from "./refund-state";
-
-const TAX_LINES: BillTaxLineView[] = [
-  { label: "CGST", ratePercent: 2.5, amountMinor: 1800 },
-  { label: "SGST", ratePercent: 2.5, amountMinor: 1800 },
-];
 
 function makeLine(overrides: Partial<OrderLineView> = {}): OrderLineView {
   return {
@@ -59,32 +55,40 @@ describe("toggleLineSelected / setLineQuantity", () => {
 });
 
 describe("computeRefundTotals", () => {
-  it("computes the correct partial-refund amount for a full-quantity selection, matching the P10 mock exactly", () => {
+  it("computes the refund amount for a full-quantity selection", () => {
     const line = makeLine();
-    const bill = { lines: [line], taxLines: TAX_LINES };
-    const totals = computeRefundTotals(bill, { [line.id]: 2 });
+    const totals = computeRefundTotals([line], { [line.id]: 2 });
 
-    expect(totals.subtotalMinor).toBe(12000); // Rs120.00
-    expect(totals.taxReversalMinor).toBe(600); // Rs6.00 (5% combined)
-    expect(totals.totalMinor).toBe(12600); // Rs126.00
+    expect(totals.subtotalMinor).toBe(12000); // ₹120.00 (2 × ₹60)
+    expect(totals.taxReversalMinor).toBe(600); // ₹6.00 (5% flat placeholder)
+    expect(totals.totalMinor).toBe(12600); // ₹126.00
   });
 
-  it("computes the correct partial-refund amount for a partial-quantity selection", () => {
+  it("computes the refund amount for a partial-quantity selection", () => {
     const line = makeLine();
-    const bill = { lines: [line], taxLines: TAX_LINES };
-    const totals = computeRefundTotals(bill, { [line.id]: 1 });
+    const totals = computeRefundTotals([line], { [line.id]: 1 });
 
-    expect(totals.subtotalMinor).toBe(6000); // Rs60.00
-    expect(totals.taxReversalMinor).toBe(300); // Rs3.00
-    expect(totals.totalMinor).toBe(6300); // Rs63.00
+    expect(totals.subtotalMinor).toBe(6000);
+    expect(totals.taxReversalMinor).toBe(300);
+    expect(totals.totalMinor).toBe(6300);
+  });
+
+  it("folds a line's selected modifiers into its refundable unit price", () => {
+    const line = makeLine({
+      quantity: 1,
+      unitPriceMinor: 6000,
+      modifiers: [{ modifierId: "mod-extra-butter", name: "Extra butter", priceMinor: 2000 }],
+    });
+    const totals = computeRefundTotals([line], { [line.id]: 1 });
+
+    expect(totals.subtotalMinor).toBe(8000); // ₹60 + ₹20 modifier
   });
 
   it("excludes unselected lines and lines selected with a zero quantity", () => {
     const naan = makeLine();
     const paneer = makeLine({ id: "line-paneer", itemName: "Paneer Tikka", quantity: 1, unitPriceMinor: 32000 });
-    const bill = { lines: [naan, paneer], taxLines: TAX_LINES };
 
-    const totals = computeRefundTotals(bill, { [naan.id]: 2, [paneer.id]: 0 });
+    const totals = computeRefundTotals([naan, paneer], { [naan.id]: 2, [paneer.id]: 0 });
     expect(totals.lines).toHaveLength(1);
     expect(totals.lines[0].line.id).toBe(naan.id);
   });
@@ -100,14 +104,14 @@ describe("hasRefundSelection / toRefundLineInputs", () => {
     expect(hasRefundSelection({ "line-1": 1 })).toBe(true);
   });
 
-  it("converts the selection into the API's line-input shape, dropping zero entries", () => {
-    expect(toRefundLineInputs({ "line-1": 2, "line-2": 0 })).toEqual([{ lineId: "line-1", quantity: 2 }]);
+  it("converts the selection into the real RefundLineDto shape (orderLineId, not lineId), dropping zero entries", () => {
+    expect(toRefundLineInputs({ "line-1": 2, "line-2": 0 })).toEqual([{ orderLineId: "line-1", quantity: 2 }]);
   });
 });
 
 describe("canRefundBill", () => {
-  it("only allows refunding a finalised bill", () => {
-    expect(canRefundBill({ status: "finalised" })).toBe(true);
-    expect(canRefundBill({ status: "draft" })).toBe(false);
+  it("only allows refunding a finalized bill", () => {
+    expect(canRefundBill({ status: "finalized" })).toBe(true);
+    expect(canRefundBill({ status: "open" })).toBe(false);
   });
 });

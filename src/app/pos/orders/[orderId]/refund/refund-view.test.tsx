@@ -1,76 +1,93 @@
-// Component tests for the real P10 refund & adjustments screen. No live
-// restiq-backend to verify against yet (see refund-state.ts's file header),
-// so every network call is stubbed against this story's own self-authored
-// contract, same convention as bill-settle-view.test.tsx.
+// Component tests for the real P10 refund & adjustments screen, reconciled
+// (restiq-web#98) against the real, merged restiq-backend `src/pos/bills/*`
+// contract - every stubbed route/shape below is the real one (bills.dtos.ts/
+// bills.controller.ts, read directly), not a self-authored guess.
 import { cleanup, render, screen, waitFor, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { RefundView } from "./refund-view";
 import type { BillView } from "../settle/bill-state";
+import type { PosMenuView, RawOrder } from "../order-taking-state";
 
 const ORDER_ID = "order-1042";
+const BILL_ID = "bill-1";
 
 function jsonResponse(body: unknown, status = 200): Response {
   return new Response(JSON.stringify(body), { status, headers: { "content-type": "application/json" } });
 }
 
-function makeFinalisedBill(overrides: Partial<BillView> = {}): BillView {
+const MENU: PosMenuView = {
+  currency: "INR",
+  categories: [{ id: "cat-mains", name: "Mains", sortOrder: 0 }],
+  items: [
+    { id: "item-butter-naan", categoryId: "cat-mains", name: "Butter Naan", shortName: "Naan", available: true, priceMinor: 6000, variants: [], modifierGroups: [] },
+    { id: "item-paneer-tikka", categoryId: "cat-mains", name: "Paneer Tikka", shortName: "Paneer", available: true, priceMinor: 32000, variants: [], modifierGroups: [] },
+  ],
+};
+
+function rawOrder(): RawOrder {
   return {
-    id: "bill-1",
-    billNumber: "TN1-000482",
-    orderId: ORDER_ID,
-    tableLabel: "Table 12",
-    currency: "INR",
-    status: "finalised",
+    id: ORDER_ID,
+    tenantId: "tenant-1",
+    outletId: "outlet-1",
+    tableId: "table-12",
+    ownerId: "staff-1",
+    status: "closed",
+    tokenNumber: null,
+    createdAt: "2026-08-24T14:00:00.000Z",
+    updatedAt: "2026-08-24T14:22:00.000Z",
     lines: [
       {
         id: "line-naan",
+        orderId: ORDER_ID,
         itemId: "item-butter-naan",
-        itemName: "Butter Naan",
         variantId: null,
-        variantName: null,
         quantity: 2,
         unitPriceMinor: 6000,
-        modifiers: [],
-        lineTotalMinor: 12000,
-        addedByStaffId: "staff-1",
         seatNumber: null,
+        addedByStaffId: "staff-1",
+        createdAt: "2026-08-24T14:05:00.000Z",
+        modifiers: [],
       },
       {
         id: "line-paneer",
+        orderId: ORDER_ID,
         itemId: "item-paneer-tikka",
-        itemName: "Paneer Tikka",
         variantId: null,
-        variantName: null,
         quantity: 1,
         unitPriceMinor: 32000,
-        modifiers: [],
-        lineTotalMinor: 32000,
-        addedByStaffId: "staff-1",
         seatNumber: null,
+        addedByStaffId: "staff-1",
+        createdAt: "2026-08-24T14:06:00.000Z",
+        modifiers: [],
       },
     ],
+  };
+}
+
+function makeFinalizedBill(overrides: Partial<BillView> = {}): BillView {
+  return {
+    id: BILL_ID,
+    orderId: ORDER_ID,
+    billNumber: 482,
+    status: "finalized",
     subtotalMinor: 72000,
-    discount: null,
-    taxLines: [
-      { label: "CGST", ratePercent: 2.5, amountMinor: 1800 },
-      { label: "SGST", ratePercent: 2.5, amountMinor: 1800 },
-    ],
-    roundOffMinor: 0,
-    grandTotalMinor: 75600,
+    taxMinor: 3600,
+    discountMinor: null,
+    discountReason: null,
+    totalMinor: 75600,
+    createdAt: "2026-08-24T14:10:00.000Z",
+    finalizedAt: "2026-08-24T14:22:00.000Z",
     tenders: [
-      { id: "tender-1", method: "cash", amountMinor: 50000, capturedAt: "2026-08-24T14:22:00.000Z" },
-      { id: "tender-2", method: "upi", amountMinor: 25600, capturedAt: "2026-08-24T14:22:00.000Z" },
+      { id: "tender-1", method: "cash", amountMinor: 50000, createdAt: "2026-08-24T14:22:00.000Z" },
+      { id: "tender-2", method: "upi_manual", amountMinor: 25600, createdAt: "2026-08-24T14:22:00.000Z" },
     ],
-    tenderedMinor: 75600,
-    remainingMinor: 0,
-    finalisedAt: "2026-08-24T14:22:00.000Z",
     ...overrides,
   };
 }
 
 let bill: BillView;
-let refundRequests: Array<{ lines: { lineId: string; quantity: number }[]; reasonCode: string; managerPin: string; refundMethod: string; notes?: string }>;
+let refundRequests: Array<{ lines?: { orderLineId: string; quantity: number }[]; reason: string; managerPin: string }>;
 
 function stubFetch(options: { rejectPin?: string } = {}) {
   refundRequests = [];
@@ -79,56 +96,44 @@ function stubFetch(options: { rejectPin?: string } = {}) {
     const method = init?.method ?? "GET";
     const key = `${method} ${url.replace(/^.*\/pos\/api\//, "")}`;
 
-    if (key === `GET orders/${ORDER_ID}/bill`) return Promise.resolve(jsonResponse(bill));
+    if (key === "GET menu") return Promise.resolve(jsonResponse(MENU));
+    if (key === `GET orders/${ORDER_ID}`) return Promise.resolve(jsonResponse(rawOrder()));
+    if (key === `GET bills/${BILL_ID}`) return Promise.resolve(jsonResponse(bill));
 
-    if (key === `POST orders/${ORDER_ID}/bill/refund`) {
-      const body = JSON.parse(String(init?.body)) as {
-        lines: { lineId: string; quantity: number }[];
-        reasonCode: string;
-        managerPin: string;
-        refundMethod: "cash" | "upi";
-        notes?: string;
-      };
+    if (key === `POST bills/${BILL_ID}/refund`) {
+      const body = JSON.parse(String(init?.body)) as { lines?: { orderLineId: string; quantity: number }[]; reason: string; managerPin: string };
       refundRequests.push(body);
 
       if (options.rejectPin && body.managerPin === options.rejectPin) {
         return Promise.resolve(jsonResponse({ error: { code: "invalid_pin", message: "Incorrect manager PIN." } }, 401));
       }
 
-      const subtotalMinor = body.lines.reduce((sum, l) => {
-        const line = bill.lines.find((candidate) => candidate.id === l.lineId)!;
+      const order = rawOrder();
+      const lines = body.lines ?? [];
+      const subtotalMinor = lines.reduce((sum, l) => {
+        const line = order.lines.find((candidate) => candidate.id === l.orderLineId)!;
         return sum + line.unitPriceMinor * l.quantity;
       }, 0);
-      const taxReversalMinor = Math.round(subtotalMinor * 0.05);
+      const taxMinor = Math.round(subtotalMinor * 0.05);
       return Promise.resolve(
-        jsonResponse({
-          id: "credit-note-1",
-          creditNoteNumber: "CN-TN1-000482-01",
-          billId: bill.id,
-          billNumber: bill.billNumber,
-          orderId: ORDER_ID,
-          currency: bill.currency,
-          lines: body.lines.map((l) => {
-            const line = bill.lines.find((candidate) => candidate.id === l.lineId)!;
-            return {
-              id: `cn-${l.lineId}`,
-              lineId: l.lineId,
-              itemName: line.itemName,
-              variantName: line.variantName,
-              quantity: l.quantity,
-              unitPriceMinor: line.unitPriceMinor,
-              amountMinor: line.unitPriceMinor * l.quantity,
-            };
-          }),
-          subtotalMinor,
-          taxReversalMinor,
-          totalMinor: subtotalMinor + taxReversalMinor,
-          refundMethod: body.refundMethod,
-          reasonCode: body.reasonCode,
-          reasonLabel: body.reasonCode,
-          notes: body.notes ?? null,
-          issuedAt: "2026-08-25T10:00:00.000Z",
-        }),
+        jsonResponse(
+          {
+            id: "credit-note-1",
+            originalBillId: bill.id,
+            reason: body.reason,
+            approvedByStaffId: "manager-1",
+            createdByStaffId: "staff-1",
+            subtotalMinor,
+            taxMinor,
+            totalMinor: subtotalMinor + taxMinor,
+            createdAt: "2026-08-25T10:00:00.000Z",
+            lines: lines.map((l) => {
+              const line = order.lines.find((candidate) => candidate.id === l.orderLineId)!;
+              return { id: `cn-${l.orderLineId}`, orderLineId: l.orderLineId, quantity: l.quantity, unitPriceMinor: line.unitPriceMinor, amountMinor: line.unitPriceMinor * l.quantity };
+            }),
+          },
+          201,
+        ),
       );
     }
 
@@ -143,11 +148,19 @@ afterEach(() => {
   vi.unstubAllGlobals();
 });
 
+describe("RefundView - no bill id", () => {
+  it("directs back to Settle instead of guessing at a bill id", async () => {
+    stubFetch();
+    render(<RefundView orderId={ORDER_ID} billId={null} />);
+    expect(await screen.findByTestId("refund-no-bill")).toBeTruthy();
+  });
+});
+
 describe("RefundView - selecting items to refund", () => {
   it("computes the correct partial refund amount as items/quantities are selected", async () => {
-    bill = makeFinalisedBill();
+    bill = makeFinalizedBill();
     stubFetch();
-    render(<RefundView orderId={ORDER_ID} />);
+    render(<RefundView orderId={ORDER_ID} billId={BILL_ID} />);
 
     await screen.findByTestId("refund-config-panel");
     expect(screen.getByTestId("refund-total-value").textContent).toBe("₹0.00");
@@ -167,15 +180,15 @@ describe("RefundView - selecting items to refund", () => {
     expect(screen.getByTestId("refund-total-value").textContent).toBe("₹399.00");
   });
 
-  it("only shows the original bill (never mutated) and the finalised bill's own totals throughout selection", async () => {
-    bill = makeFinalisedBill();
+  it("only shows the original bill (never mutated) and the finalized bill's own totals throughout selection", async () => {
+    bill = makeFinalizedBill();
     stubFetch();
-    render(<RefundView orderId={ORDER_ID} />);
+    render(<RefundView orderId={ORDER_ID} billId={BILL_ID} />);
 
     await screen.findByTestId("bill-summary");
-    expect(screen.getByTestId("bill-status").textContent).toBe("Finalised");
+    expect(screen.getByTestId("bill-status").textContent).toBe("Finalized");
     expect(screen.getByTestId("bill-grand-total").textContent).toBe("₹756.00");
-    // BillSummary hides its own discount/edit affordance once finalised.
+    // BillSummary hides its own discount/edit affordance once finalized.
     expect(screen.queryByTestId("bill-add-discount")).toBeNull();
 
     await userEvent.click(screen.getByTestId("refund-line-select-line-naan"));
@@ -186,9 +199,9 @@ describe("RefundView - selecting items to refund", () => {
 
 describe("RefundView - manager PIN gate", () => {
   it("blocks the refund until the manager PIN dialog approves it", async () => {
-    bill = makeFinalisedBill();
+    bill = makeFinalizedBill();
     const fetchMock = stubFetch();
-    render(<RefundView orderId={ORDER_ID} />);
+    render(<RefundView orderId={ORDER_ID} billId={BILL_ID} />);
 
     await screen.findByTestId("refund-config-panel");
     await userEvent.click(screen.getByTestId("refund-line-select-line-naan"));
@@ -215,13 +228,13 @@ describe("RefundView - manager PIN gate", () => {
 
     await waitFor(() => expect(screen.queryByTestId("manager-pin-dialog")).toBeNull());
     expect(refundRequests).toHaveLength(1);
-    expect(refundRequests[0]).toMatchObject({ reasonCode: "customer-complaint", managerPin: "1234" });
+    expect(refundRequests[0]).toMatchObject({ reason: "Customer complaint", managerPin: "1234" });
   });
 
   it("keeps a rejected PIN from proceeding - the refund never lands and the config panel stays put", async () => {
-    bill = makeFinalisedBill();
+    bill = makeFinalizedBill();
     stubFetch({ rejectPin: "0000" });
-    render(<RefundView orderId={ORDER_ID} />);
+    render(<RefundView orderId={ORDER_ID} billId={BILL_ID} />);
 
     await screen.findByTestId("refund-config-panel");
     await userEvent.click(screen.getByTestId("refund-line-select-line-naan"));
@@ -244,9 +257,9 @@ describe("RefundView - manager PIN gate", () => {
 
 describe("RefundView - successful refund", () => {
   it("shows the resulting credit note and leaves the original bill's display unchanged", async () => {
-    bill = makeFinalisedBill();
+    bill = makeFinalizedBill();
     const fetchMock = stubFetch();
-    render(<RefundView orderId={ORDER_ID} />);
+    render(<RefundView orderId={ORDER_ID} billId={BILL_ID} />);
 
     await screen.findByTestId("refund-config-panel");
     await userEvent.click(screen.getByTestId("refund-line-select-line-naan"));
@@ -260,14 +273,11 @@ describe("RefundView - successful refund", () => {
     await userEvent.click(within(dialog).getByTestId("manager-pin-dialog-confirm"));
 
     await screen.findByTestId("credit-note-result");
-    expect(screen.getByTestId("credit-note-number").textContent).toContain("TN1-000482");
+    expect(screen.getByTestId("credit-note-number").textContent).toContain("credit-note-1");
     expect(screen.getByTestId("credit-note-total").textContent).toBe("₹126.00");
-    // The original, finalised bill is never re-fetched or shown as edited -
-    // the read-only invoice view is simply swapped out, and only one GET was
-    // ever issued for it.
+    // The original, finalized bill is never re-fetched or shown as edited -
+    // the read-only invoice view is simply swapped out.
     expect(screen.queryByTestId("bill-summary")).toBeNull();
-    const getCalls = fetchMock.mock.calls.filter(([, init]) => (init?.method ?? "GET") === "GET");
-    expect(getCalls).toHaveLength(1);
     // No PUT/PATCH ever touched the bill itself - only the insert-only refund POST.
     const mutatingBillCalls = fetchMock.mock.calls.filter(([input, init]) => {
       const url = String(input);
@@ -278,10 +288,10 @@ describe("RefundView - successful refund", () => {
 });
 
 describe("RefundView - ineligible bill", () => {
-  it("refuses to show refund controls for a bill that isn't finalised yet", async () => {
-    bill = makeFinalisedBill({ status: "draft", finalisedAt: null });
+  it("refuses to show refund controls for a bill that isn't finalized yet", async () => {
+    bill = makeFinalizedBill({ status: "open", finalizedAt: null });
     stubFetch();
-    render(<RefundView orderId={ORDER_ID} />);
+    render(<RefundView orderId={ORDER_ID} billId={BILL_ID} />);
 
     await screen.findByTestId("refund-not-eligible");
     expect(screen.queryByTestId("refund-config-panel")).toBeNull();

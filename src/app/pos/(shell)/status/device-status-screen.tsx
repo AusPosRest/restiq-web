@@ -6,6 +6,15 @@
 // PrinterStatusChip/OfflineIndicatorPill, "(demo)" in the DOM, not just a
 // tooltip). Five-state pattern per EXPERIENCE.md, same as shift-screen.tsx:
 // skeleton while loading, inline retry on failure, content once landed.
+//
+// RECONCILED (2026-09-02, restiq-web#98): the real route is
+// `outlets/:outletId/attendance` (no `/today`) - see `../../api.ts`'s
+// `AttendanceView` header for the full reasoning. There is no connectivity
+// signal anywhere in that response (not even a mocked one, unlike the
+// printer's real `printerStatus`) - `OfflineIndicatorPill` below is passed a
+// permanently-static "online" prop rather than a fabricated response field,
+// keeping DESIGN.md's two-chip layout honest about what's real (the printer
+// chip) vs. purely decorative (this one).
 import { usePosLoad } from "../../use-pos-load";
 import type { AttendanceView } from "../../api";
 import { LoadErrorPanel, Skeleton } from "./data-states";
@@ -14,7 +23,7 @@ import { PrinterStatusChip } from "./printer-status-chip";
 import { OfflineIndicatorPill } from "./offline-indicator-pill";
 
 export function DeviceStatusScreen({ outletId }: Readonly<{ outletId: string }>) {
-  const { loading, failed, data, retry } = usePosLoad<AttendanceView>(`outlets/${outletId}/attendance/today`);
+  const { loading, failed, data, retry } = usePosLoad<AttendanceView>(`outlets/${outletId}/attendance`);
 
   return (
     <div className="flex flex-1 flex-col">
@@ -36,8 +45,8 @@ export function DeviceStatusScreen({ outletId }: Readonly<{ outletId: string }>)
           <section>
             <h2 className="mb-3 font-headline text-base font-semibold">Device status</h2>
             <div data-testid="pos-device-status-demo-notice" className="flex flex-wrap items-center gap-3 rounded-lg border border-border/40 bg-card px-5 py-4">
-              <PrinterStatusChip status={data.device.printer} />
-              <OfflineIndicatorPill status={data.device.connectivity} />
+              <PrinterStatusChip status={data.printerStatus.status} />
+              <OfflineIndicatorPill status="online" />
             </div>
           </section>
 
