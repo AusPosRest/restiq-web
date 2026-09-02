@@ -3,20 +3,25 @@
 // Non-pointer accessibility fallback for the canvas (EXPERIENCE.md
 // Accessibility Floor: "Floor-plan canvas provides a list-view alternative
 // for non-pointer interaction"). Same floors/tables data as the canvas, as a
-// plain table with editable x/y/capacity fields - no drag math needed here,
-// just numbers a keyboard or screen-reader user can type directly.
+// plain table with editable label/shape/x/y/capacity fields - no drag math
+// needed here, just values a keyboard or screen-reader user can type/pick
+// directly. Also the table-level rename/delete surface (issue #109): a table
+// has no "detail view" of its own, so its row here is the one place to edit
+// its label or shape and to delete it.
+import { Trash2 } from "lucide-react";
 import { useState } from "react";
-import { groupTablesByFloor, type DiningTableView, type FloorView } from "./floor-plan-state";
+import { groupTablesByFloor, TABLE_SHAPES, type DiningTableView, type FloorView } from "./floor-plan-state";
 
-export type EditableTableField = "x" | "y" | "seatCapacity";
+export type EditableTableField = "x" | "y" | "seatCapacity" | "label" | "shape";
 
 export interface FloorPlanListViewProps {
   floors: readonly FloorView[];
   tables: readonly DiningTableView[];
-  onFieldCommitted: (tableId: string, field: EditableTableField, value: number) => void;
+  onFieldCommitted: (tableId: string, field: EditableTableField, value: number | string) => void;
+  onDeleteRequested: (tableId: string) => void;
 }
 
-export function FloorPlanListView({ floors, tables, onFieldCommitted }: Readonly<FloorPlanListViewProps>) {
+export function FloorPlanListView({ floors, tables, onFieldCommitted, onDeleteRequested }: Readonly<FloorPlanListViewProps>) {
   const groups = groupTablesByFloor(floors, tables);
 
   if (tables.length === 0) {
@@ -33,10 +38,14 @@ export function FloorPlanListView({ floors, tables, onFieldCommitted }: Readonly
         <thead>
           <tr className="border-b border-border/40 text-left text-xs font-semibold uppercase tracking-wider text-muted-foreground">
             <th className="px-4 py-3 font-semibold">Floor</th>
-            <th className="px-4 py-3 font-semibold">Table</th>
+            <th className="px-4 py-3 font-semibold">Label</th>
+            <th className="px-4 py-3 font-semibold">Shape</th>
             <th className="px-4 py-3 font-semibold">X</th>
             <th className="px-4 py-3 font-semibold">Y</th>
             <th className="px-4 py-3 font-semibold">Capacity</th>
+            <th className="px-4 py-3 font-semibold">
+              <span className="sr-only">Actions</span>
+            </th>
           </tr>
         </thead>
         <tbody>
@@ -45,7 +54,28 @@ export function FloorPlanListView({ floors, tables, onFieldCommitted }: Readonly
               <tr key={table.id} data-testid={`floor-plan-list-row-${table.id}`} className="border-b border-border/20 last:border-0">
                 <td className="px-4 py-2 text-muted-foreground">{floor.name}</td>
                 <td className="px-4 py-2 font-medium">
-                  {table.label} <span className="text-xs text-muted-foreground">({table.shape})</span>
+                  <TextField
+                    key={table.label}
+                    testId={`floor-plan-list-label-${table.id}`}
+                    label={`${table.label} label`}
+                    value={table.label}
+                    onCommit={(value) => onFieldCommitted(table.id, "label", value)}
+                  />
+                </td>
+                <td className="px-4 py-2">
+                  <select
+                    aria-label={`${table.label} shape`}
+                    data-testid={`floor-plan-list-shape-${table.id}`}
+                    value={table.shape}
+                    onChange={(event) => onFieldCommitted(table.id, "shape", event.target.value)}
+                    className="rounded-md border border-border bg-input px-2 py-1 text-sm focus:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+                  >
+                    {TABLE_SHAPES.map((shape) => (
+                      <option key={shape} value={shape}>
+                        {shape}
+                      </option>
+                    ))}
+                  </select>
                 </td>
                 <td className="px-4 py-2">
                   <NumberField
@@ -76,6 +106,17 @@ export function FloorPlanListView({ floors, tables, onFieldCommitted }: Readonly
                     min={1}
                     onCommit={(value) => onFieldCommitted(table.id, "seatCapacity", value)}
                   />
+                </td>
+                <td className="px-4 py-2">
+                  <button
+                    type="button"
+                    aria-label={`Delete ${table.label}`}
+                    data-testid={`floor-plan-list-delete-${table.id}`}
+                    onClick={() => onDeleteRequested(table.id)}
+                    className="rounded-md p-1.5 text-muted-foreground hover:bg-status-error/10 hover:text-status-error focus:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+                  >
+                    <Trash2 className="size-4" aria-hidden="true" />
+                  </button>
                 </td>
               </tr>
             )),
@@ -121,6 +162,37 @@ function NumberField({
         if (event.key === "Enter") event.currentTarget.blur();
       }}
       className="w-20 rounded-md border border-border bg-input px-2 py-1 text-sm focus:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+    />
+  );
+}
+
+function TextField({
+  testId,
+  label,
+  value,
+  onCommit,
+}: Readonly<{ testId: string; label: string; value: string; onCommit: (value: string) => void }>) {
+  // Same remount-on-external-change contract as NumberField above.
+  const [draft, setDraft] = useState(value);
+
+  function commit() {
+    const trimmed = draft.trim();
+    if (trimmed && trimmed !== value) onCommit(trimmed);
+    else setDraft(value);
+  }
+
+  return (
+    <input
+      type="text"
+      aria-label={label}
+      data-testid={testId}
+      value={draft}
+      onChange={(event) => setDraft(event.target.value)}
+      onBlur={commit}
+      onKeyDown={(event) => {
+        if (event.key === "Enter") event.currentTarget.blur();
+      }}
+      className="w-28 rounded-md border border-border bg-input px-2 py-1 text-sm focus:outline-none focus-visible:ring-2 focus-visible:ring-ring"
     />
   );
 }

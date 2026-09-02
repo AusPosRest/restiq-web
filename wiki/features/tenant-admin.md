@@ -295,6 +295,48 @@ story. Backend counterpart: `restiq-backend/wiki/features/tenant-admin.md`.
     straight from the initial load since nothing could mutate them yet); an
     added floor auto-selects itself so the owner lands somewhere useful
     immediately.
+- **Gap closed - edit/delete affordances (issue #109):** the above covered
+  add + drag only, with no way to fix a typo'd floor/table name, reshape or
+  re-seat an existing table, or remove a floor/table created by mistake.
+  Added on top, against `restiq-backend#92`'s `DELETE floors/:floorId` (landed
+  in parallel) and the existing `PATCH floors/:floorId` / `PATCH
+  tables/:tableId` / `DELETE tables/:tableId`:
+  - **Floor tabs moved up:** the floor tab strip used to live inside
+    `floor-plan-canvas.tsx` (hidden entirely below 2 floors), which had no
+    home for a single-floor outlet's rename/delete controls and disappeared
+    in list view. It now lives in `floor-plan.tsx`'s `FloorTabsBar`, always
+    visible above both views regardless of floor count - the canvas itself
+    lost its `floors`/`onSelectFloor` props and now only ever renders the
+    already-selected floor's tables, drag/keyboard math untouched.
+  - **Rename a floor:** a pencil button (`floor-plan-rename-floor-button`)
+    next to the selected tab swaps it for an inline name field
+    (`floor-plan-rename-floor-form`, same open/submit/cancel shape as
+    `AddFloorControl`) that `PATCH`es `.../floors/:floorId` with `{ name }`.
+  - **Delete a floor:** a trash button (`floor-plan-delete-floor-button`)
+    next to rename, disabled with a `title` hint ("Move or remove its tables
+    first") whenever the selected floor still has tables - the same rule
+    `restiq-backend#92`'s `DELETE` enforces server-side with a 409, so the
+    client-side gate matches what the backend would reject anyway. Confirmed
+    via the shared `ConfirmReasonDialog` (the reason is UI-only ceremony
+    matching the admin realm's existing destructive-action pattern - the
+    delete endpoint takes no reason). On success the deleted floor drops from
+    state and selection falls to another remaining floor; a race-condition
+    409 (a table added between the button rendering and the confirm) toasts
+    instead of silently failing.
+  - **Rename/reshape/re-seat a table:** `floor-plan-list-view.tsx` gained a
+    Label text field and a Shape `<select>` per row (`floor-plan-list-label-*`
+    / `floor-plan-list-shape-*`), alongside the existing X/Y/capacity number
+    fields - all six funnel through the same `commitTable` optimistic-write/
+    rollback path already built for position edits, just widened to accept
+    `label`/`shape` too. `TABLE_SHAPES` moved from a local const in
+    `floor-plan.tsx` to `floor-plan-state.ts` so the add-table form and this
+    new shape `<select>` share one array instead of two hand-kept copies.
+  - **Delete a table:** a trash button per list row
+    (`floor-plan-list-delete-*`), confirmed via the same `ConfirmReasonDialog`
+    pattern as floor delete, `DELETE`s `.../tables/:tableId`.
+  - **api.ts:** added `updateFloor`, `deleteFloor`, `deleteTable`; widened
+    `UpdateTableInput` with `label`/`shape` - all additive, next to the
+    existing floor-plan helpers.
 
 ## CAP-6 - Devices & printers
 

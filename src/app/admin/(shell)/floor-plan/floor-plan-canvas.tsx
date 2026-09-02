@@ -7,17 +7,20 @@
 // works (ponytail). Pointer drag AND arrow-key nudging both funnel through
 // the same computeDragPosition math (floor-plan-state.ts) so keyboard users
 // get identical snapping/clamping behaviour, not a second implementation.
+//
+// Floor selection itself (the tabs) lives one level up in floor-plan.tsx's
+// FloorTabsBar (issue #109) so rename/delete controls sit next to the same
+// tabs the list view also needs to see - this component only ever renders
+// the selected floor's tables.
 import { useRef, useState } from "react";
-import { computeDragPosition, findOverlap, GRID_SNAP_PX, type DiningTableView, type FloorView } from "./floor-plan-state";
+import { computeDragPosition, findOverlap, GRID_SNAP_PX, type DiningTableView } from "./floor-plan-state";
 
 export const CANVAS_WIDTH = 640;
 export const CANVAS_HEIGHT = 420;
 
 export interface FloorPlanCanvasProps {
-  floors: readonly FloorView[];
   tables: readonly DiningTableView[];
   selectedFloorId: string;
-  onSelectFloor: (floorId: string) => void;
   onTableMoved: (tableId: string, next: { x: number; y: number }, previous: { x: number; y: number }) => void;
 }
 
@@ -35,7 +38,7 @@ const ARROW_DELTAS: Record<string, [number, number]> = {
   ArrowRight: [GRID_SNAP_PX, 0],
 };
 
-export function FloorPlanCanvas({ floors, tables, selectedFloorId, onSelectFloor, onTableMoved }: Readonly<FloorPlanCanvasProps>) {
+export function FloorPlanCanvas({ tables, selectedFloorId, onTableMoved }: Readonly<FloorPlanCanvasProps>) {
   const floorTables = tables.filter((table) => table.floorId === selectedFloorId);
   const dragRef = useRef<{ tableId: string; origin: DragOrigin } | null>(null);
   const [livePositions, setLivePositions] = useState<Record<string, { x: number; y: number }>>({});
@@ -94,64 +97,42 @@ export function FloorPlanCanvas({ floors, tables, selectedFloorId, onSelectFloor
   }
 
   return (
-    <div className="flex flex-col gap-3">
-      {floors.length > 1 && (
-        <div role="tablist" aria-label="Floors" data-testid="floor-plan-floor-tabs" className="flex gap-1">
-          {floors.map((floor) => (
-            <button
-              key={floor.id}
-              type="button"
-              role="tab"
-              aria-selected={floor.id === selectedFloorId}
-              data-testid={`floor-tab-${floor.id}`}
-              onClick={() => onSelectFloor(floor.id)}
-              className={`rounded-lg px-3 py-1.5 text-sm font-medium focus:outline-none focus-visible:ring-2 focus-visible:ring-ring ${
-                floor.id === selectedFloorId ? "bg-primary text-primary-foreground" : "bg-accent text-muted-foreground hover:text-foreground"
-              }`}
-            >
-              {floor.name}
-            </button>
-          ))}
-        </div>
-      )}
-
-      <div
-        data-testid="floor-plan-canvas"
-        className="relative overflow-hidden rounded-lg border border-border bg-card"
-        style={{ width: CANVAS_WIDTH, height: CANVAS_HEIGHT }}
-      >
-        {floorTables.map((table) => {
-          const position = positionOf(table);
-          const dragging = livePositions[table.id] !== undefined;
-          const overlapping =
-            dragging &&
-            findOverlap(
-              { id: table.id, x: position.x, y: position.y, width: table.width, height: table.height },
-              floorTables.map((other) => ({ id: other.id, x: positionOf(other).x, y: positionOf(other).y, width: other.width, height: other.height })),
-            ) !== null;
-          return (
-            <div
-              key={table.id}
-              tabIndex={0}
-              role="button"
-              aria-label={`${table.label}, seats ${table.seatCapacity}. Drag or use arrow keys to move.`}
-              data-testid={`table-shape-${table.id}`}
-              data-x={position.x}
-              data-y={position.y}
-              onPointerDown={(event) => handlePointerDown(event, table)}
-              onPointerMove={(event) => handlePointerMove(event, table)}
-              onPointerUp={() => handlePointerUp(table)}
-              onKeyDown={(event) => handleKeyDown(event, table)}
-              className={`absolute flex cursor-grab select-none items-center justify-center border text-xs font-semibold text-foreground transition-colors focus:outline-none focus-visible:ring-2 focus-visible:ring-ring active:cursor-grabbing ${
-                table.shape === "circle" ? "rounded-full" : "rounded-md"
-              } ${overlapping ? "border-status-error bg-status-error/20" : "border-primary/60 bg-primary/15"}`}
-              style={{ left: position.x, top: position.y, width: table.width, height: table.height }}
-            >
-              {table.label}
-            </div>
-          );
-        })}
-      </div>
+    <div
+      data-testid="floor-plan-canvas"
+      className="relative overflow-hidden rounded-lg border border-border bg-card"
+      style={{ width: CANVAS_WIDTH, height: CANVAS_HEIGHT }}
+    >
+      {floorTables.map((table) => {
+        const position = positionOf(table);
+        const dragging = livePositions[table.id] !== undefined;
+        const overlapping =
+          dragging &&
+          findOverlap(
+            { id: table.id, x: position.x, y: position.y, width: table.width, height: table.height },
+            floorTables.map((other) => ({ id: other.id, x: positionOf(other).x, y: positionOf(other).y, width: other.width, height: other.height })),
+          ) !== null;
+        return (
+          <div
+            key={table.id}
+            tabIndex={0}
+            role="button"
+            aria-label={`${table.label}, seats ${table.seatCapacity}. Drag or use arrow keys to move.`}
+            data-testid={`table-shape-${table.id}`}
+            data-x={position.x}
+            data-y={position.y}
+            onPointerDown={(event) => handlePointerDown(event, table)}
+            onPointerMove={(event) => handlePointerMove(event, table)}
+            onPointerUp={() => handlePointerUp(table)}
+            onKeyDown={(event) => handleKeyDown(event, table)}
+            className={`absolute flex cursor-grab select-none items-center justify-center border text-xs font-semibold text-foreground transition-colors focus:outline-none focus-visible:ring-2 focus-visible:ring-ring active:cursor-grabbing ${
+              table.shape === "circle" ? "rounded-full" : "rounded-md"
+            } ${overlapping ? "border-status-error bg-status-error/20" : "border-primary/60 bg-primary/15"}`}
+            style={{ left: position.x, top: position.y, width: table.width, height: table.height }}
+          >
+            {table.label}
+          </div>
+        );
+      })}
     </div>
   );
 }

@@ -146,6 +146,10 @@ export const SHAPE_SIZES: Record<TableShape, { width: number; height: number }> 
   rectangle: { width: 64, height: 40 },
 };
 
+// Shared with the add-table form and the list view's shape editor - one
+// source of truth for "what shapes exist" rather than two hand-kept arrays.
+export const TABLE_SHAPES: readonly TableShape[] = ["square", "circle", "rectangle"];
+
 export function computeNextTablePosition(
   existing: readonly TableRect[],
   size: { width: number; height: number },

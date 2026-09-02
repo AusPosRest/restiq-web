@@ -354,6 +354,7 @@ export interface UpdateTableInput {
   label?: string;
   x?: number;
   y?: number;
+  shape?: TableShape;
   seatCapacity?: number;
 }
 
@@ -365,6 +366,24 @@ export function updateTable(outletId: string, tableId: string, input: UpdateTabl
     method: "PATCH",
     body: JSON.stringify(input),
   });
+}
+
+// issue #109: rename/delete affordances for floors and tables, against
+// restiq-backend#92's UpdateFloorDto/DELETE (landing in parallel) - a rename
+// is just UpdateFloorDto{name}, and both deletes return 204 with no body.
+export function updateFloor(outletId: string, floorId: string, input: { name?: string }): Promise<FloorView> {
+  return adminApi<FloorView>(`outlets/${outletId}/floor-plan/floors/${floorId}`, {
+    method: "PATCH",
+    body: JSON.stringify(input),
+  });
+}
+
+export function deleteFloor(outletId: string, floorId: string): Promise<void> {
+  return adminApi<void>(`outlets/${outletId}/floor-plan/floors/${floorId}`, { method: "DELETE" });
+}
+
+export function deleteTable(outletId: string, tableId: string): Promise<void> {
+  return adminApi<void>(`outlets/${outletId}/floor-plan/tables/${tableId}`, { method: "DELETE" });
 }
 
 export interface UpdateStationInput {
