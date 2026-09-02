@@ -1,6 +1,5 @@
 import { describe, expect, it } from "vitest";
 import {
-  allLinesSeated,
   canConfirmSelection,
   canSendToKitchen,
   computeOrderTotalMinor,
@@ -16,7 +15,6 @@ import {
   toggleModifier,
   toOrderLineView,
   toOrderView,
-  unseatedLineCount,
   variantSatisfied,
   type ModifierSelection,
   type OrderLineView,
@@ -214,52 +212,31 @@ describe("computeOrderTotalMinor", () => {
   });
 });
 
-// --- CAP-4 group ordering: seat assignment and the send-to-kitchen gate
-// (SPEC.md success criterion: "Every item is assigned to a seat number
-// before the order can be sent to the kitchen; unassigned items block
-// fire.").
+// --- Send-to-kitchen gate. Product decision (2026-09-02, restiq-web#120):
+// seats no longer gate this - `seatNumber` is optional metadata only, so
+// an order with unseated (or entirely unseated) lines can still be sent.
 
-function seatedLine(seatNumber: number | null): Pick<OrderLineView, "seatNumber"> {
+function lineWithSeat(seatNumber: number | null): Pick<OrderLineView, "seatNumber"> {
   return { seatNumber };
 }
-
-describe("allLinesSeated / unseatedLineCount", () => {
-  it("is vacuously true for an order with no lines", () => {
-    expect(allLinesSeated([])).toBe(true);
-    expect(unseatedLineCount([])).toBe(0);
-  });
-
-  it("is true once every line has a seat number", () => {
-    const lines = [seatedLine(1), seatedLine(2)] as OrderLineView[];
-    expect(allLinesSeated(lines)).toBe(true);
-    expect(unseatedLineCount(lines)).toBe(0);
-  });
-
-  it("is false when any line is unseated (null)", () => {
-    const lines = [seatedLine(1), seatedLine(null)] as OrderLineView[];
-    expect(allLinesSeated(lines)).toBe(false);
-    expect(unseatedLineCount(lines)).toBe(1);
-  });
-
-});
 
 describe("canSendToKitchen", () => {
   it("blocks an order with no lines - nothing to send", () => {
     expect(canSendToKitchen({ lines: [], status: "open" })).toBe(false);
   });
 
-  it("blocks an order with any unseated line", () => {
-    const lines = [seatedLine(1), seatedLine(null)] as OrderLineView[];
-    expect(canSendToKitchen({ lines, status: "open" })).toBe(false);
+  it("allows an order with unseated lines - seats no longer gate send", () => {
+    const lines = [lineWithSeat(1), lineWithSeat(null)] as OrderLineView[];
+    expect(canSendToKitchen({ lines, status: "open" })).toBe(true);
   });
 
-  it("allows an order once every line is seated", () => {
-    const lines = [seatedLine(1), seatedLine(2)] as OrderLineView[];
+  it("allows an order where every line is unseated", () => {
+    const lines = [lineWithSeat(null), lineWithSeat(null)] as OrderLineView[];
     expect(canSendToKitchen({ lines, status: "open" })).toBe(true);
   });
 
   it("blocks an order that has already been sent to the kitchen", () => {
-    const lines = [seatedLine(1)] as OrderLineView[];
+    const lines = [lineWithSeat(1)] as OrderLineView[];
     expect(canSendToKitchen({ lines, status: "sent" })).toBe(false);
   });
 });

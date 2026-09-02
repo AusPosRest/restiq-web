@@ -1,5 +1,33 @@
 # Completed
 
+- **2026-09-02** - POS order screen: removed "Split by seat" and the seat
+  gate (issue #120). Product decision: seats were confusing on the order
+  screen, and are becoming optional metadata rather than a fire requirement,
+  paired with a backend change (restiq-backend "Make seat assignment
+  optional: stop rejecting unseated lines on send-to-kitchen") that drops the
+  `unseated_lines` rejection on send. Removed from
+  `src/app/pos/orders/[orderId]/order-panel.tsx`: the "Split by seat" toggle
+  (`split-by-seat-toggle`), per-line seat stepper rows
+  (`order-line-seat-{id}`), and the "N items need a seat..." gate message
+  (`send-to-kitchen-blocked`). Removed from `order-taking-state.ts`:
+  `allLinesSeated`/`unseatedLineCount`; `canSendToKitchen` is now just "at
+  least one line and the order hasn't already been sent." Removed the now-dead
+  `assignSeat` wiring (`handleSeatIncrement`/`handleSeatDecrement`) from
+  `order-taking-view.tsx` - `assignSeat` itself stays in `src/app/pos/api.ts`
+  since the backend endpoint still exists, just unused here now.
+  `seatNumber` stays on `OrderLineView`/`RawOrderLine` (still real wire data)
+  but is no longer rendered on this screen. Left unchanged (already correct):
+  `src/app/kds/(shell)/station/ticket-card.tsx`'s seat chip already rendered
+  nothing for a `null` seatNumber - added the missing regression assertion
+  for that case in `station-queue-screen.test.tsx`. `src/app/pos/counter/`
+  and open-orders had no seat UI to remove. Updated
+  `order-taking-state.test.ts`/`order-taking-view.test.tsx`: send-to-kitchen
+  enabled with unseated/entirely-unseated lines, no split toggle or seat rows
+  render, and a race-condition `unseated_lines` rejection from the backend
+  surfaces as a plain inline error instead of a reinstated gate. See
+  [wiki/features/pos-cashier-waiter.md](../features/pos-cashier-waiter.md)'s
+  CAP-4 deviation note. Issue AusPosRest/restiq-web#120.
+
 - **2026-09-02** - Settle: relies on the now-idempotent bill POST, drops the
   sessionStorage bill-id cache (issue #117). restiq-backend#98/PR #99
   (merged) made `POST orders/:orderId/bill` idempotent per order - a repeat

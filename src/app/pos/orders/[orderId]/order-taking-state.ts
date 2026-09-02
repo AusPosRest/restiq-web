@@ -178,7 +178,7 @@ export interface OrderLineView {
   lineTotalMinor: number;
   /** Raw staff id - no staff-name lookup exists server-side yet, see file header. */
   addedByStaffId: string;
-  /** CAP-4 group ordering: which seat/cover this line belongs to; `null` means unseated. */
+  /** Optional seat/cover metadata (restiq-web#120: no longer gates send-to-kitchen, and not rendered on this screen); `null` means unassigned. */
   seatNumber: number | null;
 }
 
@@ -373,21 +373,14 @@ export function computeOrderTotalMinor(lines: readonly OrderLineView[]): number 
   return lines.reduce((sum, line) => sum + line.lineTotalMinor, 0);
 }
 
-// --- CAP-4 group ordering: seat assignment and the fire-gate. SPEC.md's
-// success criterion is literal: "Every item is assigned to a seat number
-// before the order can be sent to the kitchen; unassigned items block
-// fire."
-
-/** Vacuously true for an order with no lines - nothing to block yet. */
-export function allLinesSeated(lines: readonly OrderLineView[]): boolean {
-  return lines.every((line) => line.seatNumber != null);
-}
-
-export function unseatedLineCount(lines: readonly OrderLineView[]): number {
-  return lines.filter((line) => line.seatNumber == null).length;
-}
+// --- Send-to-kitchen gate. Product decision (2026-09-02, restiq-web#120):
+// the CAP-4 "every line needs a seat before fire" rule this used to enforce
+// is removed - seats are optional metadata only (restiq-backend's matching
+// change drops the `unseated_lines` rejection on send). `seatNumber` stays
+// on `OrderLineView` (still real wire data, see file header) but no longer
+// gates anything here.
 
 /** Gates the "Send to kitchen" action - disabled, never hidden, same EXPERIENCE.md convention as ModifierSheet's confirm button. Real `Order.status` is forward-only (open->sent->closed, orders.service.ts's `FORWARD_TRANSITIONS`), so "not yet sent" is exactly `status === "open"` - no fabricated `firedAt` timestamp needed. */
 export function canSendToKitchen(order: Pick<OrderView, "lines" | "status">): boolean {
-  return order.lines.length > 0 && order.status === "open" && allLinesSeated(order.lines);
+  return order.lines.length > 0 && order.status === "open";
 }
