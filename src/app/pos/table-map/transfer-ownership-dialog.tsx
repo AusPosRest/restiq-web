@@ -13,7 +13,8 @@ import { Button } from "@/components/ui/button";
 
 export interface TransferOwnershipDialogProps {
   open: boolean;
-  tableLabel: string;
+  /** The full origin label, e.g. "Table T4" or "Counter" - callers format this themselves (see originLabel() in table-map-state.ts/open-orders-state.ts), this dialog doesn't assume every order has a table. */
+  originLabel: string;
   ownerName: string;
   busy?: boolean;
   onCancel: () => void;
@@ -25,7 +26,7 @@ export function TransferOwnershipDialog(props: Readonly<TransferOwnershipDialogP
   return props.open ? <DialogBody key="open" {...props} /> : null;
 }
 
-function DialogBody({ tableLabel, ownerName, busy, onCancel, onConfirm }: Readonly<TransferOwnershipDialogProps>) {
+function DialogBody({ originLabel, ownerName, busy, onCancel, onConfirm }: Readonly<TransferOwnershipDialogProps>) {
   const [reason, setReason] = useState("");
 
   return (
@@ -36,7 +37,7 @@ function DialogBody({ tableLabel, ownerName, busy, onCancel, onConfirm }: Readon
           data-testid="transfer-ownership-dialog"
           className="pos-theme fixed left-1/2 top-1/2 z-50 w-full max-w-md -translate-x-1/2 -translate-y-1/2 rounded-lg border border-border/60 bg-popover p-6 text-foreground shadow-xl"
         >
-          <Dialog.Title className="font-headline text-lg font-semibold">Transfer ownership — Table {tableLabel}</Dialog.Title>
+          <Dialog.Title className="font-headline text-lg font-semibold">Transfer ownership — {originLabel}</Dialog.Title>
           <Dialog.Description className="mt-2 text-sm text-muted-foreground">
             Currently owned by <span className="font-semibold text-foreground">{ownerName}</span>. Transferring makes you the
             owner - the order history stays one thread under both staff members&apos; names.

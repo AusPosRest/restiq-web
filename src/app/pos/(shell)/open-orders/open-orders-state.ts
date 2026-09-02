@@ -6,55 +6,88 @@
 // same split as table-map-state.ts/shift-state.ts, so it's unit-testable
 // without a DOM.
 //
-// SELF-AUTHORED CONTRACT, not yet verified against a real backend.
-// restiq-backend issue #53 ("Open and held orders, outlet-wide") had no
-// branch and no commits when this story was built - `git ls-remote` against
-// restiq-backend's real remote showed only dev/main/feature/15-device-fleet,
-// confirmed by reading the actual remote, not a summary. This story's
-// best-guess GET endpoint (`outlets/${outletId}/orders`, see
-// open-orders-screen.tsx) follows story 3's real, verified
-// `GET /pos/v1/outlets/:outletId/table-map` shape (outlet scoped in the
-// path) rather than story 3's own unreconciled `table-map` guess - see
-// table-map-state.ts's file header for that still-open gap.
+// RECONCILED (2026-08-27, restiq-web#60) against the real, merged
+// restiq-backend `dev` contract (src/pos/orders/orders.controller.ts's
+// `GET /pos/v1/outlets/:outletId/orders` and orders.dtos.ts's `OrderView`,
+// read directly - restiq-backend#53 has since landed). Two things the
+// original self-authored guess got wrong, both fixed here:
+//  - the endpoint returns a bare `RawOpenOrder[]`, not a `{ outletId, orders }`
+//    envelope - open-orders-screen.tsx was reading `data.orders`, always
+//    `undefined` against the real payload (the reported crash).
+//  - the real `OrderView` has no table label, staff name, item count, or
+//    total - only `tableId`/`ownerId` (raw ids, no server-side join) and
+//    `lines` (quantity/unitPriceMinor/modifiers, always present now that
+//    CAP-3 order-lines has landed, so itemCount/totalMinor are always
+//    derivable - the old "null until CAP-3 lands" case no longer applies).
+//    `toOpenOrderEntry` below derives itemCount/totalMinor from `lines`
+//    (reusing order-taking-state.ts's `computeUnitTotalMinor` - same
+//    unitPrice+modifiers formula, not re-derived) and falls back to the raw
+//    id for tableLabel/ownerStaffId until a staff-name/table-label lookup
+//    exists server-side (flagged separately, same gap affects
+//    table-map-state.ts). There's no separate `ownerStaffName` field - it'd
+//    just be a second copy of the same raw id until that lookup exists;
+//    callers show "You" for the viewer's own orders (isOwnOrder) and the raw
+//    id otherwise.
 //
 // "Open and held" is SPEC/UX language for "every non-closed Order" - the
-// real Order model (restiq-backend's feature/46-table-map-ownership
-// orders.service.ts, read directly) only has open/sent/closed statuses, no
-// distinct "held" status, so this never fabricates one: both open and sent
-// orders show up here, closed ones never do - mirrors story 3's own
-// table-map query (`status: { not: 'closed' }`).
-//
-// itemCount/totalMinor are modeled as nullable, not required: CAP-3 (order
-// lines, story 4/#52) may not be merged yet, so the backend may have no
-// lines/pricing to summarize from. summarize() below only ever sums when
-// every order in the list actually has a total, rather than showing a
-// partial, misleading figure.
-//
-// MUST be reconciled against the real restiq-backend#53 DTOs once that
-// lands - same discipline as table-map-state.ts's own pending reconciliation.
+// real Order model only has open/sent/closed statuses, no distinct "held"
+// status, so this never fabricates one: both open and sent orders show up
+// here, closed ones never do - the real backend's listOpenOrders applies
+// that same `status: { not: 'closed' }` filter server-side.
+
+import { computeUnitTotalMinor } from "../../orders/[orderId]/order-taking-state";
 
 export type OrderOrigin = "table" | "counter";
 export type OpenOrderStatus = "open" | "sent";
 
+/** One line as the real backend returns it - only what this list view needs to derive itemCount/totalMinor. */
+export interface RawOpenOrderLine {
+  quantity: number;
+  unitPriceMinor: number;
+  modifiers: { priceMinor: number }[];
+}
+
+/** The real, verified wire shape of one entry in `GET /pos/v1/outlets/:outletId/orders`'s array response. */
+export interface RawOpenOrder {
+  id: string;
+  /** null for a CAP-6 counter order. */
+  tableId: string | null;
+  ownerId: string;
+  status: OpenOrderStatus;
+  /** ISO timestamp. */
+  createdAt: string;
+  lines: RawOpenOrderLine[];
+}
+
 export interface OpenOrderEntry {
   id: string;
   origin: OrderOrigin;
-  /** Present only when origin === "table"; null for a counter-origin order. */
+  /** Present only when origin === "table"; null for a counter-origin order. Raw table id - no label lookup exists server-side yet, see file header. */
   tableLabel: string | null;
+  /** Raw owner id - no staff-name lookup exists server-side yet, see file header. Callers compare against currentStaffId (isOwnOrder) to show "You" instead of the raw id for the viewer's own orders. */
   ownerStaffId: string;
-  ownerStaffName: string;
   status: OpenOrderStatus;
   /** ISO timestamp - mirrors table-map-state.ts's TableOrderSummary.openedAt naming. */
   openedAt: string;
-  /** null until CAP-3/order-lines exist for this order. */
-  itemCount: number | null;
-  /** null until pricing exists for this order (paise/minor units). */
-  totalMinor: number | null;
+  itemCount: number;
+  totalMinor: number;
 }
 
-export interface OpenOrdersView {
-  outletId: string;
-  orders: OpenOrderEntry[];
+function lineTotalMinor(line: RawOpenOrderLine): number {
+  return line.quantity * computeUnitTotalMinor(line.unitPriceMinor, line.modifiers);
+}
+
+export function toOpenOrderEntry(raw: RawOpenOrder): OpenOrderEntry {
+  return {
+    id: raw.id,
+    origin: raw.tableId === null ? "counter" : "table",
+    tableLabel: raw.tableId,
+    ownerStaffId: raw.ownerId,
+    status: raw.status,
+    openedAt: raw.createdAt,
+    itemCount: raw.lines.reduce((sum, line) => sum + line.quantity, 0),
+    totalMinor: raw.lines.reduce((sum, line) => sum + lineTotalMinor(line), 0),
+  };
 }
 
 export const OPEN_ORDER_STATUS_LABEL: Record<OpenOrderStatus, string> = {
@@ -80,13 +113,9 @@ export function elapsedLabel(openedAt: string, now: Date = new Date()): string {
 
 export interface OpenOrdersSummary {
   count: number;
-  /** null unless every order in the list has a known total - never a partial/misleading sum. */
-  totalMinor: number | null;
+  totalMinor: number;
 }
 
 export function summarize(orders: readonly OpenOrderEntry[]): OpenOrdersSummary {
-  const totalMinor = orders.every((o) => o.totalMinor !== null)
-    ? orders.reduce((sum, o) => sum + (o.totalMinor ?? 0), 0)
-    : null;
-  return { count: orders.length, totalMinor };
+  return { count: orders.length, totalMinor: orders.reduce((sum, order) => sum + order.totalMinor, 0) };
 }

@@ -1,13 +1,13 @@
-// Component tests for the real P3 order-taking screen (replaces story 3's
-// order-stub.test.tsx). No live restiq-backend to verify against yet - see
-// order-taking-state.ts's file header - so every network call is stubbed
-// against this story's own self-authored contract, same convention as
-// table-map.test.tsx.
+// Component tests for the real P3 order-taking screen. Every network call is
+// stubbed against the real, verified restiq-backend wire shape (RawOrder/
+// RawOrderLine, orders.dtos.ts) - order-taking-state.ts's `toOrderView`/
+// `toOrderLineView` do the item/variant-name join against the loaded menu,
+// same as the production code path.
 import { cleanup, render, screen, waitFor, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { OrderTakingView } from "./order-taking-view";
-import type { OrderView, PosMenuView } from "./order-taking-state";
+import type { PosMenuView, RawOrder } from "./order-taking-state";
 
 function jsonResponse(body: unknown, status = 200): Response {
   return new Response(JSON.stringify(body), { status, headers: { "content-type": "application/json" } });
@@ -18,6 +18,9 @@ function stubFetch(handler: (url: string, init?: RequestInit) => Response) {
   vi.stubGlobal("fetch", fetchMock);
   return fetchMock;
 }
+
+const CURRENT_STAFF_ID = "staff-me";
+const ORDER_ID = "order-t4-abcdef";
 
 const MENU: PosMenuView = {
   currency: "INR",
@@ -63,20 +66,25 @@ const MENU: PosMenuView = {
   ],
 };
 
-function order(overrides: Partial<OrderView> = {}): OrderView {
+/** A fixture shaped exactly like the real backend's `GET /pos/v1/orders/:id` (and every order-line mutation's) response. */
+function order(overrides: Partial<RawOrder> = {}): RawOrder {
   return {
-    id: "order-t4-abcdef",
+    id: ORDER_ID,
+    tenantId: "tenant-1",
+    outletId: "outlet-1",
     tableId: "t4",
-    tableLabel: "T4",
-    status: "occupied",
-    ownerStaffId: "staff-me",
-    ownerStaffName: "Ravi",
-    openedAt: new Date().toISOString(),
-    currency: "INR",
+    ownerId: CURRENT_STAFF_ID,
+    status: "open",
+    tokenNumber: null,
+    createdAt: new Date().toISOString(),
+    updatedAt: new Date().toISOString(),
     lines: [],
-    totalMinor: 0,
     ...overrides,
   };
+}
+
+function renderView() {
+  return render(<OrderTakingView orderId={ORDER_ID} currentStaffId={CURRENT_STAFF_ID} />);
 }
 
 afterEach(() => {
@@ -87,61 +95,73 @@ afterEach(() => {
 describe("OrderTakingView", () => {
   it("shows a loading skeleton before the order and menu land", async () => {
     stubFetch((url) => (url.includes("/menu") ? jsonResponse(MENU) : jsonResponse(order())));
-    render(<OrderTakingView orderId="order-t4-abcdef" />);
+    renderView();
     expect(screen.getByTestId("order-taking-loading")).toBeTruthy();
     await waitFor(() => expect(screen.getByTestId("order-taking-view")).toBeTruthy());
   });
 
   it("shows a retryable error panel when the order fails to load", async () => {
     stubFetch((url) => (url.includes("/menu") ? jsonResponse(MENU) : jsonResponse({ error: { message: "down" } }, 500)));
-    render(<OrderTakingView orderId="order-t4-abcdef" />);
+    renderView();
     await waitFor(() => expect(screen.getByTestId("order-taking-error")).toBeTruthy());
   });
 
   it("shows a retryable error panel when the menu fails to load", async () => {
     stubFetch((url) => (url.includes("/menu") ? jsonResponse({ error: { message: "down" } }, 500) : jsonResponse(order())));
-    render(<OrderTakingView orderId="order-t4-abcdef" />);
+    renderView();
     await waitFor(() => expect(screen.getByTestId("order-taking-menu-error")).toBeTruthy());
   });
 
-  it("renders the menu grid grouped by the first category and the empty order panel", async () => {
+  it("renders the menu grid grouped by the first category, the empty order panel, and the real table id (no name-lookup endpoint exists)", async () => {
     stubFetch((url) => (url.includes("/menu") ? jsonResponse(MENU) : jsonResponse(order())));
-    render(<OrderTakingView orderId="order-t4-abcdef" />);
+    renderView();
     await waitFor(() => expect(screen.getByTestId("order-taking-view")).toBeTruthy());
 
     expect(screen.getByTestId("item-tile-item-paneer")).toBeTruthy();
     expect(screen.queryByTestId("item-tile-item-naan")).toBeNull(); // Breads tab not active yet
     expect(screen.getByTestId("order-panel-empty")).toBeTruthy();
+    // Rendered both in the header and the order panel - real table id, no name-lookup endpoint exists.
+    expect(screen.getAllByText("Table t4").length).toBeGreaterThan(0);
   });
 
-  it("adding an item with no required modifiers works directly - no sheet needed", async () => {
+  it('shows "You" for the signed-in staff\'s own order, not their raw id', async () => {
+    stubFetch((url) => (url.includes("/menu") ? jsonResponse(MENU) : jsonResponse(order({ ownerId: CURRENT_STAFF_ID }))));
+    renderView();
+    await waitFor(() => expect(screen.getByTestId("order-taking-view")).toBeTruthy());
+    expect(screen.getByTestId("order-owner").textContent).toContain("You");
+  });
+
+  it("shows the raw owner id for someone else's order", async () => {
+    stubFetch((url) => (url.includes("/menu") ? jsonResponse(MENU) : jsonResponse(order({ ownerId: "staff-priya" }))));
+    renderView();
+    await waitFor(() => expect(screen.getByTestId("order-taking-view")).toBeTruthy());
+    expect(screen.getByTestId("order-owner").textContent).toContain("staff-priya");
+  });
+
+  it("adding an item with no required modifiers works directly - no sheet needed, item name resolved from the menu", async () => {
     const user = userEvent.setup();
     const withNaan = order({
       lines: [
         {
           id: "line-1",
+          orderId: ORDER_ID,
           itemId: "item-naan",
-          itemName: "Butter Naan",
           variantId: null,
-          variantName: null,
           quantity: 1,
           unitPriceMinor: 14000,
+          seatNumber: null,
+          addedByStaffId: CURRENT_STAFF_ID,
+          createdAt: new Date().toISOString(),
           modifiers: [],
-          lineTotalMinor: 14000,
-          specialInstructions: null,
-          addedByStaffId: "staff-me",
-          addedByStaffName: "Ravi",
-          addedAt: new Date().toISOString(),
         },
       ],
-      totalMinor: 14000,
     });
     stubFetch((url) => {
       if (url.includes("/menu")) return jsonResponse(MENU);
       if (url.endsWith("/lines")) return jsonResponse(withNaan);
       return jsonResponse(order());
     });
-    render(<OrderTakingView orderId="order-t4-abcdef" />);
+    renderView();
     await waitFor(() => expect(screen.getByTestId("order-taking-view")).toBeTruthy());
 
     await user.click(screen.getByTestId("category-tab-cat-breads"));
@@ -151,13 +171,63 @@ describe("OrderTakingView", () => {
     expect(screen.queryByTestId("modifier-sheet")).toBeNull();
     await waitFor(() => expect(screen.getByTestId("order-line-line-1")).toBeTruthy());
     expect(screen.getByTestId("order-panel-total").textContent).toBe("₹140");
-    expect(within(screen.getByTestId("order-line-line-1")).getByTestId("order-line-added-by-line-1").textContent).toBe("Added by Ravi");
+    expect(within(screen.getByTestId("order-line-line-1")).getByText("Butter Naan")).toBeTruthy();
+    expect(within(screen.getByTestId("order-line-line-1")).getByTestId("order-line-added-by-line-1").textContent).toBe("Added by You");
+  });
+
+  it("tapping the same plain item again increments its existing line instead of adding a duplicate (regression for #63)", async () => {
+    const user = userEvent.setup();
+    const afterAdd = order({
+      lines: [
+        {
+          id: "line-1",
+          orderId: ORDER_ID,
+          itemId: "item-naan",
+          variantId: null,
+          quantity: 1,
+          unitPriceMinor: 14000,
+          seatNumber: null,
+          addedByStaffId: CURRENT_STAFF_ID,
+          createdAt: new Date().toISOString(),
+          modifiers: [],
+        },
+      ],
+    });
+    const afterIncrement = order({ lines: afterAdd.lines.map((line) => ({ ...line, quantity: 2 })) });
+    let addCalls = 0;
+    let patchCalls = 0;
+    const fetchMock = stubFetch((url, init) => {
+      if (url.includes("/menu")) return jsonResponse(MENU);
+      if (url.endsWith("/lines")) {
+        addCalls += 1;
+        return jsonResponse(afterAdd);
+      }
+      if (url.endsWith("/lines/line-1") && init?.method === "PATCH") {
+        patchCalls += 1;
+        return jsonResponse(afterIncrement);
+      }
+      return jsonResponse(order());
+    });
+    renderView();
+    await waitFor(() => expect(screen.getByTestId("order-taking-view")).toBeTruthy());
+
+    await user.click(screen.getByTestId("category-tab-cat-breads"));
+    await user.click(screen.getByTestId("item-tile-item-naan"));
+    await waitFor(() => expect(screen.getByTestId("order-line-line-1")).toBeTruthy());
+
+    await user.click(screen.getByTestId("item-tile-item-naan"));
+    await waitFor(() => expect(screen.getByTestId("order-line-qty-line-1").textContent).toBe("2"));
+
+    expect(addCalls).toBe(1);
+    expect(patchCalls).toBe(1);
+    expect(screen.queryByTestId("order-line-line-2")).toBeNull();
+    void fetchMock;
   });
 
   it("an item with a required modifier group blocks add until it's satisfied", async () => {
     const user = userEvent.setup();
     stubFetch((url) => (url.includes("/menu") ? jsonResponse(MENU) : jsonResponse(order())));
-    render(<OrderTakingView orderId="order-t4-abcdef" />);
+    renderView();
     await waitFor(() => expect(screen.getByTestId("order-taking-view")).toBeTruthy());
 
     await user.click(screen.getByTestId("item-tile-item-paneer"));
@@ -171,34 +241,30 @@ describe("OrderTakingView", () => {
     expect(confirm.disabled).toBe(false);
   });
 
-  it("the order panel updates as lines are added", async () => {
+  it("the order panel updates as lines are added, with variant name resolved from the menu", async () => {
     const user = userEvent.setup();
     const afterAdd = order({
       lines: [
         {
           id: "line-paneer",
+          orderId: ORDER_ID,
           itemId: "item-paneer",
-          itemName: "Paneer Tikka",
           variantId: "v-half",
-          variantName: "Half",
           quantity: 1,
           unitPriceMinor: 34000,
-          modifiers: [{ modifierId: "m-medium", name: "Medium", priceMinor: 0 }],
-          lineTotalMinor: 34000,
-          specialInstructions: null,
-          addedByStaffId: "staff-me",
-          addedByStaffName: "Ravi",
-          addedAt: new Date().toISOString(),
+          seatNumber: null,
+          addedByStaffId: CURRENT_STAFF_ID,
+          createdAt: new Date().toISOString(),
+          modifiers: [{ id: "olm-1", modifierId: "m-medium", name: "Medium", priceMinor: 0 }],
         },
       ],
-      totalMinor: 34000,
     });
     stubFetch((url) => {
       if (url.includes("/menu")) return jsonResponse(MENU);
       if (url.endsWith("/lines")) return jsonResponse(afterAdd);
       return jsonResponse(order());
     });
-    render(<OrderTakingView orderId="order-t4-abcdef" />);
+    renderView();
     await waitFor(() => expect(screen.getByTestId("order-taking-view")).toBeTruthy());
     expect(screen.getByTestId("order-panel-total").textContent).toBe("₹0");
 
@@ -210,6 +276,7 @@ describe("OrderTakingView", () => {
     await waitFor(() => expect(screen.getByTestId("order-panel-total").textContent).toBe("₹340"));
     expect(screen.queryByTestId("modifier-sheet")).toBeNull();
     expect(screen.queryByTestId("order-panel-empty")).toBeNull();
+    expect(screen.getByText("Half", { exact: false })).toBeTruthy();
   });
 
   it("incrementing a line's quantity calls the update endpoint and reflects the new total", async () => {
@@ -218,30 +285,26 @@ describe("OrderTakingView", () => {
       lines: [
         {
           id: "line-naan",
+          orderId: ORDER_ID,
           itemId: "item-naan",
-          itemName: "Butter Naan",
           variantId: null,
-          variantName: null,
           quantity: 1,
           unitPriceMinor: 14000,
+          seatNumber: null,
+          addedByStaffId: CURRENT_STAFF_ID,
+          createdAt: new Date().toISOString(),
           modifiers: [],
-          lineTotalMinor: 14000,
-          specialInstructions: null,
-          addedByStaffId: "staff-me",
-          addedByStaffName: "Ravi",
-          addedAt: new Date().toISOString(),
         },
       ],
-      totalMinor: 14000,
     });
-    const twoLines = { ...oneLine, lines: [{ ...oneLine.lines[0], quantity: 2, lineTotalMinor: 28000 }], totalMinor: 28000 };
+    const twoLines = { ...oneLine, lines: [{ ...oneLine.lines[0], quantity: 2 }] };
 
     stubFetch((url, init) => {
       if (url.includes("/menu")) return jsonResponse(MENU);
       if (url.endsWith("/lines/line-naan") && init?.method === "PATCH") return jsonResponse(twoLines);
       return jsonResponse(oneLine);
     });
-    render(<OrderTakingView orderId="order-t4-abcdef" />);
+    renderView();
     await waitFor(() => expect(screen.getByTestId("order-line-line-naan")).toBeTruthy());
 
     await user.click(screen.getByTestId("order-line-increment-line-naan"));
@@ -256,30 +319,26 @@ describe("OrderTakingView", () => {
       lines: [
         {
           id: "line-naan",
+          orderId: ORDER_ID,
           itemId: "item-naan",
-          itemName: "Butter Naan",
           variantId: null,
-          variantName: null,
           quantity: 1,
           unitPriceMinor: 14000,
+          seatNumber: null,
+          addedByStaffId: CURRENT_STAFF_ID,
+          createdAt: new Date().toISOString(),
           modifiers: [],
-          lineTotalMinor: 14000,
-          specialInstructions: null,
-          addedByStaffId: "staff-me",
-          addedByStaffName: "Ravi",
-          addedAt: new Date().toISOString(),
         },
       ],
-      totalMinor: 14000,
     });
-    const emptied = { ...oneLine, lines: [], totalMinor: 0 };
+    const emptied = { ...oneLine, lines: [] };
 
     const fetchMock = stubFetch((url, init) => {
       if (url.includes("/menu")) return jsonResponse(MENU);
       if (url.endsWith("/lines/line-naan") && init?.method === "DELETE") return jsonResponse(emptied);
       return jsonResponse(oneLine);
     });
-    render(<OrderTakingView orderId="order-t4-abcdef" />);
+    renderView();
     await waitFor(() => expect(screen.getByTestId("order-line-line-naan")).toBeTruthy());
 
     await user.click(screen.getByTestId("order-line-decrement-line-naan"));
@@ -290,29 +349,25 @@ describe("OrderTakingView", () => {
 
   // --- CAP-4 group ordering: seat assignment and the send-to-kitchen gate.
 
-  function lineFixture(overrides: Partial<import("./order-taking-state").OrderLineView> = {}) {
+  function lineFixture(overrides: Partial<RawOrder["lines"][number]> = {}): RawOrder["lines"][number] {
     return {
       id: "line-naan",
+      orderId: ORDER_ID,
       itemId: "item-naan",
-      itemName: "Butter Naan",
       variantId: null,
-      variantName: null,
       quantity: 1,
       unitPriceMinor: 14000,
-      modifiers: [],
-      lineTotalMinor: 14000,
-      specialInstructions: null,
-      addedByStaffId: "staff-me",
-      addedByStaffName: "Ravi",
-      addedAt: new Date().toISOString(),
       seatNumber: null,
+      addedByStaffId: CURRENT_STAFF_ID,
+      createdAt: new Date().toISOString(),
+      modifiers: [],
       ...overrides,
     };
   }
 
   it("assigning a seat to a line updates it", async () => {
     const user = userEvent.setup();
-    const unseated = order({ lines: [lineFixture()], totalMinor: 14000 });
+    const unseated = order({ lines: [lineFixture()] });
     const seated = { ...unseated, lines: [{ ...unseated.lines[0], seatNumber: 1 }] };
 
     const fetchMock = stubFetch((url, init) => {
@@ -320,7 +375,7 @@ describe("OrderTakingView", () => {
       if (url.endsWith("/lines/line-naan") && init?.method === "PATCH") return jsonResponse(seated);
       return jsonResponse(unseated);
     });
-    render(<OrderTakingView orderId="order-t4-abcdef" />);
+    renderView();
     await waitFor(() => expect(screen.getByTestId("order-line-line-naan")).toBeTruthy());
 
     await user.click(screen.getByTestId("split-by-seat-toggle"));
@@ -335,9 +390,9 @@ describe("OrderTakingView", () => {
   });
 
   it("blocks sending to the kitchen while any line is unseated, naming the fix inline", async () => {
-    const withUnseatedLine = order({ lines: [lineFixture()], totalMinor: 14000 });
+    const withUnseatedLine = order({ lines: [lineFixture()] });
     stubFetch((url) => (url.includes("/menu") ? jsonResponse(MENU) : jsonResponse(withUnseatedLine)));
-    render(<OrderTakingView orderId="order-t4-abcdef" />);
+    renderView();
     await waitFor(() => expect(screen.getByTestId("order-line-line-naan")).toBeTruthy());
 
     const sendButton = screen.getByTestId("send-to-kitchen") as HTMLButtonElement;
@@ -345,17 +400,17 @@ describe("OrderTakingView", () => {
     expect(screen.getByTestId("send-to-kitchen-blocked").textContent).toContain("1 item needs a seat");
   });
 
-  it("sending to the kitchen succeeds once every line is seated", async () => {
+  it("sending to the kitchen succeeds once every line is seated, gated on the real Order.status (not a fabricated firedAt timestamp)", async () => {
     const user = userEvent.setup();
-    const fullySeated = order({ lines: [lineFixture({ seatNumber: 1 })], totalMinor: 14000 });
-    const sent = { ...fullySeated, firedAt: "2026-08-25T10:00:00.000Z" };
+    const fullySeated = order({ lines: [lineFixture({ seatNumber: 1 })] });
+    const sent = { ...fullySeated, status: "sent" as const };
 
     const fetchMock = stubFetch((url, init) => {
       if (url.includes("/menu")) return jsonResponse(MENU);
       if (url.endsWith("/status") && init?.method === "PATCH") return jsonResponse(sent);
       return jsonResponse(fullySeated);
     });
-    render(<OrderTakingView orderId="order-t4-abcdef" />);
+    renderView();
     await waitFor(() => expect(screen.getByTestId("order-line-line-naan")).toBeTruthy());
 
     const sendButton = screen.getByTestId("send-to-kitchen") as HTMLButtonElement;
@@ -372,7 +427,7 @@ describe("OrderTakingView", () => {
 
   it("group ordering is invisible for an order with no lines - existing empty-order behavior is unaffected", async () => {
     stubFetch((url) => (url.includes("/menu") ? jsonResponse(MENU) : jsonResponse(order())));
-    render(<OrderTakingView orderId="order-t4-abcdef" />);
+    renderView();
     await waitFor(() => expect(screen.getByTestId("order-taking-view")).toBeTruthy());
 
     expect(screen.queryByTestId("split-by-seat-toggle")).toBeNull();
@@ -383,7 +438,7 @@ describe("OrderTakingView", () => {
   it("searching finds an item outside the active category tab", async () => {
     const user = userEvent.setup();
     stubFetch((url) => (url.includes("/menu") ? jsonResponse(MENU) : jsonResponse(order())));
-    render(<OrderTakingView orderId="order-t4-abcdef" />);
+    renderView();
     await waitFor(() => expect(screen.getByTestId("order-taking-view")).toBeTruthy());
 
     expect(screen.queryByTestId("item-tile-item-naan")).toBeNull();

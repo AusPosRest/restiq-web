@@ -30,10 +30,8 @@ function makeLine(overrides: Partial<OrderLineView> = {}): OrderLineView {
     unitPriceMinor: 6000,
     modifiers: [],
     lineTotalMinor: 12000,
-    specialInstructions: null,
     addedByStaffId: "staff-1",
-    addedByStaffName: "Arjun",
-    addedAt: "2026-08-24T14:22:00.000Z",
+    seatNumber: null,
     ...overrides,
   };
 }

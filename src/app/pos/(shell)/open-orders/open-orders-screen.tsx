@@ -28,18 +28,19 @@ import {
   OPEN_ORDER_STATUS_LABEL,
   originLabel,
   summarize,
+  toOpenOrderEntry,
   type OpenOrderEntry,
-  type OpenOrdersView,
+  type RawOpenOrder,
 } from "./open-orders-state";
 
 export function OpenOrdersScreen({ outletId, currentStaffId }: Readonly<{ outletId: string; currentStaffId: string }>) {
-  const { loading, failed, data, retry } = usePosLoad<OpenOrdersView>(`outlets/${outletId}/orders`);
+  const { loading, failed, data, retry } = usePosLoad<RawOpenOrder[]>(`outlets/${outletId}/orders`);
 
   if (loading) return <LoadingShell />;
   if (failed || !data) {
     return <LoadErrorPanel testId="open-orders-error" message="Couldn't load open orders." onRetry={retry} />;
   }
-  return <OpenOrdersLoaded orders={data.orders} currentStaffId={currentStaffId} onReload={retry} />;
+  return <OpenOrdersLoaded orders={data.map(toOpenOrderEntry)} currentStaffId={currentStaffId} onReload={retry} />;
 }
 
 function OpenOrdersLoaded({
@@ -55,7 +56,7 @@ function OpenOrdersLoaded({
   function handleTransferConfirm(reason: string) {
     if (!pendingTransfer) return;
     setBusy(true);
-    transferOrder(pendingTransfer.orderId, reason || undefined)
+    transferOrder(pendingTransfer.orderId, currentStaffId, reason || undefined)
       .then(() => {
         setPendingTransfer(null);
         router.push(`/pos/orders/${pendingTransfer.orderId}`);
@@ -117,7 +118,7 @@ function OpenOrdersLoaded({
                     busy={busy}
                     onTakeOver={() => {
                       setActionError(null);
-                      setPendingTransfer({ orderId: order.id, label: originLabel(order), ownerName: order.ownerStaffName });
+                      setPendingTransfer({ orderId: order.id, label: originLabel(order), ownerName: order.ownerStaffId });
                     }}
                   />
                 ))}
@@ -129,7 +130,7 @@ function OpenOrdersLoaded({
             {(() => {
               const summary = summarize(orders);
               const count = `${summary.count} open order${summary.count === 1 ? "" : "s"}`;
-              return summary.totalMinor !== null ? `${count} · ${formatMinor(summary.totalMinor)} in progress` : count;
+              return `${count} · ${formatMinor(summary.totalMinor)} in progress`;
             })()}
           </footer>
         </>
@@ -138,7 +139,7 @@ function OpenOrdersLoaded({
       {pendingTransfer && (
         <TransferOwnershipDialog
           open
-          tableLabel={pendingTransfer.label}
+          originLabel={pendingTransfer.label}
           ownerName={pendingTransfer.ownerName}
           busy={busy}
           onCancel={() => setPendingTransfer(null)}
@@ -158,11 +159,11 @@ function OrderRow({
   return (
     <tr data-testid={`open-order-${order.id}`} className="border-b border-border/20 last:border-0">
       <td className="px-4 py-3 font-medium">{originLabel(order)}</td>
-      <td className="px-4 py-3">{order.ownerStaffName}</td>
+      <td className="px-4 py-3">{own ? "You" : order.ownerStaffId}</td>
       <td className="px-4 py-3">{OPEN_ORDER_STATUS_LABEL[order.status]}</td>
       <td className="px-4 py-3 tabular-nums">{elapsedLabel(order.openedAt)}</td>
-      <td className="px-4 py-3 tabular-nums">{order.itemCount ?? "—"}</td>
-      <td className="px-4 py-3 tabular-nums">{order.totalMinor !== null ? formatMinor(order.totalMinor) : "—"}</td>
+      <td className="px-4 py-3 tabular-nums">{order.itemCount}</td>
+      <td className="px-4 py-3 tabular-nums">{formatMinor(order.totalMinor)}</td>
       <td className="px-4 py-3 text-right">
         {own ? (
           <Button asChild size="sm" data-testid={`open-order-resume-${order.id}`}>

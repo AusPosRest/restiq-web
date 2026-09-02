@@ -25,43 +25,68 @@ import { useState } from "react";
 import { startOrder, transferOrder, PosApiError } from "../api";
 import { LoadErrorPanel, Skeleton } from "../data-states";
 import { usePosLoad } from "../use-pos-load";
-import { deriveTapAction, groupTablesByFloor, TABLE_STATUS_LABEL, type TableMapView } from "./table-map-state";
+import {
+  deriveTapAction,
+  groupTablesByFloor,
+  TABLE_STATUS_LABEL,
+  toTableMapEntry,
+  type RawTableMapEntry,
+  type TableMapEntry,
+} from "./table-map-state";
 import { TableTile } from "./table-shape";
 import { TransferOwnershipDialog } from "./transfer-ownership-dialog";
 
-const LEGEND_STATUSES = ["empty", "occupied", "needs_bill"] as const;
+const LEGEND_STATUSES = ["empty", "occupied"] as const;
 
-export function TableMap() {
-  const { loading, failed, data, retry } = usePosLoad<TableMapView>("table-map");
+export function TableMap({
+  outletId,
+  currentStaffId,
+  currentStaffName,
+}: Readonly<{ outletId: string; currentStaffId: string; currentStaffName: string }>) {
+  const { loading, failed, data, retry } = usePosLoad<RawTableMapEntry[]>(`outlets/${outletId}/table-map`);
 
   if (loading) return <LoadingShell />;
   if (failed || !data) {
     return <LoadErrorPanel testId="table-map-error" message="Couldn't load the table map." onRetry={retry} />;
   }
-  return <TableMapLoaded initial={data} onReload={retry} />;
+  return (
+    <TableMapLoaded
+      initial={data.map(toTableMapEntry)}
+      outletId={outletId}
+      currentStaffId={currentStaffId}
+      currentStaffName={currentStaffName}
+      onReload={retry}
+    />
+  );
 }
 
-function TableMapLoaded({ initial, onReload }: Readonly<{ initial: TableMapView; onReload: () => void }>) {
+function TableMapLoaded({
+  initial,
+  outletId,
+  currentStaffId,
+  currentStaffName,
+  onReload,
+}: Readonly<{ initial: TableMapEntry[]; outletId: string; currentStaffId: string; currentStaffName: string; onReload: () => void }>) {
   const router = useRouter();
-  const [view, setView] = useState(initial);
-  const [pendingTransfer, setPendingTransfer] = useState<{ tableId: string; orderId: string; tableLabel: string; ownerName: string } | null>(null);
+  const [tables, setTables] = useState(initial);
+  const [pendingTransfer, setPendingTransfer] = useState<{ tableId: string; orderId: string; tableLabel: string; ownerId: string } | null>(null);
   const [busy, setBusy] = useState(false);
   const [actionError, setActionError] = useState<string | null>(null);
 
-  const groups = groupTablesByFloor(view.floors, view.tables);
+  const groups = groupTablesByFloor(tables);
 
   function handleTap(tableId: string) {
-    const table = view.tables.find((t) => t.id === tableId);
+    const table = tables.find((t) => t.id === tableId);
     if (!table) return;
     setActionError(null);
-    const action = deriveTapAction(table, view.currentStaff.id);
+    const action = deriveTapAction(table, currentStaffId);
 
     if (action.type === "start_order") {
       setBusy(true);
-      startOrder(tableId)
-        .then((updated) => {
-          setView((prev) => ({ ...prev, tables: prev.tables.map((t) => (t.id === tableId ? updated : t)) }));
-          if (updated.order) router.push(`/pos/orders/${updated.order.id}`);
+      startOrder(outletId, tableId)
+        .then((order) => {
+          setTables((prev) => prev.map((t) => (t.id === tableId ? { ...t, status: "occupied", order: { id: order.id, ownerStaffId: order.ownerId } } : t)));
+          router.push(`/pos/orders/${order.id}`);
         })
         .catch((error: unknown) => setActionError(errorMessage(error, "Couldn't start an order for this table.")))
         .finally(() => setBusy(false));
@@ -74,15 +99,15 @@ function TableMapLoaded({ initial, onReload }: Readonly<{ initial: TableMapView;
     }
 
     // transfer_required - never a silent open, per SPEC CAP-2 success criterion.
-    setPendingTransfer({ tableId, orderId: action.orderId, tableLabel: table.label, ownerName: action.ownerName });
+    setPendingTransfer({ tableId, orderId: action.orderId, tableLabel: table.label, ownerId: action.ownerId });
   }
 
   function handleTransferConfirm(reason: string) {
     if (!pendingTransfer) return;
     setBusy(true);
-    transferOrder(pendingTransfer.orderId, reason || undefined)
-      .then((updated) => {
-        setView((prev) => ({ ...prev, tables: prev.tables.map((t) => (t.id === pendingTransfer.tableId ? updated : t)) }));
+    transferOrder(pendingTransfer.orderId, currentStaffId, reason || undefined)
+      .then((order) => {
+        setTables((prev) => prev.map((t) => (t.id === pendingTransfer.tableId ? { ...t, order: { id: order.id, ownerStaffId: order.ownerId } } : t)));
         setPendingTransfer(null);
         router.push(`/pos/orders/${pendingTransfer.orderId}`);
       })
@@ -99,7 +124,7 @@ function TableMapLoaded({ initial, onReload }: Readonly<{ initial: TableMapView;
         </div>
         <div className="flex items-center gap-4">
           <p data-testid="current-staff" className="font-label text-sm text-muted-foreground">
-            Signed in as <span className="font-semibold text-foreground">{view.currentStaff.name}</span>
+            Signed in as <span className="font-semibold text-foreground">{currentStaffName}</span>
           </p>
           <Link
             href="/pos/open-orders"
@@ -142,8 +167,8 @@ function TableMapLoaded({ initial, onReload }: Readonly<{ initial: TableMapView;
       )}
 
       {groups.map((group) => (
-        <section key={group.floor.id} data-testid={`floor-group-${group.floor.id}`} className="flex flex-col gap-3">
-          <h2 className="font-label text-sm font-semibold uppercase tracking-wider text-muted-foreground">{group.floor.name}</h2>
+        <section key={group.floorId} data-testid={`floor-group-${group.floorId}`} className="flex flex-col gap-3">
+          <h2 className="font-label text-sm font-semibold uppercase tracking-wider text-muted-foreground">Floor {group.floorId}</h2>
           {group.tables.length === 0 ? (
             <p className="text-sm text-muted-foreground">No tables on this floor.</p>
           ) : (
@@ -159,8 +184,8 @@ function TableMapLoaded({ initial, onReload }: Readonly<{ initial: TableMapView;
       {pendingTransfer && (
         <TransferOwnershipDialog
           open
-          tableLabel={pendingTransfer.tableLabel}
-          ownerName={pendingTransfer.ownerName}
+          originLabel={`Table ${pendingTransfer.tableLabel}`}
+          ownerName={pendingTransfer.ownerId}
           busy={busy}
           onCancel={() => setPendingTransfer(null)}
           onConfirm={handleTransferConfirm}
@@ -171,8 +196,7 @@ function TableMapLoaded({ initial, onReload }: Readonly<{ initial: TableMapView;
 }
 
 function LegendItem({ status }: Readonly<{ status: (typeof LEGEND_STATUSES)[number] }>) {
-  const dotClass =
-    status === "empty" ? "border-2 border-status-available" : status === "occupied" ? "bg-status-occupied" : "bg-status-warning";
+  const dotClass = status === "empty" ? "border-2 border-status-available" : "bg-status-occupied";
   return (
     <span className="flex items-center gap-1.5 text-xs text-muted-foreground">
       <span className={`size-3 rounded-full ${dotClass}`} aria-hidden="true" />

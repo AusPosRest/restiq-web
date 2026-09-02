@@ -755,3 +755,32 @@ faked.
   description - all omitted, none fabricated (initial-letter tile stands in for a
   photo). 46 new tests; 738/738 passing repo-wide; lint/typecheck/build clean. PR
   AusPosRest/restiq-web#77 (issue #67).
+- **2026-08-27** - POS table map and order taking, reconciled against the
+  real backend (CAP-2/CAP-3, restiq-web#61 / restiq-backend#66, closes the
+  spec-2-3-2-4 bugfix): table map 404'd (wrong, non-outlet-scoped URL) and
+  `GET /pos/v1/menu` - the endpoint order-taking's grid has depended on since
+  it was first built - never existed server-side at all, so staff couldn't
+  open a table, start an order, or add a single item. Finished/verified the
+  already-drafted `restiq-backend` menu module
+  (`src/pos/menu/{menu.controller,menu.service,menu.dtos}.ts`,
+  `test/pos-menu.e2e-spec.ts`, 8 new e2e tests; fixed one real bug the test
+  run surfaced - an item/variant with no resolvable price was returned
+  instead of dropped) and reconciled both `table-map-state.ts` and
+  `order-taking-state.ts` against the real, merged `orders.dtos.ts` contract,
+  same pattern already applied for open-orders (#60): a pure `toXEntry`-style
+  mapping function per screen (`toTableMapEntry`, `toOrderView`/
+  `toOrderLineView`) isolates the real flat/raw-id wire shape from the UI,
+  `computeUnitTotalMinor` reused (not re-derived) for `lineTotalMinor`, and
+  unresolvable names fall back to the raw id (or "You" via an
+  ownership check) rather than a fabricated value. Dropped UI the real
+  backend has no data for outright rather than faking it: table-map's
+  `needs_bill` status and per-table elapsed time, order-taking's `firedAt`
+  (replaced by the real `Order.status`) and `specialInstructions` on the read
+  side (the write-side capture is left in place only because CAP-6's
+  `counter-view.tsx`, out of scope here, shares the same input type). Fixed
+  `startOrder`/`transferOrder` (`api.ts`) to hit the real outlet/table-scoped
+  routes and send the now-required `newOwnerStaffId`. 21 web files touched,
+  9 new/rewritten test files; 661/661 web tests and 388/388 backend e2e
+  tests passing, tsc/lint clean in both repos. See
+  [wiki/features/pos-cashier-waiter.md](../features/pos-cashier-waiter.md)'s
+  CAP-2/CAP-3 sections for the full reconciliation writeup.

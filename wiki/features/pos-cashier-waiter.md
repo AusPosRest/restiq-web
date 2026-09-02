@@ -137,6 +137,24 @@ actually built here, story by story. Backend counterpart:
   `GET /pos/v1/orders/:id`. **Must be reconciled against the real restiq-backend#46 DTOs
   once that lands** - same discipline as `wiki/features/tenant-admin.md`'s CAP-8 dashboard
   reconciliation.
+- **Reconciled against the real backend (2026-08-27, restiq-web#61).** The self-authored
+  guess above was wrong on every count once `restiq-backend#46` landed on `dev` and was read
+  directly (`orders.controller.ts`/`orders.dtos.ts`): the real route is outlet-scoped
+  (`GET /pos/v1/outlets/:outletId/table-map`, not the bare `table-map` path this story
+  called - the reported 404), the response is a **flat `TableMapEntry[]`**, not a
+  `{ outletId, currentStaff, floors, tables }` envelope (no floor-name lookup, no
+  currentStaff read anywhere server-side), and each entry is flat too
+  (`tableId`/`floorId`/`label`/`seatCapacity`/`status`/`orderId`/`ownerId`, two-valued
+  status only - `needs_bill` is real but not settable until CAP-7's `Bill` model exists,
+  same TODO the backend's own DTO carries). `table-map-state.ts`'s `toTableMapEntry` now
+  does that mapping; `currentStaff` comes from the `pos_staff` cookie server-side
+  (`table-map/page.tsx`, same pattern `(shell)/open-orders/page.tsx` established for
+  restiq-web#60); floor grouping is derived purely from each table's own `floorId` (no
+  separate floor list exists to group against); the elapsed-time label and `needs_bill`'s
+  UI are dropped outright rather than fabricated, since the backend has no per-table
+  "opened at" or bill-request state to compute them from. `startOrder`/`transferOrder`
+  (`api.ts`) now hit the real outlet/table-scoped POST and send `newOwnerStaffId` (confirmed
+  required live via a real 400, "newOwnerStaffId must be a UUID").
 - **CAP-1 (story 1, PIN login, issue #38) also not available at build time** - its branch
   existed but had zero POS-specific commits when this story was built, so there was no
   real `/pos/login` screen yet to issue a `pos_session` cookie through, and `pos-session.ts`/
@@ -228,6 +246,29 @@ actually built here, story by story. Backend counterpart:
   a flagged-but-out-of-scope observation that story 3's own already-shipped status
   vocabulary doesn't match the real `Order.status` enum either - a pre-existing CAP-2 gap,
   not this story's to fix).
+- **Reconciled against the real backend (2026-08-27, restiq-web#61).** `GET /pos/v1/menu`
+  (`restiq-backend#66`) is now real and verified (`test/pos-menu.e2e-spec.ts`) - the
+  `PosMenuView` shape this story guessed at was never wrong, just unbacked; one real bug
+  surfaced writing that test (an item/variant with no resolvable price was still returned
+  instead of dropped, fixed in `menu.service.ts`). `Order`/`OrderLine` are real too
+  (`restiq-backend#52`/`#58`, `orders.dtos.ts`, read directly): raw ids only
+  (`itemId`/`variantId`/`addedByStaffId`/`tableId`/`ownerId`), no `itemName`/`variantName`/
+  `addedByStaffName`/`tableLabel`/`ownerStaffName`, no `currency` on `Order` at all (it
+  lives on the menu), and a real three-valued forward-only `status`
+  (`open`/`sent`/`closed`) instead of the old `occupied`/`needs_bill` guess or a fabricated
+  `firedAt` timestamp. `order-taking-state.ts`'s new `toOrderView`/`toOrderLineView` join
+  `itemId`/`variantId` against the already-loaded menu for real display names (raw-id
+  fallback if a menu isn't in scope, or the item's since been deleted), derive
+  `lineTotalMinor` via the existing `computeUnitTotalMinor` rather than trusting a wire
+  field that doesn't exist, and `canSendToKitchen` now gates on `status === "open"` - real
+  data the backend already enforces the same way. `specialInstructions` has no backing
+  column anywhere in `OrderLine`; dropped from the read side so nothing displays a value
+  the backend never actually stored (the write-side capture is left in place, unreconciled,
+  only because `counter-view.tsx`/CAP-6 - out of scope for restiq-web#61 - shares the same
+  `ModifierSheetConfirmValue` type). `OrderView.ownerStaffName`/`tableLabel` field names
+  are kept (rather than renamed/removed) purely because `counter-view.tsx` reads
+  `order.ownerStaffName` directly and wasn't touched by this pass - the *value* behind that
+  name is now the real raw owner id, never a fabricated one.
 - **Tests:** 45 new tests - pure logic (`order-taking-state.test.ts`, 28: modifier-group
   min/max, single-vs-multi-select toggling, variant/price resolution, category+search
   filtering), a full component suite for the sheet (`modifier-sheet.test.tsx`, 7: badge
@@ -651,21 +692,27 @@ done now, this is what actually happened:
 - **Built:** P6 Open & Held Orders (`src/app/pos/(shell)/open-orders/`, routed at
   `/pos/open-orders`, nested under the real shell so it gets the persistent shift bar).
   Pure list/format logic lives in `open-orders-state.ts` (`isOwnOrder`, `originLabel`,
-  `elapsedLabel`, `summarize`), unit-tested in isolation same as `table-map-state.ts`. The
-  screen (`open-orders-screen.tsx`) is a five-state view over `GET
-  /pos/api/outlets/:outletId/orders`: skeleton while loading, inline retry on failure, a
-  true empty state ("No open orders") for zero rows, and otherwise a table of every
-  non-closed order with its origin (`Table {label}` or `Counter`), server name, status
-  (Open / Sent to kitchen - no fabricated "held" status, see Key decisions), elapsed time,
-  and item count/total *only when the backend actually provides them* - both render `—`
-  rather than crashing or guessing when null, and the footer's running total only sums when
-  every row has one (`summarize()`), never a partial/misleading figure. The signed-in
-  staff's own orders get a plain **Resume** link straight to the existing
-  `/pos/orders/[orderId]` route (story 3's destination, no new endpoint); everyone else's
-  orders get a **Take over** button that opens story 3's real, reused
-  `TransferOwnershipDialog` (`../../table-map/transfer-ownership-dialog.tsx`) and calls its
-  real `transferOrder()` action (`../../api.ts`) on confirm - no second dialog, no second
-  transfer endpoint, exactly stories.yaml's instruction.
+  `elapsedLabel`, `summarize`, `toOpenOrderEntry`), unit-tested in isolation same as
+  `table-map-state.ts`. The screen (`open-orders-screen.tsx`) is a five-state view over the
+  real, verified `GET /pos/api/outlets/:outletId/orders` (reconciled 2026-08-27, restiq-web#60
+  - see Reconciliation below): skeleton while loading, inline retry on failure, a true empty
+  state ("No open orders") for zero rows, and otherwise a table of every non-closed order with
+  its origin (`Table {tableId}` or `Counter` - raw table id, no label lookup exists
+  server-side yet), server ("You" for the signed-in staff's own orders via `isOwnOrder`, else
+  the raw owner id - no staff-name lookup exists server-side yet), status (Open / Sent to
+  kitchen - no fabricated "held" status, see Key decisions), elapsed time, and item
+  count/total derived client-side from each order's real `lines` (`toOpenOrderEntry` sums
+  quantity for itemCount and reuses `order-taking-state.ts`'s `computeUnitTotalMinor` -
+  unitPrice + modifiers - per line for totalMinor, widened to accept just `{ priceMinor }` so
+  both screens share one formula) - a true zero for an order with no lines yet, never a
+  guessed or missing figure, and the footer's running total (`summarize()`) is an
+  unconditional sum since totalMinor is always computable now. The signed-in staff's own
+  orders get a plain **Resume** link straight to the existing `/pos/orders/[orderId]` route
+  (story 3's destination, no new endpoint); everyone else's orders get a **Take over** button
+  that opens story 3's real, reused `TransferOwnershipDialog`
+  (`../../table-map/transfer-ownership-dialog.tsx`) and calls its real `transferOrder()`
+  action (`../../api.ts`) on confirm - no second dialog, no second transfer endpoint, exactly
+  stories.yaml's instruction.
   - **Reachable from anywhere**, per EXPERIENCE.md's IA: a persistent "Open orders" nav
     link was added to the shell's `shift-bar.tsx` (same plain-link-not-a-fetch pattern as
     the existing "Shift" link) so every `(shell)`-nested `/pos` screen can reach it. The
@@ -673,33 +720,36 @@ done now, this is what actually happened:
     CAP-2's Integration points above), so it doesn't get the shift bar's nav; a second,
     matching link was added directly to its own header for the same reason, rather than
     leaving the table map - the other half of the main loop - unable to reach P6 at all.
-- **Backend not available at build time.** `restiq-backend`#53 ("Open and held orders,
-  outlet-wide") had no branch and no commits when this story was built - confirmed by
-  `git ls-remote` against the real `restiq-backend` remote (only `dev`/`main`/
-  `feature/15-device-fleet` existed), not a summary. Self-authored contract (see
-  `open-orders-state.ts`'s file header for the full reasoning): `GET
-  /pos/v1/outlets/:outletId/orders -> { outletId, orders: OpenOrderEntry[] }`, where each
-  `OpenOrderEntry` carries `id, origin ("table"|"counter"), tableLabel, ownerStaffId,
-  ownerStaffName, status ("open"|"sent"), openedAt, itemCount, totalMinor` - the last two
-  nullable by design. This follows story 3's real, *verified* `GET
-  /pos/v1/outlets/:outletId/table-map` shape (outlet id in the path) rather than story 3's
-  own still-unreconciled `table-map` guess. **Must be reconciled against the real
-  restiq-backend#53 DTOs once that lands** - same discipline as `table-map-state.ts`'s own
-  pending reconciliation.
-- **Tests:** 22 new tests - pure logic (`open-orders-state.test.ts`: own-order detection,
-  table vs. counter origin labels, elapsed-time formatting including a clock-skew case, and
-  `summarize()`'s "only sum when every order has a total" rule) and a full component suite
-  (`open-orders-screen.test.tsx`: loading/error/empty states, rendering origin/server/
-  status/elapsed for a mixed table+counter list, Resume-vs-Take-over branching by
-  ownership, the reused transfer dialog's confirm/cancel paths including that a cancelled
-  transfer fires no network request, and that a missing item-count/total renders `—`
-  without crashing while a complete one sums correctly) plus a nav-link assertion added to
-  both `shift-bar.test.tsx` and `table-map.test.tsx`. 556/556 tests passing repo-wide;
-  lint/typecheck/build clean.
-- **Live verification:** none possible (no real backend for this story or story 3 to run
-  against, same posture as CAP-2). Verified entirely via the test suite above, stubbing
-  global `fetch` against the self-authored contract - the same convention every other
-  not-yet-backed realm story in this doc already uses.
+- **Reconciled against the real backend (2026-08-27, restiq-web#60).** At build time,
+  `restiq-backend`#53 ("Open and held orders, outlet-wide") had no branch and no commits -
+  confirmed by `git ls-remote` against the real `restiq-backend` remote (only `dev`/`main`/
+  `feature/15-device-fleet` existed), not a summary - so this story shipped a self-authored,
+  unverified contract: `GET /pos/v1/outlets/:outletId/orders -> { outletId, orders:
+  OpenOrderEntry[] }`. That guess was wrong on both counts once restiq-backend#53 landed on
+  `dev` and was read directly (`orders.controller.ts`/`orders.dtos.ts`): the real endpoint
+  returns a **bare `OrderView[]`**, not a `{ outletId, orders }` envelope - `data.orders` was
+  always `undefined` against the real payload, crashing every staff member who opened the
+  screen (restiq-web#60). And the real `OrderView` carries no `tableLabel`/`ownerStaffName`/
+  `itemCount`/`totalMinor` - only raw `tableId`/`ownerId` and `lines`
+  (quantity/unitPriceMinor/modifiers, always present now that CAP-3 order-lines has landed).
+  `open-orders-state.ts`'s new `toOpenOrderEntry` derives itemCount/totalMinor from `lines`
+  and falls back to the raw id for table/owner display (the UI shows "You" for the viewer's
+  own orders via `isOwnOrder`) until a staff-name/table-label lookup exists server-side -
+  **same gap still open in `table-map-state.ts`, flagged but not fixed here** (out of scope
+  for restiq-web#60, needs its own issue).
+- **Tests:** pure logic (`open-orders-state.test.ts`: `toOpenOrderEntry`'s mapping off the
+  real wire shape, own-order detection, table vs. counter origin labels, elapsed-time
+  formatting including a clock-skew case, and `summarize()`'s unconditional sum) and a full
+  component suite (`open-orders-screen.test.tsx`: loading/error/empty states, a regression
+  test for the bare-array payload, rendering origin/server/status/elapsed for a mixed
+  table+counter list, the "You" fallback for the viewer's own order, Resume-vs-Take-over
+  branching by ownership, the reused transfer dialog's confirm/cancel paths including that a
+  cancelled transfer fires no network request, and that an order with no lines yet renders a
+  true zero without crashing) plus a nav-link assertion in both `shift-bar.test.tsx` and
+  `table-map.test.tsx`. 652/652 tests passing repo-wide; lint/typecheck clean.
+- **Live verification:** none possible in this session (no running restiq-backend instance to
+  hit). Verified via the test suite above (stubbing global `fetch` against the real,
+  read-directly wire shape, not a guess) plus `tsc --noEmit` and `pnpm lint`.
 
 ## Key decisions (CAP-5)
 

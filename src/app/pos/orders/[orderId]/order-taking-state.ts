@@ -3,93 +3,65 @@
 // without a DOM - mirrors table-map-state.ts's/shift-state.ts's split between
 // logic and UI.
 //
-// SELF-AUTHORED CONTRACT, not yet verified against a real backend.
-// restiq-backend#52 ("Order taking with modifiers, variants, combos", branch
-// feature/52-order-taking-modifiers) has no branch and no commits as of this
-// build - confirmed via `gh issue view 52 --repo AusPosRest/restiq-backend`
-// (open, unstarted) and `gh api repos/AusPosRest/restiq-backend/branches`
-// (only dev/main/feature-15 exist), plus reading the real `dev` branch's
-// schema directly (`gh api .../contents/prisma/schema.prisma?ref=dev`):
-// `Order` is exactly stories.yaml story 3's "base fields only, no lines yet"
-// - `{id, tenantId, outletId, tableId, ownerId, status: open|sent|closed,
-// createdAt, updatedAt}`, no OrderLine model anywhere, and
-// `PosOrdersController` (`src/pos/orders/orders.controller.ts`) only exposes
-// table-map/get/status/transfer - no `/lines` endpoint, no menu read. (The
-// local `restiq-backend` working tree on disk was 6 commits behind this
-// `dev` HEAD when checked - i.e. missing the entire `src/pos` module on disk
-// - so this was verified against the real GitHub `dev` tree via `gh api`,
-// not the stale local checkout.)
+// The menu catalogue types below (PosMenuItemView/PosMenuCategoryView/
+// PosModifierGroupView/PosModifierView/PosMenuVariantView/PosMenuView) were
+// never wrong - they already matched the real, now-shipped
+// `GET /pos/v1/menu` (restiq-backend's `src/pos/menu/menu.dtos.ts`'s
+// `MenuView`, read directly) from the day this file was first built. No
+// change needed there.
 //
-// The menu catalogue itself (MenuItem/ItemVariant/ModifierGroup/Modifier/
-// ItemModifierGroup) is real and merged (restiq-backend's CAP-4,
-// `src/admin/menu/*.dtos.ts`, read directly) - the shapes below mirror those
-// field names exactly (id/name/priceMinor/minSelections/maxSelections etc.),
-// but the POS-facing read (`GET /pos/v1/menu`, resolving a channel/outlet
-// price server-side into a single `priceMinor` per item/variant rather than
-// the admin API's separate channel-scoped price lookup) doesn't exist yet.
-//
-// This story's `OrderView` keeps restiq-web's own already-shipped display
-// shape (`tableLabel`/`ownerStaffName`/`status: occupied|needs_bill`, from
-// story 3's OrderStubView and table-map-state.ts's TableOrderSummary -
-// internal consistency with the rest of the already-merged POS realm)
-// rather than the real bare `Order` row's `tableId`/`ownerId`/`open|sent|
-// closed` - the real base Order has no display names to read at all (those
-// come from a *separate* table-map/staff lookup), so a real CAP-3 `GET
-// /pos/v1/orders/:id` will need to resolve and enrich them the same way this
-// self-authored one already does, not hand the client raw ids. Also note for
-// whoever reconciles this: story 3's own already-shipped OrderStubView/
-// TableMapEntry status vocabulary (`occupied`/`needs_bill`) doesn't match
-// the real `Order.status` enum (`open`/`sent`/`closed`) either - a
-// pre-existing CAP-2 gap, out of this story's scope to fix, flagged here
-// only because it was noticed while reading the real schema for this story's
-// own work.
-//
-// MUST be reconciled against the real restiq-backend#52 DTOs once that lands
-// - same discipline as table-map-state.ts's CAP-2 reconciliation note and
-// wiki/features/tenant-admin.md's CAP-8 dashboard reconciliation.
-//
-// Combos (also named in stories.yaml story 4's title) are deliberately out
-// of scope for this pass - nothing in the task's own build list or test plan
-// calls for them, and CreateComboDto/ComboComponent's shape is a
-// meaningfully different concept (a bundle of items, not a single line) that
-// would double this file's surface for no asked-for behavior (YAGNI). See
-// wiki/features/pos-cashier-waiter.md's CAP-3 section for the explicit gap.
-//
-// DESIGN.md's POSItemTile spec calls for a "veg/non-veg dot" - the real
-// MenuItem model has no such field (only free-form tenant-defined
-// Allergen tags, not a dietary-type enum), so it is omitted here rather than
-// guessed at from an allergen tag's name - the same no-fake-data discipline
-// the owner dashboard and table-map's `needs_bill` status already follow.
-//
-// --- CAP-4 group ordering (story 5, issue #52 web / #58 backend) additions
-// below. restiq-backend#58 ("Group ordering - seats and covers", branch
-// feature/58-group-ordering) has no branch yet as of this build (`gh api
-// repos/AusPosRest/restiq-backend/branches` lists only dev/main/feature-15;
-// `gh issue view 58` confirms open/unstarted) - a parallel agent is building
-// it. What *is* real and verified directly off restiq-backend's `dev`
-// (`orders.controller.ts`/`orders.service.ts`/`orders.dtos.ts`, read via `gh
-// api .../contents/...?ref=dev`, PR #57 merged): `PATCH
-// /pos/v1/orders/:orderId/status {status}` (forward-only open->sent->closed,
-// owner-only) already exists and already accepts `status: 'sent'` - CAP-4's
-// job is only to add the seat-gate (a 400 when any line lacks a seat) on top
-// of that already-real transition, not a new endpoint. Likewise `PATCH
-// /pos/v1/orders/:orderId/lines/:lineId` is real (`UpdateOrderLineDto`
-// today only carries `quantity`/`modifierIds`) - issue #58's own framing
-// ("extends story 4's real, merged line add/edit endpoints with an optional
-// seatNumber field") is taken at face value: `seatNumber` rides the same
-// endpoint, not a new one. `seatNumber`/`firedAt` below are this client's
-// anticipated shape for that still-unbuilt extension; reconcile once #58
-// lands.
-//
-// `firedAt` (not a reuse of `OrderView.status`) is a deliberate new field
-// rather than extending the existing `status: "occupied" | "needs_bill"`
-// union - that union already mirrors table-map semantics, not the real
-// `Order.status` enum (a pre-existing, out-of-scope CAP-2/CAP-3 gap flagged
-// in this file's original header above). Piling CAP-4's "sent to kitchen"
-// concept onto that same mismatched field would compound the gap instead of
-// isolating this story's own addition - `firedAt` follows the same
-// insert-only ISO-string convention already used for `openedAt`/`createdAt`
-// elsewhere in this file.
+// RECONCILED (2026-08-27, restiq-web#61) against the real, merged
+// restiq-backend `dev` contract for `Order`/`OrderLine`
+// (src/pos/orders/orders.dtos.ts's `OrderView`/`OrderLineView`, read
+// directly - restiq-backend#52/#58 have since landed). What the original
+// self-authored guess got wrong, all fixed here:
+//  - the real `Order`/`OrderLine` carry raw ids only - `itemId`/`variantId`
+//    (no `itemName`/`variantName`), `addedByStaffId` (no
+//    `addedByStaffName`), `tableId`/`ownerId` (no `tableLabel`/
+//    `ownerStaffName` display strings) - there is no server-side name-lookup
+//    join anywhere in pos/*. `toOrderView`/`toOrderLineView` below do that
+//    join client-side against the menu already loaded for this screen
+//    (itemName/variantName), the same "raw id, resolved where we can, never
+//    fabricated" posture open-orders-state.ts's `toOpenOrderEntry`
+//    established for `ownerStaffId`/`tableLabel` - callers compare
+//    `ownerStaffId`/`addedByStaffId` against the viewer's own id to show
+//    "You" instead of a raw id for the viewer's own entries, same as
+//    open-orders-screen.tsx's `isOwnOrder`.
+//  - `lineTotalMinor` doesn't exist on the wire - it's derived here via
+//    `computeUnitTotalMinor` (unchanged, reused, not re-derived - same
+//    formula open-orders-state.ts's `toOpenOrderEntry` already reuses this
+//    file's export for).
+//  - there is no `currency` on `Order` at all - it lives on the menu
+//    (`PosMenuView.currency`, resolved server-side from a single fixed
+//    dine-in price channel, see menu.dtos.ts's own header). Screens read
+//    `menu.currency` directly now instead of a fabricated `OrderView.currency`.
+//  - `Order.status` is a real three-valued enum (`open`/`sent`/`closed`),
+//    forward-only - not the old self-authored `occupied`/`needs_bill` guess
+//    (that vocabulary was table-map's, mismatched even before this
+//    reconciliation, see table-map-state.ts's own former header). The old
+//    `firedAt` field (a fabricated timestamp nothing server-side ever sets)
+//    is gone - `canSendToKitchen`/the send-to-kitchen UI now gate on
+//    `status === "open"` directly, real data the backend already enforces
+//    the same way (orders.service.ts's `FORWARD_TRANSITIONS`).
+//  - `specialInstructions` has no backing column anywhere in `OrderLine` -
+//    dropped from the read side (`OrderLineView`) so nothing ever displays a
+//    value the backend can't have actually stored. The write-side capture
+//    (`ModifierSheetConfirmValue.specialInstructions`, `AddOrderLineInput.
+//    specialInstructions`) is left in place unreconciled - CAP-6's counter
+//    screen (`counter-view.tsx`) shares both of those types and is
+//    out-of-scope here (see spec-2-3-2-4's boundaries); the value is simply
+//    accepted and silently dropped server-side today
+//    (`ValidationPipe({whitelist:true})`), same latent gap that already
+//    existed before this pass, just not this story's to close.
+//  - `OrderView.ownerStaffName`/`tableLabel` are kept as field names (rather
+//    than renamed to `ownerStaffId`/removed) purely because `counter-view.tsx`
+//    (CAP-6, also out of scope per spec-2-3-2-4's boundaries) reads
+//    `order.ownerStaffName` directly and isn't touched by this pass - the
+//    *value* behind that name is now real (the raw owner id, honestly
+//    reported), not a fabricated one, satisfying the "never a fabricated
+//    real value" rule even though the field name is a legacy holdover.
+//    order-taking-view.tsx (in scope) applies its own "You" substitution on
+//    top of that raw id at render time, same as open-orders-screen.tsx.
 
 export interface PosMenuVariantView {
   id: string;
@@ -135,6 +107,47 @@ export interface PosMenuView {
   currency: string;
 }
 
+// --- Wire shapes. The real, verified payloads `GET /pos/v1/orders/:id` and
+// every order/order-line mutation endpoint return (orders.dtos.ts's
+// `OrderView`/`OrderLineView`, read directly) - raw ids only, no display
+// names, no derived totals.
+
+export interface RawOrderLineModifier {
+  id: string;
+  modifierId: string;
+  name: string;
+  priceMinor: number;
+}
+
+export interface RawOrderLine {
+  id: string;
+  orderId: string;
+  itemId: string;
+  variantId: string | null;
+  quantity: number;
+  unitPriceMinor: number;
+  seatNumber: number | null;
+  addedByStaffId: string;
+  createdAt: string;
+  modifiers: RawOrderLineModifier[];
+}
+
+export interface RawOrder {
+  id: string;
+  tenantId: string;
+  outletId: string;
+  tableId: string | null;
+  ownerId: string;
+  status: "open" | "sent" | "closed";
+  tokenNumber: number | null;
+  createdAt: string;
+  updatedAt: string;
+  lines: RawOrderLine[];
+}
+
+// --- UI-facing shapes, mapped from the raw wire shapes above (join item/
+// variant names against the menu, derive per-line/order totals).
+
 export interface OrderLineModifierView {
   modifierId: string;
   name: string;
@@ -151,42 +164,75 @@ export interface OrderLineView {
   unitPriceMinor: number;
   modifiers: OrderLineModifierView[];
   lineTotalMinor: number;
-  specialInstructions: string | null;
+  /** Raw staff id - no staff-name lookup exists server-side yet, see file header. */
   addedByStaffId: string;
-  addedByStaffName: string;
-  addedAt: string;
-  /**
-   * CAP-4 group ordering: which seat/cover this line belongs to; `null`/
-   * absent means unseated. Optional (not just nullable) so story 4's
-   * already-shipped call sites and tests, which never set this field, keep
-   * type-checking unchanged - see this file's CAP-4 header note above.
-   */
-  seatNumber?: number | null;
+  /** CAP-4 group ordering: which seat/cover this line belongs to; `null` means unseated. */
+  seatNumber: number | null;
 }
 
 export interface OrderView {
   id: string;
-  /** `null` for a CAP-6 QSR counter order (story 7) - it has no table at all, never a fabricated empty-string id. */
+  /** `null` for a CAP-6 QSR counter order - it has no table at all, never a fabricated empty-string id. */
   tableId: string | null;
-  tableLabel: string;
-  status: "occupied" | "needs_bill";
-  ownerStaffId: string;
+  status: "open" | "sent" | "closed";
+  /** Raw owner id, kept under this legacy field name for `counter-view.tsx`'s sake - see file header. */
   ownerStaffName: string;
-  openedAt: string;
-  currency: string;
   lines: OrderLineView[];
   /** Sum of every line's total. Tax breakdown is CAP-7 Bill & Settle's job, not this screen's - no rate is fabricated here. */
   totalMinor: number;
-  /** CAP-4: set once the order has been sent to the kitchen; `null`/absent beforehand. Optional for the same story-4-compatibility reason as `OrderLineView.seatNumber` above. */
-  firedAt?: string | null;
-  /**
-   * CAP-6 QSR counter mode (story 7): the sequential token number issued
-   * when this order was opened at the counter; `null`/absent for a dine-in
-   * (table) order. Optional for the same story-4-compatibility reason as
-   * `seatNumber`/`firedAt` above - see `../../api.ts`'s `startCounterOrder`
-   * header for the full contract reasoning.
-   */
-  tokenNumber?: number | null;
+  /** The sequential token number issued for a CAP-6 counter order; `null` for a dine-in (table) order. */
+  tokenNumber: number | null;
+}
+
+function resolveMenuItem(menu: Pick<PosMenuView, "items"> | undefined, itemId: string): PosMenuItemView | undefined {
+  return menu?.items.find((item) => item.id === itemId);
+}
+
+/** Falls back to the raw id when the item isn't in the loaded menu (deleted, or no menu given) - never a fabricated name. */
+function resolveItemName(menu: Pick<PosMenuView, "items"> | undefined, itemId: string): string {
+  return resolveMenuItem(menu, itemId)?.name ?? itemId;
+}
+
+function resolveVariantName(menu: Pick<PosMenuView, "items"> | undefined, itemId: string, variantId: string | null): string | null {
+  if (variantId === null) return null;
+  const item = resolveMenuItem(menu, itemId);
+  return item?.variants.find((variant) => variant.id === variantId)?.name ?? variantId;
+}
+
+export function toOrderLineView(raw: RawOrderLine, menu?: Pick<PosMenuView, "items">): OrderLineView {
+  const modifiers = raw.modifiers.map((modifier) => ({ modifierId: modifier.modifierId, name: modifier.name, priceMinor: modifier.priceMinor }));
+  return {
+    id: raw.id,
+    itemId: raw.itemId,
+    itemName: resolveItemName(menu, raw.itemId),
+    variantId: raw.variantId,
+    variantName: resolveVariantName(menu, raw.itemId, raw.variantId),
+    quantity: raw.quantity,
+    unitPriceMinor: raw.unitPriceMinor,
+    modifiers,
+    lineTotalMinor: raw.quantity * computeUnitTotalMinor(raw.unitPriceMinor, modifiers),
+    addedByStaffId: raw.addedByStaffId,
+    seatNumber: raw.seatNumber,
+  };
+}
+
+/** `menu` is optional so callers with no menu in scope (e.g. table-map's `startOrder`/`transferOrder`, which never render a line's item/variant name) still get a usable mapping - names simply fall back to raw ids in that case. */
+export function toOrderView(raw: RawOrder, menu?: Pick<PosMenuView, "items">): OrderView {
+  const lines = raw.lines.map((line) => toOrderLineView(line, menu));
+  return {
+    id: raw.id,
+    tableId: raw.tableId,
+    status: raw.status,
+    ownerStaffName: raw.ownerId,
+    tokenNumber: raw.tokenNumber,
+    lines,
+    totalMinor: computeOrderTotalMinor(lines),
+  };
+}
+
+/** "Table {id}" / "Counter" - the same raw-id-fallback convention open-orders-state.ts's `originLabel` uses, kept as a one-liner here rather than a cross-import since the two operate on differently-shaped types. */
+export function orderOriginLabel(order: Pick<OrderView, "tableId">): string {
+  return order.tableId !== null ? `Table ${order.tableId}` : "Counter";
 }
 
 export interface AddOrderLineInput {
@@ -194,6 +240,7 @@ export interface AddOrderLineInput {
   variantId?: string;
   quantity: number;
   modifierIds: string[];
+  /** Accepted client-side but not persisted server-side - see file header ("specialInstructions has no backing column"). Left in place only because `counter-view.tsx`/`modifier-sheet.tsx` share this type and are out of this reconciliation's scope. */
   specialInstructions?: string;
 }
 
@@ -303,7 +350,7 @@ export function resolveSelectedModifiers(item: Pick<PosMenuItemView, "modifierGr
   return modifiers;
 }
 
-export function computeUnitTotalMinor(unitPriceMinor: number, modifiers: readonly PosModifierView[]): number {
+export function computeUnitTotalMinor(unitPriceMinor: number, modifiers: readonly { priceMinor: number }[]): number {
   return unitPriceMinor + modifiers.reduce((sum, modifier) => sum + modifier.priceMinor, 0);
 }
 
@@ -314,9 +361,7 @@ export function computeOrderTotalMinor(lines: readonly OrderLineView[]): number 
 // --- CAP-4 group ordering: seat assignment and the fire-gate. SPEC.md's
 // success criterion is literal: "Every item is assigned to a seat number
 // before the order can be sent to the kitchen; unassigned items block
-// fire." `allLinesSeated`/`canSendToKitchen` are this client's mirror of
-// that server-side gate (see this file's CAP-4 header note for why the real
-// 400 doesn't exist to verify against yet).
+// fire."
 
 /** Vacuously true for an order with no lines - nothing to block yet. */
 export function allLinesSeated(lines: readonly OrderLineView[]): boolean {
@@ -327,7 +372,7 @@ export function unseatedLineCount(lines: readonly OrderLineView[]): number {
   return lines.filter((line) => line.seatNumber == null).length;
 }
 
-/** Gates the "Send to kitchen" action - disabled, never hidden, same EXPERIENCE.md convention as ModifierSheet's confirm button. */
-export function canSendToKitchen(order: Pick<OrderView, "lines" | "firedAt">): boolean {
-  return order.lines.length > 0 && !order.firedAt && allLinesSeated(order.lines);
+/** Gates the "Send to kitchen" action - disabled, never hidden, same EXPERIENCE.md convention as ModifierSheet's confirm button. Real `Order.status` is forward-only (open->sent->closed, orders.service.ts's `FORWARD_TRANSITIONS`), so "not yet sent" is exactly `status === "open"` - no fabricated `firedAt` timestamp needed. */
+export function canSendToKitchen(order: Pick<OrderView, "lines" | "status">): boolean {
+  return order.lines.length > 0 && order.status === "open" && allLinesSeated(order.lines);
 }

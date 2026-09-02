@@ -1,45 +1,58 @@
 import { describe, expect, it } from "vitest";
 import {
   deriveTapAction,
-  elapsedMinutes,
-  formatElapsedLabel,
   groupTablesByFloor,
-  type FloorView,
+  toTableMapEntry,
+  type RawTableMapEntry,
   type TableMapEntry,
 } from "./table-map-state";
-
-const FLOORS: FloorView[] = [
-  { id: "f1", name: "Ground Floor", sortOrder: 0 },
-  { id: "f2", name: "Terrace", sortOrder: 1 },
-];
 
 function emptyTable(id: string, floorId = "f1"): TableMapEntry {
   return { id, floorId, label: id.toUpperCase(), seatCapacity: 4, status: "empty", order: null };
 }
 
-function occupiedTable(id: string, ownerStaffId: string, ownerStaffName: string, openedAt: string, floorId = "f1"): TableMapEntry {
+function occupiedTable(id: string, ownerStaffId: string, floorId = "f1"): TableMapEntry {
   return {
     id,
     floorId,
     label: id.toUpperCase(),
     seatCapacity: 4,
     status: "occupied",
-    order: { id: `order-${id}`, ownerStaffId, ownerStaffName, openedAt },
+    order: { id: `order-${id}`, ownerStaffId },
   };
 }
 
+describe("toTableMapEntry", () => {
+  it("maps the real, flat wire shape (RawTableMapEntry) into the display shape", () => {
+    const raw: RawTableMapEntry = { tableId: "t1", floorId: "f1", label: "T1", seatCapacity: 4, status: "occupied", orderId: "order-1", ownerId: "staff-me" };
+    expect(toTableMapEntry(raw)).toEqual({
+      id: "t1",
+      floorId: "f1",
+      label: "T1",
+      seatCapacity: 4,
+      status: "occupied",
+      order: { id: "order-1", ownerStaffId: "staff-me" },
+    });
+  });
+
+  it("maps an empty table's null orderId/ownerId to a null order, not a fabricated summary", () => {
+    const raw: RawTableMapEntry = { tableId: "t1", floorId: "f1", label: "T1", seatCapacity: 4, status: "empty", orderId: null, ownerId: null };
+    expect(toTableMapEntry(raw).order).toBeNull();
+  });
+});
+
 describe("groupTablesByFloor", () => {
-  it("buckets each table under its own floor, preserving floor order", () => {
+  it("buckets each table under its own floorId, preserving first-appearance order", () => {
     const tables = [emptyTable("t1", "f1"), emptyTable("t2", "f2"), emptyTable("t3", "f1")];
-    const groups = groupTablesByFloor(FLOORS, tables);
-    expect(groups.map((g) => g.floor.id)).toEqual(["f1", "f2"]);
+    const groups = groupTablesByFloor(tables);
+    expect(groups.map((g) => g.floorId)).toEqual(["f1", "f2"]);
     expect(groups[0].tables.map((t) => t.id)).toEqual(["t1", "t3"]);
     expect(groups[1].tables.map((t) => t.id)).toEqual(["t2"]);
   });
 
-  it("leaves a floor with no tables as an empty group rather than dropping it", () => {
-    const groups = groupTablesByFloor(FLOORS, [emptyTable("t1", "f1")]);
-    expect(groups[1].tables).toEqual([]);
+  it("never fabricates an empty floor - there is no separate floor list, only floors tables actually reference", () => {
+    const groups = groupTablesByFloor([emptyTable("t1", "f1")]);
+    expect(groups).toHaveLength(1);
   });
 });
 
@@ -49,44 +62,16 @@ describe("deriveTapAction", () => {
   });
 
   it("opens directly when the current staff member already owns the order", () => {
-    const table = occupiedTable("t4", "staff-me", "Priya", "2026-08-24T10:00:00.000Z");
+    const table = occupiedTable("t4", "staff-me");
     expect(deriveTapAction(table, "staff-me")).toEqual({ type: "open_order", orderId: "order-t4" });
   });
 
-  it("never silently opens someone else's order - it requires the explicit transfer step", () => {
-    const table = occupiedTable("t9", "staff-priya", "Priya", "2026-08-24T10:00:00.000Z");
+  it("never silently opens someone else's order - it requires the explicit transfer step, naming the raw owner id (no name-lookup endpoint exists)", () => {
+    const table = occupiedTable("t9", "staff-priya");
     expect(deriveTapAction(table, "staff-me")).toEqual({
       type: "transfer_required",
       orderId: "order-t9",
-      ownerName: "Priya",
+      ownerId: "staff-priya",
     });
-  });
-});
-
-describe("elapsed time", () => {
-  const opened = "2026-08-24T10:00:00.000Z";
-
-  it("computes whole minutes elapsed", () => {
-    expect(elapsedMinutes(opened, new Date("2026-08-24T10:22:30.000Z"))).toBe(22);
-  });
-
-  it("never goes negative for a clock skew edge case", () => {
-    expect(elapsedMinutes(opened, new Date("2026-08-24T09:59:00.000Z"))).toBe(0);
-  });
-
-  it("hides the label below the ageing threshold", () => {
-    expect(formatElapsedLabel(opened, new Date("2026-08-24T10:05:00.000Z"))).toBeNull();
-  });
-
-  it("shows minutes once past the threshold", () => {
-    expect(formatElapsedLabel(opened, new Date("2026-08-24T10:22:00.000Z"))).toBe("22m");
-  });
-
-  it("shows hours and minutes past an hour", () => {
-    expect(formatElapsedLabel(opened, new Date("2026-08-24T11:10:00.000Z"))).toBe("1h 10m");
-  });
-
-  it("omits the minutes remainder on an exact hour", () => {
-    expect(formatElapsedLabel(opened, new Date("2026-08-24T12:00:00.000Z"))).toBe("2h");
   });
 });

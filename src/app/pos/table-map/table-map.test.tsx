@@ -2,7 +2,7 @@ import { cleanup, render, screen, waitFor, within } from "@testing-library/react
 import userEvent from "@testing-library/user-event";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { TableMap } from "./table-map";
-import type { TableMapView } from "./table-map-state";
+import type { RawTableMapEntry } from "./table-map-state";
 
 const push = vi.fn();
 
@@ -10,34 +10,18 @@ vi.mock("next/navigation", () => ({
   useRouter: () => ({ push }),
 }));
 
-const CURRENT_STAFF = { id: "staff-me", name: "Ravi" };
+const OUTLET_ID = "outlet-1";
+const CURRENT_STAFF_ID = "staff-me";
+const CURRENT_STAFF_NAME = "Ravi";
 
-function view(overrides: Partial<TableMapView> = {}): TableMapView {
-  return {
-    outletId: "o1",
-    currentStaff: CURRENT_STAFF,
-    floors: [{ id: "f1", name: "Ground Floor", sortOrder: 0 }],
-    tables: [
-      { id: "t1", floorId: "f1", label: "T1", seatCapacity: 2, status: "empty", order: null },
-      {
-        id: "t9",
-        floorId: "f1",
-        label: "T9",
-        seatCapacity: 4,
-        status: "occupied",
-        order: { id: "order-t9", ownerStaffId: "staff-priya", ownerStaffName: "Priya", openedAt: new Date().toISOString() },
-      },
-      {
-        id: "t4",
-        floorId: "f1",
-        label: "T4",
-        seatCapacity: 4,
-        status: "occupied",
-        order: { id: "order-t4", ownerStaffId: "staff-me", ownerStaffName: "Ravi", openedAt: new Date().toISOString() },
-      },
-    ],
-    ...overrides,
-  };
+/** A fixture shaped exactly like the real backend's `GET /pos/v1/outlets/:outletId/table-map` array entries. */
+function tables(overrides: Partial<RawTableMapEntry>[] = []): RawTableMapEntry[] {
+  const base: RawTableMapEntry[] = [
+    { tableId: "t1", floorId: "f1", label: "T1", seatCapacity: 2, status: "empty", orderId: null, ownerId: null },
+    { tableId: "t9", floorId: "f1", label: "T9", seatCapacity: 4, status: "occupied", orderId: "order-t9", ownerId: "staff-priya" },
+    { tableId: "t4", floorId: "f1", label: "T4", seatCapacity: 4, status: "occupied", orderId: "order-t4", ownerId: CURRENT_STAFF_ID },
+  ];
+  return overrides.length ? base.map((t, i) => ({ ...t, ...overrides[i] })) : base;
 }
 
 function jsonResponse(body: unknown, status = 200): Response {
@@ -50,6 +34,10 @@ function stubFetch(handler: (url: string, init?: RequestInit) => Response) {
   return fetchMock;
 }
 
+function renderTableMap() {
+  return render(<TableMap outletId={OUTLET_ID} currentStaffId={CURRENT_STAFF_ID} currentStaffName={CURRENT_STAFF_NAME} />);
+}
+
 afterEach(() => {
   cleanup();
   vi.unstubAllGlobals();
@@ -58,21 +46,28 @@ afterEach(() => {
 
 describe("TableMap", () => {
   it("shows a loading skeleton before the table map lands", async () => {
-    stubFetch(() => jsonResponse(view()));
-    render(<TableMap />);
+    stubFetch(() => jsonResponse(tables()));
+    renderTableMap();
     expect(screen.getByTestId("table-map-loading")).toBeTruthy();
     await waitFor(() => expect(screen.getByTestId("table-map")).toBeTruthy());
   });
 
+  it("fetches the outlet-scoped real endpoint, not the old bare path (regression for #61's 404)", async () => {
+    const fetchMock = stubFetch(() => jsonResponse(tables()));
+    renderTableMap();
+    await waitFor(() => expect(screen.getByTestId("table-map")).toBeTruthy());
+    expect(fetchMock).toHaveBeenCalledWith(expect.stringContaining(`/pos/api/outlets/${OUTLET_ID}/table-map`), expect.anything());
+  });
+
   it("shows a retryable error panel when the load fails", async () => {
     stubFetch(() => jsonResponse({ error: { message: "down" } }, 500));
-    render(<TableMap />);
+    renderTableMap();
     await waitFor(() => expect(screen.getByTestId("table-map-error")).toBeTruthy());
   });
 
   it("renders every table with a status color AND a visible text label - color is never the only signal", async () => {
-    stubFetch(() => jsonResponse(view()));
-    render(<TableMap />);
+    stubFetch(() => jsonResponse(tables()));
+    renderTableMap();
     await waitFor(() => expect(screen.getByTestId("table-map")).toBeTruthy());
 
     const empty = screen.getByTestId("table-tile-t1");
@@ -84,9 +79,16 @@ describe("TableMap", () => {
     expect(occupied.dataset.status).toBe("occupied");
   });
 
+  it("shows the signed-in staff member's name from the server-resolved session, not a fetched field", async () => {
+    stubFetch(() => jsonResponse(tables()));
+    renderTableMap();
+    await waitFor(() => expect(screen.getByTestId("table-map")).toBeTruthy());
+    expect(screen.getByTestId("current-staff").textContent).toContain(CURRENT_STAFF_NAME);
+  });
+
   it("links to Open & Held Orders (CAP-5) - reachable from anywhere per EXPERIENCE.md's IA", async () => {
-    stubFetch(() => jsonResponse(view()));
-    render(<TableMap />);
+    stubFetch(() => jsonResponse(tables()));
+    renderTableMap();
     await waitFor(() => expect(screen.getByTestId("table-map")).toBeTruthy());
 
     expect(screen.getByTestId("table-map-open-orders-link")).toHaveProperty(
@@ -95,33 +97,55 @@ describe("TableMap", () => {
     );
   });
 
-  it("starts a new order when an empty table is tapped", async () => {
+  it("starts a new order when an empty table is tapped, posting to the real outlet/table-scoped route", async () => {
     const user = userEvent.setup();
-    const startedOrder = {
-      id: "t1",
-      floorId: "f1",
-      label: "T1",
-      seatCapacity: 2,
-      status: "occupied",
-      order: { id: "order-new", ownerStaffId: "staff-me", ownerStaffName: "Ravi", openedAt: new Date().toISOString() },
-    };
-    stubFetch((url) => {
-      if (url.endsWith("/pos/api/table-map")) return jsonResponse(view());
-      if (url.endsWith("/pos/api/tables/t1/start-order")) return jsonResponse(startedOrder);
+    const startedOrder = { id: "order-new", tenantId: "t", outletId: OUTLET_ID, tableId: "t1", ownerId: CURRENT_STAFF_ID, status: "open", tokenNumber: null, createdAt: "now", updatedAt: "now", lines: [] };
+    const fetchMock = stubFetch((url) => {
+      if (url.endsWith(`/pos/api/outlets/${OUTLET_ID}/table-map`)) return jsonResponse(tables());
+      if (url.endsWith(`/pos/api/outlets/${OUTLET_ID}/tables/t1/order`)) return jsonResponse(startedOrder);
       throw new Error(`unexpected fetch ${url}`);
     });
-    render(<TableMap />);
+    renderTableMap();
     await waitFor(() => expect(screen.getByTestId("table-map")).toBeTruthy());
 
     await user.click(screen.getByTestId("table-tile-t1"));
 
     await waitFor(() => expect(push).toHaveBeenCalledWith("/pos/orders/order-new"));
+    const startCall = fetchMock.mock.calls.find(([url]) => (url as string).endsWith(`/tables/t1/order`));
+    expect((startCall?.[1] as RequestInit | undefined)?.method).toBe("POST");
+  });
+
+  it("reflects the server's real owner after a get-or-claim race (openOrClaimTable can return a pre-existing order owned by someone else), requiring transfer on a second tap instead of a silent open", async () => {
+    const user = userEvent.setup();
+    const claimedOrder = { id: "order-t1", tenantId: "t", outletId: OUTLET_ID, tableId: "t1", ownerId: "staff-other", status: "open", tokenNumber: null, createdAt: "now", updatedAt: "now", lines: [] };
+    const fetchMock = stubFetch((url) => {
+      if (url.endsWith(`/pos/api/outlets/${OUTLET_ID}/table-map`)) return jsonResponse(tables());
+      if (url.endsWith(`/pos/api/outlets/${OUTLET_ID}/tables/t1/order`)) return jsonResponse(claimedOrder);
+      throw new Error(`unexpected fetch ${url}`);
+    });
+    renderTableMap();
+    await waitFor(() => expect(screen.getByTestId("table-map")).toBeTruthy());
+
+    await user.click(screen.getByTestId("table-tile-t1"));
+    await waitFor(() => expect(push).toHaveBeenCalledWith("/pos/orders/order-t1"));
+    push.mockClear();
+
+    // A second tap on the same tile must resolve from the tile's own local
+    // state, which should now carry the server's real ownerId (staff-other),
+    // not the tapping staff - so this tap goes through the transfer flow
+    // instead of silently reopening the order as if the tapper owned it.
+    await user.click(screen.getByTestId("table-tile-t1"));
+
+    expect(push).not.toHaveBeenCalled();
+    const dialog = await screen.findByTestId("transfer-ownership-dialog");
+    expect(dialog.textContent).toContain("staff-other");
+    expect(fetchMock.mock.calls.filter(([url]) => (url as string).endsWith(`/tables/t1/order`))).toHaveLength(1);
   });
 
   it("opens directly when the current staff member already owns the table", async () => {
     const user = userEvent.setup();
-    stubFetch(() => jsonResponse(view()));
-    render(<TableMap />);
+    stubFetch(() => jsonResponse(tables()));
+    renderTableMap();
     await waitFor(() => expect(screen.getByTestId("table-map")).toBeTruthy());
 
     await user.click(screen.getByTestId("table-tile-t4"));
@@ -130,35 +154,28 @@ describe("TableMap", () => {
     expect(screen.queryByTestId("transfer-ownership-dialog")).toBeNull();
   });
 
-  it("shows the owner and the transfer action instead of opening someone else's table directly", async () => {
+  it("shows the raw owner id and the transfer action instead of opening someone else's table directly - no name-lookup endpoint exists server-side", async () => {
     const user = userEvent.setup();
-    stubFetch(() => jsonResponse(view()));
-    render(<TableMap />);
+    stubFetch(() => jsonResponse(tables()));
+    renderTableMap();
     await waitFor(() => expect(screen.getByTestId("table-map")).toBeTruthy());
 
     await user.click(screen.getByTestId("table-tile-t9"));
 
     expect(push).not.toHaveBeenCalled();
     const dialog = await screen.findByTestId("transfer-ownership-dialog");
-    expect(dialog.textContent).toContain("Priya");
+    expect(dialog.textContent).toContain("staff-priya");
   });
 
-  it("completing a transfer updates the tile's owner and opens the order", async () => {
+  it("completing a transfer sends newOwnerStaffId (the real TransferOrderDto requires it) and opens the order", async () => {
     const user = userEvent.setup();
-    const transferred = {
-      id: "t9",
-      floorId: "f1",
-      label: "T9",
-      seatCapacity: 4,
-      status: "occupied",
-      order: { id: "order-t9", ownerStaffId: "staff-me", ownerStaffName: "Ravi", openedAt: new Date().toISOString() },
-    };
-    stubFetch((url) => {
-      if (url.endsWith("/pos/api/table-map")) return jsonResponse(view());
+    const transferred = { id: "order-t9", tenantId: "t", outletId: OUTLET_ID, tableId: "t9", ownerId: CURRENT_STAFF_ID, status: "open", tokenNumber: null, createdAt: "now", updatedAt: "now", lines: [] };
+    const fetchMock = stubFetch((url) => {
+      if (url.endsWith(`/pos/api/outlets/${OUTLET_ID}/table-map`)) return jsonResponse(tables());
       if (url.endsWith("/pos/api/orders/order-t9/transfer")) return jsonResponse(transferred);
       throw new Error(`unexpected fetch ${url}`);
     });
-    render(<TableMap />);
+    renderTableMap();
     await waitFor(() => expect(screen.getByTestId("table-map")).toBeTruthy());
 
     await user.click(screen.getByTestId("table-tile-t9"));
@@ -167,12 +184,14 @@ describe("TableMap", () => {
 
     await waitFor(() => expect(screen.queryByTestId("transfer-ownership-dialog")).toBeNull());
     expect(push).toHaveBeenCalledWith("/pos/orders/order-t9");
+    const transferCall = fetchMock.mock.calls.find(([url]) => (url as string).endsWith("/orders/order-t9/transfer"));
+    expect(JSON.parse((transferCall?.[1] as RequestInit).body as string)).toEqual({ newOwnerStaffId: CURRENT_STAFF_ID });
   });
 
   it("cancelling the transfer dialog leaves the table untouched", async () => {
     const user = userEvent.setup();
-    const fetchMock = stubFetch(() => jsonResponse(view()));
-    render(<TableMap />);
+    const fetchMock = stubFetch(() => jsonResponse(tables()));
+    renderTableMap();
     await waitFor(() => expect(screen.getByTestId("table-map")).toBeTruthy());
 
     await user.click(screen.getByTestId("table-tile-t9"));
