@@ -349,7 +349,9 @@ describe("OrderTakingView", () => {
     expect(fetchMock.mock.calls.some(([, init]) => (init as RequestInit | undefined)?.method === "DELETE")).toBe(true);
   });
 
-  // --- CAP-4 group ordering: seat assignment and the send-to-kitchen gate.
+  // --- Send-to-kitchen. Product decision (2026-09-02, restiq-web#120): seats
+  // are optional metadata only now - they never gate sending, and this
+  // screen no longer renders a "Split by seat" toggle or per-line seat rows.
 
   function lineFixture(overrides: Partial<RawOrder["lines"][number]> = {}): RawOrder["lines"][number] {
     return {
@@ -367,57 +369,44 @@ describe("OrderTakingView", () => {
     };
   }
 
-  it("assigning a seat to a line updates it", async () => {
-    const user = userEvent.setup();
-    const unseated = order({ lines: [lineFixture()] });
-    const seated = { ...unseated, lines: [{ ...unseated.lines[0], seatNumber: 1 }] };
-
-    const fetchMock = stubFetch((url, init) => {
-      if (url.includes("/menu")) return jsonResponse(MENU);
-      if (url.endsWith("/lines/line-naan") && init?.method === "PATCH") return jsonResponse(seated);
-      return jsonResponse(unseated);
-    });
+  it("does not render the split-by-seat toggle or any per-line seat row", async () => {
+    const withUnseatedLine = order({ lines: [lineFixture()] });
+    stubFetch((url) => (url.includes("/menu") ? jsonResponse(MENU) : jsonResponse(withUnseatedLine)));
     renderView();
     await waitFor(() => expect(screen.getByTestId("order-line-line-naan")).toBeTruthy());
 
-    await user.click(screen.getByTestId("split-by-seat-toggle"));
-    expect(screen.getByTestId("order-line-seat-line-naan").textContent).toBe("Unseated");
-
-    await user.click(screen.getByTestId("order-line-seat-increment-line-naan"));
-
-    await waitFor(() => expect(screen.getByTestId("order-line-seat-line-naan").textContent).toBe("Seat 1"));
-    const patchCall = fetchMock.mock.calls.find(([url, init]) => (url as string).endsWith("/lines/line-naan") && (init as RequestInit | undefined)?.method === "PATCH");
-    expect(patchCall).toBeTruthy();
-    expect(JSON.parse((patchCall?.[1] as RequestInit).body as string)).toEqual({ seatNumber: 1 });
+    expect(screen.queryByTestId("split-by-seat-toggle")).toBeNull();
+    expect(screen.queryByTestId("order-line-seat-line-naan")).toBeNull();
+    expect(screen.queryByTestId("order-line-seat-increment-line-naan")).toBeNull();
+    expect(screen.queryByTestId("order-line-seat-decrement-line-naan")).toBeNull();
   });
 
-  it("blocks sending to the kitchen while any line is unseated, naming the fix inline", async () => {
+  it("enables send to kitchen with an unseated line, and never shows a seat-gate message", async () => {
     const withUnseatedLine = order({ lines: [lineFixture()] });
     stubFetch((url) => (url.includes("/menu") ? jsonResponse(MENU) : jsonResponse(withUnseatedLine)));
     renderView();
     await waitFor(() => expect(screen.getByTestId("order-line-line-naan")).toBeTruthy());
 
     const sendButton = screen.getByTestId("send-to-kitchen") as HTMLButtonElement;
-    expect(sendButton.disabled).toBe(true);
-    expect(screen.getByTestId("send-to-kitchen-blocked").textContent).toContain("1 item needs a seat");
+    expect(sendButton.disabled).toBe(false);
+    expect(screen.queryByTestId("send-to-kitchen-blocked")).toBeNull();
   });
 
-  it("sending to the kitchen succeeds once every line is seated, gated on the real Order.status (not a fabricated firedAt timestamp)", async () => {
+  it("sending to the kitchen succeeds for an order with unseated lines, gated on the real Order.status (not a fabricated firedAt timestamp)", async () => {
     const user = userEvent.setup();
-    const fullySeated = order({ lines: [lineFixture({ seatNumber: 1 })] });
-    const sent = { ...fullySeated, status: "sent" as const };
+    const withUnseatedLine = order({ lines: [lineFixture()] });
+    const sent = { ...withUnseatedLine, status: "sent" as const };
 
     const fetchMock = stubFetch((url, init) => {
       if (url.includes("/menu")) return jsonResponse(MENU);
       if (url.endsWith("/status") && init?.method === "PATCH") return jsonResponse(sent);
-      return jsonResponse(fullySeated);
+      return jsonResponse(withUnseatedLine);
     });
     renderView();
     await waitFor(() => expect(screen.getByTestId("order-line-line-naan")).toBeTruthy());
 
     const sendButton = screen.getByTestId("send-to-kitchen") as HTMLButtonElement;
     expect(sendButton.disabled).toBe(false);
-    expect(screen.queryByTestId("send-to-kitchen-blocked")).toBeNull();
 
     await user.click(sendButton);
 
@@ -427,7 +416,29 @@ describe("OrderTakingView", () => {
     expect((screen.getByTestId("send-to-kitchen") as HTMLButtonElement).disabled).toBe(true);
   });
 
-  it("group ordering is invisible for an order with no lines - existing empty-order behavior is unaffected", async () => {
+  it("surfaces a race-condition unseated_lines rejection from the backend as a plain inline error, not a reinstated gate", async () => {
+    const user = userEvent.setup();
+    const withUnseatedLine = order({ lines: [lineFixture()] });
+    let statusCalls = 0;
+    stubFetch((url, init) => {
+      if (url.includes("/menu")) return jsonResponse(MENU);
+      if (url.endsWith("/status") && init?.method === "PATCH") {
+        statusCalls += 1;
+        return jsonResponse({ error: { message: "Every line must be seated before sending to the kitchen.", code: "unseated_lines" } }, 400);
+      }
+      return jsonResponse(withUnseatedLine);
+    });
+    renderView();
+    await waitFor(() => expect(screen.getByTestId("order-line-line-naan")).toBeTruthy());
+
+    await user.click(screen.getByTestId("send-to-kitchen"));
+
+    await waitFor(() => expect(screen.getByTestId("order-taking-action-error").textContent).toContain("Every line must be seated"));
+    expect(statusCalls).toBe(1);
+    expect(screen.queryByTestId("send-to-kitchen-blocked")).toBeNull();
+  });
+
+  it("send to kitchen stays disabled for an order with no lines - existing empty-order behavior is unaffected", async () => {
     stubFetch((url) => (url.includes("/menu") ? jsonResponse(MENU) : jsonResponse(order())));
     renderView();
     await waitFor(() => expect(screen.getByTestId("order-taking-view")).toBeTruthy());

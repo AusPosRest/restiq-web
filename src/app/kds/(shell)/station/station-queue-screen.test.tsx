@@ -109,6 +109,7 @@ describe("StationQueueScreen", () => {
     expect(screen.getByTestId("kds-line-l2").className).not.toContain("line-through");
     expect(screen.getByTestId("kds-line-l2").querySelector("div")?.className).toContain("line-through");
     expect(screen.getByTestId("kds-line-l1-seat").textContent).toContain("S1");
+    expect(screen.queryByTestId("kds-line-l2-seat")).toBeNull();
   });
 
   it("renders the RECALLED banner as real data from ticket.recalled, not local UI memory", async () => {

@@ -359,6 +359,34 @@ actually built here, story by story. Backend counterpart:
   entirely via the 16 tests above, stubbing global `fetch` against the anticipated
   contract described above.
 
+### Deviation (2026-09-02): Split by seat removed - seats optional
+
+- **Product reason:** the owner found "Split by seat" confusing on the order screen and
+  decided to remove it (restiq-web#120), paired with a backend change (restiq-backend
+  issue "Make seat assignment optional: stop rejecting unseated lines on send-to-kitchen")
+  that drops the `unseated_lines` rejection on send - `seatNumber` becomes purely optional
+  metadata, never a fire-gate.
+- **What was removed from `order-taking-view.tsx`/`order-panel.tsx`/`order-taking-state.ts`:**
+  the "Split by seat" toggle (`split-by-seat-toggle`), the per-line seat stepper rows
+  (`order-line-seat-{id}` and its increment/decrement buttons), the "N items need a seat
+  before sending to the kitchen" gate message (`send-to-kitchen-blocked`), and the pure
+  helpers `allLinesSeated`/`unseatedLineCount`. The `assignSeat` wiring
+  (`handleSeatIncrement`/`handleSeatDecrement`) was removed from `order-taking-view.tsx`
+  since nothing else called it; `assignSeat` itself stays in `src/app/pos/api.ts` as a thin
+  wrapper the backend's assign-seat endpoint still supports, just unused by this screen now.
+- **What stayed:** `seatNumber` remains on `OrderLineView`/`RawOrderLine` (still real wire
+  data) but is no longer rendered on this screen. `canSendToKitchen` is now just "at least
+  one line, and the order hasn't already been sent" - no seat requirement.
+  `src/app/kds/(shell)/station/ticket-card.tsx`'s seat chip (`kds-line-{id}-seat`) already
+  rendered nothing for a `null` seatNumber and a chip for a real one, so no change was
+  needed there beyond adding the missing regression assertion for the null case.
+  `src/app/pos/counter/` and open-orders never had seat UI to remove.
+- **Tests:** the CAP-4 seat-gate tests above (12 pure-logic + the seat-assignment/blocked
+  integration tests) were replaced with tests asserting send-to-kitchen is enabled with
+  unseated (or entirely unseated) lines, that no split toggle or seat row renders, and that
+  a race-condition `unseated_lines` rejection from the backend surfaces as a plain inline
+  error rather than reinstating the gate.
+
 ## Integration points for later stories
 
 - **Story 4 (CAP-3, order taking, P3/P4) - done, see its own section above.**

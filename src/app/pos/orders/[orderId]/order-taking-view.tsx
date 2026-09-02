@@ -13,7 +13,7 @@
 import Link from "next/link";
 import { useMemo, useState } from "react";
 import { Search } from "lucide-react";
-import { addOrderLine, assignSeat, PosApiError, removeOrderLine, sendOrderToKitchen, updateOrderLineQuantity } from "../../api";
+import { addOrderLine, PosApiError, removeOrderLine, sendOrderToKitchen, updateOrderLineQuantity } from "../../api";
 import { LoadErrorPanel, Skeleton } from "../../data-states";
 import { usePosLoad } from "../../use-pos-load";
 import { ModifierSheet, type ModifierSheetConfirmValue } from "./modifier-sheet";
@@ -151,30 +151,8 @@ function OrderTakingLoaded({
       .finally(() => setBusyLineId(null));
   }
 
-  // --- CAP-4 group ordering: seat assignment and the send-to-kitchen gate.
-  function handleSeatIncrement(line: OrderLineView) {
-    setBusyLineId(line.id);
-    setActionError(null);
-    assignSeat(orderId, line.id, (line.seatNumber ?? 0) + 1, menu)
-      .then(setOrder)
-      .catch((error: unknown) => setActionError(errorMessage(error, "Couldn't assign a seat to that line.")))
-      .finally(() => setBusyLineId(null));
-  }
-
-  function handleSeatDecrement(line: OrderLineView) {
-    if (line.seatNumber == null) return;
-    setBusyLineId(line.id);
-    setActionError(null);
-    assignSeat(orderId, line.id, line.seatNumber <= 1 ? null : line.seatNumber - 1, menu)
-      .then(setOrder)
-      .catch((error: unknown) => setActionError(errorMessage(error, "Couldn't update that line's seat.")))
-      .finally(() => setBusyLineId(null));
-  }
-
   function handleSendToKitchen() {
-    // Defensive re-check mirroring the button's own disabled state - the
-    // real backend enforces this with a 400 (SPEC CAP-4), this just keeps
-    // the client from ever issuing a call it already knows will be rejected.
+    // Defensive re-check mirroring the button's own disabled state.
     if (!canSendToKitchen(order)) return;
     setSendingToKitchen(true);
     setActionError(null);
@@ -269,8 +247,6 @@ function OrderTakingLoaded({
           onIncrement={handleIncrement}
           onDecrement={handleDecrement}
           onRemove={handleRemove}
-          onSeatIncrement={handleSeatIncrement}
-          onSeatDecrement={handleSeatDecrement}
           sendingToKitchen={sendingToKitchen}
           onSendToKitchen={handleSendToKitchen}
         />
