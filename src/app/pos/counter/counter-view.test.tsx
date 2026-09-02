@@ -41,6 +41,7 @@ function counterOrder(overrides: Partial<RawOrder> = {}): RawOrder {
     tenantId: "tenant-1",
     outletId: OUTLET_ID,
     tableId: null,
+    tableLabel: null,
     ownerId: "staff-priya",
     status: "open",
     tokenNumber: 47,

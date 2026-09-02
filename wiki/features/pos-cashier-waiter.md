@@ -1207,3 +1207,43 @@ against the real, merged `restiq-backend` and fixed. Read directly, not guessed:
   environment, same constraint as every other not-yet-backed story in this doc. Verified by
   reading the real controller/service/DTO source directly (cited per bullet above) rather
   than guessing from a spec, plus the full rewritten test suite.
+
+## Reconciliation (2026-09-02, restiq-backend#96) - floor/table display names close the last raw-id gaps
+
+restiq-web#96 reported the table map's floor headings and the order-taking/bill-settle
+headers rendering raw UUIDs (`FLOOR 01a06107-…`, `TABLE 01a06108-…`) instead of names.
+restiq-backend#96 (merged to `main`) closes exactly this by adding two additive fields,
+verified directly against `src/pos/orders/orders.dtos.ts`/`orders.service.ts` on that repo's
+`main`:
+
+- **`TableMapEntry.floorName: string`** - the real Floor's name, joined server-side
+  (`orders.service.ts`: `floorName: t.floor.name`) - alongside the existing `floorId`.
+  `table-map-state.ts`'s `RawTableMapEntry`/`TableMapEntry`/`FloorGroup` all carry it now;
+  `groupTablesByFloor`'s heading is `floorName`, falling back to the raw `floorId` only if
+  the field is somehow missing - never the other way round. Closes the gap this doc's CAP-2
+  section previously flagged ("there is no floor-name lookup endpoint for pos").
+- **`OrderView.tableLabel: string | null`** - the DiningTable's real label for a dine-in
+  order, `null` for a counter order (`orders.service.ts`: `tableLabel: table?.label ?? null`)
+  - present on every endpoint that returns an `OrderView` (get/lines/status/transfer,
+  open-orders, start-order, counter-orders). `order-taking-state.ts`'s `RawOrder`/`OrderView`
+  carry it now; `orderOriginLabel` reads it (`Table {tableLabel}` / `Counter`), falling back
+  to the raw `tableId` only if the field is somehow missing. `open-orders-state.ts`'s
+  `RawOpenOrder`/`toOpenOrderEntry` follow the same fallback rule for the open-orders list.
+  Closes the gap this doc's CAP-3/CAP-5 sections previously flagged (`tableLabel` as a
+  raw-id-fallback field, no label lookup existing server-side).
+- **Screens fixed:** table map's floor group heading (`table-map.tsx`), the order-taking
+  header and order panel (`order-taking-view.tsx`/`order-panel.tsx`), the Bill & Settle
+  header (`settle/bill-settle-view.tsx` via `BillSummary`'s `originLabel`), and the open &
+  held orders list (`open-orders-screen.tsx`) - every one of them was reading
+  `orderOriginLabel`/`groupTablesByFloor` already, so fixing the two shared functions fixed
+  every caller in one pass, no per-screen patch.
+- **Tests:** fixtures across `table-map-state.test.ts`, `table-map.test.tsx`,
+  `order-taking-state.test.ts`, `order-taking-view.test.tsx`, `bill-settle-view.test.tsx`,
+  `open-orders-state.test.ts`, `open-orders-screen.test.tsx` (plus `counter-view.test.tsx`/
+  `refund-view.test.tsx` for the now-required `tableLabel` field) updated to the real
+  `floorName`/`tableLabel` shape, with explicit regression assertions that a rendered header
+  contains the name and never the raw UUID, plus the fallback-to-id and counter-order
+  (`null` label) cases. Full suite green (1002/1002), `tsc --noEmit`/lint/build all clean.
+- **Live verification:** none possible from this environment (same constraint as every other
+  story above) - verified by reading `restiq-backend`'s real, merged `main` DTOs/service
+  directly rather than guessing from the issue's description.

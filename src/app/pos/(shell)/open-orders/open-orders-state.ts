@@ -21,19 +21,22 @@
 //    derivable - the old "null until CAP-3 lands" case no longer applies).
 //    `toOpenOrderEntry` below derives itemCount/totalMinor from `lines`
 //    (reusing order-taking-state.ts's `computeUnitTotalMinor` - same
-//    unitPrice+modifiers formula, not re-derived) and falls back to the raw
-//    id for tableLabel/ownerStaffId until a staff-name/table-label lookup
-//    exists server-side (flagged separately, same gap affects
-//    table-map-state.ts). There's no separate `ownerStaffName` field - it'd
-//    just be a second copy of the same raw id until that lookup exists;
-//    callers show "You" for the viewer's own orders (isOwnOrder) and the raw
-//    id otherwise.
+//    unitPrice+modifiers formula, not re-derived). There's no separate
+//    `ownerStaffName` field - it'd just be a second copy of the same raw id
+//    until a staff-name lookup exists server-side; callers show "You" for
+//    the viewer's own orders (isOwnOrder) and the raw id otherwise.
 //
 // "Open and held" is SPEC/UX language for "every non-closed Order" - the
 // real Order model only has open/sent/closed statuses, no distinct "held"
 // status, so this never fabricates one: both open and sent orders show up
 // here, closed ones never do - the real backend's listOpenOrders applies
 // that same `status: { not: 'closed' }` filter server-side.
+//
+// RECONCILED (2026-09-02, restiq-backend#96) - this endpoint returns the
+// same `OrderView` shape order-taking-state.ts's `RawOrder` does, which now
+// carries a real `tableLabel` (the DiningTable's label, joined
+// server-side) - `toOpenOrderEntry` reads it directly instead of the raw
+// `tableId`, falling back to the id only if the field is somehow missing.
 
 import { computeUnitTotalMinor } from "../../orders/[orderId]/order-taking-state";
 
@@ -52,6 +55,8 @@ export interface RawOpenOrder {
   id: string;
   /** null for a CAP-6 counter order. */
   tableId: string | null;
+  /** The DiningTable's real label for a dine-in order; null for a counter order. */
+  tableLabel: string | null;
   ownerId: string;
   status: OpenOrderStatus;
   /** ISO timestamp. */
@@ -62,7 +67,7 @@ export interface RawOpenOrder {
 export interface OpenOrderEntry {
   id: string;
   origin: OrderOrigin;
-  /** Present only when origin === "table"; null for a counter-origin order. Raw table id - no label lookup exists server-side yet, see file header. */
+  /** Present only when origin === "table"; null for a counter-origin order. The real table label, see file header. */
   tableLabel: string | null;
   /** Raw owner id - no staff-name lookup exists server-side yet, see file header. Callers compare against currentStaffId (isOwnOrder) to show "You" instead of the raw id for the viewer's own orders. */
   ownerStaffId: string;
@@ -81,7 +86,7 @@ export function toOpenOrderEntry(raw: RawOpenOrder): OpenOrderEntry {
   return {
     id: raw.id,
     origin: raw.tableId === null ? "counter" : "table",
-    tableLabel: raw.tableId,
+    tableLabel: raw.tableLabel ?? raw.tableId,
     ownerStaffId: raw.ownerId,
     status: raw.status,
     openedAt: raw.createdAt,

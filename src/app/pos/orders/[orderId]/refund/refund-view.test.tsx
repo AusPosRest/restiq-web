@@ -31,6 +31,7 @@ function rawOrder(): RawOrder {
     tenantId: "tenant-1",
     outletId: "outlet-1",
     tableId: "table-12",
+    tableLabel: "T12",
     ownerId: "staff-1",
     status: "closed",
     tokenNumber: null,

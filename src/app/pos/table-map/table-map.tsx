@@ -168,7 +168,7 @@ function TableMapLoaded({
 
       {groups.map((group) => (
         <section key={group.floorId} data-testid={`floor-group-${group.floorId}`} className="flex flex-col gap-3">
-          <h2 className="font-label text-sm font-semibold uppercase tracking-wider text-muted-foreground">Floor {group.floorId}</h2>
+          <h2 className="font-label text-sm font-semibold uppercase tracking-wider text-muted-foreground">{group.floorName}</h2>
           {group.tables.length === 0 ? (
             <p className="text-sm text-muted-foreground">No tables on this floor.</p>
           ) : (

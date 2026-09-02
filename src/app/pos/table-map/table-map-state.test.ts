@@ -7,14 +7,15 @@ import {
   type TableMapEntry,
 } from "./table-map-state";
 
-function emptyTable(id: string, floorId = "f1"): TableMapEntry {
-  return { id, floorId, label: id.toUpperCase(), seatCapacity: 4, status: "empty", order: null };
+function emptyTable(id: string, floorId = "f1", floorName = "Ground Floor"): TableMapEntry {
+  return { id, floorId, floorName, label: id.toUpperCase(), seatCapacity: 4, status: "empty", order: null };
 }
 
 function occupiedTable(id: string, ownerStaffId: string, floorId = "f1"): TableMapEntry {
   return {
     id,
     floorId,
+    floorName: "Ground Floor",
     label: id.toUpperCase(),
     seatCapacity: 4,
     status: "occupied",
@@ -23,11 +24,12 @@ function occupiedTable(id: string, ownerStaffId: string, floorId = "f1"): TableM
 }
 
 describe("toTableMapEntry", () => {
-  it("maps the real, flat wire shape (RawTableMapEntry) into the display shape", () => {
-    const raw: RawTableMapEntry = { tableId: "t1", floorId: "f1", label: "T1", seatCapacity: 4, status: "occupied", orderId: "order-1", ownerId: "staff-me" };
+  it("maps the real, flat wire shape (RawTableMapEntry) into the display shape, including the real floorName", () => {
+    const raw: RawTableMapEntry = { tableId: "t1", floorId: "f1", floorName: "Ground Floor", label: "T1", seatCapacity: 4, status: "occupied", orderId: "order-1", ownerId: "staff-me" };
     expect(toTableMapEntry(raw)).toEqual({
       id: "t1",
       floorId: "f1",
+      floorName: "Ground Floor",
       label: "T1",
       seatCapacity: 4,
       status: "occupied",
@@ -36,14 +38,14 @@ describe("toTableMapEntry", () => {
   });
 
   it("maps an empty table's null orderId/ownerId to a null order, not a fabricated summary", () => {
-    const raw: RawTableMapEntry = { tableId: "t1", floorId: "f1", label: "T1", seatCapacity: 4, status: "empty", orderId: null, ownerId: null };
+    const raw: RawTableMapEntry = { tableId: "t1", floorId: "f1", floorName: "Ground Floor", label: "T1", seatCapacity: 4, status: "empty", orderId: null, ownerId: null };
     expect(toTableMapEntry(raw).order).toBeNull();
   });
 });
 
 describe("groupTablesByFloor", () => {
   it("buckets each table under its own floorId, preserving first-appearance order", () => {
-    const tables = [emptyTable("t1", "f1"), emptyTable("t2", "f2"), emptyTable("t3", "f1")];
+    const tables = [emptyTable("t1", "f1"), emptyTable("t2", "f2", "First Floor"), emptyTable("t3", "f1")];
     const groups = groupTablesByFloor(tables);
     expect(groups.map((g) => g.floorId)).toEqual(["f1", "f2"]);
     expect(groups[0].tables.map((t) => t.id)).toEqual(["t1", "t3"]);
@@ -53,6 +55,16 @@ describe("groupTablesByFloor", () => {
   it("never fabricates an empty floor - there is no separate floor list, only floors tables actually reference", () => {
     const groups = groupTablesByFloor([emptyTable("t1", "f1")]);
     expect(groups).toHaveLength(1);
+  });
+
+  it("uses the real floorName as the group heading, never the raw floorId", () => {
+    const groups = groupTablesByFloor([emptyTable("t1", "f1", "Ground Floor")]);
+    expect(groups[0].floorName).toBe("Ground Floor");
+  });
+
+  it("falls back to the raw floorId only if floorName is somehow missing, never the other way round", () => {
+    const groups = groupTablesByFloor([emptyTable("t1", "f1", "")]);
+    expect(groups[0].floorName).toBe("f1");
   });
 });
 

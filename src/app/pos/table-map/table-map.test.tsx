@@ -17,9 +17,9 @@ const CURRENT_STAFF_NAME = "Ravi";
 /** A fixture shaped exactly like the real backend's `GET /pos/v1/outlets/:outletId/table-map` array entries. */
 function tables(overrides: Partial<RawTableMapEntry>[] = []): RawTableMapEntry[] {
   const base: RawTableMapEntry[] = [
-    { tableId: "t1", floorId: "f1", label: "T1", seatCapacity: 2, status: "empty", orderId: null, ownerId: null },
-    { tableId: "t9", floorId: "f1", label: "T9", seatCapacity: 4, status: "occupied", orderId: "order-t9", ownerId: "staff-priya" },
-    { tableId: "t4", floorId: "f1", label: "T4", seatCapacity: 4, status: "occupied", orderId: "order-t4", ownerId: CURRENT_STAFF_ID },
+    { tableId: "t1", floorId: "f1", floorName: "Ground Floor", label: "T1", seatCapacity: 2, status: "empty", orderId: null, ownerId: null },
+    { tableId: "t9", floorId: "f1", floorName: "Ground Floor", label: "T9", seatCapacity: 4, status: "occupied", orderId: "order-t9", ownerId: "staff-priya" },
+    { tableId: "t4", floorId: "f1", floorName: "Ground Floor", label: "T4", seatCapacity: 4, status: "occupied", orderId: "order-t4", ownerId: CURRENT_STAFF_ID },
   ];
   return overrides.length ? base.map((t, i) => ({ ...t, ...overrides[i] })) : base;
 }
@@ -84,6 +84,18 @@ describe("TableMap", () => {
     renderTableMap();
     await waitFor(() => expect(screen.getByTestId("table-map")).toBeTruthy());
     expect(screen.getByTestId("current-staff").textContent).toContain(CURRENT_STAFF_NAME);
+  });
+
+  it("shows the real floor name in the group heading, never the raw floorId UUID (regression for #96)", async () => {
+    stubFetch(() =>
+      jsonResponse(tables([{ floorId: "01a06107-0000-4000-8000-000000000001", floorName: "Ground Floor" }])),
+    );
+    renderTableMap();
+    await waitFor(() => expect(screen.getByTestId("table-map")).toBeTruthy());
+
+    const heading = screen.getByTestId("floor-group-01a06107-0000-4000-8000-000000000001");
+    expect(heading.textContent).toContain("Ground Floor");
+    expect(heading.textContent).not.toContain("01a06107");
   });
 
   it("links to Open & Held Orders (CAP-5) - reachable from anywhere per EXPERIENCE.md's IA", async () => {

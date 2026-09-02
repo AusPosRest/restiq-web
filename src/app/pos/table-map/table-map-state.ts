@@ -16,9 +16,14 @@
 //    comes from the pos_staff cookie server-side (table-map/page.tsx, same
 //    pattern open-orders/page.tsx already established), and floor grouping
 //    is derived purely from each table's own `floorId` (see
-//    `groupTablesByFloor` below) - there is no floor-name lookup endpoint
-//    for pos, so a group's heading is the raw floor id, same raw-id-fallback
-//    posture as open-orders-state.ts's tableLabel/ownerStaffId.
+//    `groupTablesByFloor` below).
+//
+// RECONCILED (2026-09-02, restiq-backend#96) - `TableMapEntry` now also
+// carries `floorName` (the real Floor's name, joined server-side) alongside
+// `floorId` - restiq-web#96's reported bug ("FLOOR 01a06107-…" rendering the
+// raw id) is exactly the gap this closes. `groupTablesByFloor`'s heading is
+// `floorName` now, `floorId` only as a last-resort fallback if the field is
+// somehow missing - never the other way round.
 //  - the real entry is flat (`tableId`/`floorId`/`label`/`seatCapacity`/
 //    `status`/`orderId`/`ownerId`), not a nested `{ id, ..., order: {
 //    id, ownerStaffId, ownerStaffName, openedAt } }` - no owner name, no
@@ -42,6 +47,8 @@ export type TableStatus = "empty" | "occupied";
 export interface RawTableMapEntry {
   tableId: string;
   floorId: string;
+  /** The Floor's real name (e.g. "Ground Floor"), joined server-side - see file header. */
+  floorName: string;
   label: string;
   seatCapacity: number;
   status: TableStatus;
@@ -58,6 +65,7 @@ export interface TableOrderSummary {
 export interface TableMapEntry {
   id: string;
   floorId: string;
+  floorName: string;
   label: string;
   seatCapacity: number;
   status: TableStatus;
@@ -68,6 +76,7 @@ export function toTableMapEntry(raw: RawTableMapEntry): TableMapEntry {
   return {
     id: raw.tableId,
     floorId: raw.floorId,
+    floorName: raw.floorName,
     label: raw.label,
     seatCapacity: raw.seatCapacity,
     status: raw.status,
@@ -87,25 +96,28 @@ export const TABLE_STATUS_CLASS: Record<TableStatus, string> = {
 };
 
 export interface FloorGroup {
-  /** Raw floor id - no floor-name lookup exists server-side for pos yet, see file header. */
   floorId: string;
+  /** The floor's real name - see file header. Grouping key stays `floorId`, since two floors could share a name. */
+  floorName: string;
   tables: TableMapEntry[];
 }
 
 /** Groups tables by floorId, preserving each floor's first-appearance order - there is no separate floor list to group against. */
 export function groupTablesByFloor(tables: readonly TableMapEntry[]): FloorGroup[] {
   const order: string[] = [];
+  const floorNames = new Map<string, string>();
   const byFloor = new Map<string, TableMapEntry[]>();
   for (const table of tables) {
     let bucket = byFloor.get(table.floorId);
     if (!bucket) {
       bucket = [];
       byFloor.set(table.floorId, bucket);
+      floorNames.set(table.floorId, table.floorName);
       order.push(table.floorId);
     }
     bucket.push(table);
   }
-  return order.map((floorId) => ({ floorId, tables: byFloor.get(floorId) ?? [] }));
+  return order.map((floorId) => ({ floorId, floorName: floorNames.get(floorId) || floorId, tables: byFloor.get(floorId) ?? [] }));
 }
 
 // --- Tap routing. A tile's tap target is one action, decided purely from the

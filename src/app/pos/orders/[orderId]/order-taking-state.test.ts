@@ -305,6 +305,7 @@ function rawOrder(overrides: Partial<RawOrder> = {}): RawOrder {
     tenantId: "tenant-1",
     outletId: "outlet-1",
     tableId: "table-4",
+    tableLabel: "T4",
     ownerId: "staff-1",
     status: "open",
     tokenNumber: null,
@@ -348,22 +349,27 @@ describe("toOrderLineView", () => {
 describe("toOrderView", () => {
   it("maps every real field and derives totalMinor from the mapped lines", () => {
     const order = toOrderView(rawOrder({ lines: [rawLine({ quantity: 1 })] }), MENU_FOR_MAPPING);
-    expect(order).toMatchObject({ id: "order-1", tableId: "table-4", status: "open", ownerStaffName: "staff-1", tokenNumber: null });
+    expect(order).toMatchObject({ id: "order-1", tableId: "table-4", tableLabel: "T4", status: "open", ownerStaffName: "staff-1", tokenNumber: null });
     expect(order.totalMinor).toBe(34000);
   });
 
-  it("carries a null tableId through for a CAP-6 counter order, never a fabricated id", () => {
-    const order = toOrderView(rawOrder({ tableId: null }));
+  it("carries a null tableId/tableLabel through for a CAP-6 counter order, never a fabricated id", () => {
+    const order = toOrderView(rawOrder({ tableId: null, tableLabel: null }));
     expect(order.tableId).toBeNull();
+    expect(order.tableLabel).toBeNull();
   });
 });
 
 describe("orderOriginLabel", () => {
-  it("labels a table order by its raw table id", () => {
-    expect(orderOriginLabel({ tableId: "table-4" })).toBe("Table table-4");
+  it("labels a table order by its real tableLabel, never the raw table id (regression for #96)", () => {
+    expect(orderOriginLabel({ tableId: "table-4", tableLabel: "T4" })).toBe("Table T4");
+  });
+
+  it("falls back to the raw table id only if tableLabel is somehow missing, never the other way round", () => {
+    expect(orderOriginLabel({ tableId: "table-4", tableLabel: null })).toBe("Table table-4");
   });
 
   it("labels a counter order (null tableId)", () => {
-    expect(orderOriginLabel({ tableId: null })).toBe("Counter");
+    expect(orderOriginLabel({ tableId: null, tableLabel: null })).toBe("Counter");
   });
 });

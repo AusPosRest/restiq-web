@@ -26,6 +26,7 @@ export interface OrderPanelProps {
   /** The Order's real id - CAP-3 has no gapless bill-number concept (that's CAP-7's Bill), so the header shows a short display slice of the real id, not a fabricated sequence number. */
   orderId: string;
   tableId: OrderView["tableId"];
+  tableLabel: OrderView["tableLabel"];
   currency: string;
   lines: OrderLineView[];
   status: OrderView["status"];
@@ -44,6 +45,7 @@ export interface OrderPanelProps {
 export function OrderPanel({
   orderId,
   tableId,
+  tableLabel,
   currency,
   lines,
   status,
@@ -69,7 +71,7 @@ export function OrderPanel({
       <header className="flex items-start justify-between gap-2 border-b border-border/60 px-4 py-3">
         <div>
           <p className="font-headline text-sm font-semibold text-foreground">Order #{orderId.slice(-6).toUpperCase()}</p>
-          <p className="text-xs text-muted-foreground">{orderOriginLabel({ tableId })}</p>
+          <p className="text-xs text-muted-foreground">{orderOriginLabel({ tableId, tableLabel })}</p>
         </div>
         {lines.length > 0 && (
           <button

@@ -260,6 +260,7 @@ function OrderTakingLoaded({
         <OrderPanel
           orderId={order.id}
           tableId={order.tableId}
+          tableLabel={order.tableLabel}
           currency={menu.currency}
           lines={order.lines}
           status={order.status}

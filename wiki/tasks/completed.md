@@ -20,6 +20,20 @@
   toast text no longer contains the PIN. See
   [wiki/features/tenant-admin.md](../features/tenant-admin.md) (CAP-7
   section). Issue AusPosRest/restiq-web#114.
+- **2026-09-02** - POS: floor/table names replace raw UUIDs on-screen (issue
+  #96). The table map's floor group header, the order-taking screen's header,
+  and the Bill & Settle header were all rendering the raw `floorId`/`tableId`
+  (e.g. "FLOOR 01a06107-…", "TABLE 01a06108-…") instead of a name.
+  restiq-backend#96 (merged) added the missing display fields -
+  `TableMapEntry.floorName` and `OrderView.tableLabel` (`null` for a counter
+  order) - so `table-map-state.ts`'s `groupTablesByFloor` and
+  `order-taking-state.ts`'s `orderOriginLabel` (shared by the order-taking
+  header, the order panel, and Bill & Settle's header) now render the real
+  name, falling back to the raw id only if the field is somehow missing,
+  never the other way round. `open-orders-state.ts`'s open-orders list
+  follows the same rule. See
+  [wiki/features/pos-cashier-waiter.md](../features/pos-cashier-waiter.md)'s
+  restiq-backend#96 Reconciliation section. Issue AusPosRest/restiq-web#96.
 
 - **2026-09-02** - Ops console Branding tab: raw JSON textarea replaced with
   a real form (issue #108). The owner console's own Branding settings
