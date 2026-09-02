@@ -337,6 +337,49 @@ story. Backend counterpart: `restiq-backend/wiki/features/tenant-admin.md`.
   - **api.ts:** added `updateFloor`, `deleteFloor`, `deleteTable`; widened
     `UpdateTableInput` with `label`/`shape` - all additive, next to the
     existing floor-plan helpers.
+- **Gap closed - per-table self-order QR + printable sheet (issue #131):**
+  guest self-ordering has worked at `/qr/t/<outletId>/<tableId>` since
+  CAP-1/CAP-2 (`src/app/qr/t/[outletId]/[tableId]/page.tsx`), but nothing in
+  the owner console could show or print that URL - an owner had no way to
+  actually get a table's QR onto the table. Added on top, no new route or
+  backend endpoint:
+  - **Per-table QR dialog** (`table-qr-dialog.tsx`): a QR icon button on
+    every list row (`floor-plan-list-qr-*`) and every canvas tile
+    (`table-shape-qr-*`, a small corner button whose `onPointerDown`
+    `stopPropagation`s so it never starts a drag) opens `TableQrDialog` -
+    same `radix-ui` `Dialog` primitive as `generate-code-dialog.tsx`. Shows
+    the table label, the guest URL as copyable text (`table-qr-dialog-copy`,
+    same copy-with-a-2s-"copied"-reset pattern as
+    `src/app/ops/(shell)/tenants/invite-link.tsx`, reimplemented locally per
+    AD-4 rather than imported across the ops/admin route trees), an "Open"
+    link (`table-qr-dialog-open`, new tab), and the QR image itself.
+  - **Local/offline QR generation:** the one new dependency this build adds,
+    `qrcode` (+ `@types/qrcode`) - zero native bindings, generates entirely
+    client-side via `toDataURL` (error-correction M, 200px,
+    `table-qr-dialog.tsx#QR_OPTIONS`), no network round-trip to a QR image
+    service. Fits the offline-first POS constraint the same way every other
+    admin screen already does.
+  - **Capability note:** if the outlet's `qr_ordering` capability
+    (`../settings/capability-state.ts`) is off, the dialog still renders the
+    QR (the URL still resolves - EXPERIENCE.md's unavailable-view just turns
+    guests away) but adds a one-line note
+    (`table-qr-dialog-capability-note`): "Self-ordering is off for this
+    outlet — enable it in Settings". Fetched lazily via
+    `fetchOutletCapabilities` only once a QR dialog is actually opened
+    (`floor-plan.tsx#ensureQrOrderingLoaded`), not alongside the floor plan
+    load - most visits to this screen never touch it.
+  - **Print QR sheet** (`qr-print-sheet.tsx`): a toolbar button
+    (`floor-plan-print-qr-sheet-button`) generates every table's QR up front
+    (`Promise.all` over `QRCode.toDataURL`, one call per table across every
+    floor on the outlet) and only then renders `QrPrintSheet` and calls
+    `window.print()` - printing off a fully-rendered sheet rather than one
+    still mid-generation, since each card's `<img>` gets a pre-computed
+    `data:` URL as a prop, not its own async effect. An in-page print
+    stylesheet (Tailwind's `print:` variant, `hidden print:block`) rather
+    than a dedicated `/admin/floor-plan/qr-sheet` route - the admin shell's
+    sidebar/toolbar/outlet-switcher chrome would print alongside a
+    route-based page too, and this needed no new route, layout, or
+    outlet-id-from-search-params plumbing to avoid that.
 
 ## CAP-6 - Devices & printers
 

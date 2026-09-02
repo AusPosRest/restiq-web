@@ -8,7 +8,7 @@
 // directly. Also the table-level rename/delete surface (issue #109): a table
 // has no "detail view" of its own, so its row here is the one place to edit
 // its label or shape and to delete it.
-import { Trash2 } from "lucide-react";
+import { QrCode, Trash2 } from "lucide-react";
 import { useState } from "react";
 import { groupTablesByFloor, TABLE_SHAPES, type DiningTableView, type FloorView } from "./floor-plan-state";
 
@@ -19,9 +19,10 @@ export interface FloorPlanListViewProps {
   tables: readonly DiningTableView[];
   onFieldCommitted: (tableId: string, field: EditableTableField, value: number | string) => void;
   onDeleteRequested: (tableId: string) => void;
+  onQrRequested: (tableId: string) => void;
 }
 
-export function FloorPlanListView({ floors, tables, onFieldCommitted, onDeleteRequested }: Readonly<FloorPlanListViewProps>) {
+export function FloorPlanListView({ floors, tables, onFieldCommitted, onDeleteRequested, onQrRequested }: Readonly<FloorPlanListViewProps>) {
   const groups = groupTablesByFloor(floors, tables);
 
   if (tables.length === 0) {
@@ -130,15 +131,26 @@ export function FloorPlanListView({ floors, tables, onFieldCommitted, onDeleteRe
                   />
                 </td>
                 <td className="px-4 py-2">
-                  <button
-                    type="button"
-                    aria-label={`Delete ${table.label}`}
-                    data-testid={`floor-plan-list-delete-${table.id}`}
-                    onClick={() => onDeleteRequested(table.id)}
-                    className="rounded-md p-1.5 text-muted-foreground hover:bg-status-error/10 hover:text-status-error focus:outline-none focus-visible:ring-2 focus-visible:ring-ring"
-                  >
-                    <Trash2 className="size-4" aria-hidden="true" />
-                  </button>
+                  <div className="flex items-center gap-1">
+                    <button
+                      type="button"
+                      aria-label={`Show QR for ${table.label}`}
+                      data-testid={`floor-plan-list-qr-${table.id}`}
+                      onClick={() => onQrRequested(table.id)}
+                      className="rounded-md p-1.5 text-muted-foreground hover:bg-accent hover:text-foreground focus:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+                    >
+                      <QrCode className="size-4" aria-hidden="true" />
+                    </button>
+                    <button
+                      type="button"
+                      aria-label={`Delete ${table.label}`}
+                      data-testid={`floor-plan-list-delete-${table.id}`}
+                      onClick={() => onDeleteRequested(table.id)}
+                      className="rounded-md p-1.5 text-muted-foreground hover:bg-status-error/10 hover:text-status-error focus:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+                    >
+                      <Trash2 className="size-4" aria-hidden="true" />
+                    </button>
+                  </div>
                 </td>
               </tr>
             )),

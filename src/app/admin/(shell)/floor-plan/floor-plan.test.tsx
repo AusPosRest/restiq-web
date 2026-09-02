@@ -1,9 +1,16 @@
-import { cleanup, render, screen, waitFor } from "@testing-library/react";
+import { cleanup, fireEvent, render, screen, waitFor } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { OutletProvider } from "../outlet-context";
 import { ToastProvider } from "../toast";
 import { FloorPlan } from "./floor-plan";
+
+// Real QR encoding is qrcode's own concern, not this component's - stubbed
+// to a fixed data: URL so these tests assert wiring (which table, which
+// URL), not pixel content.
+vi.mock("qrcode", () => ({
+  default: { toDataURL: vi.fn(() => Promise.resolve("data:image/png;base64,FAKE")) },
+}));
 
 const OUTLETS = [{ id: "outlet-1", name: "Indiranagar", address: "100 Ft Road", type: "dine_in", timezone: "Asia/Kolkata" }];
 
@@ -43,6 +50,7 @@ function stubFetch({
   patchFloorStatus = 200,
   deleteFloorStatus = 204,
   deleteTableStatus = 204,
+  capabilities = [{ key: "qr_ordering", enabled: true }],
 }: {
   patchStatus?: number;
   patchBody?: unknown;
@@ -54,6 +62,7 @@ function stubFetch({
   patchFloorStatus?: number;
   deleteFloorStatus?: number;
   deleteTableStatus?: number;
+  capabilities?: Array<{ key: string; enabled: boolean }>;
 } = {}) {
   const fetchMock = vi.fn((input: RequestInfo | URL, init?: RequestInit) => {
     const url = String(input);
@@ -107,6 +116,7 @@ function stubFetch({
       return Promise.resolve(jsonResponse({ id: "t2", ...sent, ...(createTableBody ?? {}) }, 201));
     }
 
+    if (url.includes("/capabilities")) return Promise.resolve(jsonResponse(capabilities));
     if (url.includes("/floor-plan")) return Promise.resolve(jsonResponse(floorPlanResponse(floors)));
     if (url.includes("/admin/api/outlets")) return Promise.resolve(jsonResponse(OUTLETS));
     return Promise.resolve(jsonResponse({ error: { code: "not_found", message: "unhandled" } }, 404));
@@ -443,6 +453,121 @@ describe("FloorPlan", () => {
           expect.objectContaining({ method: "PATCH", body: JSON.stringify({ seatCapacity: 6 }) }),
         ),
       );
+    });
+  });
+
+  describe("Table QR", () => {
+    const TWO_TABLE_FLOORS = [
+      {
+        id: "floor-1",
+        outletId: "outlet-1",
+        name: "Ground Floor",
+        sortOrder: 0,
+        tables: [{ id: "t1", floorId: "floor-1", label: "T1", x: 40, y: 40, width: 40, height: 40, shape: "square", seatCapacity: 4 }],
+      },
+      {
+        id: "floor-2",
+        outletId: "outlet-1",
+        name: "Terrace",
+        sortOrder: 1,
+        tables: [{ id: "t2", floorId: "floor-2", label: "T2", x: 40, y: 40, width: 40, height: 40, shape: "square", seatCapacity: 2 }],
+      },
+    ];
+
+    beforeEach(() => {
+      Object.assign(navigator, { clipboard: { writeText: vi.fn(() => Promise.resolve()) } });
+    });
+
+    it("opens the QR dialog with the right guest URL from a canvas tile", async () => {
+      stubFetch();
+      renderFloorPlan();
+      await screen.findByTestId("table-shape-t1");
+
+      await userEvent.click(screen.getByTestId("table-shape-qr-t1"));
+
+      expect((await screen.findByTestId("table-qr-dialog-label")).textContent).toBe("T1");
+      expect(screen.getByTestId("table-qr-dialog-url").textContent).toBe(`${window.location.origin}/qr/t/outlet-1/t1`);
+      expect((await screen.findByTestId("table-qr-dialog-image")).getAttribute("src")).toMatch(/^data:/);
+    });
+
+    it("does not start dragging the table when a pointer-down lands on its QR corner button", async () => {
+      stubFetch();
+      renderFloorPlan();
+      const shape = await screen.findByTestId("table-shape-t1");
+      const qrButton = screen.getByTestId("table-shape-qr-t1");
+
+      // A drag on the tile itself would carry the pointer down through to
+      // pointermove/pointerup and move the table - the QR button's own
+      // pointer-down must stopPropagation before that ever reaches the
+      // tile's drag handler.
+      fireEvent.pointerDown(qrButton, { clientX: 10, clientY: 10 });
+      fireEvent.pointerMove(shape, { clientX: 80, clientY: 80 });
+      fireEvent.pointerUp(shape);
+
+      expect(shape.dataset.x).toBe("40");
+      expect(shape.dataset.y).toBe("40");
+    });
+
+    it("opens the QR dialog with the right guest URL from a list row", async () => {
+      stubFetch();
+      renderFloorPlan();
+      await screen.findByTestId("table-shape-t1");
+      await userEvent.click(screen.getByTestId("floor-plan-view-list"));
+      await screen.findByTestId("floor-plan-list-row-t1");
+
+      await userEvent.click(screen.getByTestId("floor-plan-list-qr-t1"));
+
+      expect((await screen.findByTestId("table-qr-dialog-label")).textContent).toBe("T1");
+      expect(screen.getByTestId("table-qr-dialog-url").textContent).toBe(`${window.location.origin}/qr/t/outlet-1/t1`);
+    });
+
+    it("copies the guest URL to the clipboard from the dialog", async () => {
+      stubFetch();
+      renderFloorPlan();
+      await screen.findByTestId("table-shape-t1");
+
+      await userEvent.click(screen.getByTestId("table-shape-qr-t1"));
+      await userEvent.click(await screen.findByTestId("table-qr-dialog-copy"));
+
+      expect(navigator.clipboard.writeText).toHaveBeenCalledWith(`${window.location.origin}/qr/t/outlet-1/t1`);
+    });
+
+    it("shows the capability note when qr_ordering is off for the outlet, but still shows the QR", async () => {
+      stubFetch({ capabilities: [{ key: "qr_ordering", enabled: false }] });
+      renderFloorPlan();
+      await screen.findByTestId("table-shape-t1");
+
+      await userEvent.click(screen.getByTestId("table-shape-qr-t1"));
+
+      expect((await screen.findByTestId("table-qr-dialog-capability-note")).textContent).toContain("Self-ordering is off for this outlet");
+      expect(await screen.findByTestId("table-qr-dialog-image")).toBeTruthy();
+    });
+
+    it("does not show the capability note when qr_ordering is on", async () => {
+      stubFetch({ capabilities: [{ key: "qr_ordering", enabled: true }] });
+      renderFloorPlan();
+      await screen.findByTestId("table-shape-t1");
+
+      await userEvent.click(screen.getByTestId("table-shape-qr-t1"));
+      await screen.findByTestId("table-qr-dialog-image");
+
+      expect(screen.queryByTestId("table-qr-dialog-capability-note")).toBeNull();
+    });
+
+    it("prints one card per table on the outlet from the toolbar's Print QR sheet button", async () => {
+      stubFetch({ floors: TWO_TABLE_FLOORS });
+      const printSpy = vi.spyOn(window, "print").mockImplementation(() => {});
+      renderFloorPlan();
+      await screen.findByTestId("table-shape-t1");
+
+      await userEvent.click(screen.getByTestId("floor-plan-print-qr-sheet-button"));
+
+      await waitFor(() => expect(screen.getByTestId("qr-print-card-t1")).toBeTruthy());
+      expect(screen.getByTestId("qr-print-card-t2")).toBeTruthy();
+      expect(screen.getByTestId("qr-print-card-t1").textContent).toContain(`${window.location.origin}/qr/t/outlet-1/t1`);
+      await waitFor(() => expect(printSpy).toHaveBeenCalled());
+
+      printSpy.mockRestore();
     });
   });
 });

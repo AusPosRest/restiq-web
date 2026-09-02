@@ -18,7 +18,7 @@ afterEach(() => cleanup());
 
 describe("FloorPlanListView", () => {
   it("renders the same tables the canvas would, grouped by floor", () => {
-    render(<FloorPlanListView floors={FLOORS} tables={TABLES} onFieldCommitted={vi.fn()} onDeleteRequested={vi.fn()} />);
+    render(<FloorPlanListView floors={FLOORS} tables={TABLES} onFieldCommitted={vi.fn()} onDeleteRequested={vi.fn()} onQrRequested={vi.fn()} />);
 
     expect(screen.getByTestId("floor-plan-list-row-t1").textContent).toContain("Ground Floor");
     expect(screen.getByTestId("floor-plan-list-row-t2").textContent).toContain("Terrace");
@@ -31,13 +31,13 @@ describe("FloorPlanListView", () => {
   });
 
   it("shows an empty state when there are no tables", () => {
-    render(<FloorPlanListView floors={FLOORS} tables={[]} onFieldCommitted={vi.fn()} onDeleteRequested={vi.fn()} />);
+    render(<FloorPlanListView floors={FLOORS} tables={[]} onFieldCommitted={vi.fn()} onDeleteRequested={vi.fn()} onQrRequested={vi.fn()} />);
     expect(screen.getByTestId("floor-plan-list-empty")).toBeTruthy();
   });
 
   it("commits an edited x/y/capacity field on blur", async () => {
     const onFieldCommitted = vi.fn();
-    render(<FloorPlanListView floors={FLOORS} tables={TABLES} onFieldCommitted={onFieldCommitted} onDeleteRequested={vi.fn()} />);
+    render(<FloorPlanListView floors={FLOORS} tables={TABLES} onFieldCommitted={onFieldCommitted} onDeleteRequested={vi.fn()} onQrRequested={vi.fn()} />);
 
     const capacityField = screen.getByTestId("floor-plan-list-capacity-t1");
     await userEvent.clear(capacityField);
@@ -49,7 +49,7 @@ describe("FloorPlanListView", () => {
 
   it("reverts an invalid edit instead of committing it", async () => {
     const onFieldCommitted = vi.fn();
-    render(<FloorPlanListView floors={FLOORS} tables={TABLES} onFieldCommitted={onFieldCommitted} onDeleteRequested={vi.fn()} />);
+    render(<FloorPlanListView floors={FLOORS} tables={TABLES} onFieldCommitted={onFieldCommitted} onDeleteRequested={vi.fn()} onQrRequested={vi.fn()} />);
 
     const capacityField = screen.getByTestId("floor-plan-list-capacity-t1");
     await userEvent.clear(capacityField);
@@ -62,7 +62,7 @@ describe("FloorPlanListView", () => {
 
   it("commits an edited label on blur", async () => {
     const onFieldCommitted = vi.fn();
-    render(<FloorPlanListView floors={FLOORS} tables={TABLES} onFieldCommitted={onFieldCommitted} onDeleteRequested={vi.fn()} />);
+    render(<FloorPlanListView floors={FLOORS} tables={TABLES} onFieldCommitted={onFieldCommitted} onDeleteRequested={vi.fn()} onQrRequested={vi.fn()} />);
 
     const labelField = screen.getByTestId("floor-plan-list-label-t1");
     await userEvent.clear(labelField);
@@ -74,7 +74,7 @@ describe("FloorPlanListView", () => {
 
   it("reverts a blanked-out label instead of committing it", async () => {
     const onFieldCommitted = vi.fn();
-    render(<FloorPlanListView floors={FLOORS} tables={TABLES} onFieldCommitted={onFieldCommitted} onDeleteRequested={vi.fn()} />);
+    render(<FloorPlanListView floors={FLOORS} tables={TABLES} onFieldCommitted={onFieldCommitted} onDeleteRequested={vi.fn()} onQrRequested={vi.fn()} />);
 
     const labelField = screen.getByTestId("floor-plan-list-label-t1");
     await userEvent.clear(labelField);
@@ -86,7 +86,7 @@ describe("FloorPlanListView", () => {
 
   it("commits a shape change immediately", async () => {
     const onFieldCommitted = vi.fn();
-    render(<FloorPlanListView floors={FLOORS} tables={TABLES} onFieldCommitted={onFieldCommitted} onDeleteRequested={vi.fn()} />);
+    render(<FloorPlanListView floors={FLOORS} tables={TABLES} onFieldCommitted={onFieldCommitted} onDeleteRequested={vi.fn()} onQrRequested={vi.fn()} />);
 
     await userEvent.selectOptions(screen.getByTestId("floor-plan-list-shape-t1"), "rectangle");
 
@@ -95,10 +95,19 @@ describe("FloorPlanListView", () => {
 
   it("requests deletion for the row's table", async () => {
     const onDeleteRequested = vi.fn();
-    render(<FloorPlanListView floors={FLOORS} tables={TABLES} onFieldCommitted={vi.fn()} onDeleteRequested={onDeleteRequested} />);
+    render(<FloorPlanListView floors={FLOORS} tables={TABLES} onFieldCommitted={vi.fn()} onDeleteRequested={onDeleteRequested} onQrRequested={vi.fn()} />);
 
     await userEvent.click(screen.getByTestId("floor-plan-list-delete-t1"));
 
     expect(onDeleteRequested).toHaveBeenCalledWith("t1");
+  });
+
+  it("requests the QR dialog for the row's table", async () => {
+    const onQrRequested = vi.fn();
+    render(<FloorPlanListView floors={FLOORS} tables={TABLES} onFieldCommitted={vi.fn()} onDeleteRequested={vi.fn()} onQrRequested={onQrRequested} />);
+
+    await userEvent.click(screen.getByTestId("floor-plan-list-qr-t1"));
+
+    expect(onQrRequested).toHaveBeenCalledWith("t1");
   });
 });

@@ -1,5 +1,19 @@
 # Completed
 
+- **2026-09-02** - Floor plan: per-table self-order QR codes + printable QR
+  sheet (issue #131). A QR button on every list row and canvas tile
+  (canvas one is a corner button whose pointer-down `stopPropagation`s so it
+  never starts a drag) opens a dialog with the table's label, its guest
+  self-order URL (`/qr/t/<outletId>/<tableId>`) as copyable text, an Open
+  link, and the QR itself - generated locally/offline via the new `qrcode`
+  dependency's `toDataURL` (error-correction M, 200px), no network round-trip
+  to a QR image service. If the outlet's `qr_ordering` capability is off, the
+  dialog still shows the QR but adds a note pointing at Settings. A "Print QR
+  sheet" toolbar button generates every table's QR up front, then prints an
+  in-page sheet (Tailwind `print:` variant, one card per table) rather than
+  routing to a dedicated page. See
+  [wiki/features/tenant-admin.md](../features/tenant-admin.md)'s CAP-5
+  section. Issue AusPosRest/restiq-web#131.
 - **2026-09-02** - Floor plan: tile footprint scales with seat capacity, capacity shown on tiles, width/height editable in the list view (restiq-web#124).
 - **2026-09-02** - POS order screen: removed "Split by seat" and the seat
   gate (issue #120). Product decision: seats were confusing on the order

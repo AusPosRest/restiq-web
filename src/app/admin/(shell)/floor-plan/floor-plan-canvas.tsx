@@ -12,6 +12,7 @@
 // FloorTabsBar (issue #109) so rename/delete controls sit next to the same
 // tabs the list view also needs to see - this component only ever renders
 // the selected floor's tables.
+import { QrCode } from "lucide-react";
 import { useRef, useState } from "react";
 import { computeDragPosition, findOverlap, GRID_SNAP_PX, type DiningTableView } from "./floor-plan-state";
 
@@ -22,6 +23,7 @@ export interface FloorPlanCanvasProps {
   tables: readonly DiningTableView[];
   selectedFloorId: string;
   onTableMoved: (tableId: string, next: { x: number; y: number }, previous: { x: number; y: number }) => void;
+  onQrRequested: (tableId: string) => void;
 }
 
 interface DragOrigin {
@@ -38,7 +40,7 @@ const ARROW_DELTAS: Record<string, [number, number]> = {
   ArrowRight: [GRID_SNAP_PX, 0],
 };
 
-export function FloorPlanCanvas({ tables, selectedFloorId, onTableMoved }: Readonly<FloorPlanCanvasProps>) {
+export function FloorPlanCanvas({ tables, selectedFloorId, onTableMoved, onQrRequested }: Readonly<FloorPlanCanvasProps>) {
   const floorTables = tables.filter((table) => table.floorId === selectedFloorId);
   const dragRef = useRef<{ tableId: string; origin: DragOrigin } | null>(null);
   const [livePositions, setLivePositions] = useState<Record<string, { x: number; y: number }>>({});
@@ -135,6 +137,22 @@ export function FloorPlanCanvas({ tables, selectedFloorId, onTableMoved }: Reado
                 {table.seatCapacity} seats
               </span>
             </span>
+            <button
+              type="button"
+              aria-label={`Show QR for ${table.label}`}
+              data-testid={`table-shape-qr-${table.id}`}
+              // stopPropagation on pointer-down, not just click: the tile's
+              // own onPointerDown starts a drag on the same event, and it
+              // fires before click ever would.
+              onPointerDown={(event) => event.stopPropagation()}
+              onClick={(event) => {
+                event.stopPropagation();
+                onQrRequested(table.id);
+              }}
+              className="absolute right-0 top-0 z-10 cursor-pointer rounded-bl-md rounded-tr-md bg-card/90 p-0.5 text-muted-foreground hover:text-foreground focus:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+            >
+              <QrCode className="size-3" aria-hidden="true" />
+            </button>
           </div>
         );
       })}
