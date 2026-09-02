@@ -54,10 +54,9 @@ describe("CheckoutScreen", () => {
     expect(screen.getByTestId("checkout-no-order")).toBeTruthy();
   });
 
-  it("create-or-fetch convergence: a 409 bill_already_exists on create falls back to GET, not an error", async () => {
+  it("renders the same bill on a 200 (any guest re-requesting an order that already has one - restiq-backend#98 made the POST idempotent per order, resolving the create race with no client-side fallback)", async () => {
     const fetchMock = routedFetch({
-      "POST /qr/api/orders/o1/bill": () => jsonResponse(409, { error: { code: "bill_already_exists", message: "A bill already exists for this order" } }),
-      "GET /qr/api/orders/o1/bill": () => jsonResponse(200, TWO_GUEST_BILL),
+      "POST /qr/api/orders/o1/bill": () => jsonResponse(200, TWO_GUEST_BILL),
     });
     vi.stubGlobal("fetch", fetchMock);
 
@@ -65,11 +64,7 @@ describe("CheckoutScreen", () => {
 
     expect(await screen.findByTestId("checkout-bill-summary")).toBeTruthy();
     expect(screen.getByTestId("checkout-total").textContent).toBe("₹525.00");
-
-    const calls = fetchMock.mock.calls as [string, RequestInit | undefined][];
-    expect(calls[0]).toEqual(["/qr/api/orders/o1/bill", expect.objectContaining({ method: "POST" })]);
-    expect(calls[1][0]).toBe("/qr/api/orders/o1/bill");
-    expect(calls[1][1]?.method).toBeUndefined();
+    expect(fetchMock.mock.calls).toHaveLength(1);
   });
 
   it("renders every guest's share, with the caller's own row emphasized and the only one offering a pay action", async () => {

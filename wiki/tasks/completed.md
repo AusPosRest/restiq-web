@@ -1,5 +1,25 @@
 # Completed
 
+- **2026-09-02** - Settle: relies on the now-idempotent bill POST, drops the
+  sessionStorage bill-id cache (issue #117). restiq-backend#98/PR #99
+  (merged) made `POST orders/:orderId/bill` idempotent per order - a repeat
+  call for an order that already has a bill (open or finalized) now returns
+  200 with that same `BillView` instead of a bare 409 `bill_already_exists`;
+  only a closed order with no bill ever created still 409s. This retired the
+  workaround `src/app/pos/api.ts`'s `fetchOrCreateBill()` had carried since
+  restiq-web#98's own reconciliation, when no lookup-by-order endpoint
+  existed yet: the `sessionStorage` bill-id cache
+  (`rememberBillId`/`recallBillId`) and the 409-then-`GET bills/:id` fallback
+  are both gone - the function is now a plain POST, which `posApi()` already
+  treats as success on either 200 or 201. The guest checkout client
+  (`src/app/qr/checkout/checkout-api.ts`'s `createOrFetchBill()`) never held
+  a `sessionStorage` cache but had its own now-dead 409-race fallback (the
+  backend resolves that race atomically now too); simplified the same way,
+  and removed the now-unused `fetchBill()` with it. See
+  [wiki/features/pos-cashier-waiter.md](../features/pos-cashier-waiter.md)'s
+  restiq-backend#98/restiq-web#117 Reconciliation section. Issue
+  AusPosRest/restiq-web#117.
+
 - **2026-09-02** - Staff PIN: shown-once copyable chip replaces the
   auto-dismissing toast (issue #114). Issuing a POS PIN
   (`src/app/admin/(shell)/staff/staff.tsx`) put the plaintext PIN only in a

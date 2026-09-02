@@ -6,7 +6,7 @@
 // `currency` field at all - checkout-state.ts's formatRupees is INR-only for
 // that reason, same India-first posture cart-state.ts's formatMinor default
 // already established.
-import { GuestApiError, guestApi } from "../api-client";
+import { guestApi } from "../api-client";
 
 export type BillStatus = "open" | "finalized";
 export type BillShareStatus = "outstanding" | "paid";
@@ -49,34 +49,17 @@ export interface SimulatedPaymentInput {
   payerPhone?: string;
 }
 
-/** POST /guest/v1/orders/:orderId/bill - 201 GuestBillView; 409 bill_already_exists once another guest's create wins the race (see createOrFetchBill below); 409 conflict if the order is already closed; 410 session_closed; 404 not_found. */
-export function createBill(orderId: string): Promise<GuestBillView> {
-  return guestApi<GuestBillView>(`orders/${orderId}/bill`, { method: "POST" });
-}
-
-/** GET /guest/v1/orders/:orderId/bill - 200 GuestBillView; 404 not_found (no bill yet, or the order isn't the caller's own). */
-export function fetchBill(orderId: string): Promise<GuestBillView> {
-  return guestApi<GuestBillView>(`orders/${orderId}/bill`);
-}
-
 /**
- * create-or-fetch convergence: any guest at the table may be first to
- * request the bill, so a 409 `bill_already_exists` from that race just means
- * someone else's create already won - fetch the real bill they created
- * rather than treating it as an error (same convergence posture as
- * cart-screen.tsx's `empty_cart` race on Place order). Every other error
- * (410 `session_closed` once the table settles/closes, 409 `conflict`, 404)
- * propagates to the caller untouched.
+ * POST /guest/v1/orders/:orderId/bill - create-or-fetch, idempotent per
+ * order (restiq-backend#98): 201 GuestBillView for a genuinely new bill, 200
+ * with that same GuestBillView for any later call on an order that already
+ * has one (any guest at the table may be first to request it - this is also
+ * how that race resolves, with no client-side fallback needed); 409
+ * `conflict` if the order is closed with no bill ever created; 410
+ * `session_closed`; 404 `not_found`.
  */
-export async function createOrFetchBill(orderId: string): Promise<GuestBillView> {
-  try {
-    return await createBill(orderId);
-  } catch (error) {
-    if (error instanceof GuestApiError && error.code === "bill_already_exists") {
-      return fetchBill(orderId);
-    }
-    throw error;
-  }
+export function createOrFetchBill(orderId: string): Promise<GuestBillView> {
+  return guestApi<GuestBillView>(`orders/${orderId}/bill`, { method: "POST" });
 }
 
 /**

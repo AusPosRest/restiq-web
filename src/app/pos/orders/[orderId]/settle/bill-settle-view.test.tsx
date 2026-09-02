@@ -99,11 +99,10 @@ function stubFetch(handlers: Partial<Record<string, (init?: RequestInit) => Resp
 afterEach(() => {
   cleanup();
   vi.unstubAllGlobals();
-  sessionStorage.clear();
 });
 
 describe("BillSettleView - loading", () => {
-  it("creates the bill for this order and shows its subtotal/tax/total", async () => {
+  it("creates the bill for this order (a real 201) and shows its subtotal/tax/total", async () => {
     stubFetch();
     render(<BillSettleView orderId={ORDER_ID} />);
 
@@ -121,17 +120,44 @@ describe("BillSettleView - loading", () => {
     expect(summary.textContent).not.toContain("table-4");
   });
 
-  it("falls back to the cached bill id and GETs it when creation 409s (a bill already exists for this order)", async () => {
-    const fetchMock = stubFetch({
-      [`POST orders/${ORDER_ID}/bill`]: () => jsonResponse({ error: { code: "bill_already_exists", message: "A bill already exists for this order" } }, 409),
-      "GET bills/bill-1": () => jsonResponse(makeBill()),
+  it("renders the same bill on a 200 (an order that already has one) - restiq-backend#98 made the POST idempotent per order", async () => {
+    stubFetch({
+      [`POST orders/${ORDER_ID}/bill`]: () => jsonResponse(makeBill({ id: "bill-existing" }), 200),
     });
-    sessionStorage.setItem(`pos.billId.${ORDER_ID}`, "bill-1");
 
     render(<BillSettleView orderId={ORDER_ID} />);
 
-    await screen.findByTestId("bill-summary");
-    expect(fetchMock.mock.calls.some(([input]) => String(input).endsWith("/bills/bill-1"))).toBe(true);
+    const summary = await screen.findByTestId("bill-summary");
+    expect(summary.textContent).toContain("₹819.00");
+  });
+
+  it("reopens correctly in a fresh tab with no storage at all, and never touches sessionStorage (a repeat POST for an already-billed order just returns 200)", async () => {
+    const originalDescriptor = Object.getOwnPropertyDescriptor(window, "sessionStorage")!;
+    Object.defineProperty(window, "sessionStorage", {
+      configurable: true,
+      get(): never {
+        throw new Error("sessionStorage should not be touched - the settle screen no longer caches a bill id");
+      },
+    });
+    try {
+      stubFetch({
+        [`POST orders/${ORDER_ID}/bill`]: () => jsonResponse(makeBill({ id: "bill-existing" }), 200),
+      });
+      render(<BillSettleView orderId={ORDER_ID} />);
+      await screen.findByTestId("bill-summary");
+    } finally {
+      Object.defineProperty(window, "sessionStorage", originalDescriptor);
+    }
+  });
+
+  it("shows the error state on a genuine 409 (an order closed with no bill ever created)", async () => {
+    stubFetch({
+      [`POST orders/${ORDER_ID}/bill`]: () => jsonResponse({ error: { code: "conflict", message: "This order is already closed" } }, 409),
+    });
+
+    render(<BillSettleView orderId={ORDER_ID} />);
+
+    expect(await screen.findByTestId("bill-settle-error")).toBeTruthy();
   });
 });
 
