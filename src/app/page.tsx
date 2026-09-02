@@ -1,4 +1,5 @@
 import Link from "next/link";
+import { CredentialValue } from "./landing-credential";
 
 // The public landing page: one door per user surface. RESTIQ has five disjoint
 // auth realms (ops/admin/pos/kds-on-pos/guest) plus the device-enrolment realm,
@@ -109,11 +110,10 @@ export default function Home() {
 
         <main className="mt-10 grid flex-1 gap-4 sm:grid-cols-2 lg:grid-cols-3" data-testid="landing-surfaces">
           {SURFACES.map((s) => (
-            <Link
+            <div
               key={s.name}
-              href={s.href}
               data-testid={`landing-card-${s.href}`}
-              className="group flex flex-col gap-3 rounded-xl border border-border bg-card p-5 transition-colors hover:border-primary focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+              className="group relative flex flex-col gap-3 rounded-xl border border-border bg-card p-5 transition-colors hover:border-primary focus-within:border-primary"
             >
               <div className="flex flex-col gap-1">
                 <span className="font-label text-[11px] font-semibold uppercase tracking-wider text-primary">
@@ -122,21 +122,28 @@ export default function Home() {
                 <span className="text-lg font-semibold">{s.name}</span>
               </div>
               <p className="flex-1 text-sm leading-relaxed text-muted-foreground">{s.blurb}</p>
-              <dl className="flex flex-col gap-1 rounded-lg bg-muted/60 px-3 py-2">
+              <dl className="relative z-10 flex flex-col gap-0.5 rounded-lg bg-muted/60 px-2 py-2 text-xs">
                 {s.creds.map((c) => (
-                  <div key={c.label} className="flex items-baseline justify-between gap-3 text-xs">
-                    <dt className="shrink-0 font-medium text-muted-foreground">{c.label}</dt>
-                    <dd className="truncate text-right font-mono text-foreground">{c.value}</dd>
+                  <div key={c.label} className="flex items-center justify-between gap-3">
+                    <dt className="shrink-0 pl-1 font-medium text-muted-foreground">{c.label}</dt>
+                    <dd className="min-w-0">
+                      <CredentialValue label={c.label} value={c.value} />
+                    </dd>
                   </div>
                 ))}
               </dl>
-              <span className="mt-1 inline-flex items-center gap-1.5 text-sm font-semibold text-primary">
+              {/* Stretched link: the whole card is clickable, but the copy
+                  buttons above (z-10) intercept their own clicks. */}
+              <Link
+                href={s.href}
+                className="mt-1 inline-flex items-center gap-1.5 text-sm font-semibold text-primary after:absolute after:inset-0 after:rounded-xl focus-visible:outline-none"
+              >
                 {s.cta}
                 <span aria-hidden="true" className="transition-transform group-hover:translate-x-0.5">
                   →
                 </span>
-              </span>
-            </Link>
+              </Link>
+            </div>
           ))}
         </main>
 

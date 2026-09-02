@@ -16,16 +16,24 @@ describe("Landing page", () => {
     ];
     for (const href of routes) {
       const card = screen.getByTestId(`landing-card-${href}`);
-      expect(card.getAttribute("href")).toBe(href);
+      // The card is a stretched-link container; the CTA anchor carries the href.
+      expect(card.querySelector("a")?.getAttribute("href")).toBe(href);
     }
     // The guest QR card carries a full table-session URL, not a bare route.
-    const guest = screen.getByText("Guest QR Self-Order").closest("a");
-    expect(guest?.getAttribute("href")).toContain("/qr/t/");
+    const guest = screen.getByText("Guest QR Self-Order").closest("[data-testid^='landing-card-']");
+    expect(guest?.querySelector("a")?.getAttribute("href")).toContain("/qr/t/");
   });
 
   it("shows the demo POS PINs so a tester can sign in without setup", () => {
     render(<Home />);
     expect(screen.getByText("PIN 1234")).toBeTruthy();
     expect(screen.getByText("PIN 9999")).toBeTruthy();
+  });
+
+  it("makes each credential value a copy button", () => {
+    render(<Home />);
+    const emailCopy = screen.getByTestId("landing-copy-Email");
+    expect(emailCopy.tagName).toBe("BUTTON");
+    expect(emailCopy.getAttribute("aria-label")).toContain("admin@restiq.example");
   });
 });
