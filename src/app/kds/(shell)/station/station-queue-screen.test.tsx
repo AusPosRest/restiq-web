@@ -118,18 +118,26 @@ describe("StationQueueScreen", () => {
     await vi.waitFor(() => expect(screen.getByTestId("kds-ticket-t1-recalled-banner").textContent).toContain("RECALLED"));
   });
 
-  it("crosses blue -> yellow -> red exactly at the station's ageing thresholds, without waiting for a poll", async () => {
-    vi.stubGlobal("fetch", mockFetch(() => [ticket({})]));
-    renderScreen();
+  it(
+    "crosses blue -> yellow -> red exactly at the station's ageing thresholds, without waiting for a poll",
+    async () => {
+      vi.stubGlobal("fetch", mockFetch(() => [ticket({})]));
+      renderScreen();
 
-    await vi.waitFor(() => expect(screen.getByTestId("kds-ticket-t1").getAttribute("data-ageing")).toBe("new"));
+      await vi.waitFor(() => expect(screen.getByTestId("kds-ticket-t1").getAttribute("data-ageing")).toBe("new"));
 
-    await vi.advanceTimersByTimeAsync(10 * 60_000);
-    await vi.waitFor(() => expect(screen.getByTestId("kds-ticket-t1").getAttribute("data-ageing")).toBe("ageing"));
+      await vi.advanceTimersByTimeAsync(10 * 60_000);
+      await vi.waitFor(() => expect(screen.getByTestId("kds-ticket-t1").getAttribute("data-ageing")).toBe("ageing"));
 
-    await vi.advanceTimersByTimeAsync(10 * 60_000);
-    await vi.waitFor(() => expect(screen.getByTestId("kds-ticket-t1").getAttribute("data-ageing")).toBe("urgent"));
-  });
+      await vi.advanceTimersByTimeAsync(10 * 60_000);
+      await vi.waitFor(() => expect(screen.getByTestId("kds-ticket-t1").getAttribute("data-ageing")).toBe("urgent"));
+    },
+    // Two 10-minute fake-timer advances each drive a real vi.waitFor poll loop;
+    // under full-suite parallel load (CPU contention across worker threads)
+    // that easily exceeds vitest's 5s default. The assertions are unchanged -
+    // this only gives the test enough wall-clock room to finish (issue #91).
+    20_000,
+  );
 
   it("bump/recall/refire call the ticket's real endpoints", async () => {
     const fetchMock = mockFetch(() => [ticket({})]);
