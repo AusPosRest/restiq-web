@@ -1,5 +1,26 @@
 # Completed
 
+- **2026-09-02** - Staff PIN: shown-once copyable chip replaces the
+  auto-dismissing toast (issue #114). Issuing a POS PIN
+  (`src/app/admin/(shell)/staff/staff.tsx`) put the plaintext PIN only in a
+  success toast that auto-dismissed in ~1s, and the backend has no PIN
+  recovery (revoke + re-issue is the only way to see it again), so owners
+  routinely missed it. New `StaffPinChip`
+  (`src/app/admin/(shell)/staff/pin-chip.tsx`) renders as an extra row under
+  the issuing staff member in `staff-table.tsx` - large monospace PIN, the
+  person's name, a copy button (`navigator.clipboard.writeText`, 1.5s
+  "Copied" state, try/catch-wrapped), and an explicit "Dismiss" - staying on
+  screen until dismissed, replaced if another member's PIN is issued while
+  it's showing. Mirrors ops's `InviteLinkChip` show-once pattern
+  (`src/app/ops/(shell)/tenants/invite-link.tsx`), reimplemented locally
+  rather than imported since admin/ops never share components (AD-4). The
+  toast is now just `"PIN issued for {name}."` - the PIN no longer appears in
+  it. Extended `staff-table.test.tsx` and `staff.test.tsx`: chip renders with
+  the mocked PIN, copy calls a mocked clipboard, dismiss removes it, and the
+  toast text no longer contains the PIN. See
+  [wiki/features/tenant-admin.md](../features/tenant-admin.md) (CAP-7
+  section). Issue AusPosRest/restiq-web#114.
+
 - **2026-09-02** - Ops console Branding tab: raw JSON textarea replaced with
   a real form (issue #108). The owner console's own Branding settings
   (`src/app/admin/(shell)/settings/branding-editor.tsx`) already shipped a

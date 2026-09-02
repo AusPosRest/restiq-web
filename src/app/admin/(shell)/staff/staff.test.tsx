@@ -147,4 +147,35 @@ describe("Staff", () => {
     expect(screen.queryByTestId("confirm-reason-dialog")).toBeNull();
     expect(screen.getByTestId("staff-pin-status-s1").textContent).toBe("Active");
   });
+
+  it("issuing a PIN shows it once in a dismissible chip, with a short toast that doesn't repeat it", async () => {
+    stubFetch({ staff: [{ ...STAFF[0], pinStatus: "none" }] });
+    renderStaff();
+    await screen.findByTestId("staff-row-s1");
+
+    await userEvent.click(screen.getByTestId("staff-issue-pin-s1"));
+
+    expect(await screen.findByTestId("staff-pin-chip-value")).toHaveProperty("textContent", "4821");
+    const toastMessage = (await screen.findByTestId("toast-success")).textContent ?? "";
+    expect(toastMessage).toContain("PIN issued for Priya Nair");
+    expect(toastMessage).not.toContain("4821");
+
+    await userEvent.click(screen.getByTestId("staff-pin-chip-dismiss"));
+    expect(screen.queryByTestId("staff-pin-chip")).toBeNull();
+  });
+
+  it("copies the issued PIN to the clipboard and shows a transient Copied state", async () => {
+    const writeText = vi.fn().mockResolvedValue(undefined);
+    Object.defineProperty(navigator, "clipboard", { value: { writeText }, configurable: true });
+    stubFetch({ staff: [{ ...STAFF[0], pinStatus: "none" }] });
+    renderStaff();
+    await screen.findByTestId("staff-row-s1");
+
+    await userEvent.click(screen.getByTestId("staff-issue-pin-s1"));
+    await screen.findByTestId("staff-pin-chip-value");
+
+    await userEvent.click(screen.getByTestId("staff-pin-chip-copy"));
+    expect(writeText).toHaveBeenCalledWith("4821");
+    expect(await screen.findByText("Copied")).toBeTruthy();
+  });
 });
