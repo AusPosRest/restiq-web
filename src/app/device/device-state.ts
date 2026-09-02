@@ -40,28 +40,49 @@ export interface DeviceView {
 const FINGERPRINT_KEY = "device:hardwareKeyFingerprint";
 const DEVICE_KEY = "device:enrolled";
 
+// Device identity lives in sessionStorage, NOT localStorage, so it is scoped
+// to ONE browser TAB rather than shared across the whole origin (issue #104).
+// That is the "one page = one device" model: open two tabs and each enrols
+// independently - a POS tab and a KDS tab can run side by side on the same
+// machine. sessionStorage survives reloads within the tab (fine for an
+// always-open kiosk screen) and clears when the tab closes - closing the tab
+// unplugs that device, re-enrol with a fresh code to bring it back.
+function tabStore(): Storage | null {
+  try {
+    return window.sessionStorage;
+  } catch {
+    // Storage unavailable (private mode, disabled) - callers fall back.
+    return null;
+  }
+}
+
 /**
- * This browser's hardware identity in the prototype - honest naming, not a
- * real device key. Generated once with crypto.randomUUID() and persisted, so
- * re-enrolling the same browser (e.g. after a revoke) reuses the same value.
+ * This tab's hardware identity in the prototype - honest naming, not a real
+ * device key. Generated once per tab with crypto.randomUUID() and persisted
+ * for the tab's lifetime, so re-enrolling within the same tab (e.g. after a
+ * revoke) reuses the same value.
  */
 export function getOrCreateFingerprint(): string {
+  const generated = `web-${crypto.randomUUID()}`;
+  const store = tabStore();
+  if (!store) return generated;
   try {
-    const existing = window.localStorage.getItem(FINGERPRINT_KEY);
+    const existing = store.getItem(FINGERPRINT_KEY);
     if (existing) return existing;
-    const generated = `web-${crypto.randomUUID()}`;
-    window.localStorage.setItem(FINGERPRINT_KEY, generated);
+    store.setItem(FINGERPRINT_KEY, generated);
     return generated;
   } catch {
-    // Storage unavailable (private browsing, disabled) - enrolment still
-    // works, it just won't be stable across a reload.
-    return `web-${crypto.randomUUID()}`;
+    // getItem/setItem can throw even when the store object exists (quota,
+    // security policy) - enrolment still works, just not stable across reload.
+    return generated;
   }
 }
 
 export function readStoredDevice(): DeviceView | null {
+  const store = tabStore();
+  if (!store) return null;
   try {
-    const raw = window.localStorage.getItem(DEVICE_KEY);
+    const raw = store.getItem(DEVICE_KEY);
     if (!raw) return null;
     return JSON.parse(raw) as DeviceView;
   } catch {
@@ -70,21 +91,14 @@ export function readStoredDevice(): DeviceView | null {
 }
 
 export function writeStoredDevice(device: DeviceView): void {
-  try {
-    window.localStorage.setItem(DEVICE_KEY, JSON.stringify(device));
-  } catch {
-    // Best-effort - the tab still shows the enrolled state this session, it
-    // just won't survive a reload.
-  }
+  // Best-effort - the tab still shows the enrolled state this session even if
+  // the write fails, it just won't survive a reload.
+  tabStore()?.setItem(DEVICE_KEY, JSON.stringify(device));
 }
 
-/** Clears only this browser's stored identity. Server-side revocation stays an ops/admin job - see device-screen.tsx's un-enrol microcopy. */
+/** Clears only this tab's stored identity. Server-side revocation stays an ops/admin job - see device-screen.tsx's un-enrol microcopy. */
 export function clearStoredDevice(): void {
-  try {
-    window.localStorage.removeItem(DEVICE_KEY);
-  } catch {
-    // Nothing to clean up if storage never worked in the first place.
-  }
+  tabStore()?.removeItem(DEVICE_KEY);
 }
 
 export type ContinueTarget = { kind: "redirect"; path: string } | { kind: "unsupported" };

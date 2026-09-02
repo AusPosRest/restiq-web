@@ -151,7 +151,7 @@ function EnrolForm({
     <form data-testid="device-enrol-form" onSubmit={onSubmit}>
       <h1 className="font-headline text-xl font-semibold text-foreground">Enrol this device</h1>
       <p className="mt-1 text-sm text-muted-foreground">
-        Enter the one-time code shown in the console to turn this browser into a RESTIQ terminal.
+        Enter the one-time code shown in the console to turn this tab into a RESTIQ terminal.
       </p>
 
       <label htmlFor="device-code" className="mt-6 block text-sm font-medium text-foreground">
@@ -218,7 +218,7 @@ function DeviceCard({
 
   return (
     <div data-testid="device-card">
-      <h1 className="font-headline text-xl font-semibold text-foreground">This browser is enrolled</h1>
+      <h1 className="font-headline text-xl font-semibold text-foreground">This tab is enrolled</h1>
 
       <div className="mt-6 rounded-lg border border-border bg-background p-5">
         <p data-testid="device-card-label" className="text-lg font-semibold text-foreground">
@@ -265,10 +265,10 @@ function DeviceCard({
         onClick={onUnenrol}
         className="mt-4 w-full rounded-lg border border-border bg-transparent px-4 py-3 text-sm font-medium text-muted-foreground transition-colors hover:bg-accent focus:outline-none focus-visible:ring-2 focus-visible:ring-ring"
       >
-        Un-enrol this browser
+        Un-enrol this tab
       </button>
       <p data-testid="device-unenrol-note" className="mt-2 text-xs text-muted-foreground">
-        This only clears this browser&apos;s stored identity - it doesn&apos;t revoke the device. Revoking access is an
+        This only clears this tab&apos;s stored identity - it doesn&apos;t revoke the device. Revoking access is an
         ops/admin job.
       </p>
     </div>

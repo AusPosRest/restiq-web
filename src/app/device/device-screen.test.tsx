@@ -32,7 +32,7 @@ const POS_DEVICE: DeviceView = {
 describe("DeviceScreen", () => {
   beforeEach(() => {
     push.mockReset();
-    window.localStorage.clear();
+    window.sessionStorage.clear();
     vi.unstubAllGlobals();
   });
   afterEach(cleanup);
@@ -125,7 +125,7 @@ describe("DeviceScreen", () => {
   });
 
   it("routes Continue by device type - pos to /pos/login", async () => {
-    window.localStorage.setItem("device:enrolled", JSON.stringify(POS_DEVICE));
+    window.sessionStorage.setItem("device:enrolled", JSON.stringify(POS_DEVICE));
     render(<DeviceScreen />);
 
     await userEvent.click(await screen.findByTestId("device-continue"));
@@ -133,7 +133,7 @@ describe("DeviceScreen", () => {
   });
 
   it("routes Continue by device type - kds to /kds", async () => {
-    window.localStorage.setItem("device:enrolled", JSON.stringify({ ...POS_DEVICE, type: "kds" }));
+    window.sessionStorage.setItem("device:enrolled", JSON.stringify({ ...POS_DEVICE, type: "kds" }));
     render(<DeviceScreen />);
 
     await userEvent.click(await screen.findByTestId("device-continue"));
@@ -141,7 +141,7 @@ describe("DeviceScreen", () => {
   });
 
   it("shows a plain no-web-surface line for a kiosk device instead of a Continue button", async () => {
-    window.localStorage.setItem("device:enrolled", JSON.stringify({ ...POS_DEVICE, type: "kiosk" }));
+    window.sessionStorage.setItem("device:enrolled", JSON.stringify({ ...POS_DEVICE, type: "kiosk" }));
     render(<DeviceScreen />);
 
     expect(await screen.findByTestId("device-continue-unsupported")).toBeTruthy();
@@ -149,7 +149,7 @@ describe("DeviceScreen", () => {
   });
 
   it("un-enrols by clearing only the stored device, returning to the enrolment form", async () => {
-    window.localStorage.setItem("device:enrolled", JSON.stringify(POS_DEVICE));
+    window.sessionStorage.setItem("device:enrolled", JSON.stringify(POS_DEVICE));
     render(<DeviceScreen />);
 
     await userEvent.click(await screen.findByTestId("device-unenrol"));
