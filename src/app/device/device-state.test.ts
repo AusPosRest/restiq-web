@@ -56,9 +56,9 @@ describe("isCodeComplete", () => {
   });
 });
 
-describe("localStorage-backed helpers", () => {
+describe("sessionStorage-backed helpers", () => {
   beforeEach(() => {
-    window.localStorage.clear();
+    window.sessionStorage.clear();
   });
   afterEach(() => {
     vi.restoreAllMocks();
@@ -87,7 +87,7 @@ describe("localStorage-backed helpers", () => {
   });
 
   it("returns null for malformed stored JSON instead of throwing", () => {
-    window.localStorage.setItem("device:enrolled", "{not json");
+    window.sessionStorage.setItem("device:enrolled", "{not json");
     expect(readStoredDevice()).toBeNull();
   });
 });
