@@ -351,13 +351,20 @@ export async function fetchFloorPlan(outletId: string): Promise<FloorPlanView> {
 }
 
 export interface UpdateTableInput {
+  label?: string;
   x?: number;
   y?: number;
   seatCapacity?: number;
 }
 
 export function updateTable(outletId: string, tableId: string, input: UpdateTableInput): Promise<DiningTableView> {
-  return adminApi<DiningTableView>(`outlets/${outletId}/tables/${tableId}`, { method: "PATCH", body: JSON.stringify(input) });
+  // The backend nests floor-plan mutations under .../floor-plan/ - the create*
+  // calls below already do; this one and updateStation had dropped it, so every
+  // table move 404'd (issue #106).
+  return adminApi<DiningTableView>(`outlets/${outletId}/floor-plan/tables/${tableId}`, {
+    method: "PATCH",
+    body: JSON.stringify(input),
+  });
 }
 
 export interface UpdateStationInput {
@@ -369,7 +376,10 @@ export interface UpdateStationInput {
 }
 
 export function updateStation(outletId: string, stationId: string, input: UpdateStationInput): Promise<StationView> {
-  return adminApi<StationView>(`outlets/${outletId}/stations/${stationId}`, { method: "PATCH", body: JSON.stringify(input) });
+  return adminApi<StationView>(`outlets/${outletId}/floor-plan/stations/${stationId}`, {
+    method: "PATCH",
+    body: JSON.stringify(input),
+  });
 }
 
 export function updatePrinter(outletId: string, printerId: string, renderMode: PrinterRenderMode): Promise<PrinterView> {
