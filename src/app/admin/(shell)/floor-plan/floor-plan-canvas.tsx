@@ -129,7 +129,12 @@ export function FloorPlanCanvas({ tables, selectedFloorId, onTableMoved }: Reado
             } ${overlapping ? "border-status-error bg-status-error/20" : "border-primary/60 bg-primary/15"}`}
             style={{ left: position.x, top: position.y, width: table.width, height: table.height }}
           >
-            {table.label}
+            <span className="flex flex-col items-center leading-tight">
+              {table.label}
+              <span data-testid={`table-seats-${table.id}`} className="text-[10px] font-normal text-muted-foreground">
+                {table.seatCapacity} seats
+              </span>
+            </span>
           </div>
         );
       })}

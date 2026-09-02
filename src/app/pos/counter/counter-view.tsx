@@ -64,7 +64,7 @@ import { TenderKeypad } from "../orders/[orderId]/settle/tender-keypad";
 import { billTotalMinor, canFinalizeBill, isBillReadOnly, pendingTenderedMinor } from "../orders/[orderId]/settle/bill-state";
 import { TokenBadge } from "./token-badge";
 
-export function CounterView({ outletId }: Readonly<{ outletId: string }>) {
+export function CounterView({ outletId, currentStaffId }: Readonly<{ outletId: string; currentStaffId: string }>) {
   const menuLoad = usePosLoad<PosMenuView>("menu");
   const [order, setOrder] = useState<OrderView | null>(null);
   const [orderStarting, setOrderStarting] = useState(true);
@@ -99,14 +99,15 @@ export function CounterView({ outletId }: Readonly<{ outletId: string }>) {
   // Keyed on the order id: finalizing and starting the next counter order
   // swaps in a brand new id, remounting CounterLoaded fresh rather than
   // hand-resetting every piece of its ring-up-in-progress state.
-  return <CounterLoaded key={order.id} menu={menuLoad.data} initialOrder={order} onStartNextOrder={beginNewOrder} />;
+  return <CounterLoaded key={order.id} menu={menuLoad.data} initialOrder={order} currentStaffId={currentStaffId} onStartNextOrder={beginNewOrder} />;
 }
 
 function CounterLoaded({
   menu,
   initialOrder,
+  currentStaffId,
   onStartNextOrder,
-}: Readonly<{ menu: PosMenuView; initialOrder: OrderView; onStartNextOrder: () => void }>) {
+}: Readonly<{ menu: PosMenuView; initialOrder: OrderView; currentStaffId: string; onStartNextOrder: () => void }>) {
   const [order, setOrder] = useState(initialOrder);
   const [bill, setBill] = useState<BillView | null>(null);
   const [billLoading, setBillLoading] = useState(true);
@@ -162,13 +163,17 @@ function CounterLoaded({
   function submitLine(itemId: string, value: ModifierSheetConfirmValue, onSettled: () => void) {
     setAddingLine(true);
     setActionError(null);
-    addOrderLine(order.id, {
-      itemId,
-      variantId: value.variantId ?? undefined,
-      quantity: value.quantity,
-      modifierIds: value.modifierIds,
-      specialInstructions: value.specialInstructions || undefined,
-    })
+    addOrderLine(
+      order.id,
+      {
+        itemId,
+        variantId: value.variantId ?? undefined,
+        quantity: value.quantity,
+        modifierIds: value.modifierIds,
+        specialInstructions: value.specialInstructions || undefined,
+      },
+      menu,
+    )
       .then((updated) => {
         setOrder(updated);
         loadBill();
@@ -195,7 +200,7 @@ function CounterLoaded({
   function handleIncrement(line: OrderLineView) {
     setBusyLineId(line.id);
     setActionError(null);
-    updateOrderLineQuantity(order.id, line.id, line.quantity + 1)
+    updateOrderLineQuantity(order.id, line.id, line.quantity + 1, menu)
       .then((updated) => {
         setOrder(updated);
         loadBill();
@@ -207,7 +212,7 @@ function CounterLoaded({
   function handleDecrement(line: OrderLineView) {
     setBusyLineId(line.id);
     setActionError(null);
-    const request = line.quantity <= 1 ? removeOrderLine(order.id, line.id) : updateOrderLineQuantity(order.id, line.id, line.quantity - 1);
+    const request = line.quantity <= 1 ? removeOrderLine(order.id, line.id, menu) : updateOrderLineQuantity(order.id, line.id, line.quantity - 1, menu);
     request
       .then((updated) => {
         setOrder(updated);
@@ -220,7 +225,7 @@ function CounterLoaded({
   function handleRemove(line: OrderLineView) {
     setBusyLineId(line.id);
     setActionError(null);
-    removeOrderLine(order.id, line.id)
+    removeOrderLine(order.id, line.id, menu)
       .then((updated) => {
         setOrder(updated);
         loadBill();
@@ -281,7 +286,7 @@ function CounterLoaded({
         )}
         <div className={`flex items-center gap-3 ${readOnly ? "ml-auto" : ""}`}>
           <p data-testid="counter-cashier" className="text-sm text-muted-foreground">
-            Cashier <span className="font-semibold text-foreground">{order.ownerStaffName}</span>
+            Cashier <span className="font-semibold text-foreground">{order.ownerStaffName === currentStaffId ? "You" : order.ownerStaffName}</span>
           </p>
           {typeof order.tokenNumber === "number" && <TokenBadge tokenNumber={order.tokenNumber} />}
         </div>

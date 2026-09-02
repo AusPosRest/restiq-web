@@ -140,6 +140,17 @@ export function findOverlap(candidate: TableRect, others: readonly TableRect[]):
 // check (floor-plan.service.ts's boundsOverlap) reject it like any other
 // spot, since only the server can serialize concurrent edits.
 
+/**
+ * Footprint derived from seat capacity so the canvas reads at a glance - a
+ * 2-top is visibly smaller than an 8-top. Side grows 12px per seat from a
+ * 40px base, clamped to 56..160; rectangles are 1.5x as wide as tall.
+ * ponytail: linear rule, no per-shape tuning until someone asks.
+ */
+export function sizeForSeats(seats: number, shape: TableShape): { width: number; height: number } {
+  const side = Math.min(160, Math.max(56, 40 + 12 * Math.max(1, Math.floor(seats))));
+  return { width: shape === "rectangle" ? Math.round(side * 1.5) : side, height: side };
+}
+
 export const SHAPE_SIZES: Record<TableShape, { width: number; height: number }> = {
   square: { width: 40, height: 40 },
   circle: { width: 40, height: 40 },

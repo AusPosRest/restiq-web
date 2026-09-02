@@ -12,7 +12,7 @@ import { Trash2 } from "lucide-react";
 import { useState } from "react";
 import { groupTablesByFloor, TABLE_SHAPES, type DiningTableView, type FloorView } from "./floor-plan-state";
 
-export type EditableTableField = "x" | "y" | "seatCapacity" | "label" | "shape";
+export type EditableTableField = "x" | "y" | "seatCapacity" | "label" | "shape" | "width" | "height";
 
 export interface FloorPlanListViewProps {
   floors: readonly FloorView[];
@@ -43,6 +43,8 @@ export function FloorPlanListView({ floors, tables, onFieldCommitted, onDeleteRe
             <th className="px-4 py-3 font-semibold">X</th>
             <th className="px-4 py-3 font-semibold">Y</th>
             <th className="px-4 py-3 font-semibold">Capacity</th>
+            <th className="px-4 py-3 font-semibold">Width</th>
+            <th className="px-4 py-3 font-semibold">Height</th>
             <th className="px-4 py-3 font-semibold">
               <span className="sr-only">Actions</span>
             </th>
@@ -105,6 +107,26 @@ export function FloorPlanListView({ floors, tables, onFieldCommitted, onDeleteRe
                     value={table.seatCapacity}
                     min={1}
                     onCommit={(value) => onFieldCommitted(table.id, "seatCapacity", value)}
+                  />
+                </td>
+                <td className="px-4 py-2">
+                  <NumberField
+                    key={table.width}
+                    testId={`floor-plan-list-width-${table.id}`}
+                    label={`${table.label} width`}
+                    value={table.width}
+                    min={24}
+                    onCommit={(value) => onFieldCommitted(table.id, "width", value)}
+                  />
+                </td>
+                <td className="px-4 py-2">
+                  <NumberField
+                    key={table.height}
+                    testId={`floor-plan-list-height-${table.id}`}
+                    label={`${table.label} height`}
+                    value={table.height}
+                    min={24}
+                    onCommit={(value) => onFieldCommitted(table.id, "height", value)}
                   />
                 </td>
                 <td className="px-4 py-2">

@@ -356,6 +356,8 @@ export interface UpdateTableInput {
   y?: number;
   shape?: TableShape;
   seatCapacity?: number;
+  width?: number;
+  height?: number;
 }
 
 export function updateTable(outletId: string, tableId: string, input: UpdateTableInput): Promise<DiningTableView> {
