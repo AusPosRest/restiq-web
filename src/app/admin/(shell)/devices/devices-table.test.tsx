@@ -49,6 +49,23 @@ describe("DevicesTable", () => {
     expect(row.textContent).toContain("Revoked");
   });
 
+  it("links each enrolled POS/KDS device to its surface, and nothing for revoked or unsupported types", () => {
+    render(
+      <DevicesTable
+        devices={[
+          device({ id: "pos-1", type: "pos" }),
+          device({ id: "kds-1", type: "kds" }),
+          device({ id: "kiosk-1", type: "kiosk" }),
+          device({ id: "gone-1", type: "pos", status: "revoked" }),
+        ]}
+      />,
+    );
+    expect(screen.getByTestId("device-open-pos-1").getAttribute("href")).toBe("/pos/login");
+    expect(screen.getByTestId("device-open-kds-1").getAttribute("href")).toBe("/kds");
+    expect(screen.queryByTestId("device-open-kiosk-1")).toBeNull();
+    expect(screen.queryByTestId("device-open-gone-1")).toBeNull();
+  });
+
   it("shows an empty state with no devices", () => {
     render(<DevicesTable devices={[]} />);
     expect(screen.getByTestId("devices-empty")).toBeTruthy();

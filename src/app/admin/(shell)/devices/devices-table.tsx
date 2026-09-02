@@ -3,9 +3,18 @@
 // Read-only device list for the current outlet (name/type/role/app version/
 // last seen/status) - enrolment and revocation stay Platform Console's job;
 // this screen only surfaces what's already enrolled plus generates codes.
-import { MonitorSmartphone, Radio } from "lucide-react";
+import { ExternalLink, MonitorSmartphone, Radio } from "lucide-react";
 import { useState } from "react";
 import { formatLastSeen, type AdminDeviceView } from "./devices-state";
+
+// Where an enrolled device's surface lives, so an owner can click straight
+// through to log in and take orders (issue #112). Kiosk/CDS have no web
+// surface yet. Mirrors src/app/device/device-state.ts's continueTargetFor -
+// not imported across route trees (AD-4).
+const SURFACE_LINKS: Record<string, { href: string; label: string }> = {
+  pos: { href: "/pos/login", label: "Open POS" },
+  kds: { href: "/kds", label: "Open KDS" },
+};
 
 const STATUS_LABELS: Record<string, string> = { active: "Enrolled", revoked: "Revoked" };
 const STATUS_STYLES: Record<string, string> = {
@@ -40,6 +49,9 @@ export function DevicesTable({ devices }: Readonly<{ devices: readonly AdminDevi
             <th className="font-label px-4 text-left text-xs font-semibold uppercase tracking-wider text-muted-foreground">App Version</th>
             <th className="font-label px-4 text-left text-xs font-semibold uppercase tracking-wider text-muted-foreground">Last Seen</th>
             <th className="font-label px-4 text-left text-xs font-semibold uppercase tracking-wider text-muted-foreground">Status</th>
+            <th className="font-label px-4 text-left text-xs font-semibold uppercase tracking-wider text-muted-foreground">
+              <span className="sr-only">Open</span>
+            </th>
           </tr>
         </thead>
         <tbody>
@@ -70,6 +82,22 @@ export function DevicesTable({ devices }: Readonly<{ devices: readonly AdminDevi
                 >
                   {STATUS_LABELS[device.status] ?? device.status}
                 </span>
+              </td>
+              <td className="px-4 text-right">
+                {device.status === "active" && SURFACE_LINKS[device.type] ? (
+                  <a
+                    href={SURFACE_LINKS[device.type].href}
+                    target="_blank"
+                    rel="noopener"
+                    data-testid={`device-open-${device.id}`}
+                    className="inline-flex items-center gap-1 whitespace-nowrap text-xs font-semibold text-primary hover:underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+                  >
+                    {SURFACE_LINKS[device.type].label}
+                    <ExternalLink className="size-3" aria-hidden="true" />
+                  </a>
+                ) : (
+                  <span className="text-xs text-muted-foreground">-</span>
+                )}
               </td>
             </tr>
           ))}
