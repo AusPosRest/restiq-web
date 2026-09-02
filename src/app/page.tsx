@@ -1,86 +1,150 @@
-'use client'
+import Link from "next/link";
 
-import { useEffect, useState } from 'react'
-import { Button } from '@/components/ui/button'
+// The public landing page: one door per user surface. RESTIQ has five disjoint
+// auth realms (ops/admin/pos/kds-on-pos/guest) plus the device-enrolment realm,
+// each with its own entry route - this page just routes a person to the right
+// one and shows the demo credentials, since this is a prototype with no real
+// sign-up. Rendered in the charcoal+amber "ops-theme" (globals.css), the
+// closest thing RESTIQ has to a house identity.
 
-// The only place an API address appears in this codebase. Set per environment:
-// .env.local on the dev machine, a project setting on Vercel.
-const apiUrl = process.env.NEXT_PUBLIC_API_URL ?? ''
-
-type Health = { status: string; service: string }
-type DbHealth = { status: string; database: string }
-
-async function readHealth(): Promise<string> {
-  try {
-    const res = await fetch(`${apiUrl}/health`)
-    const data: Health = await res.json()
-    return `${data.status} - ${data.service}`
-  } catch {
-    return 'backend unreachable'
-  }
+interface Surface {
+  name: string;
+  who: string;
+  blurb: string;
+  href: string;
+  cta: string;
+  creds: { label: string; value: string }[];
+  external?: boolean;
 }
 
-async function readDbHealth(): Promise<string> {
-  try {
-    const res = await fetch(`${apiUrl}/health/db`)
-    const data: DbHealth = await res.json()
-    return `${data.status} - ${data.database}`
-  } catch {
-    return 'backend unreachable'
-  }
-}
+// Guest QR entry needs a real outlet+table; this is the seeded demo table with
+// the qr_ordering capability enabled (Spice Route outlet, table T1).
+const GUEST_QR = "/qr/t/01a042f2-8e56-733d-ad2e-739163950988/22222222-2222-7222-8222-222222220001";
+
+const SURFACES: Surface[] = [
+  {
+    name: "Platform Console",
+    who: "Internal operator",
+    blurb: "Onboard tenants, manage plans, devices and fleet health across every restaurant.",
+    href: "/ops/login",
+    cta: "Operator sign in",
+    creds: [
+      { label: "Email", value: "admin@restiq.example" },
+      { label: "Password", value: "OpsDemo2026!" },
+    ],
+  },
+  {
+    name: "Tenant Admin",
+    who: "Restaurant owner",
+    blurb: "The owner console: go-live checklist, menu, floor plan, staff, devices and branding.",
+    href: "/admin",
+    cta: "Open owner console",
+    creds: [{ label: "Access", value: "By owner invite link (no password login yet)" }],
+  },
+  {
+    name: "POS · Cashier & Waiter",
+    who: "Floor staff",
+    blurb: "Table map, order taking, fire-to-kitchen and bill settlement on a tablet till.",
+    href: "/pos/login",
+    cta: "PIN sign in",
+    creds: [
+      { label: "Cashier", value: "PIN 1234" },
+      { label: "Waiter", value: "PIN 5678" },
+      { label: "Manager", value: "PIN 9999" },
+    ],
+  },
+  {
+    name: "Kitchen Display",
+    who: "Kitchen",
+    blurb: "Live station queues, ticket ageing, bump / recall / refire and the all-day summary.",
+    href: "/kds",
+    cta: "Open kitchen display",
+    creds: [{ label: "Access", value: "Signs in with the same POS PINs" }],
+  },
+  {
+    name: "Guest QR Self-Order",
+    who: "Diner",
+    blurb: "Scan the table QR, browse the menu, build a shared cart and pay - no app, no staff.",
+    href: GUEST_QR,
+    cta: "Try the guest flow",
+    creds: [{ label: "Access", value: "No login - a table session PIN is shown on screen" }],
+  },
+  {
+    name: "Enrol a Device",
+    who: "Any browser",
+    blurb: "Turn this browser tab into a POS or KDS terminal with a one-time code from the console.",
+    href: "/device",
+    cta: "Enrol this browser",
+    creds: [{ label: "Access", value: "Generate a code in the ops or admin console" }],
+  },
+];
+
+export const metadata = {
+  title: "RESTIQ",
+  description: "Multi-tenant restaurant POS - choose your surface",
+};
 
 export default function Home() {
-  const [health, setHealth] = useState('checking...')
-  const [dbHealth, setDbHealth] = useState('checking...')
-
-  useEffect(() => {
-    let cancelled = false
-    void readHealth().then((result) => {
-      if (!cancelled) setHealth(result)
-    })
-    void readDbHealth().then((result) => {
-      if (!cancelled) setDbHealth(result)
-    })
-    return () => {
-      cancelled = true
-    }
-  }, [])
-
   return (
-    <main className="mx-auto flex min-h-screen max-w-xl flex-col justify-center gap-6 p-8">
-      <div>
-        <h1 className="text-2xl font-semibold">Restiq - test page</h1>
-        <p className="mt-2 text-sm text-muted-foreground">
-          This page exists to prove the pipeline, nothing else: browser to this app,
-          from here to the API, and from the API to the database.
-        </p>
+    <div className="ops-theme min-h-screen bg-background text-foreground">
+      <div className="mx-auto flex min-h-screen max-w-5xl flex-col px-6 py-12 sm:py-16">
+        <header className="flex flex-col gap-3">
+          <div className="flex items-baseline gap-3">
+            <span className="text-2xl font-bold tracking-tight text-primary">RESTIQ</span>
+            <span
+              className="rounded-full border border-border px-2 py-0.5 text-[11px] font-semibold uppercase tracking-wider text-muted-foreground"
+              data-testid="landing-env-badge"
+            >
+              Demo
+            </span>
+          </div>
+          <h1 className="max-w-2xl text-3xl font-semibold leading-tight text-balance sm:text-4xl">
+            Restaurant point of sale, from the back office to the table.
+          </h1>
+          <p className="max-w-2xl text-sm leading-relaxed text-muted-foreground sm:text-base">
+            Six surfaces, one platform. Pick the door for who you are - every demo login is listed on its
+            card.
+          </p>
+        </header>
+
+        <main className="mt-10 grid flex-1 gap-4 sm:grid-cols-2 lg:grid-cols-3" data-testid="landing-surfaces">
+          {SURFACES.map((s) => (
+            <Link
+              key={s.name}
+              href={s.href}
+              data-testid={`landing-card-${s.href}`}
+              className="group flex flex-col gap-3 rounded-xl border border-border bg-card p-5 transition-colors hover:border-primary focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+            >
+              <div className="flex flex-col gap-1">
+                <span className="font-label text-[11px] font-semibold uppercase tracking-wider text-primary">
+                  {s.who}
+                </span>
+                <span className="text-lg font-semibold">{s.name}</span>
+              </div>
+              <p className="flex-1 text-sm leading-relaxed text-muted-foreground">{s.blurb}</p>
+              <dl className="flex flex-col gap-1 rounded-lg bg-muted/60 px-3 py-2">
+                {s.creds.map((c) => (
+                  <div key={c.label} className="flex items-baseline justify-between gap-3 text-xs">
+                    <dt className="shrink-0 font-medium text-muted-foreground">{c.label}</dt>
+                    <dd className="truncate text-right font-mono text-foreground">{c.value}</dd>
+                  </div>
+                ))}
+              </dl>
+              <span className="mt-1 inline-flex items-center gap-1.5 text-sm font-semibold text-primary">
+                {s.cta}
+                <span aria-hidden="true" className="transition-transform group-hover:translate-x-0.5">
+                  →
+                </span>
+              </span>
+            </Link>
+          ))}
+        </main>
+
+        <footer className="mt-12 border-t border-border pt-6 text-xs text-muted-foreground">
+          RESTIQ is a working prototype. All logins above are seeded demo accounts - see the full testing
+          guide in <span className="font-mono">wiki/testing-credentials.md</span>.
+        </footer>
       </div>
-
-      <dl className="grid gap-2 text-sm">
-        <div className="flex justify-between border-b pb-2">
-          <dt className="text-muted-foreground">API address</dt>
-          <dd className="font-mono">{apiUrl || 'not set'}</dd>
-        </div>
-        <div className="flex justify-between border-b pb-2">
-          <dt className="text-muted-foreground">API health</dt>
-          <dd className="font-mono">{health}</dd>
-        </div>
-        <div className="flex justify-between border-b pb-2">
-          <dt className="text-muted-foreground">Database</dt>
-          <dd className="font-mono">{dbHealth}</dd>
-        </div>
-      </dl>
-
-      <Button
-        className="w-fit"
-        onClick={() => {
-          void readHealth().then(setHealth)
-          void readDbHealth().then(setDbHealth)
-        }}
-      >
-        Check again
-      </Button>
-    </main>
-  )
+    </div>
+  );
 }
