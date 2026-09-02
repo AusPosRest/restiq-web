@@ -15,9 +15,10 @@ import { StatusBadge } from "../../status-badge";
 import { useToast } from "../../toast";
 import { useOpsLoad } from "../../use-ops-load";
 import { DevicesTable } from "../../devices/devices-table";
+import { BrandingTab } from "./branding-tab";
 import { CapabilitiesTab } from "./capabilities-tab";
 import { SubscriptionTab } from "./subscription-tab";
-import { BrandingTab, OutletsTab, OverviewTab, OwnersTab } from "./tabs";
+import { OutletsTab, OverviewTab, OwnersTab } from "./tabs";
 
 const TABS = ["overview", "outlets", "devices", "subscription", "capabilities", "branding", "owners"] as const;
 export type TabKey = (typeof TABS)[number];
