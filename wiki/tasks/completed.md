@@ -1,5 +1,27 @@
 # Completed
 
+- **2026-09-02** - Landing page: live device list with Open links + staff
+  logins table (issue #121). `src/app/page.tsx` is now an async server
+  component (`export const dynamic = "force-dynamic"`, so `next build`
+  doesn't need the backend) that fetches every enrolled device fleet-wide via
+  the ops API (`src/app/landing-devices.ts`: `POST ops/v1/auth/login` with
+  server-only `DEMO_OPS_EMAIL`/`DEMO_OPS_PASSWORD` env vars, then
+  `GET ops/v1/devices` with the bearer token - the token never reaches the
+  client) and renders a Devices (live) table sorted by tenant, with an Open
+  link per row that maps device type to its login route (`pos`/`kiosk` ->
+  `/pos/login`, `kds` -> `/kds`, other types and revoked devices get no
+  link). Missing env vars or an unreachable backend degrade to a calm inline
+  note without breaking the rest of the page. Added a Staff logins table
+  sourced from a new manifest, `src/app/demo-logins.ts` (`DEMO_STAFF`), since
+  PINs are hashed server-side and can't be fetched back - reuses the
+  existing `CredentialValue` copy-to-clipboard component; the POS card's
+  creds now point at this table instead of duplicating the PIN numbers.
+  Extended `src/app/page.test.tsx` (mocked `fetch` for the login+devices
+  calls, the unavailable-note path, Open-link type mapping/revoked-skip, and
+  the staff table). See
+  [wiki/testing-credentials.md](../testing-credentials.md) for the env vars
+  and manifest. Issue AusPosRest/restiq-web#121.
+
 - **2026-09-02** - Settle: relies on the now-idempotent bill POST, drops the
   sessionStorage bill-id cache (issue #117). restiq-backend#98/PR #99
   (merged) made `POST orders/:orderId/bill` idempotent per order - a repeat
