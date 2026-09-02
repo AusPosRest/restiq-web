@@ -271,6 +271,12 @@ describe("ItemDrawer price - current vs pending distinction", () => {
   });
 
   it("opens the price-change dialog from 'Change price', schedules a future change with a reason, and shows it as pending (distinct from current)", async () => {
+    // A pending price only reads as pending while effectiveAt is in the
+    // future, so the date must be computed, never hardcoded (issue #89).
+    const futureDate = new Date(Date.now() + 7 * 86400000);
+    const futureYmd = futureDate.toISOString().slice(0, 10);
+    const futureDay = String(futureDate.getUTCDate());
+    const futureMonth = futureDate.toLocaleString("en", { month: "short", timeZone: "UTC" });
     const fetchMock = stubFetch({
       onPost: (url, body) => {
         if (url === "/admin/api/menu/items/item-1/prices") {
@@ -287,20 +293,22 @@ describe("ItemDrawer price - current vs pending distinction", () => {
     expect(screen.getByTestId("price-change-dialog")).toBeTruthy();
 
     await userEvent.click(screen.getByLabelText("Schedule for a date"));
-    await userEvent.type(screen.getByTestId("price-change-date"), "2026-09-01");
+    await userEvent.type(screen.getByTestId("price-change-date"), futureYmd);
     await userEvent.type(screen.getByTestId("price-change-reason"), "Menu refresh");
     await userEvent.click(screen.getByTestId("price-change-submit"));
 
     await waitFor(() => expect(screen.getByTestId("item-base-price-pending")).toBeTruthy());
     // Current price line is untouched - nothing was overwritten in place.
     expect(screen.getByTestId("item-base-price-current").textContent).toContain("₹180");
-    expect(screen.getByTestId("item-base-price-pending").textContent).toMatch(/1 Sep|Sep 1/);
+    expect(screen.getByTestId("item-base-price-pending").textContent).toMatch(
+      new RegExp(`${futureDay} ${futureMonth}|${futureMonth} ${futureDay}`),
+    );
 
     const priceCalls = fetchMock.mock.calls.filter(([url]) => url === "/admin/api/menu/items/item-1/prices");
     expect(priceCalls).toHaveLength(2); // one per channel (dine_in, delivery)
     const [, init] = priceCalls[0] as [string, RequestInit];
     const sentBody = JSON.parse(init.body as string);
-    expect(sentBody).toMatchObject({ channel: "dine_in", effectiveAt: "2026-09-01T00:00:00.000Z", reason: "Menu refresh" });
+    expect(sentBody).toMatchObject({ channel: "dine_in", effectiveAt: `${futureYmd}T00:00:00.000Z`, reason: "Menu refresh" });
   });
 
   it("requires a reason before the price-change submit is enabled", async () => {
