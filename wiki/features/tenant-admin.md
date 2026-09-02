@@ -429,10 +429,19 @@ story. Backend counterpart: `restiq-backend/wiki/features/tenant-admin.md`.
     able to sign in with their PIN."`, naming the actual person, not
     internal jargon.
   - **PIN issue**: no confirm step (only revoke is named as security-
-    relevant) - a plaintext PIN is returned once and shown in a success
-    toast ("Share it with them now - it won't be shown again"), the same
-    show-once idiom CAP-6's enrolment codes use, without adding a persistent
-    on-screen PIN display component this story's scope didn't call for.
+    relevant) - a plaintext PIN is returned once. Issue #114: a toast alone
+    auto-dismissed in ~1s before owners could read it, and the backend has no
+    PIN recovery (revoke + re-issue is the only way to see it again), so the
+    PIN now renders in `pin-chip.tsx`'s `StaffPinChip` - an extra table row
+    under the issuing staff member, large monospace PIN, name, a copy button
+    (`navigator.clipboard.writeText`, 1.5s "Copied" state, wrapped in
+    try/catch), and an explicit "Dismiss" - staying on screen until the owner
+    dismisses it or issues for someone else (which replaces it). The
+    microcopy says "Shown once - copy it before you dismiss." The toast is
+    now just `"PIN issued for {name}."`; the PIN itself no longer appears in
+    it. Mirrors ops's `InviteLinkChip` (`src/app/ops/(shell)/tenants/invite-link.tsx`)
+    show-once pattern - reimplemented locally rather than imported, since
+    admin and ops never share components across the route split (AD-4).
   - **Role permission matrix** (`permission-matrix.tsx`): read-only
     reference table, one column per seeded role, one row per permission.
     **Deviation:** `GET /admin/v1/roles` (see Key decisions) returns only
@@ -451,7 +460,8 @@ story. Backend counterpart: `restiq-backend/wiki/features/tenant-admin.md`.
     issue scope.
 - **data-testid** on every interactive element (`staff-add-open`,
   `staff-row-*`, `staff-role-select-*`, `staff-issue-pin-*`,
-  `staff-revoke-pin-*`, `add-staff-*`, `confirm-reason-dialog` and its
+  `staff-revoke-pin-*`, `staff-pin-chip`, `staff-pin-chip-copy`,
+  `staff-pin-chip-dismiss`, `add-staff-*`, `confirm-reason-dialog` and its
   fields, `permission-matrix`); keyboard-operable throughout with visible
   focus rings on every custom control.
 

@@ -14,7 +14,7 @@ import { useToast } from "../toast";
 import { AddStaffDialog } from "./add-staff-dialog";
 import { PermissionMatrix } from "./permission-matrix";
 import { staffFullName, type AddStaffForm, type RoleView, type StaffView } from "./staff-state";
-import { StaffTable } from "./staff-table";
+import { StaffTable, type IssuedPinView } from "./staff-table";
 
 interface StaffData {
   roles: RoleView[];
@@ -81,6 +81,7 @@ function StaffEditor({ initial }: Readonly<{ initial: StaffData }>) {
   const [roleChangeTarget, setRoleChangeTarget] = useState<RoleChangeTarget | null>(null);
   const [revokeTargetId, setRevokeTargetId] = useState<string | null>(null);
   const [busyStaffId, setBusyStaffId] = useState<string | null>(null);
+  const [issuedPin, setIssuedPin] = useState<IssuedPinView | null>(null);
 
   const roles = initial.roles;
 
@@ -122,7 +123,8 @@ function StaffEditor({ initial }: Readonly<{ initial: StaffData }>) {
     try {
       const issued = await issueStaffPin(staffId);
       setStaff((current) => current.map((m) => (m.id === staffId ? { ...m, pinStatus: "active" } : m)));
-      toast({ kind: "success", message: `PIN for ${staffFullName(member)}: ${issued.pin}. Share it with them now - it won't be shown again.` });
+      setIssuedPin({ staffId, name: staffFullName(member), pin: issued.pin });
+      toast({ kind: "success", message: `PIN issued for ${staffFullName(member)}.` });
     } catch (error) {
       toast({ kind: "error", message: error instanceof AdminApiError ? error.message : "Couldn't issue a PIN." });
     } finally {
@@ -138,6 +140,7 @@ function StaffEditor({ initial }: Readonly<{ initial: StaffData }>) {
       const updated = await revokeStaffPin(staffId, reason);
       setStaff((current) => current.map((member) => (member.id === staffId ? updated : member)));
       setRevokeTargetId(null);
+      setIssuedPin((current) => (current?.staffId === staffId ? null : current));
       toast({ kind: "success", message: `${staffFullName(updated)} can no longer sign in to the till.` });
     } catch (error) {
       toast({ kind: "error", message: error instanceof AdminApiError ? error.message : "Couldn't revoke that PIN." });
@@ -168,9 +171,11 @@ function StaffEditor({ initial }: Readonly<{ initial: StaffData }>) {
         staff={staff}
         roles={roles}
         busyStaffId={busyStaffId}
+        issuedPin={issuedPin}
         onRoleSelected={(staffId, roleId) => setRoleChangeTarget({ staffId, roleId })}
         onIssuePin={(staffId) => void handleIssuePin(staffId)}
         onRevokeRequested={(staffId) => setRevokeTargetId(staffId)}
+        onDismissIssuedPin={() => setIssuedPin(null)}
       />
 
       <PermissionMatrix roles={roles} />
