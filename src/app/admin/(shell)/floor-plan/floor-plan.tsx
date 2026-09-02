@@ -9,16 +9,17 @@
 // toolbar) so a brand-new outlet with zero floors can reach the Go-Live
 // Checklist's floor_plan step through the console - see floor-plan-state.ts
 // and api.ts's file headers for the create-endpoint contract this reuses.
-import { LayoutGrid, Table2, TableProperties } from "lucide-react";
+import { LayoutGrid, Pencil, Table2, TableProperties, Trash2 } from "lucide-react";
 import { useEffect, useState } from "react";
 import type { FormEvent } from "react";
 import { Button } from "@/components/ui/button";
-import { AdminApiError, createFloor, createTable, fetchFloorPlan, updateTable } from "../../api";
+import { AdminApiError, createFloor, createTable, deleteFloor, deleteTable, fetchFloorPlan, updateFloor, updateTable } from "../../api";
+import { ConfirmReasonDialog } from "../confirm-reason-dialog";
 import { LoadErrorPanel, Skeleton } from "../data-states";
 import { useOutlets } from "../outlet-context";
 import { useToast } from "../toast";
 import { CANVAS_HEIGHT, CANVAS_WIDTH, FloorPlanCanvas } from "./floor-plan-canvas";
-import { computeNextTablePosition, findOverlap, SHAPE_SIZES } from "./floor-plan-state";
+import { computeNextTablePosition, findOverlap, SHAPE_SIZES, TABLE_SHAPES } from "./floor-plan-state";
 import type { DiningTableView, FloorPlanView, FloorView, PrinterView, StationView, TableShape } from "./floor-plan-state";
 import { FloorPlanListView, type EditableTableField } from "./floor-plan-list-view";
 import { StationsPanel } from "./stations-panel";
@@ -113,13 +114,21 @@ function FloorPlanEditor({ outletId, initial }: Readonly<{ outletId: string; ini
   const [printers, setPrinters] = useState<PrinterView[]>(initial.printers);
   const [view, setView] = useState<ViewMode>("canvas");
   const [selectedFloorId, setSelectedFloorId] = useState<string>(initial.floors[0]?.id ?? "");
+  const [floorPendingDeleteId, setFloorPendingDeleteId] = useState<string | null>(null);
+  const [floorDeleteBusy, setFloorDeleteBusy] = useState(false);
+  const [tablePendingDeleteId, setTablePendingDeleteId] = useState<string | null>(null);
+  const [tableDeleteBusy, setTableDeleteBusy] = useState(false);
 
   // Optimistic write, reconciled against the backend's actual REJECT-with-409
   // overlap policy (see floor-plan-state.ts's file header) - a save either
   // lands exactly where requested or fails outright, so the only recovery
   // this needs is a snap-back-and-toast on failure, never a "position was
   // adjusted" reconciliation.
-  async function commitTable(tableId: string, patch: Partial<Pick<DiningTableView, "x" | "y" | "seatCapacity">>, previous: DiningTableView) {
+  async function commitTable(
+    tableId: string,
+    patch: Partial<Pick<DiningTableView, "x" | "y" | "seatCapacity" | "label" | "shape">>,
+    previous: DiningTableView,
+  ) {
     setTables((current) => current.map((table) => (table.id === tableId ? { ...table, ...patch } : table)));
     try {
       const saved = await updateTable(outletId, tableId, patch);
@@ -140,15 +149,57 @@ function FloorPlanEditor({ outletId, initial }: Readonly<{ outletId: string; ini
     void commitTable(tableId, next, { ...table, ...previous });
   }
 
-  function handleListFieldCommitted(tableId: string, field: EditableTableField, value: number) {
+  function handleListFieldCommitted(tableId: string, field: EditableTableField, value: number | string) {
     const table = tables.find((t) => t.id === tableId);
     if (!table) return;
-    void commitTable(tableId, { [field]: value }, table);
+    const patch = { [field]: value } as Partial<Pick<DiningTableView, "x" | "y" | "seatCapacity" | "label" | "shape">>;
+    void commitTable(tableId, patch, table);
   }
 
   function handleFloorCreated(floor: FloorView) {
     setFloors((current) => [...current, floor]);
     setSelectedFloorId(floor.id);
+  }
+
+  function handleFloorRenamed(floor: FloorView) {
+    setFloors((current) => current.map((f) => (f.id === floor.id ? floor : f)));
+  }
+
+  async function handleConfirmFloorDelete() {
+    if (!floorPendingDeleteId) return;
+    const floorId = floorPendingDeleteId;
+    setFloorDeleteBusy(true);
+    try {
+      await deleteFloor(outletId, floorId);
+      const remaining = floors.filter((f) => f.id !== floorId);
+      setFloors(remaining);
+      setSelectedFloorId((current) => (current === floorId ? (remaining[0]?.id ?? "") : current));
+      setFloorPendingDeleteId(null);
+    } catch (error) {
+      const stillHasTables = error instanceof AdminApiError && error.status === 409;
+      pushToast({
+        kind: "error",
+        message: stillHasTables ? "This floor still has tables. Move or remove them first." : "Couldn't delete this floor. Try again.",
+      });
+    } finally {
+      setFloorDeleteBusy(false);
+    }
+  }
+
+  async function handleConfirmTableDelete() {
+    if (!tablePendingDeleteId) return;
+    const tableId = tablePendingDeleteId;
+    const table = tables.find((t) => t.id === tableId);
+    setTableDeleteBusy(true);
+    try {
+      await deleteTable(outletId, tableId);
+      setTables((current) => current.filter((t) => t.id !== tableId));
+      setTablePendingDeleteId(null);
+    } catch {
+      pushToast({ kind: "error", message: `Couldn't delete ${table?.label ?? "this table"}. Try again.` });
+    } finally {
+      setTableDeleteBusy(false);
+    }
   }
 
   function handleOptimisticTableAdd(table: DiningTableView) {
@@ -187,6 +238,16 @@ function FloorPlanEditor({ outletId, initial }: Readonly<{ outletId: string; ini
         </div>
       ) : (
         <>
+          <FloorTabsBar
+            outletId={outletId}
+            floors={floors}
+            tables={tables}
+            selectedFloorId={selectedFloorId}
+            onSelectFloor={setSelectedFloorId}
+            onFloorRenamed={handleFloorRenamed}
+            onDeleteRequested={setFloorPendingDeleteId}
+          />
+
           <div className="flex flex-wrap items-start gap-2" data-testid="floor-plan-toolbar">
             <AddFloorControl outletId={outletId} triggerLabel="Add floor" triggerTestId="floor-plan-add-floor-button" onCreated={handleFloorCreated} />
             <AddTableControl
@@ -201,15 +262,14 @@ function FloorPlanEditor({ outletId, initial }: Readonly<{ outletId: string; ini
           <div className="grid flex-1 grid-cols-[1fr_320px] gap-6">
             <div>
               {view === "canvas" ? (
-                <FloorPlanCanvas
+                <FloorPlanCanvas tables={tables} selectedFloorId={selectedFloorId} onTableMoved={handleTableMoved} />
+              ) : (
+                <FloorPlanListView
                   floors={floors}
                   tables={tables}
-                  selectedFloorId={selectedFloorId}
-                  onSelectFloor={setSelectedFloorId}
-                  onTableMoved={handleTableMoved}
+                  onFieldCommitted={handleListFieldCommitted}
+                  onDeleteRequested={setTablePendingDeleteId}
                 />
-              ) : (
-                <FloorPlanListView floors={floors} tables={tables} onFieldCommitted={handleListFieldCommitted} />
               )}
             </div>
             <StationsPanel
@@ -223,6 +283,32 @@ function FloorPlanEditor({ outletId, initial }: Readonly<{ outletId: string; ini
           </div>
         </>
       )}
+
+      <ConfirmReasonDialog
+        open={floorPendingDeleteId !== null}
+        title="Delete this floor?"
+        description={(() => {
+          const floor = floors.find((f) => f.id === floorPendingDeleteId);
+          return floor ? `"${floor.name}" will be removed from this outlet's floor plan.` : "";
+        })()}
+        verb="Delete floor"
+        busy={floorDeleteBusy}
+        onCancel={() => setFloorPendingDeleteId(null)}
+        onConfirm={() => void handleConfirmFloorDelete()}
+      />
+
+      <ConfirmReasonDialog
+        open={tablePendingDeleteId !== null}
+        title="Delete this table?"
+        description={(() => {
+          const table = tables.find((t) => t.id === tablePendingDeleteId);
+          return table ? `"${table.label}" will be removed from the floor plan.` : "";
+        })()}
+        verb="Delete table"
+        busy={tableDeleteBusy}
+        onCancel={() => setTablePendingDeleteId(null)}
+        onConfirm={() => void handleConfirmTableDelete()}
+      />
     </div>
   );
 }
@@ -248,6 +334,134 @@ function ViewToggleButton({
     >
       <Icon className="size-3.5" aria-hidden="true" /> {label}
     </button>
+  );
+}
+
+// --- Floor tabs (issue #109). Selection lives here rather than inside the
+// canvas so it's visible in both canvas and list view, and so the currently
+// selected floor's rename/delete controls have one home regardless of which
+// view is active. Delete is disabled whenever the selected floor still has
+// tables (floor-plan.service.ts rejects it with 409 either way - this is
+// just the immediate, no-round-trip version of that same rule) and the
+// dialog/API call for both live in FloorPlanEditor, same split as
+// AddFloorControl below (its trigger is local, the create request bubbles up).
+interface FloorTabsBarProps {
+  outletId: string;
+  floors: readonly FloorView[];
+  tables: readonly DiningTableView[];
+  selectedFloorId: string;
+  onSelectFloor: (floorId: string) => void;
+  onFloorRenamed: (floor: FloorView) => void;
+  onDeleteRequested: (floorId: string) => void;
+}
+
+function FloorTabsBar({ outletId, floors, tables, selectedFloorId, onSelectFloor, onFloorRenamed, onDeleteRequested }: Readonly<FloorTabsBarProps>) {
+  const pushToast = useToast();
+  const [renaming, setRenaming] = useState(false);
+  const [name, setName] = useState("");
+  const [submitting, setSubmitting] = useState(false);
+
+  const selectedFloor = floors.find((floor) => floor.id === selectedFloorId);
+  const hasTables = tables.some((table) => table.floorId === selectedFloorId);
+
+  function openRename() {
+    if (!selectedFloor) return;
+    setName(selectedFloor.name);
+    setRenaming(true);
+  }
+
+  async function submitRename(event: FormEvent) {
+    event.preventDefault();
+    const trimmed = name.trim();
+    if (!trimmed || !selectedFloor || submitting) return;
+    setSubmitting(true);
+    try {
+      const saved = await updateFloor(outletId, selectedFloor.id, { name: trimmed });
+      onFloorRenamed(saved);
+      setRenaming(false);
+    } catch {
+      pushToast({ kind: "error", message: `Couldn't rename "${selectedFloor.name}". Try again.` });
+    } finally {
+      setSubmitting(false);
+    }
+  }
+
+  return (
+    <div className="flex flex-wrap items-center gap-2" data-testid="floor-plan-floor-tabs-row">
+      <div role="tablist" aria-label="Floors" data-testid="floor-plan-floor-tabs" className="flex gap-1">
+        {floors.map((floor) => (
+          <button
+            key={floor.id}
+            type="button"
+            role="tab"
+            aria-selected={floor.id === selectedFloorId}
+            data-testid={`floor-tab-${floor.id}`}
+            onClick={() => onSelectFloor(floor.id)}
+            className={`rounded-lg px-3 py-1.5 text-sm font-medium focus:outline-none focus-visible:ring-2 focus-visible:ring-ring ${
+              floor.id === selectedFloorId ? "bg-primary text-primary-foreground" : "bg-accent text-muted-foreground hover:text-foreground"
+            }`}
+          >
+            {floor.name}
+          </button>
+        ))}
+      </div>
+
+      {selectedFloor && !renaming && (
+        <div className="flex items-center gap-1">
+          <button
+            type="button"
+            aria-label={`Rename ${selectedFloor.name}`}
+            data-testid="floor-plan-rename-floor-button"
+            onClick={openRename}
+            className="rounded-md p-1.5 text-muted-foreground hover:bg-accent hover:text-foreground focus:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+          >
+            <Pencil className="size-3.5" aria-hidden="true" />
+          </button>
+          <button
+            type="button"
+            aria-label={`Delete ${selectedFloor.name}`}
+            data-testid="floor-plan-delete-floor-button"
+            disabled={hasTables}
+            title={hasTables ? "Move or remove its tables first" : undefined}
+            onClick={() => onDeleteRequested(selectedFloor.id)}
+            className="rounded-md p-1.5 text-muted-foreground hover:bg-status-error/10 hover:text-status-error focus:outline-none focus-visible:ring-2 focus-visible:ring-ring disabled:pointer-events-none disabled:opacity-40"
+          >
+            <Trash2 className="size-3.5" aria-hidden="true" />
+          </button>
+        </div>
+      )}
+
+      {selectedFloor && renaming && (
+        <form onSubmit={submitRename} data-testid="floor-plan-rename-floor-form" className="flex items-center gap-2">
+          <label htmlFor="floor-plan-rename-floor-name" className="sr-only">
+            Floor name
+          </label>
+          <input
+            id="floor-plan-rename-floor-name"
+            data-testid="floor-plan-rename-floor-name"
+            autoFocus
+            required
+            value={name}
+            disabled={submitting}
+            onChange={(event) => setName(event.target.value)}
+            className={TOOLBAR_INPUT_CLASS}
+          />
+          <Button type="submit" size="sm" data-testid="floor-plan-rename-floor-submit" disabled={submitting || !name.trim()}>
+            {submitting ? "Saving…" : "Save"}
+          </Button>
+          <Button
+            type="button"
+            size="sm"
+            variant="ghost"
+            data-testid="floor-plan-rename-floor-cancel"
+            disabled={submitting}
+            onClick={() => setRenaming(false)}
+          >
+            Cancel
+          </Button>
+        </form>
+      )}
+    </div>
   );
 }
 
@@ -326,7 +540,6 @@ function AddFloorControl({ outletId, triggerLabel, triggerTestId, onCreated }: R
 // floor, still adjustable here and still checked live via findOverlap (the
 // same helper the canvas uses for its drag-overlap preview), though the
 // server's REJECT-with-409 policy remains the actual authority on save.
-const TABLE_SHAPES: readonly TableShape[] = ["square", "circle", "rectangle"];
 const DEFAULT_CAPACITY = "4";
 
 interface AddTableControlProps {

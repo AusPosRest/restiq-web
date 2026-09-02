@@ -40,6 +40,9 @@ function stubFetch({
   createFloorBody,
   createTableStatus = 201,
   createTableBody,
+  patchFloorStatus = 200,
+  deleteFloorStatus = 204,
+  deleteTableStatus = 204,
 }: {
   patchStatus?: number;
   patchBody?: unknown;
@@ -48,10 +51,37 @@ function stubFetch({
   createFloorBody?: unknown;
   createTableStatus?: number;
   createTableBody?: unknown;
+  patchFloorStatus?: number;
+  deleteFloorStatus?: number;
+  deleteTableStatus?: number;
 } = {}) {
   const fetchMock = vi.fn((input: RequestInfo | URL, init?: RequestInit) => {
     const url = String(input);
     const method = init?.method ?? "GET";
+
+    if (url.includes("/floor-plan/floors/") && method === "PATCH") {
+      if (patchFloorStatus !== 200) {
+        return Promise.resolve(jsonResponse({ error: { code: "bad_request", message: "Invalid floor" } }, patchFloorStatus));
+      }
+      const floorId = url.split("/floors/")[1];
+      const existing = (floors ?? DEFAULT_FLOORS).find((f) => f.id === floorId);
+      const sent = JSON.parse(String(init?.body)) as Record<string, unknown>;
+      return Promise.resolve(jsonResponse({ id: floorId, outletId: "outlet-1", sortOrder: existing?.sortOrder ?? 0, name: existing?.name ?? "", ...sent }));
+    }
+
+    if (url.includes("/floor-plan/floors/") && method === "DELETE") {
+      if (deleteFloorStatus !== 204) {
+        return Promise.resolve(jsonResponse({ error: { code: "floor_has_tables", message: "This floor still has tables" } }, deleteFloorStatus));
+      }
+      return Promise.resolve(new Response(null, { status: 204 }));
+    }
+
+    if (url.includes("/tables/") && method === "DELETE") {
+      if (deleteTableStatus !== 204) {
+        return Promise.resolve(jsonResponse({ error: { code: "not_found", message: "Table not found" } }, deleteTableStatus));
+      }
+      return Promise.resolve(new Response(null, { status: 204 }));
+    }
 
     if (url.includes("/tables/") && method === "PATCH") {
       if (patchStatus !== 200) {
@@ -259,6 +289,159 @@ describe("FloorPlan", () => {
 
       expect(await screen.findByTestId("floor-plan-list-row-t2")).toBeTruthy();
       expect(screen.queryByTestId("table-shape-t2")).toBeNull();
+    });
+  });
+
+  describe("Rename floor", () => {
+    it("renames the selected floor and shows the new name on its tab", async () => {
+      const fetchMock = stubFetch();
+      renderFloorPlan();
+      await screen.findByTestId("table-shape-t1");
+
+      await userEvent.click(screen.getByTestId("floor-plan-rename-floor-button"));
+      const nameField = screen.getByTestId("floor-plan-rename-floor-name");
+      await userEvent.clear(nameField);
+      await userEvent.type(nameField, "First Floor");
+      await userEvent.click(screen.getByTestId("floor-plan-rename-floor-submit"));
+
+      await waitFor(() =>
+        expect(fetchMock).toHaveBeenCalledWith(
+          expect.stringContaining("/outlets/outlet-1/floor-plan/floors/floor-1"),
+          expect.objectContaining({ method: "PATCH", body: JSON.stringify({ name: "First Floor" }) }),
+        ),
+      );
+      expect((await screen.findByTestId("floor-tab-floor-1")).textContent).toBe("First Floor");
+      expect(screen.queryByTestId("floor-plan-rename-floor-form")).toBeNull();
+    });
+  });
+
+  describe("Delete floor", () => {
+    const TWO_FLOORS = [
+      { id: "floor-1", outletId: "outlet-1", name: "Empty Floor", sortOrder: 0, tables: [] },
+      {
+        id: "floor-2",
+        outletId: "outlet-1",
+        name: "Terrace",
+        sortOrder: 1,
+        tables: [{ id: "t2", floorId: "floor-2", label: "T2", x: 40, y: 40, width: 40, height: 40, shape: "square", seatCapacity: 4 }],
+      },
+    ];
+
+    it("disables delete while the selected floor still has tables", async () => {
+      stubFetch();
+      renderFloorPlan();
+      await screen.findByTestId("table-shape-t1");
+
+      const deleteButton = screen.getByTestId("floor-plan-delete-floor-button") as HTMLButtonElement;
+      expect(deleteButton.disabled).toBe(true);
+      expect(deleteButton.title).toBe("Move or remove its tables first");
+    });
+
+    it("confirms and deletes an empty floor, then switches to another floor", async () => {
+      const fetchMock = stubFetch({ floors: TWO_FLOORS });
+      renderFloorPlan();
+      const deleteButton = (await screen.findByTestId("floor-plan-delete-floor-button")) as HTMLButtonElement;
+      expect(deleteButton.disabled).toBe(false);
+
+      await userEvent.click(deleteButton);
+      await userEvent.type(await screen.findByTestId("confirm-reason"), "Created by mistake");
+      await userEvent.click(screen.getByTestId("confirm-submit"));
+
+      await waitFor(() =>
+        expect(fetchMock).toHaveBeenCalledWith(
+          expect.stringContaining("/outlets/outlet-1/floor-plan/floors/floor-1"),
+          expect.objectContaining({ method: "DELETE" }),
+        ),
+      );
+      expect(screen.queryByTestId("floor-tab-floor-1")).toBeNull();
+      expect(await screen.findByTestId("table-shape-t2")).toBeTruthy();
+    });
+
+    it("toasts instead of removing the floor when the backend rejects the delete with 409", async () => {
+      stubFetch({ floors: TWO_FLOORS, deleteFloorStatus: 409 });
+      renderFloorPlan();
+      const deleteButton = await screen.findByTestId("floor-plan-delete-floor-button");
+
+      await userEvent.click(deleteButton);
+      await userEvent.type(await screen.findByTestId("confirm-reason"), "Created by mistake");
+      await userEvent.click(screen.getByTestId("confirm-submit"));
+
+      await screen.findByTestId("toast-error");
+      expect(screen.getByTestId("toast-error").textContent).toContain("still has tables");
+      expect(screen.getByTestId("floor-tab-floor-1")).toBeTruthy();
+    });
+  });
+
+  describe("Rename table", () => {
+    it("renames a table from the list view", async () => {
+      const fetchMock = stubFetch();
+      renderFloorPlan();
+      await screen.findByTestId("table-shape-t1");
+      await userEvent.click(screen.getByTestId("floor-plan-view-list"));
+
+      const labelField = await screen.findByTestId("floor-plan-list-label-t1");
+      await userEvent.clear(labelField);
+      await userEvent.type(labelField, "Patio 1");
+      await userEvent.tab();
+
+      await waitFor(() =>
+        expect(fetchMock).toHaveBeenCalledWith(
+          expect.stringContaining("/outlets/outlet-1/floor-plan/tables/t1"),
+          expect.objectContaining({ method: "PATCH", body: JSON.stringify({ label: "Patio 1" }) }),
+        ),
+      );
+      expect(await screen.findByTestId("floor-plan-list-label-t1")).toHaveProperty("value", "Patio 1");
+    });
+  });
+
+  describe("Delete table", () => {
+    it("confirms and deletes a table from the list view", async () => {
+      const fetchMock = stubFetch();
+      renderFloorPlan();
+      await screen.findByTestId("table-shape-t1");
+      await userEvent.click(screen.getByTestId("floor-plan-view-list"));
+      await screen.findByTestId("floor-plan-list-row-t1");
+
+      await userEvent.click(screen.getByTestId("floor-plan-list-delete-t1"));
+      await userEvent.type(await screen.findByTestId("confirm-reason"), "No longer needed");
+      await userEvent.click(screen.getByTestId("confirm-submit"));
+
+      await waitFor(() =>
+        expect(fetchMock).toHaveBeenCalledWith(
+          expect.stringContaining("/outlets/outlet-1/floor-plan/tables/t1"),
+          expect.objectContaining({ method: "DELETE" }),
+        ),
+      );
+      expect(await screen.findByTestId("floor-plan-list-empty")).toBeTruthy();
+    });
+  });
+
+  describe("Edit seats/shape", () => {
+    it("PATCHes a shape change and a seat capacity change from the list view", async () => {
+      const fetchMock = stubFetch();
+      renderFloorPlan();
+      await screen.findByTestId("table-shape-t1");
+      await userEvent.click(screen.getByTestId("floor-plan-view-list"));
+
+      await userEvent.selectOptions(await screen.findByTestId("floor-plan-list-shape-t1"), "circle");
+      await waitFor(() =>
+        expect(fetchMock).toHaveBeenCalledWith(
+          expect.stringContaining("/outlets/outlet-1/floor-plan/tables/t1"),
+          expect.objectContaining({ method: "PATCH", body: JSON.stringify({ shape: "circle" }) }),
+        ),
+      );
+
+      const capacityField = screen.getByTestId("floor-plan-list-capacity-t1");
+      await userEvent.clear(capacityField);
+      await userEvent.type(capacityField, "6");
+      await userEvent.tab();
+
+      await waitFor(() =>
+        expect(fetchMock).toHaveBeenCalledWith(
+          expect.stringContaining("/outlets/outlet-1/floor-plan/tables/t1"),
+          expect.objectContaining({ method: "PATCH", body: JSON.stringify({ seatCapacity: 6 }) }),
+        ),
+      );
     });
   });
 });

@@ -23,6 +23,31 @@
   [wiki/features/tenant-admin.md](../features/tenant-admin.md) (CAP-10
   section). Issue AusPosRest/restiq-web#108.
 
+- **2026-09-02** - Floor Plan editing: rename/delete floors and tables, edit
+  seats/shape (issue #109). `src/app/admin/(shell)/floor-plan/` previously
+  only supported add + drag; added the missing edit/delete affordances
+  against `restiq-backend#92`'s `DELETE floors/:floorId` (landed in
+  parallel, 409 when the floor still has tables) plus the existing
+  `PATCH floors/:floorId` / `PATCH tables/:tableId` / `DELETE
+  tables/:tableId`. Moved the floor tab strip out of `floor-plan-canvas.tsx`
+  (previously hidden below 2 floors, and absent from list view entirely)
+  into a new always-visible `FloorTabsBar` in `floor-plan.tsx`, which carries
+  a rename pencil (inline name field, `PATCH`es `{ name }`) and a delete
+  trash icon for the selected floor - disabled with a "Move or remove its
+  tables first" hint whenever it still has tables, confirmed via the
+  existing `ConfirmReasonDialog`, with a 409 race toasting instead of
+  silently failing. `floor-plan-list-view.tsx` gained per-row Label/Shape
+  editors alongside the existing X/Y/capacity fields (all funnel through the
+  same optimistic `commitTable`) and a per-row delete button. `api.ts` grew
+  `updateFloor`/`deleteFloor`/`deleteTable`, additive next to the existing
+  floor-plan helpers; `UpdateTableInput` widened with `label`/`shape`.
+  `TABLE_SHAPES` moved to `floor-plan-state.ts` so the add-table form and the
+  new shape editor share one array. 11 new tests across `floor-plan.test.tsx`
+  (rename/delete floor, rename/delete table, seat/shape edit) and
+  `floor-plan-list-view.test.tsx` (label/shape editing, delete). See
+  [wiki/features/tenant-admin.md](../features/tenant-admin.md) (CAP-5
+  section). Issue AusPosRest/restiq-web#109.
+
 - **2026-09-02** - Device enrolment page: a browser tab acts as a POS/KDS
   device (issue #99). `/device` (`src/app/device/`) - its own minimal,
   unauthenticated realm (reuses `pos-theme`) against the real, public
