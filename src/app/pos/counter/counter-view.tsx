@@ -189,6 +189,13 @@ function CounterLoaded({
       setActiveItem(item);
       return;
     }
+    // Same rule as table mode (restiq-web#63/#129): a repeat tap on a plain
+    // item bumps its existing line instead of adding a duplicate.
+    const existingLine = order.lines.find((line) => line.itemId === item.id && line.variantId === null && line.modifiers.length === 0);
+    if (existingLine) {
+      handleIncrement(existingLine);
+      return;
+    }
     submitLine(item.id, { variantId: null, modifierIds: [], quantity: 1, specialInstructions: "" }, () => undefined);
   }
 
