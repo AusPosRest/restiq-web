@@ -50,9 +50,16 @@ export function orderTypeLabel(ticket: Pick<TicketView, "tableLabel">): "Dine-in
   return ticket.tableLabel ? "Dine-in" : "Counter";
 }
 
-/** "#1042" from the real tokenNumber, or a short id fragment when a ticket has none (defensive - every fired order should carry one). */
-export function ticketDisplayNumber(ticket: Pick<TicketView, "tokenNumber" | "orderId">): string {
-  return ticket.tokenNumber != null ? `#${ticket.tokenNumber}` : `#${ticket.orderId.slice(0, 8)}`;
+/**
+ * "#1042" from the real tokenNumber (counter orders), "Table T1" for a
+ * dine-in order (which by design never gets a token - see OrderView's
+ * tokenNumber comment), and only as a last resort a short id fragment
+ * (defensive - every fired order is one of the two above).
+ */
+export function ticketDisplayNumber(ticket: Pick<TicketView, "tokenNumber" | "tableLabel" | "orderId">): string {
+  if (ticket.tokenNumber != null) return `#${ticket.tokenNumber}`;
+  if (ticket.tableLabel) return `Table ${ticket.tableLabel}`;
+  return `#${ticket.orderId.slice(0, 8)}`;
 }
 
 /**

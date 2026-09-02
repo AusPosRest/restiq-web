@@ -51,7 +51,6 @@ export function ExpoOrderRow({
           </p>
           <p className="text-xs text-muted-foreground">
             {orderTypeLabel(order)}
-            {order.tableLabel ? ` - ${order.tableLabel}` : ""}
           </p>
         </div>
         {oldest ? (

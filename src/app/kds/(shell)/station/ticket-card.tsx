@@ -96,7 +96,6 @@ export function TicketCard({
           </p>
           <p className="text-xs text-muted-foreground">
             {orderTypeLabel(ticket)}
-            {ticket.tableLabel ? ` - ${ticket.tableLabel}` : ""}
           </p>
         </div>
         <p data-testid={`kds-ticket-${ticket.id}-elapsed`} className="font-headline text-3xl font-bold tabular-nums text-foreground">
