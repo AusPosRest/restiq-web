@@ -194,6 +194,51 @@ describe("CounterView - ring up and settle in one continuous flow", () => {
     expect(screen.queryByTestId("item-grid")).toBeNull();
   });
 
+  it("bumps the existing line's quantity on a repeat tap instead of adding a duplicate line (#129)", async () => {
+    const user = userEvent.setup();
+    let posts = 0;
+    let patches = 0;
+    const line = {
+      id: "line-1",
+      orderId: "order-47",
+      itemId: "item-naan",
+      variantId: null,
+      quantity: 1,
+      unitPriceMinor: 6000,
+      seatNumber: null,
+      addedByStaffId: "staff-priya",
+      createdAt: "2026-08-25T09:01:00.000Z",
+      modifiers: [],
+    };
+    stubFetch({
+      "GET menu": () => jsonResponse(MENU),
+      [`POST outlets/${OUTLET_ID}/counter-orders`]: () => jsonResponse(counterOrder(), 201),
+      "POST orders/order-47/bill": () => jsonResponse(bill("order-47"), 201),
+      "POST orders/order-47/lines": () => {
+        posts += 1;
+        return jsonResponse(counterOrder({ lines: [line] }));
+      },
+      "PATCH orders/order-47/lines/line-1": (init) => {
+        patches += 1;
+        const body = JSON.parse(String(init?.body)) as { quantity: number };
+        return jsonResponse(counterOrder({ lines: [{ ...line, quantity: body.quantity }] }));
+      },
+    });
+
+    render(<CounterView outletId={OUTLET_ID} currentStaffId={CURRENT_STAFF_ID} />);
+    await screen.findByTestId("counter-view");
+
+    await user.click(screen.getByTestId("item-tile-item-naan"));
+    await waitFor(() => expect(screen.getByTestId("bill-line-line-1")).toBeTruthy());
+    await user.click(screen.getByTestId("item-tile-item-naan"));
+    await waitFor(() => expect(patches).toBe(1));
+
+    expect(posts).toBe(1);
+    // Exactly one line row (row ids are bill-line-<lineId>; child cells carry longer ids).
+    expect(screen.queryAllByTestId(/^bill-line-line-\d+$/)).toHaveLength(1);
+    expect(screen.getByTestId("bill-line-line-1").textContent).toContain("2");
+  });
+
   it("starting the next order after settling issues a fresh token number", async () => {
     const user = userEvent.setup();
     let orderCount = 0;
