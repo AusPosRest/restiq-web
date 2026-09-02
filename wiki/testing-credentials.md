@@ -13,6 +13,11 @@ for testing each one. All values are **local demo data only** (database
   `NEXT_PUBLIC_API_URL=http://localhost:8180` and
   `POS_TENANT_ID=01a042f2-8e1b-7169-9023-ea7c86c4ab2b`). A stale
   `POS_TENANT_ID` silently 401s POS login; env changes need a server restart.
+- The landing page's live Devices section additionally needs
+  `DEMO_OPS_EMAIL` / `DEMO_OPS_PASSWORD` set (server-only, no `NEXT_PUBLIC_`
+  prefix — the ops token this exchanges them for never reaches the browser).
+  Unset or unreachable and the section just shows a "Device list unavailable"
+  note; the rest of the page still renders.
 
 ## Shared demo IDs
 
@@ -55,8 +60,14 @@ session is lost, regenerate an invite from the ops console
 | `1234` | Priya Nair | Cashier |
 | `5678` | Arjun Das | Waiter |
 | `9999` | Ravi Kumar | Manager |
+| `9419` | Kiran Shetty (Bay Leaf Kitchens) | Kitchen |
 
 URL: http://localhost:3100/pos/login — 4-digit keypad, auto-submits.
+
+This table is generated from `src/app/demo-logins.ts` (`DEMO_STAFF`), which
+also drives the landing page's staff logins table — PINs are bcrypt-hashed
+server-side and can't be fetched back once issued, so that manifest is the
+one place to update when a PIN changes or a new demo staff member is seeded.
 
 Rules:
 - 5 wrong PINs trigger a lockout countdown; wait it out or restart the backend.
