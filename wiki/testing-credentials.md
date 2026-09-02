@@ -53,6 +53,14 @@ the one-time invite-accept link (`POST /admin/v1/auth/accept-invite`). If the
 session is lost, regenerate an invite from the ops console
 (`POST /ops/v1/tenants/:id/owner-invite/regenerate`) and accept it again.
 
+**Getting a table's QR / guest URL:** open `/admin/floor-plan`, then click the
+QR icon on any table (the small corner button on a canvas tile, or the QR
+button on a list row) to open a dialog with that table's QR code, its guest
+URL (`/qr/t/<outletId>/<tableId>`), a copy button, and an Open link. Click
+"Print QR sheet" in the toolbar to print one card per table on the outlet at
+once. If the dialog shows "Self-ordering is off for this outlet", turn on the
+`qr_ordering` capability under `/admin/settings` first (see section 5 below).
+
 ## 3. POS Cashier & Waiter — `/pos`
 
 | PIN | Staff | Role |

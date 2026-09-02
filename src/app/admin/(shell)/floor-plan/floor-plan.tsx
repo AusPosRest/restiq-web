@@ -9,20 +9,25 @@
 // toolbar) so a brand-new outlet with zero floors can reach the Go-Live
 // Checklist's floor_plan step through the console - see floor-plan-state.ts
 // and api.ts's file headers for the create-endpoint contract this reuses.
-import { LayoutGrid, Pencil, Table2, TableProperties, Trash2 } from "lucide-react";
+import { LayoutGrid, Pencil, Printer as PrinterIcon, Table2, TableProperties, Trash2 } from "lucide-react";
 import { useEffect, useState } from "react";
 import type { FormEvent } from "react";
+import QRCode from "qrcode";
 import { Button } from "@/components/ui/button";
-import { AdminApiError, createFloor, createTable, deleteFloor, deleteTable, fetchFloorPlan, updateFloor, updateTable } from "../../api";
+import { AdminApiError, createFloor, createTable, deleteFloor, deleteTable, fetchFloorPlan, fetchOutletCapabilities, updateFloor, updateTable } from "../../api";
 import { ConfirmReasonDialog } from "../confirm-reason-dialog";
 import { LoadErrorPanel, Skeleton } from "../data-states";
 import { useOutlets } from "../outlet-context";
 import { useToast } from "../toast";
+import { KNOWN_CAPABILITY_KEYS, mergeCapabilities } from "../settings/capability-state";
 import { CANVAS_HEIGHT, CANVAS_WIDTH, FloorPlanCanvas } from "./floor-plan-canvas";
-import { computeNextTablePosition, findOverlap, TABLE_SHAPES, sizeForSeats } from "./floor-plan-state";
+import { computeNextTablePosition, findOverlap, groupTablesByFloor, TABLE_SHAPES, sizeForSeats } from "./floor-plan-state";
 import type { DiningTableView, FloorPlanView, FloorView, PrinterView, StationView, TableShape } from "./floor-plan-state";
 import { FloorPlanListView, type EditableTableField } from "./floor-plan-list-view";
 import { StationsPanel } from "./stations-panel";
+import { QR_OPTIONS, TableQrDialog } from "./table-qr-dialog";
+import { guestOrderUrl } from "./table-qr-state";
+import { QrPrintSheet, type PrintQrCard } from "./qr-print-sheet";
 
 type ViewMode = "canvas" | "list";
 
@@ -118,6 +123,9 @@ function FloorPlanEditor({ outletId, initial }: Readonly<{ outletId: string; ini
   const [floorDeleteBusy, setFloorDeleteBusy] = useState(false);
   const [tablePendingDeleteId, setTablePendingDeleteId] = useState<string | null>(null);
   const [tableDeleteBusy, setTableDeleteBusy] = useState(false);
+  const [qrTableId, setQrTableId] = useState<string | null>(null);
+  const [qrOrderingEnabled, setQrOrderingEnabled] = useState<boolean | null>(null);
+  const [printCards, setPrintCards] = useState<PrintQrCard[] | null>(null);
 
   // Optimistic write, reconciled against the backend's actual REJECT-with-409
   // overlap policy (see floor-plan-state.ts's file header) - a save either
@@ -210,6 +218,43 @@ function FloorPlanEditor({ outletId, initial }: Readonly<{ outletId: string; ini
     setTables((current) => (result ? current.map((t) => (t.id === tempId ? result : t)) : current.filter((t) => t.id !== tempId)));
   }
 
+  // Fetched lazily (only once a QR dialog is actually opened) rather than
+  // alongside the floor plan load - most floor-plan visits never touch this
+  // note, so there's no reason to pay for the extra round-trip every time.
+  // Failure defaults to showing the note rather than crashing the dialog:
+  // an unconfirmed capability is safer to flag than to silently assume on.
+  async function ensureQrOrderingLoaded() {
+    if (qrOrderingEnabled !== null) return;
+    try {
+      const rows = await fetchOutletCapabilities(outletId);
+      const enabled = mergeCapabilities(KNOWN_CAPABILITY_KEYS, rows).find((c) => c.key === "qr_ordering")?.enabled ?? false;
+      setQrOrderingEnabled(enabled);
+    } catch {
+      setQrOrderingEnabled(false);
+    }
+  }
+
+  function handleQrRequested(tableId: string) {
+    void ensureQrOrderingLoaded();
+    setQrTableId(tableId);
+  }
+
+  // Generates every table's QR up front and only then flips printCards,
+  // which the effect below turns into window.print() - printing off a
+  // fully-rendered sheet, never a still-loading one (see qr-print-sheet.tsx).
+  async function handlePrintQrSheet() {
+    const origin = window.location.origin;
+    const entries = groupTablesByFloor(floors, tables).flatMap(({ floor, tables: floorTables }) =>
+      floorTables.map((table) => ({ floorName: floor.name, table, url: guestOrderUrl(origin, outletId, table.id) })),
+    );
+    const qrDataUrls = await Promise.all(entries.map((entry) => QRCode.toDataURL(entry.url, QR_OPTIONS)));
+    setPrintCards(entries.map((entry, index) => ({ ...entry, qrDataUrl: qrDataUrls[index] })));
+  }
+
+  useEffect(() => {
+    if (printCards) window.print();
+  }, [printCards]);
+
   return (
     <div className="flex flex-1 flex-col gap-6">
       <div className="flex items-center justify-between gap-4">
@@ -257,18 +302,22 @@ function FloorPlanEditor({ outletId, initial }: Readonly<{ outletId: string; ini
               onOptimisticAdd={handleOptimisticTableAdd}
               onSettled={handleTableCreateSettled}
             />
+            <Button size="sm" variant="secondary" data-testid="floor-plan-print-qr-sheet-button" onClick={() => void handlePrintQrSheet()}>
+              <PrinterIcon aria-hidden="true" /> Print QR sheet
+            </Button>
           </div>
 
           <div className="grid flex-1 grid-cols-[1fr_320px] gap-6">
             <div>
               {view === "canvas" ? (
-                <FloorPlanCanvas tables={tables} selectedFloorId={selectedFloorId} onTableMoved={handleTableMoved} />
+                <FloorPlanCanvas tables={tables} selectedFloorId={selectedFloorId} onTableMoved={handleTableMoved} onQrRequested={handleQrRequested} />
               ) : (
                 <FloorPlanListView
                   floors={floors}
                   tables={tables}
                   onFieldCommitted={handleListFieldCommitted}
                   onDeleteRequested={setTablePendingDeleteId}
+                  onQrRequested={handleQrRequested}
                 />
               )}
             </div>
@@ -309,6 +358,14 @@ function FloorPlanEditor({ outletId, initial }: Readonly<{ outletId: string; ini
         onCancel={() => setTablePendingDeleteId(null)}
         onConfirm={() => void handleConfirmTableDelete()}
       />
+
+      <TableQrDialog
+        table={tables.find((table) => table.id === qrTableId) ?? null}
+        outletId={outletId}
+        qrOrderingEnabled={qrOrderingEnabled}
+        onClose={() => setQrTableId(null)}
+      />
+      {printCards && <QrPrintSheet cards={printCards} />}
     </div>
   );
 }
