@@ -279,24 +279,30 @@ export function BrandingTab({ detail, onMutated }: Readonly<TabProps>) {
 
 // --- Owners: contact + owner invite with audited regeneration.
 
-export function OwnersTab({ detail, onMutated }: Readonly<TabProps>) {
+export function OwnersTab({ detail }: Readonly<{ detail: TenantDetail }>) {
   const toast = useToast();
-  const { tenant, ownerInvite } = detail;
+  const { tenant } = detail;
   const [confirming, setConfirming] = useState(false);
   const [busy, setBusy] = useState(false);
   const [inviteToken, setInviteToken] = useState<string | null>(null);
+  // The regenerate response already carries the fresh invite, so render from
+  // it locally instead of refetching the whole detail - a refetch flips the
+  // page to its loading skeleton, which unmounts this tab and loses the
+  // shown-once inviteToken (restiq-web#87).
+  const [freshInvite, setFreshInvite] = useState<TenantDetail["ownerInvite"]>(null);
+  const ownerInvite = freshInvite ?? detail.ownerInvite;
 
   async function regenerate(reason: string) {
     setBusy(true);
     try {
-      const body = await opsApi<{ inviteToken: string }>(`tenants/${tenant.id}/owner-invite/regenerate`, {
-        method: "POST",
-        body: JSON.stringify({ reason }),
-      });
+      const body = await opsApi<{ invite: NonNullable<TenantDetail["ownerInvite"]>; inviteToken: string }>(
+        `tenants/${tenant.id}/owner-invite/regenerate`,
+        { method: "POST", body: JSON.stringify({ reason }) },
+      );
       setInviteToken(body.inviteToken);
+      setFreshInvite(body.invite);
       setConfirming(false);
       toast({ kind: "success", message: "Owner invite regenerated - the previous link no longer works." });
-      onMutated();
     } catch (error) {
       toast({ kind: "error", message: error instanceof OpsApiError ? error.message : "The invite could not be regenerated." });
     } finally {
