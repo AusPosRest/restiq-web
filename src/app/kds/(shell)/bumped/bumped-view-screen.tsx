@@ -1,17 +1,17 @@
 "use client";
 
-// K3 Bumped View and Recall (CAP-4, issue #71) - a horizontal rail of
-// bumped tickets, newest-first (bumped-view-state.ts), rendered through the
-// same load-bearing `TicketCard` K1 established (its own header already
-// documents this: "K3 should render this same component against
-// `GET .../bumped` results, not build its own ticket rendering"). A bumped
-// ticket's frame is TicketCard's existing green `ticket-bumped` styling
-// (`ticket.status === "bumped"`) - no new frame logic here. Recall is a
-// single tap with no confirmation (EXPERIENCE.md: "recall IS the undo"),
-// wired through the same `useTicketActions` K1 uses so the one-tap-with-
-// retry contract is identical; bump/refire are unreachable for a bumped
-// ticket (TicketCard only renders Recall for `status: "bumped"`) so those
-// two callbacks are no-ops here, never called.
+// K3 Bumped View and Recall (CAP-4, issue #71; clarity pass issue #134) - a
+// horizontal rail of bumped tickets, newest-first (bumped-view-state.ts),
+// rendered through the same load-bearing `TicketCard` K1 established (its
+// own header already documents this: "K3 should render this same component
+// against `GET .../bumped` results, not build its own ticket rendering"). A
+// bumped ticket's frame is TicketCard's neutral `status === "bumped"`
+// styling (no live ageing clock, no ageing color) - no new frame logic here.
+// Recall is a single tap with no confirmation (EXPERIENCE.md: "recall IS the
+// undo"), wired through the same `useTicketActions` K1 uses so the
+// one-tap-with-retry contract is identical; bump/refire are unreachable for
+// a bumped ticket (TicketCard only renders Recall for `status: "bumped"`) so
+// those two callbacks are no-ops here, never called.
 import { useCallback, useEffect, useState } from "react";
 import { AlertTriangle } from "lucide-react";
 import { useKdsOutlet } from "../../kds-outlet-context";
@@ -20,14 +20,13 @@ import { Skeleton } from "../../data-states";
 import { TicketCard } from "../station/ticket-card";
 import { useTicketActions } from "../station/use-ticket-actions";
 import { useBumpedQueue } from "./use-bumped-queue";
-import { formatRecallTimes, sortBumpedNewestFirst } from "./bumped-view-state";
+import { formatBumpedSummary, formatRecallSummary, sortBumpedNewestFirst } from "./bumped-view-state";
 
 const NOW_TICK_MS = 1_000;
 
-// TicketCard's ageing frame is only used for a `status: "queued"` ticket
-// (a bumped ticket always renders the green bumped frame regardless of this
-// value) - every ticket here is bumped, so this constant is never actually
-// read for coloring, only kept because TicketCard's prop is required.
+// TicketCard's ageing frame/threshold only apply to a `status: "queued"`
+// ticket - every ticket here is bumped, so this value is never actually
+// read, only kept because TicketCard's prop is required.
 const UNUSED_AGEING_THRESHOLD_MINUTES = 10;
 
 function useNow(): number {
@@ -103,7 +102,8 @@ export function BumpedViewScreen() {
               onBump={noop}
               onRecall={() => recall(ticket.id)}
               onRefire={noop}
-              recallTimes={formatRecallTimes(ticket.recallHistory)}
+              bumpedSummary={formatBumpedSummary(ticket)}
+              recallSummary={formatRecallSummary(ticket.recallHistory)}
             />
           ))}
         </div>

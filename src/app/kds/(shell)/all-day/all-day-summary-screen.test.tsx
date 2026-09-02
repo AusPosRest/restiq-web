@@ -89,6 +89,14 @@ describe("AllDaySummaryScreen", () => {
     expect(screen.getByText("No open tickets")).toBeTruthy();
   });
 
+  it("shows the All-Day-tab explainer", async () => {
+    vi.stubGlobal("fetch", mockFetch(() => []));
+    renderScreen();
+
+    await vi.waitFor(() => expect(screen.getByTestId("kds-all-day-empty")).toBeTruthy());
+    expect(screen.getByTestId("kds-tab-subtitle").textContent).toBe("Counts of everything fired today");
+  });
+
   it("keeps the stale grid on screen and shows the reconnecting notice when a poll fails", async () => {
     let succeed = true;
     vi.stubGlobal(

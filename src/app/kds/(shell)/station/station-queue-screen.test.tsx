@@ -92,6 +92,14 @@ describe("StationQueueScreen", () => {
     expect(ids).toEqual(["kds-ticket-oldest", "kds-ticket-middle", "kds-ticket-newest"]);
   });
 
+  it("shows the Station-tab explainer", async () => {
+    vi.stubGlobal("fetch", mockFetch(() => []));
+    renderScreen();
+
+    await vi.waitFor(() => expect(screen.getByTestId("kds-station-empty")).toBeTruthy());
+    expect(screen.getByTestId("kds-tab-subtitle").textContent).toBe("Tickets for this station, oldest first — bump when plated");
+  });
+
   it("separates ADD-ON batches and strikes through voided lines, from a real-shaped response", async () => {
     const withAddOnAndVoid = ticket({
       lines: [

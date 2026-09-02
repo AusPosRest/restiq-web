@@ -14,6 +14,28 @@
   routing to a dedicated page. See
   [wiki/features/tenant-admin.md](../features/tenant-admin.md)'s CAP-5
   section. Issue AusPosRest/restiq-web#131.
+- **2026-09-02** - KDS: clearer Bumped view and tab explainers (issue #134).
+  Owner feedback on a `/kds/bumped` screenshot: a finished ticket's ageing
+  clock kept counting (167:45+), every bumped card was the same ageing-scale
+  green, "Recalled Nx - <times>" read as a loud badge, and none of the four
+  tabs said what it was for. `src/app/kds/(shell)/station/ticket-card.tsx`:
+  a `status: "bumped"` ticket now shows a static `bumpedSummary` ("Bumped
+  hh:mm · took m:ss", computed once from `firedAt`/`bumpedAt`, never ticks)
+  in place of the live elapsed clock, gets a neutral `border-border bg-card`
+  frame instead of `border-ticket-bumped` green (`data-ageing` omitted too),
+  and its RECALLED banner is gated to `status !== "bumped"` (a done ticket
+  never shows the loud banner). `src/app/kds/(shell)/bumped/bumped-view-
+  state.ts`: `formatRecallTimes` (full list) replaced by
+  `formatRecallSummary` (one quiet "Recalled Nx · last hh:mm" line, `null`
+  when never recalled) and new `formatBumpedSummary`; both consumed by
+  `bumped-view-screen.tsx` via `TicketCard`'s new `bumpedSummary`/
+  `recallSummary` props (superseding `recallTimes`). `src/app/kds/(shell)/
+  kds-header.tsx`: a `TAB_SUBTITLES` map (one place, not per page) renders a
+  one-line muted explainer under the nav on every screen - Station/Expo/
+  Bumped/All-Day each get their own sentence. No changes to ticket data,
+  endpoints, or Station/Expo ageing behavior. See
+  [wiki/features/kitchen-display.md](../features/kitchen-display.md)'s "K3
+  clarity pass (issue #134)" section. Issue AusPosRest/restiq-web#134.
 - **2026-09-02** - Floor plan: tile footprint scales with seat capacity, capacity shown on tiles, width/height editable in the list view (restiq-web#124).
 - **2026-09-02** - POS order screen: removed "Split by seat" and the seat
   gate (issue #120). Product decision: seats were confusing on the order
