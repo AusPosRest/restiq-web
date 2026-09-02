@@ -4,7 +4,7 @@
 // (see expo-state.ts's `buildWaitingOnEntries`) - the same fixed, never-
 // themeable blue/yellow/red scale as every other clock on this surface.
 import { Clock } from "lucide-react";
-import { ageingLevel, formatElapsed, type AgeingLevel } from "../station/station-queue-state";
+import { ageingLevel, formatElapsed, ticketDisplayNumber, type AgeingLevel } from "../station/station-queue-state";
 import type { WaitingOnEntry } from "./expo-state";
 
 const TEXT_CLASSES: Record<AgeingLevel, string> = {
@@ -12,10 +12,6 @@ const TEXT_CLASSES: Record<AgeingLevel, string> = {
   ageing: "text-ticket-ageing",
   urgent: "text-ticket-urgent",
 };
-
-function orderLabel(entry: Readonly<WaitingOnEntry>): string {
-  return entry.tokenNumber != null ? `#${entry.tokenNumber}` : `#${entry.orderId.slice(0, 8)}`;
-}
 
 export function WaitingOnPanel({
   entries,
@@ -58,7 +54,7 @@ export function WaitingOnPanel({
                   </p>
                 </div>
                 <p className="mt-0.5 text-xs text-muted-foreground">
-                  {entry.stationName ?? "Unrouted"} - {orderLabel(entry)}
+                  {entry.stationName ?? "Unrouted"} - {ticketDisplayNumber(entry)}
                   {entry.tableLabel ? ` - ${entry.tableLabel}` : ""}
                 </p>
               </li>

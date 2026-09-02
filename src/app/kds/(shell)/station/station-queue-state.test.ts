@@ -87,10 +87,13 @@ describe("orderTypeLabel", () => {
 
 describe("ticketDisplayNumber", () => {
   it("uses the real token number when present", () => {
-    expect(ticketDisplayNumber({ tokenNumber: 1042, orderId: "abcdef12-0000" })).toBe("#1042");
+    expect(ticketDisplayNumber({ tokenNumber: 1042, tableLabel: null, orderId: "abcdef12-0000" })).toBe("#1042");
   });
-  it("falls back to a short id fragment when there's no token number", () => {
-    expect(ticketDisplayNumber({ tokenNumber: null, orderId: "abcdef12-0000" })).toBe("#abcdef12");
+  it("names the table for a dine-in order (which never carries a token number)", () => {
+    expect(ticketDisplayNumber({ tokenNumber: null, tableLabel: "T1", orderId: "abcdef12-0000" })).toBe("Table T1");
+  });
+  it("falls back to a short id fragment when there's neither", () => {
+    expect(ticketDisplayNumber({ tokenNumber: null, tableLabel: null, orderId: "abcdef12-0000" })).toBe("#abcdef12");
   });
 });
 
