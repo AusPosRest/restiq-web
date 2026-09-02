@@ -1146,15 +1146,18 @@ against the real, merged `restiq-backend` and fixed. Read directly, not guessed:
   `"draft"`/`"finalised"`. A Bill carries no order lines, table label, or currency of its own
   - `bill-settle-view.tsx`/`counter-view.tsx`/`refund-view.tsx` now read the real Order
     (for lines) and Menu (for currency) separately and pass them into `BillSummary`.
-  - **No lookup-by-orderId exists.** `POST orders/:orderId/bill` 409s
-    (`{code:'bill_already_exists'}`) with no id in the body when a bill already exists
+  - **No lookup-by-orderId exists** (at the time of this pass). `POST orders/:orderId/bill`
+    409s (`{code:'bill_already_exists'}`) with no id in the body when a bill already exists
     (`bill-core.ts`'s `createBillRecord`, read directly - it never looks the existing row
     up), and `OrderView` carries no `billId` field either. `api.ts`'s new
     `fetchOrCreateBill()` works around this the only way a client can: it remembers a
     bill's real id in `sessionStorage` (keyed by orderId, same pattern as
     `admin/(shell)/outlet-context.tsx`'s outlet-id cache) the moment it's ever seen one, and
     falls back to that cache on a 409. A fresh tab hitting an order another device already
-    billed, with nothing cached, gets an honest error rather than a guess.
+    billed, with nothing cached, gets an honest error rather than a guess. **Superseded
+    2026-09-02 by restiq-backend#98/restiq-web#117 - see the Reconciliation section at the
+    end of this doc: the real fix was on the backend (make the POST itself idempotent), not
+    a client-side cache.**
   - `settle/bill-settle-view.tsx`'s "Refund…" link now carries `?billId=` in the query
     string - the one place that already has a finalized bill's real id in hand - since the
     real refund endpoint targets the Bill, not the Order, and there's no other way to
@@ -1247,3 +1250,41 @@ verified directly against `src/pos/orders/orders.dtos.ts`/`orders.service.ts` on
 - **Live verification:** none possible from this environment (same constraint as every other
   story above) - verified by reading `restiq-backend`'s real, merged `main` DTOs/service
   directly rather than guessing from the issue's description.
+
+## Reconciliation (2026-09-02, restiq-backend#98/restiq-web#117) - the bill POST is now idempotent, the sessionStorage cache is gone
+
+restiq-backend#98/PR #99 (merged) made `POST /pos/v1/orders/:orderId/bill` idempotent per
+order: the first call still returns 201 with a new `BillView`, but every later call for the
+same order (open or finalized) now returns 200 with that *same* `BillView` - never a 409
+`bill_already_exists`, never a second row (`bill-core.ts`'s `createOrGetBillRecord`, read
+directly, replaces the old throw-on-existing `createBillRecord`). Only an order closed with
+no bill ever created still 409s (`{code:'conflict'}`). The guest realm's
+`POST /guest/v1/orders/:orderId/bill` got the identical treatment.
+
+This retires the client-side workaround the CAP-7 reconciliation above documented for
+exactly this gap:
+
+- **`src/app/pos/api.ts`'s `fetchOrCreateBill()`** - the `sessionStorage` bill-id cache
+  (`rememberBillId`/`recallBillId`) and the 409-then-`GET bills/:id` fallback are gone.
+  `posApi()` already treats any 2xx as success, so a plain `POST orders/:orderId/bill` is
+  now the entire function - the same call now correctly answers a fresh tab hitting an
+  already-billed order too, which the old cache-dependent fallback could not (its only
+  honest option there was to rethrow the 409).
+- **`src/app/qr/checkout/checkout-api.ts`'s `createOrFetchBill()`** - never held a
+  `sessionStorage` cache (the guest side already had a real `GET orders/:orderId/bill` to
+  fall back to), but its 409-catch fallback existed only to resolve the *create* race
+  between two guests requesting the bill at once - a race the backend itself now resolves
+  atomically (the same `createOrGetBillRecord` guest/bills reuses through `pos/bills`'
+  scoped barrel). That race can no longer surface as a `bill_already_exists` 409 at all, so
+  the fallback was dead code; simplified to the same plain `POST`. The now-unused
+  `fetchBill()` (`GET orders/:orderId/bill`) was removed with it - nothing else called it.
+- **Tests:** `bill-settle-view.test.tsx` and `checkout-screen.test.tsx` no longer stub a
+  `bill_already_exists` 409 or seed `sessionStorage`; both now assert the 200-repeat-call
+  path renders the same bill, and `bill-settle-view.test.tsx` adds an explicit fresh-tab
+  case (a `sessionStorage` getter that throws if touched at all) plus a genuine-409
+  (closed order, no bill) error-state case. Full suite green, `tsc --noEmit`/lint/build all
+  clean.
+- **Live verification:** none possible from this environment, same constraint as every
+  other story in this doc - verified by reading restiq-backend's real, merged
+  `src/pos/bills/{bill-core.ts,bills.service.ts,bills.controller.ts}` and
+  `src/guest/bills/{bills.service.ts,bills.controller.ts}` directly.

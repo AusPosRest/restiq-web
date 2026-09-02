@@ -302,63 +302,18 @@ export type {
 } from "./orders/[orderId]/settle/bill-state";
 import type { FinalizeBillInput, BillView } from "./orders/[orderId]/settle/bill-state";
 
-const BILL_ID_CACHE_PREFIX = "pos.billId.";
-
-/**
- * Client-side memory of an order's Bill id, keyed by orderId - sessionStorage,
- * same posture as admin/(shell)/outlet-context.tsx's outlet-id cache. Needed
- * only because the real `bills.controller.ts` (read directly) exposes no
- * lookup-by-orderId route: a 409 from `POST orders/:orderId/bill` carries no
- * id in its body (`bill-core.ts`'s `createBillRecord` just throws
- * `{code:'bill_already_exists'}`), and `OrderView` itself carries no billId
- * (`orders.dtos.ts`, read directly). Once this tab has seen a bill's real id
- * (from a create or an earlier fetch), it's remembered for the life of the
- * tab's session so a reload doesn't strand the screen on a 409 with nothing
- * to fetch.
- */
-function rememberBillId(orderId: string, billId: string): void {
-  try {
-    sessionStorage.setItem(BILL_ID_CACHE_PREFIX + orderId, billId);
-  } catch {
-    // ignore - a lost cache just means a later 409 for this order falls
-    // through to the honest "no id to recover" branch below, not a crash.
-  }
-}
-
-function recallBillId(orderId: string): string | null {
-  try {
-    return sessionStorage.getItem(BILL_ID_CACHE_PREFIX + orderId);
-  } catch {
-    return null;
-  }
-}
-
 /**
  * Create-or-fetch the Bill for an order. `POST orders/:orderId/bill`
  * (bills.controller.ts's `create`, read directly) is the only way in - there
- * is no `GET` keyed by orderId. A bill that already exists 409s
- * (`{code:'bill_already_exists'}`, no id); this falls back to the id
- * remembered from this tab's own earlier create/fetch and re-`GET`s it via
- * `bills/:id`. A fresh tab hitting an order another device already billed,
- * with nothing cached, rethrows that 409 honestly rather than guessing at an
- * id - see this file's `rememberBillId`/`recallBillId` above.
+ * is no `GET` keyed by orderId. restiq-backend#98 made this endpoint
+ * idempotent per order: a repeat call for an order that already has a Bill
+ * (open or finalized) returns 200 with that same `BillView` instead of
+ * throwing, so a plain POST is all a fresh tab ever needs - `posApi` already
+ * treats both 200 and 201 as success. Only a genuinely closed order with no
+ * Bill ever created still 409s, and that propagates to the caller as-is.
  */
-export async function fetchOrCreateBill(orderId: string): Promise<BillView> {
-  try {
-    const bill = await posApi<BillView>(`orders/${orderId}/bill`, { method: "POST" });
-    rememberBillId(orderId, bill.id);
-    return bill;
-  } catch (error) {
-    if (error instanceof PosApiError && error.status === 409) {
-      const billId = recallBillId(orderId);
-      if (billId) {
-        const bill = await posApi<BillView>(`bills/${billId}`);
-        rememberBillId(orderId, bill.id);
-        return bill;
-      }
-    }
-    throw error;
-  }
+export function fetchOrCreateBill(orderId: string): Promise<BillView> {
+  return posApi<BillView>(`orders/${orderId}/bill`, { method: "POST" });
 }
 
 export function getBill(billId: string): Promise<BillView> {
