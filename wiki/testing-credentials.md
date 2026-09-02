@@ -60,7 +60,12 @@ session is lost, regenerate an invite from the ops console
 | `1234` | Priya Nair | Cashier |
 | `5678` | Arjun Das | Waiter |
 | `9999` | Ravi Kumar | Manager |
-| `9419` | Kiran Shetty (Bay Leaf Kitchens) | Kitchen |
+| `0393` | Meera Iyer (Bay Leaf Kitchens) | Cashier |
+| `0480` | Vamsikrishna ch (Bay Leaf Kitchens) | Waiter |
+| `4947` | Rohan Desai (Bay Leaf Kitchens) | Manager |
+| `6044` | Kiran Shetty (Bay Leaf Kitchens) | Kitchen |
+| `5340` | Anita Rao (Bay Leaf Kitchens) | Owner |
+| `1005` | Suresh Nair (Bay Leaf Kitchens) | Accountant |
 
 URL: http://localhost:3100/pos/login — 4-digit keypad, auto-submits.
 
