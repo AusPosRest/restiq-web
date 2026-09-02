@@ -1,5 +1,28 @@
 # Completed
 
+- **2026-09-02** - Device enrolment page: a browser tab acts as a POS/KDS
+  device (issue #99). `/device` (`src/app/device/`) - its own minimal,
+  unauthenticated realm (reuses `pos-theme`) against the real, public
+  `POST /device/v1/enroll` (restiq-backend PR #91, read directly -
+  `src/device/enroll/*`) through a same-origin pass-through
+  (`api/[...path]/route.ts`) that attaches no session cookie, unlike every
+  other realm's proxy - the one-time code is the only credential. No stored
+  identity: a code input (auto-uppercased XXX-XXX, filtering the alphabet's
+  excluded I/O/0/1 as you type) plus an optional label;
+  `hardwareKeyFingerprint` is a `web-<uuid>` generated once with
+  `crypto.randomUUID()`, persisted in `localStorage`, and reused on every
+  re-enrol - this browser's honestly-named "hardware" identity in the
+  prototype. A stored device renders as a card (label, type, outlet,
+  enrolled time, status) with a "Continue" CTA that routes by type
+  (`pos` → `/pos/login`, `kds` → `/kds`, `kiosk`/`cds` → a plain
+  no-web-surface-yet line) and a secondary "Un-enrol this browser" that
+  clears only the local identity - server-side revocation stays an
+  ops/admin job, and the microcopy says so. Errors surface the real backend
+  codes with honest per-code copy (`code_invalid`/`code_expired`/
+  `code_already_used`). See
+  [wiki/features/tenant-admin.md](../features/tenant-admin.md) (CAP-6
+  section). Issue AusPosRest/restiq-web#99.
+
 - **2026-08-29** - QR self-order story 5: guest checkout and split payment,
   simulated (CAP-5). `/qr/checkout` (`src/app/qr/checkout/`) - a bill for
   the session's placed order, created-or-fetched (409 `bill_already_exists`

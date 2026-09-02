@@ -316,6 +316,27 @@ story. Backend counterpart: `restiq-backend/wiki/features/tenant-admin.md`.
   `devices-row-*`, `printer-row-*`, `printer-render-mode-*`,
   `printer-fallback-select-*`); keyboard-operable throughout with visible
   focus rings.
+- **`/device` - the device-side half of enrolment (issue #99):** a browser
+  tab redeems the code this section generates, turning itself into the
+  terminal. Its own minimal, unauthenticated realm (`src/app/device/`, a
+  sixth theme surface reusing `pos-theme`) against the real, public
+  `POST /device/v1/enroll` (restiq-backend PR #91,
+  `src/device/enroll/*`) through a same-origin pass-through
+  (`src/app/device/api/[...path]/route.ts`) that - unlike every other
+  realm's proxy - attaches no session cookie, since the code is the only
+  credential. No stored identity: a code input (auto-uppercased, formatted
+  XXX-XXX, filtering the alphabet's excluded I/O/0/1 as you type) plus an
+  optional label; `hardwareKeyFingerprint` is a `web-<uuid>` generated once
+  with `crypto.randomUUID()` and persisted in `localStorage`, reused on
+  every re-enrol - this browser's "hardware" identity in the prototype,
+  honestly named as such. A stored device renders as a card (label, type,
+  outlet, enrolled time, status) with a "Continue" CTA that routes by type
+  (`pos` → `/pos/login`, `kds` → `/kds`, `kiosk`/`cds` → a plain "this
+  device type has no web surface yet" line) and a secondary "Un-enrol this
+  browser" that clears only the local identity - server-side revocation
+  stays this section's `devices-row-*` job, and the microcopy says so.
+  Errors are the real backend codes with honest per-code copy
+  (`code_invalid`/`code_expired`/`code_already_used`).
 
 ## CAP-7 - Staff & roles
 
