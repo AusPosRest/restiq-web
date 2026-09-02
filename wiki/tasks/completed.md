@@ -1,5 +1,28 @@
 # Completed
 
+- **2026-09-02** - Ops console Branding tab: raw JSON textarea replaced with
+  a real form (issue #108). The owner console's own Branding settings
+  (`src/app/admin/(shell)/settings/branding-editor.tsx`) already shipped a
+  structured form in CAP-10 - the remaining raw-JSON surface was Tenant
+  Detail → Branding in the Platform Console
+  (`src/app/ops/(shell)/tenants/[id]/branding-tab.tsx`, new
+  `branding-tab-state.ts` for the pure logic, split out of `tabs.tsx`). Four
+  color fields pair a native `<input type="color">` with a synced hex text
+  input (3-/6-digit, mirrors the backend's `@IsHexColor`), a 0-64
+  corner-radius slider with a numeric readout, and text fields for font/logo
+  URL/receipt header+footer, plus a small live-preview tile. Reconciled
+  directly against restiq-backend's actual `PUT /ops/v1/tenants/:id/
+  branding` (`directory.dtos.ts`'s `UpdateBrandingDto`) - a genuinely
+  different contract from the owner console's `/admin/v1/branding`: it
+  **replaces** the tenant's whole `brandingTokens` map rather than merging
+  it, allows arbitrary extra keys, and requires every value (including
+  `cornerRadiusPx`) to be a string. `buildBrandingPayload` starts from the
+  tenant's current full token map and only overwrites the fields actually
+  changed, so a custom key an operator set outside this form's 9 fields is
+  never silently dropped. See
+  [wiki/features/tenant-admin.md](../features/tenant-admin.md) (CAP-10
+  section). Issue AusPosRest/restiq-web#108.
+
 - **2026-09-02** - Device enrolment page: a browser tab acts as a POS/KDS
   device (issue #99). `/device` (`src/app/device/`) - its own minimal,
   unauthenticated realm (reuses `pos-theme`) against the real, public

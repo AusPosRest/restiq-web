@@ -187,6 +187,24 @@ story. Backend counterpart: `restiq-backend/wiki/features/tenant-admin.md`.
   every custom control); receipt preview carries `role="img"` with a
   descriptive `aria-label` since it's a live visual summary, not
   interactive content.
+- **Platform Console counterpart (issue #108):** the ops console's Tenant
+  Detail → Branding tab (`src/app/ops/(shell)/tenants/[id]/branding-tab.tsx`,
+  state split into `branding-tab-state.ts`, AD-4 - it can't import this
+  console's own `branding-editor.tsx`) used to be a raw JSON `{}` textarea;
+  it now gets the same structured color/font/corner-radius/logo/receipt
+  fields and a small live-preview tile. It is **not** wired to
+  `/admin/v1/branding` like this console is - `PUT /ops/v1/tenants/:id/
+  branding` (`directory.dtos.ts`'s `UpdateBrandingDto`, read directly) is a
+  free-form `Record<string, string>` that the backend **replaces wholesale**
+  rather than merging, accepts arbitrary extra keys beyond the 9 this form
+  knows about, and requires every value - including `cornerRadiusPx` - to be
+  a string. `buildBrandingPayload` starts from the tenant's current full
+  token map and only overwrites the fields the operator actually changed, so
+  an unrelated custom key set earlier is never silently dropped by the
+  full-replace semantics; `cornerRadiusPx` is written back as a numeric
+  string for the same reason. The save still goes through the ops realm's
+  usual `ConfirmReasonDialog` (branding edits are audited there, unlike this
+  console's routine-edit branding).
 
 ## CAP-5 - Floor plan & stations
 
