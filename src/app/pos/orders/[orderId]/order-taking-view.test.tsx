@@ -73,6 +73,7 @@ function order(overrides: Partial<RawOrder> = {}): RawOrder {
     tenantId: "tenant-1",
     outletId: "outlet-1",
     tableId: "t4",
+    tableLabel: "T4",
     ownerId: CURRENT_STAFF_ID,
     status: "open",
     tokenNumber: null,
@@ -112,7 +113,7 @@ describe("OrderTakingView", () => {
     await waitFor(() => expect(screen.getByTestId("order-taking-menu-error")).toBeTruthy());
   });
 
-  it("renders the menu grid grouped by the first category, the empty order panel, and the real table id (no name-lookup endpoint exists)", async () => {
+  it("renders the menu grid grouped by the first category, the empty order panel, and the real table label - never the raw table id (regression for #96)", async () => {
     stubFetch((url) => (url.includes("/menu") ? jsonResponse(MENU) : jsonResponse(order())));
     renderView();
     await waitFor(() => expect(screen.getByTestId("order-taking-view")).toBeTruthy());
@@ -120,8 +121,9 @@ describe("OrderTakingView", () => {
     expect(screen.getByTestId("item-tile-item-paneer")).toBeTruthy();
     expect(screen.queryByTestId("item-tile-item-naan")).toBeNull(); // Breads tab not active yet
     expect(screen.getByTestId("order-panel-empty")).toBeTruthy();
-    // Rendered both in the header and the order panel - real table id, no name-lookup endpoint exists.
-    expect(screen.getAllByText("Table t4").length).toBeGreaterThan(0);
+    // Rendered both in the header and the order panel - the real table label, not the raw id.
+    expect(screen.getAllByText("Table T4").length).toBeGreaterThan(0);
+    expect(screen.queryByText("Table t4")).toBeNull();
   });
 
   it('shows "You" for the signed-in staff\'s own order, not their raw id', async () => {

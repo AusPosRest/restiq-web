@@ -17,6 +17,7 @@ function order(overrides: Partial<RawOpenOrder> = {}): RawOpenOrder {
   return {
     id: "order-1",
     tableId: "table-4",
+    tableLabel: "T4",
     ownerId: CURRENT_STAFF_ID,
     status: "open",
     createdAt: new Date().toISOString(),
@@ -68,16 +69,17 @@ describe("OpenOrdersScreen", () => {
     expect(screen.getByTestId("open-order-order-1")).toBeTruthy();
   });
 
-  it("renders every open order with its origin, server, status and elapsed time", async () => {
+  it("renders every open order with its origin, server, status and elapsed time - the real table label, never the raw table id (regression for #96)", async () => {
     const orders = [
-      order({ id: "order-1", tableId: "table-4" }),
-      order({ id: "order-2", tableId: null, ownerId: "staff-priya" }),
+      order({ id: "order-1", tableId: "table-4", tableLabel: "T4" }),
+      order({ id: "order-2", tableId: null, tableLabel: null, ownerId: "staff-priya" }),
     ];
     stubFetch(() => jsonResponse(orders));
     render(<OpenOrdersScreen outletId="outlet-1" currentStaffId={CURRENT_STAFF_ID} />);
     await waitFor(() => expect(screen.getByTestId("open-orders")).toBeTruthy());
 
-    expect(screen.getByTestId("open-order-order-1").textContent).toContain("Table table-4");
+    expect(screen.getByTestId("open-order-order-1").textContent).toContain("Table T4");
+    expect(screen.getByTestId("open-order-order-1").textContent).not.toContain("table-4");
     expect(screen.getByTestId("open-order-order-2").textContent).toContain("Counter");
     expect(screen.getByTestId("open-order-order-2").textContent).toContain("staff-priya");
   });
@@ -114,8 +116,8 @@ describe("OpenOrdersScreen", () => {
     const user = userEvent.setup();
     stubFetch(() =>
       jsonResponse([
-        order({ id: "order-table", tableId: "table-4", ownerId: "staff-priya" }),
-        order({ id: "order-counter", tableId: null, ownerId: "staff-priya" }),
+        order({ id: "order-table", tableId: "table-4", tableLabel: "T4", ownerId: "staff-priya" }),
+        order({ id: "order-counter", tableId: null, tableLabel: null, ownerId: "staff-priya" }),
       ]),
     );
     render(<OpenOrdersScreen outletId="outlet-1" currentStaffId={CURRENT_STAFF_ID} />);
@@ -123,7 +125,7 @@ describe("OpenOrdersScreen", () => {
 
     await user.click(screen.getByTestId("open-order-take-over-order-table"));
     let dialog = await screen.findByTestId("transfer-ownership-dialog");
-    expect(dialog.textContent).toContain("Table table-4");
+    expect(dialog.textContent).toContain("Table T4");
     expect(dialog.textContent).not.toContain("Table Table");
     await user.click(screen.getByTestId("transfer-cancel"));
 

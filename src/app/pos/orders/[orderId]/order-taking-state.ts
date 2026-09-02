@@ -53,15 +53,25 @@
 //    accepted and silently dropped server-side today
 //    (`ValidationPipe({whitelist:true})`), same latent gap that already
 //    existed before this pass, just not this story's to close.
-//  - `OrderView.ownerStaffName`/`tableLabel` are kept as field names (rather
-//    than renamed to `ownerStaffId`/removed) purely because `counter-view.tsx`
-//    (CAP-6, also out of scope per spec-2-3-2-4's boundaries) reads
-//    `order.ownerStaffName` directly and isn't touched by this pass - the
-//    *value* behind that name is now real (the raw owner id, honestly
-//    reported), not a fabricated one, satisfying the "never a fabricated
-//    real value" rule even though the field name is a legacy holdover.
-//    order-taking-view.tsx (in scope) applies its own "You" substitution on
-//    top of that raw id at render time, same as open-orders-screen.tsx.
+//  - `OrderView.ownerStaffName` is kept as a field name (rather than renamed
+//    to `ownerStaffId`) purely because `counter-view.tsx` (CAP-6, also out of
+//    scope per spec-2-3-2-4's boundaries) reads `order.ownerStaffName`
+//    directly and isn't touched by this pass - the *value* behind that name
+//    is now real (the raw owner id, honestly reported), not a fabricated
+//    one, satisfying the "never a fabricated real value" rule even though
+//    the field name is a legacy holdover. order-taking-view.tsx (in scope)
+//    applies its own "You" substitution on top of that raw id at render
+//    time, same as open-orders-screen.tsx.
+//
+// RECONCILED (2026-09-02, restiq-backend#96) - `OrderView` (every one of
+// this file's endpoints - get/lines/status/transfer, plus open-orders and
+// counter-orders which reuse the same wire shape) now also carries
+// `tableLabel: string | null` - the real DiningTable's label for a dine-in
+// order, `null` for a counter order (never fabricated). restiq-web#96's
+// reported bug ("TABLE 01a06108-…" rendering the raw tableId) is exactly the
+// gap this closes: `orderOriginLabel` below now reads `tableLabel`,
+// falling back to the raw `tableId` only if the field is somehow missing -
+// never the other way round.
 
 export interface PosMenuVariantView {
   id: string;
@@ -137,6 +147,8 @@ export interface RawOrder {
   tenantId: string;
   outletId: string;
   tableId: string | null;
+  /** The DiningTable's real label for a dine-in order; `null` for a counter order - see file header. */
+  tableLabel: string | null;
   ownerId: string;
   status: "open" | "sent" | "closed";
   tokenNumber: number | null;
@@ -174,6 +186,8 @@ export interface OrderView {
   id: string;
   /** `null` for a CAP-6 QSR counter order - it has no table at all, never a fabricated empty-string id. */
   tableId: string | null;
+  /** The real DiningTable label (e.g. "T1") for a dine-in order; `null` for a counter order - see file header. */
+  tableLabel: string | null;
   status: "open" | "sent" | "closed";
   /** Raw owner id, kept under this legacy field name for `counter-view.tsx`'s sake - see file header. */
   ownerStaffName: string;
@@ -222,6 +236,7 @@ export function toOrderView(raw: RawOrder, menu?: Pick<PosMenuView, "items">): O
   return {
     id: raw.id,
     tableId: raw.tableId,
+    tableLabel: raw.tableLabel,
     status: raw.status,
     ownerStaffName: raw.ownerId,
     tokenNumber: raw.tokenNumber,
@@ -230,9 +245,9 @@ export function toOrderView(raw: RawOrder, menu?: Pick<PosMenuView, "items">): O
   };
 }
 
-/** "Table {id}" / "Counter" - the same raw-id-fallback convention open-orders-state.ts's `originLabel` uses, kept as a one-liner here rather than a cross-import since the two operate on differently-shaped types. */
-export function orderOriginLabel(order: Pick<OrderView, "tableId">): string {
-  return order.tableId !== null ? `Table ${order.tableId}` : "Counter";
+/** "Table {tableLabel}" / "Counter" - falls back to the raw tableId only if tableLabel is somehow missing, never the other way round. Same raw-id-fallback convention open-orders-state.ts's `originLabel` uses, kept as a one-liner here rather than a cross-import since the two operate on differently-shaped types. */
+export function orderOriginLabel(order: Pick<OrderView, "tableId" | "tableLabel">): string {
+  return order.tableId !== null ? `Table ${order.tableLabel ?? order.tableId}` : "Counter";
 }
 
 export interface AddOrderLineInput {

@@ -38,6 +38,7 @@ function rawOrder(overrides: Partial<RawOrder> = {}): RawOrder {
     tenantId: "tenant-1",
     outletId: "outlet-1",
     tableId: "table-4",
+    tableLabel: "T4",
     ownerId: "staff-1",
     status: "sent",
     tokenNumber: null,
@@ -109,6 +110,15 @@ describe("BillSettleView - loading", () => {
     await screen.findByTestId("bill-summary");
     expect(screen.getByTestId("bill-line-line-1")).toBeTruthy();
     expect(screen.getByTestId("bill-grand-total").textContent).toBe("₹819.00");
+  });
+
+  it("shows the real table label in the header, never the raw table id (regression for #96)", async () => {
+    stubFetch();
+    render(<BillSettleView orderId={ORDER_ID} />);
+
+    const summary = await screen.findByTestId("bill-summary");
+    expect(summary.textContent).toContain("Table T4");
+    expect(summary.textContent).not.toContain("table-4");
   });
 
   it("falls back to the cached bill id and GETs it when creation 409s (a bill already exists for this order)", async () => {

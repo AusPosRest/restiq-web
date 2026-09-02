@@ -19,6 +19,7 @@ function rawOrder(overrides: Partial<RawOpenOrder> = {}): RawOpenOrder {
   return {
     id: "order-1",
     tableId: "table-9",
+    tableLabel: "T9",
     ownerId: "staff-priya",
     status: "open",
     createdAt: new Date().toISOString(),
@@ -28,14 +29,19 @@ function rawOrder(overrides: Partial<RawOpenOrder> = {}): RawOpenOrder {
 }
 
 describe("toOpenOrderEntry", () => {
-  it("maps a table order, falling back to the raw table id (no label lookup exists server-side yet)", () => {
-    const entry = toOpenOrderEntry(rawOrder({ tableId: "table-9" }));
+  it("maps a table order using the real tableLabel, never the raw table id (regression for #96)", () => {
+    const entry = toOpenOrderEntry(rawOrder({ tableId: "table-9", tableLabel: "T9" }));
     expect(entry.origin).toBe("table");
+    expect(entry.tableLabel).toBe("T9");
+  });
+
+  it("falls back to the raw table id only if tableLabel is somehow missing, never the other way round", () => {
+    const entry = toOpenOrderEntry(rawOrder({ tableId: "table-9", tableLabel: null }));
     expect(entry.tableLabel).toBe("table-9");
   });
 
   it("maps a counter order (null tableId) with no table label", () => {
-    const entry = toOpenOrderEntry(rawOrder({ tableId: null }));
+    const entry = toOpenOrderEntry(rawOrder({ tableId: null, tableLabel: null }));
     expect(entry.origin).toBe("counter");
     expect(entry.tableLabel).toBeNull();
   });
