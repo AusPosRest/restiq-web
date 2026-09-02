@@ -131,7 +131,7 @@ describe("FloorPlan", () => {
 
     await waitFor(() => expect(shape.dataset.x).toBe("48"));
     expect(fetchMock).toHaveBeenCalledWith(
-      expect.stringContaining("/outlets/outlet-1/tables/t1"),
+      expect.stringContaining("/outlets/outlet-1/floor-plan/tables/t1"),
       expect.objectContaining({ method: "PATCH", body: JSON.stringify({ x: 48, y: 40 }) }),
     );
   });

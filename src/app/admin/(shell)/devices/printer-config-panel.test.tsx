@@ -102,7 +102,7 @@ describe("PrinterConfigPanel", () => {
 
     await waitFor(() => expect(onStationUpdated).toHaveBeenCalledWith(expect.objectContaining({ id: "s1", fallbackPrinterId: "printer-2" })));
     expect(fetchMock).toHaveBeenCalledWith(
-      expect.stringContaining("/outlets/outlet-1/stations/s1"),
+      expect.stringContaining("/outlets/outlet-1/floor-plan/stations/s1"),
       expect.objectContaining({ method: "PATCH", body: JSON.stringify({ fallbackPrinterId: "printer-2" }) }),
     );
   });
