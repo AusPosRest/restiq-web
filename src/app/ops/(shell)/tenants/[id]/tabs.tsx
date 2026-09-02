@@ -6,6 +6,7 @@ import { MailPlus } from "lucide-react";
 import { useState } from "react";
 import { Button } from "@/components/ui/button";
 import { opsApi, OpsApiError, TenantDetail } from "../../api";
+import { InviteLinkChip } from "../invite-link";
 import { ConfirmReasonDialog } from "../../confirm-reason-dialog";
 import { StatusBadge } from "../../status-badge";
 import { useToast } from "../../toast";
@@ -283,11 +284,16 @@ export function OwnersTab({ detail, onMutated }: Readonly<TabProps>) {
   const { tenant, ownerInvite } = detail;
   const [confirming, setConfirming] = useState(false);
   const [busy, setBusy] = useState(false);
+  const [inviteToken, setInviteToken] = useState<string | null>(null);
 
   async function regenerate(reason: string) {
     setBusy(true);
     try {
-      await opsApi(`tenants/${tenant.id}/owner-invite/regenerate`, { method: "POST", body: JSON.stringify({ reason }) });
+      const body = await opsApi<{ inviteToken: string }>(`tenants/${tenant.id}/owner-invite/regenerate`, {
+        method: "POST",
+        body: JSON.stringify({ reason }),
+      });
+      setInviteToken(body.inviteToken);
       setConfirming(false);
       toast({ kind: "success", message: "Owner invite regenerated - the previous link no longer works." });
       onMutated();
@@ -340,6 +346,7 @@ export function OwnersTab({ detail, onMutated }: Readonly<TabProps>) {
                     })}
                   </span>
                 </p>
+                {inviteToken && <InviteLinkChip token={inviteToken} />}
               </div>
             ) : (
               <p className="mt-3 text-sm text-muted-foreground" data-testid="owner-invite-none">
