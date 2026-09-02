@@ -1,5 +1,7 @@
 import Link from "next/link";
+import { DEMO_STAFF } from "./demo-logins";
 import { CredentialValue } from "./landing-credential";
+import { deviceOpenHref, fetchLandingDevices } from "./landing-devices";
 
 // The public landing page: one door per user surface. RESTIQ has five disjoint
 // auth realms (ops/admin/pos/kds-on-pos/guest) plus the device-enrolment realm,
@@ -48,11 +50,7 @@ const SURFACES: Surface[] = [
     blurb: "Table map, order taking, fire-to-kitchen and bill settlement on a tablet till.",
     href: "/pos/login",
     cta: "PIN sign in",
-    creds: [
-      { label: "Cashier", value: "PIN 1234" },
-      { label: "Waiter", value: "PIN 5678" },
-      { label: "Manager", value: "PIN 9999" },
-    ],
+    creds: [{ label: "PINs", value: "See the staff logins table below" }],
   },
   {
     name: "Kitchen Display",
@@ -85,7 +83,14 @@ export const metadata = {
   description: "Multi-tenant restaurant POS - choose your surface",
 };
 
-export default function Home() {
+// Devices/staff-logins below fetch live data server-side on every request -
+// prerendering at build time would either need the backend reachable during
+// `next build` or bake in a stale snapshot.
+export const dynamic = "force-dynamic";
+
+export default async function Home() {
+  const devicesResult = await fetchLandingDevices();
+
   return (
     <div className="ops-theme min-h-screen bg-background text-foreground">
       <div className="mx-auto flex min-h-screen max-w-5xl flex-col px-6 py-12 sm:py-16">
@@ -146,6 +151,101 @@ export default function Home() {
             </div>
           ))}
         </main>
+
+        <section className="mt-12 flex flex-col gap-3" data-testid="landing-devices">
+          <h2 className="text-lg font-semibold">Devices (live)</h2>
+          {devicesResult.kind === "unavailable" ? (
+            <p className="text-sm text-muted-foreground" data-testid="landing-devices-unavailable">
+              Device list unavailable - backend not reachable.
+            </p>
+          ) : (
+            <div className="overflow-x-auto rounded-xl border border-border">
+              <table className="w-full min-w-[640px] text-left text-sm" data-testid="landing-devices-table">
+                <thead>
+                  <tr className="border-b border-border text-xs uppercase tracking-wider text-muted-foreground">
+                    <th className="px-3 py-2 font-medium">Device</th>
+                    <th className="px-3 py-2 font-medium">Tenant</th>
+                    <th className="px-3 py-2 font-medium">Outlet</th>
+                    <th className="px-3 py-2 font-medium">Type</th>
+                    <th className="px-3 py-2 font-medium">Status</th>
+                    <th className="px-3 py-2 font-medium">Open</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {devicesResult.devices.map((d) => {
+                    const openHref = deviceOpenHref(d);
+                    return (
+                      <tr key={d.id} className="border-b border-border/60 last:border-0" data-testid={`landing-device-${d.id}`}>
+                        <td className="px-3 py-2 font-medium">{d.label}</td>
+                        <td className="px-3 py-2 text-muted-foreground">{d.tenantName}</td>
+                        <td className="px-3 py-2 text-muted-foreground">{d.outletName ?? "—"}</td>
+                        <td className="px-3 py-2 font-mono text-xs uppercase">{d.type}</td>
+                        <td className="px-3 py-2 text-muted-foreground">{d.status}</td>
+                        <td className="px-3 py-2">
+                          {openHref ? (
+                            <Link
+                              href={openHref}
+                              target="_blank"
+                              rel="noreferrer"
+                              className="font-semibold text-primary"
+                              data-testid={`landing-device-open-${d.id}`}
+                            >
+                              Open
+                            </Link>
+                          ) : null}
+                        </td>
+                      </tr>
+                    );
+                  })}
+                </tbody>
+              </table>
+            </div>
+          )}
+        </section>
+
+        <section className="mt-12 flex flex-col gap-3" data-testid="landing-staff-logins">
+          <h2 className="text-lg font-semibold">Staff logins</h2>
+          <div className="overflow-x-auto rounded-xl border border-border">
+            <table className="w-full min-w-[560px] text-left text-sm" data-testid="landing-staff-table">
+              <thead>
+                <tr className="border-b border-border text-xs uppercase tracking-wider text-muted-foreground">
+                  <th className="px-3 py-2 font-medium">Tenant</th>
+                  <th className="px-3 py-2 font-medium">Name</th>
+                  <th className="px-3 py-2 font-medium">Role</th>
+                  <th className="px-3 py-2 font-medium">PIN</th>
+                  <th className="px-3 py-2 font-medium">Open</th>
+                </tr>
+              </thead>
+              <tbody>
+                {DEMO_STAFF.map((staff) => (
+                  <tr
+                    key={`${staff.tenant}-${staff.name}`}
+                    className="border-b border-border/60 last:border-0"
+                    data-testid={`landing-staff-${staff.name}`}
+                  >
+                    <td className="px-3 py-2 text-muted-foreground">{staff.tenant}</td>
+                    <td className="px-3 py-2 font-medium">{staff.name}</td>
+                    <td className="px-3 py-2 text-muted-foreground">{staff.role}</td>
+                    <td className="px-3 py-2">
+                      <CredentialValue label={`${staff.name} PIN`} value={staff.pin} />
+                    </td>
+                    <td className="px-3 py-2">
+                      <Link
+                        href="/pos/login"
+                        target="_blank"
+                        rel="noreferrer"
+                        className="font-semibold text-primary"
+                        data-testid={`landing-staff-open-${staff.name}`}
+                      >
+                        Open
+                      </Link>
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        </section>
 
         <footer className="mt-12 border-t border-border pt-6 text-xs text-muted-foreground">
           RESTIQ is a working prototype. All logins above are seeded demo accounts - see the full testing
