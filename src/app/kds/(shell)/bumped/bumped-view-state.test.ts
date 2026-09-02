@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import type { BumpedTicketView } from "../../api";
-import { formatRecallTimes, sortBumpedNewestFirst } from "./bumped-view-state";
+import { formatBumpedSummary, formatRecallSummary, sortBumpedNewestFirst } from "./bumped-view-state";
 
 function ticket(overrides: Partial<BumpedTicketView>): BumpedTicketView {
   return {
@@ -32,14 +32,22 @@ describe("sortBumpedNewestFirst", () => {
   });
 });
 
-describe("formatRecallTimes", () => {
-  it("returns one formatted local-time label per recall", () => {
-    const times = formatRecallTimes(["2026-08-29T10:00:00.000Z", "2026-08-29T10:15:00.000Z"]);
-    expect(times).toHaveLength(2);
-    expect(times[0]).not.toBe("");
+describe("formatBumpedSummary", () => {
+  it("is a static 'Bumped hh:mm · took m:ss' line from firedAt/bumpedAt", () => {
+    const summary = formatBumpedSummary({ firedAt: "2026-08-29T09:50:00.000Z", bumpedAt: "2026-08-29T10:00:10.000Z" });
+    expect(summary).toContain("Bumped");
+    expect(summary).toContain("took 10:10");
+  });
+});
+
+describe("formatRecallSummary", () => {
+  it("is one quiet line naming the count and the most recent recall", () => {
+    const summary = formatRecallSummary(["2026-08-29T09:00:00.000Z", "2026-08-29T09:30:00.000Z"]);
+    expect(summary).toContain("Recalled 2×");
+    expect(summary).toContain("last");
   });
 
-  it("is empty for a never-recalled ticket", () => {
-    expect(formatRecallTimes([])).toEqual([]);
+  it("is null for a never-recalled ticket", () => {
+    expect(formatRecallSummary([])).toBeNull();
   });
 });

@@ -89,11 +89,17 @@ describe("BumpedViewScreen", () => {
     expect(ids).toEqual(["kds-ticket-newest", "kds-ticket-middle", "kds-ticket-oldest"]);
   });
 
-  it("shows each ticket's recall history", async () => {
-    vi.stubGlobal("fetch", mockFetch(() => [ticket({ recallCount: 2, recallHistory: ["2026-08-29T09:00:00.000Z", "2026-08-29T09:30:00.000Z"] })]));
+  it("shows recall history as one quiet line, not a red banner", async () => {
+    vi.stubGlobal("fetch", mockFetch(() => [ticket({ recallCount: 2, recalled: true, recallHistory: ["2026-08-29T09:00:00.000Z", "2026-08-29T09:30:00.000Z"] })]));
     renderScreen();
 
-    await vi.waitFor(() => expect(screen.getByTestId("kds-ticket-t1-recall-history").textContent).toContain("Recalled 2x"));
+    const history = await vi.waitFor(() => screen.getByTestId("kds-ticket-t1-recall-history"));
+    expect(history.textContent).toContain("Recalled 2×");
+    expect(history.textContent).toContain("last");
+    expect(history.className).not.toContain("ticket-recalled");
+    // A bumped ticket is done - the loud RECALLED banner is for an active,
+    // just-recalled ticket back in a queue, not a finished one.
+    expect(screen.queryByTestId("kds-ticket-t1-recalled-banner")).toBeNull();
   });
 
   it("renders no history strip for a ticket that was never recalled", async () => {
@@ -102,6 +108,40 @@ describe("BumpedViewScreen", () => {
 
     await vi.waitFor(() => expect(screen.getByTestId("kds-ticket-t1")).toBeTruthy());
     expect(screen.queryByTestId("kds-ticket-t1-recall-history")).toBeNull();
+  });
+
+  it("shows a static 'Bumped ... took ...' line instead of a live ageing clock", async () => {
+    vi.stubGlobal("fetch", mockFetch(() => [ticket({ firedAt: "2026-08-29T09:50:00.000Z", bumpedAt: "2026-08-29T10:00:00.000Z" })]));
+    renderScreen();
+
+    const summary = await vi.waitFor(() => screen.getByTestId("kds-ticket-t1-bumped-summary"));
+    expect(summary.textContent).toContain("Bumped");
+    expect(summary.textContent).toContain("took");
+    expect(screen.queryByTestId("kds-ticket-t1-elapsed")).toBeNull();
+
+    const before = summary.textContent;
+    await vi.advanceTimersByTimeAsync(5_000);
+    expect(summary.textContent).toBe(before);
+  });
+
+  it("gives a bumped card a neutral border, not the ageing color scale", async () => {
+    vi.stubGlobal("fetch", mockFetch(() => [ticket({})]));
+    renderScreen();
+
+    const card = await vi.waitFor(() => screen.getByTestId("kds-ticket-t1"));
+    expect(card.hasAttribute("data-ageing")).toBe(false);
+    expect(card.className).not.toContain("ticket-bumped");
+    expect(card.className).not.toContain("ticket-new");
+    expect(card.className).not.toContain("ticket-ageing");
+    expect(card.className).not.toContain("ticket-urgent");
+  });
+
+  it("shows the Bumped-tab explainer", async () => {
+    vi.stubGlobal("fetch", mockFetch(() => []));
+    renderScreen();
+
+    await vi.waitFor(() => expect(screen.getByTestId("kds-bumped-empty")).toBeTruthy());
+    expect(screen.getByTestId("kds-tab-subtitle").textContent).toBe("Done tickets — recall one if a plate comes back");
   });
 
   it("recalls a bumped ticket with a single tap, no confirmation, and it drops off the list on the next poll", async () => {

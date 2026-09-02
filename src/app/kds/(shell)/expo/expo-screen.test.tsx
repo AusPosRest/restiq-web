@@ -186,4 +186,12 @@ describe("ExpoScreen", () => {
     await vi.waitFor(() => expect(screen.getByTestId("kds-expo-empty")).toBeTruthy());
     expect(screen.getByText("No open orders")).toBeTruthy();
   });
+
+  it("shows the Expo-tab explainer", async () => {
+    vi.stubGlobal("fetch", mockFetch(() => []));
+    renderScreen();
+
+    await vi.waitFor(() => expect(screen.getByTestId("kds-expo-empty")).toBeTruthy());
+    expect(screen.getByTestId("kds-tab-subtitle").textContent).toBe("Everything across stations that's ready to go out");
+  });
 });

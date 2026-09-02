@@ -131,7 +131,9 @@ slot established by issue #66.
 - `src/app/kds/(shell)/bumped/`:
   - `bumped-view-state.ts` - pure logic: `sortBumpedNewestFirst` (defensive
     client re-sort, same precedent as K1's `sortOldestFirst`),
-    `formatRecallTimes` (ISO timestamps -> local clock-time labels).
+    `formatBumpedSummary` (the static "Bumped hh:mm · took m:ss" line - see
+    the clarity pass below) and `formatRecallSummary` (recall history as one
+    quiet "Recalled Nx · last hh:mm" fact instead of a per-recall list).
   - `use-bumped-queue.ts` - the ~5s poll, stale-on-failure, `refresh()` for
     immediate re-polling after a recall - identical shape to K1's
     `use-station-queue.ts`, per the shell story's documented poll convention.
@@ -141,13 +143,14 @@ slot established by issue #66.
     contract); bump/refire are no-ops here since `TicketCard` only renders
     Recall for a `status: "bumped"` ticket.
   - `page.tsx` - replaces the shell story's `ComingSoon` placeholder.
-- `TicketCard` (`station/ticket-card.tsx`) gained one new optional prop,
-  `recallTimes?: string[]` - when present and non-empty, renders a small
-  "Recalled Nx - <times>" strip below the header. Undefined everywhere else
-  (K1's `/queue` read carries no recall history), so K1's own rendering and
-  tests are unaffected. This is the "reuse `TicketCard` directly" contract
-  the shell story asked for: no forked ticket rendering for K3, one additive
-  prop instead.
+- `TicketCard` (`station/ticket-card.tsx`) gained two optional props,
+  `bumpedSummary?: string` and `recallSummary?: string | null` (superseding
+  the original `recallTimes?: string[]` - see the clarity pass below).
+  Undefined/null everywhere else (K1's `/queue` read carries no recall
+  history and is never `status: "bumped"`), so K1's own rendering and tests
+  are unaffected. This is the "reuse `TicketCard` directly" contract the
+  shell story asked for: no forked ticket rendering for K3, additive props
+  instead.
 
 ## Key decisions (continued: K3, issue #71)
 
@@ -168,20 +171,55 @@ slot established by issue #66.
   append-only `TicketEvent` log) is real data the mock doesn't show; K3
   renders that instead - "Recalled Nx - <time>, <time>" - real facts, not a
   fabricated name.
-- **No time-since-bumped clock on `TicketCard`; the elapsed figure still
-  reads time-since-fired.** Reusing `TicketCard` as-is (per the shell
-  story's explicit instruction) means the header's elapsed time keeps its
-  existing meaning rather than gaining a second, forked clock for this one
-  screen. The ageing color is moot here regardless - `TicketCard` already
-  forces the green bumped frame for any `status: "bumped"` ticket, ignoring
-  the ageing level entirely.
 - **`ticket.recalled` (the RECALLED banner) does not appear in the bumped
   view.** Per the real DTO's own doc comment, `recalled` is true only while
   a ticket is `queued` as the direct result of a recall - a bumped ticket
-  is never in that state, so the banner correctly never renders here. The
-  banner belongs to K1's station queue (where a just-recalled ticket lands),
-  not K3 - consistent with SPEC's "recalling... returns it to its source
-  station's queue marked RECALLED", not the bumped view itself.
+  is never in that state in practice, so the banner is additionally gated
+  on `ticket.status !== "bumped"` as a defensive belt-and-braces (see the
+  clarity pass below - a bumped ticket that once passed through a recall
+  should never re-show the loud banner, only the quiet history line). The
+  banner belongs to K1's station queue (where a just-recalled ticket
+  lands), not K3 - consistent with SPEC's "recalling... returns it to its
+  source station's queue marked RECALLED", not the bumped view itself.
+
+### K3 clarity pass (issue #134)
+
+Owner feedback on a `/kds/bumped` screenshot: finished tickets kept a live
+ageing clock counting past 167 minutes, every card used the same ageing-
+scale green regardless of how long ago it bumped, "Recalled Nx - <times>"
+read as a loud badge, and none of the four tabs said what it was for.
+
+- **The elapsed figure now reads time-since-fired only while a ticket is
+  `queued`; a bumped ticket shows a static summary instead.**
+  `ticket-card.tsx` branches on `ticket.status === "bumped"` to swap
+  `TicketCard`'s header figure for `bumpedSummary` (from
+  `bumped-view-state.ts`'s `formatBumpedSummary`: `"Bumped hh:mm · took
+  m:ss"`, computed once from the ticket's own fixed `firedAt`/`bumpedAt` -
+  it never ticks again). `took` reuses `formatElapsed`'s existing "m:ss"
+  format verbatim, fed `bumpedAt` instead of a live `now`, rather than
+  inventing a second duration formatter.
+- **A bumped card's frame is a neutral border, not the ageing-scale
+  green.** `ticket-card.tsx`'s `BUMPED_FRAME_CLASSES` (`border-border
+  bg-card`) replaces the old `border-ticket-bumped bg-ticket-bumped/10` -
+  a done ticket carries no urgency, so it no longer borrows a color from
+  the same blue/yellow/red vocabulary the still-cooking board uses.
+  `data-ageing` is likewise omitted on a bumped card (`undefined`, not a
+  level) so nothing implies it's still on the ageing scale.
+- **Recall history collapses to one quiet fact, not a badge per recall.**
+  `formatRecallSummary` returns `"Recalled Nx · last hh:mm"` (or `null` for
+  never-recalled) instead of the old `formatRecallTimes`' full list of
+  every recall time. It renders as a plain muted-text line - the earlier
+  `bg-ticket-recalled/10 text-ticket-recalled` red styling is gone from
+  this line entirely; only the still-queued RECALLED banner (K1) keeps
+  that red treatment, for an active ticket that actually needs attention.
+- **Per-tab subtitles live in one map in the shell, not per page.**
+  `kds-header.tsx`'s `TAB_SUBTITLES` (keyed by `KdsMode`) renders a
+  `data-testid="kds-tab-subtitle"` line under the nav row on every screen:
+  Station - "Tickets for this station, oldest first — bump when plated";
+  Expo - "Everything across stations that's ready to go out"; Bumped -
+  "Done tickets — recall one if a plate comes back"; All-Day - "Counts of
+  everything fired today". One map keeps the four modes' copy from
+  drifting the way the original, unexplained nav did.
 
 ## Integration points for later stories
 

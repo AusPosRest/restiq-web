@@ -16,6 +16,11 @@ const FRAME_CLASSES: Record<AgeingLevel, string> = {
   urgent: "border-ticket-urgent bg-ticket-urgent/10",
 };
 
+// A bumped (done) ticket carries no urgency, so it gets a neutral card
+// border rather than a spot on the ageing scale (issue #134: "every card is
+// the same green" read as an ageing color that never resolved anything).
+const BUMPED_FRAME_CLASSES = "border-border bg-card";
+
 function TicketLineRow({ line }: Readonly<{ line: TicketLineView }>) {
   return (
     <li data-testid={`kds-line-${line.id}`} className={line.voided ? "text-ticket-urgent" : "text-foreground"}>
@@ -56,7 +61,8 @@ export function TicketCard({
   onBump,
   onRecall,
   onRefire,
-  recallTimes,
+  bumpedSummary,
+  recallSummary,
 }: Readonly<{
   ticket: TicketView;
   ageingThresholdMinutes: number;
@@ -67,23 +73,29 @@ export function TicketCard({
   onRecall: () => void;
   onRefire: () => void;
   /**
-   * K3-only (bumped view, CAP-4): formatted local-time labels for this
-   * ticket's full recall history, from the `/bumped` endpoint's
-   * `recallHistory`. Omitted everywhere else (K1's `/queue` read carries no
-   * such history) - undefined renders nothing, same TicketCard either way.
+   * K3-only (bumped view, CAP-4/issue #134): the static "Bumped hh:mm ·
+   * took m:ss" line that replaces the live ageing clock once a ticket is
+   * done. Omitted everywhere else (only a `status: "bumped"` ticket ever
+   * needs it) - undefined renders nothing, same TicketCard either way.
    */
-  recallTimes?: string[];
+  bumpedSummary?: string;
+  /**
+   * K3-only: one quiet "Recalled Nx · last hh:mm" line from the `/bumped`
+   * endpoint's `recallHistory`, or null for a ticket never recalled.
+   */
+  recallSummary?: string | null;
 }>) {
+  const isBumped = ticket.status === "bumped";
   const level = ageingLevel(ticket.firedAt, ageingThresholdMinutes, nowMs);
   const batches = groupLinesByBatch(ticket.lines);
 
   return (
     <article
       data-testid={`kds-ticket-${ticket.id}`}
-      data-ageing={level}
-      className={`flex w-72 shrink-0 flex-col overflow-hidden rounded-lg border-2 bg-card ${ticket.status === "bumped" ? "border-ticket-bumped bg-ticket-bumped/10" : FRAME_CLASSES[level]}`}
+      data-ageing={isBumped ? undefined : level}
+      className={`flex w-72 shrink-0 flex-col overflow-hidden rounded-lg border-2 bg-card ${isBumped ? BUMPED_FRAME_CLASSES : FRAME_CLASSES[level]}`}
     >
-      {ticket.recalled && (
+      {ticket.recalled && !isBumped && (
         <div data-testid={`kds-ticket-${ticket.id}-recalled-banner`} className="bg-ticket-recalled px-3 py-1 text-center text-xs font-bold tracking-wide text-white">
           RECALLED
         </div>
@@ -98,14 +110,20 @@ export function TicketCard({
             {orderTypeLabel(ticket)}
           </p>
         </div>
-        <p data-testid={`kds-ticket-${ticket.id}-elapsed`} className="font-headline text-3xl font-bold tabular-nums text-foreground">
-          {formatElapsed(ticket.firedAt, nowMs)}
-        </p>
+        {isBumped ? (
+          <p data-testid={`kds-ticket-${ticket.id}-bumped-summary`} className="text-right text-xs font-medium text-muted-foreground">
+            {bumpedSummary}
+          </p>
+        ) : (
+          <p data-testid={`kds-ticket-${ticket.id}-elapsed`} className="font-headline text-3xl font-bold tabular-nums text-foreground">
+            {formatElapsed(ticket.firedAt, nowMs)}
+          </p>
+        )}
       </header>
 
-      {recallTimes && recallTimes.length > 0 && (
-        <p data-testid={`kds-ticket-${ticket.id}-recall-history`} className="mx-3 mt-2 rounded bg-ticket-recalled/10 px-2 py-1 text-xs font-medium text-ticket-recalled">
-          Recalled {recallTimes.length}x - {recallTimes.join(", ")}
+      {recallSummary && (
+        <p data-testid={`kds-ticket-${ticket.id}-recall-history`} className="mx-3 mt-2 text-xs font-medium text-muted-foreground">
+          {recallSummary}
         </p>
       )}
 

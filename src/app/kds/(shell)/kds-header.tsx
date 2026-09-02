@@ -28,6 +28,16 @@ const NAV: { mode: KdsMode; label: string; href: string }[] = [
   { mode: "all-day", label: "All-Day", href: "/kds/all-day" },
 ];
 
+// One-line explainer per tab (issue #134: "none of the four tabs... explain
+// what they are"). Kept here, not per-page, so the four modes' copy can
+// never drift out of sync with each other.
+const TAB_SUBTITLES: Record<KdsMode, string> = {
+  station: "Tickets for this station, oldest first — bump when plated",
+  expo: "Everything across stations that's ready to go out",
+  bumped: "Done tickets — recall one if a plate comes back",
+  "all-day": "Counts of everything fired today",
+};
+
 export function KdsHeader({ activeMode, stationName }: Readonly<{ activeMode: KdsMode; stationName?: string }>) {
   const router = useRouter();
 
@@ -37,46 +47,52 @@ export function KdsHeader({ activeMode, stationName }: Readonly<{ activeMode: Kd
   }
 
   return (
-    <header data-testid="kds-header" className="flex min-h-14 flex-wrap items-center justify-between gap-3 border-b border-border/40 bg-card px-4 py-2">
-      <div className="flex items-center gap-3">
-        <p data-testid="kds-header-title" className="font-headline text-lg font-bold tracking-tight text-foreground uppercase">
-          {stationName ?? "Kitchen Display"}
-        </p>
-        {activeMode === "station" && (
-          <Link
-            href="/kds?reselect=1"
-            data-testid="kds-change-station"
-            className="flex min-h-11 items-center rounded-lg border border-border px-3 text-xs font-medium text-muted-foreground transition-colors hover:bg-accent hover:text-foreground"
+    <header data-testid="kds-header" className="flex flex-col gap-1 border-b border-border/40 bg-card px-4 py-2">
+      <div className="flex min-h-14 flex-wrap items-center justify-between gap-3">
+        <div className="flex items-center gap-3">
+          <p data-testid="kds-header-title" className="font-headline text-lg font-bold tracking-tight text-foreground uppercase">
+            {stationName ?? "Kitchen Display"}
+          </p>
+          {activeMode === "station" && (
+            <Link
+              href="/kds?reselect=1"
+              data-testid="kds-change-station"
+              className="flex min-h-11 items-center rounded-lg border border-border px-3 text-xs font-medium text-muted-foreground transition-colors hover:bg-accent hover:text-foreground"
+            >
+              Change station
+            </Link>
+          )}
+        </div>
+
+        <nav className="flex items-center gap-2">
+          {NAV.map((item) => (
+            <Link
+              key={item.mode}
+              href={item.href}
+              data-testid={`kds-nav-${item.mode}`}
+              aria-current={activeMode === item.mode ? "page" : undefined}
+              className={`flex min-h-11 items-center rounded-lg px-4 text-sm font-semibold transition-colors ${
+                activeMode === item.mode ? "bg-primary text-primary-foreground" : "text-muted-foreground hover:bg-accent hover:text-foreground"
+              }`}
+            >
+              {item.label}
+            </Link>
+          ))}
+          <button
+            type="button"
+            data-testid="kds-sign-out"
+            onClick={() => void signOut()}
+            aria-label="Sign out"
+            className="flex min-h-11 items-center gap-1.5 rounded-lg px-3 text-sm text-muted-foreground transition-colors hover:bg-accent hover:text-foreground"
           >
-            Change station
-          </Link>
-        )}
+            <LogOut className="size-4" aria-hidden="true" />
+          </button>
+        </nav>
       </div>
 
-      <nav className="flex items-center gap-2">
-        {NAV.map((item) => (
-          <Link
-            key={item.mode}
-            href={item.href}
-            data-testid={`kds-nav-${item.mode}`}
-            aria-current={activeMode === item.mode ? "page" : undefined}
-            className={`flex min-h-11 items-center rounded-lg px-4 text-sm font-semibold transition-colors ${
-              activeMode === item.mode ? "bg-primary text-primary-foreground" : "text-muted-foreground hover:bg-accent hover:text-foreground"
-            }`}
-          >
-            {item.label}
-          </Link>
-        ))}
-        <button
-          type="button"
-          data-testid="kds-sign-out"
-          onClick={() => void signOut()}
-          aria-label="Sign out"
-          className="flex min-h-11 items-center gap-1.5 rounded-lg px-3 text-sm text-muted-foreground transition-colors hover:bg-accent hover:text-foreground"
-        >
-          <LogOut className="size-4" aria-hidden="true" />
-        </button>
-      </nav>
+      <p data-testid="kds-tab-subtitle" className="text-xs text-muted-foreground">
+        {TAB_SUBTITLES[activeMode]}
+      </p>
     </header>
   );
 }
