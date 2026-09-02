@@ -1,5 +1,6 @@
 # Completed
 
+- **2026-09-02** - Floor plan: tile footprint scales with seat capacity, capacity shown on tiles, width/height editable in the list view (restiq-web#124).
 - **2026-09-02** - POS order screen: removed "Split by seat" and the seat
   gate (issue #120). Product decision: seats were confusing on the order
   screen, and are becoming optional metadata rather than a fire requirement,
