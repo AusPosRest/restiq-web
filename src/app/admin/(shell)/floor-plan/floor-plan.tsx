@@ -19,7 +19,7 @@ import { LoadErrorPanel, Skeleton } from "../data-states";
 import { useOutlets } from "../outlet-context";
 import { useToast } from "../toast";
 import { CANVAS_HEIGHT, CANVAS_WIDTH, FloorPlanCanvas } from "./floor-plan-canvas";
-import { computeNextTablePosition, findOverlap, SHAPE_SIZES, TABLE_SHAPES } from "./floor-plan-state";
+import { computeNextTablePosition, findOverlap, TABLE_SHAPES, sizeForSeats } from "./floor-plan-state";
 import type { DiningTableView, FloorPlanView, FloorView, PrinterView, StationView, TableShape } from "./floor-plan-state";
 import { FloorPlanListView, type EditableTableField } from "./floor-plan-list-view";
 import { StationsPanel } from "./stations-panel";
@@ -126,7 +126,7 @@ function FloorPlanEditor({ outletId, initial }: Readonly<{ outletId: string; ini
   // adjusted" reconciliation.
   async function commitTable(
     tableId: string,
-    patch: Partial<Pick<DiningTableView, "x" | "y" | "seatCapacity" | "label" | "shape">>,
+    patch: Partial<Pick<DiningTableView, "x" | "y" | "seatCapacity" | "label" | "shape" | "width" | "height">>,
     previous: DiningTableView,
   ) {
     setTables((current) => current.map((table) => (table.id === tableId ? { ...table, ...patch } : table)));
@@ -152,7 +152,7 @@ function FloorPlanEditor({ outletId, initial }: Readonly<{ outletId: string; ini
   function handleListFieldCommitted(tableId: string, field: EditableTableField, value: number | string) {
     const table = tables.find((t) => t.id === tableId);
     if (!table) return;
-    const patch = { [field]: value } as Partial<Pick<DiningTableView, "x" | "y" | "seatCapacity" | "label" | "shape">>;
+    const patch = { [field]: value } as Partial<Pick<DiningTableView, "x" | "y" | "seatCapacity" | "label" | "shape" | "width" | "height">>;
     void commitTable(tableId, patch, table);
   }
 
@@ -561,7 +561,8 @@ function AddTableControl({ outletId, floorId, tables, onOptimisticAdd, onSettled
   const [submitting, setSubmitting] = useState(false);
 
   const floorTables = tables.filter((table) => table.floorId === floorId && !table.id.startsWith("temp-table-"));
-  const size = SHAPE_SIZES[shape];
+  const seatsForSize = Number.parseInt(capacity, 10);
+  const size = sizeForSeats(Number.isFinite(seatsForSize) && seatsForSize > 0 ? seatsForSize : 4, shape);
   const canvasBounds = { width: CANVAS_WIDTH, height: CANVAS_HEIGHT };
 
   function openForm() {
@@ -572,7 +573,7 @@ function AddTableControl({ outletId, floorId, tables, onOptimisticAdd, onSettled
 
   function handleShapeChange(next: TableShape) {
     setShape(next);
-    if (!positionTouched) setPosition(computeNextTablePosition(floorTables, SHAPE_SIZES[next], canvasBounds));
+    if (!positionTouched) setPosition(computeNextTablePosition(floorTables, sizeForSeats(Number.isFinite(seatsForSize) && seatsForSize > 0 ? seatsForSize : 4, next), canvasBounds));
   }
 
   function handlePositionChange(axis: "x" | "y", value: string) {

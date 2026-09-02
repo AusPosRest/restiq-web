@@ -1032,3 +1032,8 @@ destinations as "Not connected"; and Escape closes the dialog. Covered by
 mocked-fetch component tests (`reports.test.tsx`,
 `export-destinations-dialog.test.tsx`) plus pure-logic unit tests
 (`reports-state.test.ts`).
+
+#### Table footprint & capacity (2026-09-02, restiq-web#124)
+
+- A table's default footprint is derived from its seat capacity: side = clamp(40 + 12·seats, 56, 160) px, rectangles 1.5× as wide (`sizeForSeats` in `floor-plan-state.ts`), so a 2-top is visibly smaller than a 6-top on the canvas.
+- Every canvas tile shows its label and "N seats"; width/height are editable per table in the list view (`PATCH .../floor-plan/tables/:id` already accepted them).

@@ -12,6 +12,7 @@ import {
   validateStationPrinter,
   type DiningTableView,
   type FloorView,
+  sizeForSeats,
 } from "./floor-plan-state";
 
 describe("snapToGrid", () => {
@@ -155,5 +156,15 @@ describe("groupTablesByFloor", () => {
   it("gives a floor with no tables an empty list, not a missing entry", () => {
     const groups = groupTablesByFloor([...floors, { id: "f3", name: "Basement", sortOrder: 2 }], tables);
     expect(groups[2].tables).toEqual([]);
+  });
+});
+
+describe("sizeForSeats", () => {
+  it("grows with seat capacity and clamps to 56..160, rectangles 1.5x wide", () => {
+    expect(sizeForSeats(1, "square")).toEqual({ width: 56, height: 56 });
+    expect(sizeForSeats(4, "square")).toEqual({ width: 88, height: 88 });
+    expect(sizeForSeats(4, "circle")).toEqual({ width: 88, height: 88 });
+    expect(sizeForSeats(4, "rectangle")).toEqual({ width: 132, height: 88 });
+    expect(sizeForSeats(40, "square")).toEqual({ width: 160, height: 160 });
   });
 });

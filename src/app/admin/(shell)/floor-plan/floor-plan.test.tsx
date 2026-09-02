@@ -138,6 +138,7 @@ describe("FloorPlan", () => {
     const shape = await screen.findByTestId("table-shape-t1");
     expect(shape.dataset.x).toBe("40");
     expect(shape.dataset.y).toBe("40");
+    expect(screen.getByTestId("table-seats-t1").textContent).toBe("4 seats");
   });
 
   it("switches to the list view and shows the same table data", async () => {
@@ -252,7 +253,7 @@ describe("FloorPlan", () => {
           expect.stringContaining("/outlets/outlet-1/floor-plan/tables"),
           expect.objectContaining({
             method: "POST",
-            body: JSON.stringify({ floorId: "floor-1", label: "T2", x: 0, y: 0, width: 40, height: 40, shape: "square", seatCapacity: 4 }),
+            body: JSON.stringify({ floorId: "floor-1", label: "T2", x: 80, y: 0, width: 88, height: 88, shape: "square", seatCapacity: 4 }),
           }),
         ),
       );

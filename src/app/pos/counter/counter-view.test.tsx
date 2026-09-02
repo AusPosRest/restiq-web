@@ -13,6 +13,7 @@ import type { BillView } from "../orders/[orderId]/settle/bill-state";
 import type { PosMenuView, RawOrder } from "../orders/[orderId]/order-taking-state";
 
 const OUTLET_ID = "outlet-1";
+const CURRENT_STAFF_ID = "staff-priya";
 
 function jsonResponse(body: unknown, status = 200): Response {
   return new Response(JSON.stringify(body), { status, headers: { "content-type": "application/json" } });
@@ -95,11 +96,24 @@ describe("CounterView - starting a counter order", () => {
       [`POST outlets/${OUTLET_ID}/counter-orders`]: () => jsonResponse(counterOrder(), 201),
       "POST orders/order-47/bill": () => jsonResponse(bill("order-47"), 201),
     });
-    render(<CounterView outletId={OUTLET_ID} />);
+    render(<CounterView outletId={OUTLET_ID} currentStaffId={CURRENT_STAFF_ID} />);
 
     await screen.findByTestId("counter-view");
     expect(screen.getByTestId("token-badge-number").textContent).toBe("#47");
-    expect(screen.getByTestId("counter-cashier").textContent).toContain("staff-priya");
+    expect(screen.getByTestId("counter-cashier").textContent).toContain("You");
+  });
+
+  it("shows the raw owner id for a counter order started by someone else's terminal", async () => {
+    stubFetch({
+      "GET menu": () => jsonResponse(MENU),
+      [`POST outlets/${OUTLET_ID}/counter-orders`]: () => jsonResponse(counterOrder({ ownerId: "staff-arjun" }), 201),
+      "POST orders/order-47/bill": () => jsonResponse(bill("order-47"), 201),
+    });
+    render(<CounterView outletId={OUTLET_ID} currentStaffId={CURRENT_STAFF_ID} />);
+
+    await screen.findByTestId("counter-view");
+    expect(screen.getByTestId("counter-cashier").textContent).toContain("staff-arjun");
+    expect(screen.getByTestId("counter-cashier").textContent).not.toContain("You");
   });
 
   it("shows a retryable error panel if the counter order can't be started", async () => {
@@ -107,7 +121,7 @@ describe("CounterView - starting a counter order", () => {
       "GET menu": () => jsonResponse(MENU),
       [`POST outlets/${OUTLET_ID}/counter-orders`]: () => jsonResponse({ error: { message: "down" } }, 500),
     });
-    render(<CounterView outletId={OUTLET_ID} />);
+    render(<CounterView outletId={OUTLET_ID} currentStaffId={CURRENT_STAFF_ID} />);
     await waitFor(() => expect(screen.getByTestId("counter-order-error")).toBeTruthy());
   });
 });
@@ -154,7 +168,7 @@ describe("CounterView - ring up and settle in one continuous flow", () => {
       },
     });
 
-    render(<CounterView outletId={OUTLET_ID} />);
+    render(<CounterView outletId={OUTLET_ID} currentStaffId={CURRENT_STAFF_ID} />);
     await screen.findByTestId("counter-view");
 
     // Ring up: no-modifier item adds straight to the order, same behavior as
@@ -162,6 +176,10 @@ describe("CounterView - ring up and settle in one continuous flow", () => {
     await user.click(screen.getByTestId("item-tile-item-naan"));
     await waitFor(() => expect(screen.getByTestId("bill-line-line-1")).toBeTruthy());
     expect(screen.getByTestId("bill-grand-total").textContent).toBe("₹63.00");
+    // Regression: addOrderLine must pass the loaded menu through, or the
+    // line falls back to the raw itemId instead of a resolved name.
+    expect(screen.getByTestId("bill-line-line-1").textContent).toContain("Butter Naan");
+    expect(screen.getByTestId("bill-line-line-1").textContent).not.toContain("item-naan");
 
     // Settle right here, no navigation to a /settle route.
     await user.click(screen.getByTestId("tender-fill-remaining"));
@@ -191,7 +209,7 @@ describe("CounterView - ring up and settle in one continuous flow", () => {
       "POST orders/order-48/bill": () => jsonResponse(bill("order-48"), 201),
     });
 
-    render(<CounterView outletId={OUTLET_ID} />);
+    render(<CounterView outletId={OUTLET_ID} currentStaffId={CURRENT_STAFF_ID} />);
     await screen.findByTestId("counter-settled-panel");
     expect(screen.getByTestId("token-badge-number").textContent).toBe("#47");
 

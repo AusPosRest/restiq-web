@@ -9,5 +9,5 @@ import { CounterView } from "./counter-view";
 export default async function PosCounterPage() {
   const cookieStore = await cookies();
   const display = parsePosStaffDisplay(cookieStore.get(POS_STAFF_COOKIE)?.value);
-  return <CounterView outletId={display?.outlet.id ?? ""} />;
+  return <CounterView outletId={display?.outlet.id ?? ""} currentStaffId={display?.staff.id ?? ""} />;
 }
