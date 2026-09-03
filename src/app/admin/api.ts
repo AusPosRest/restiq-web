@@ -17,6 +17,7 @@ import type { DiningTableView, FloorPlanView, FloorView, PrinterRenderMode, Prin
 import type { AdminDeviceView, DeviceType, EnrolmentCodeResult } from "./(shell)/devices/devices-state";
 import type { RoleView, StaffView } from "./(shell)/staff/staff-state";
 import { filenameFromContentDisposition, type ReportExport } from "./(shell)/reports/reports-state";
+import type { PaymentsResponse } from "./(shell)/reports/payments-state";
 
 export class AdminApiError extends Error {
   constructor(
@@ -556,5 +557,50 @@ export async function exportReport(reportKey: string, format: string): Promise<R
   }
   const blob = await res.blob();
   const filename = filenameFromContentDisposition(res.headers.get("content-disposition")) ?? `${reportKey}.${format}`;
+  return { filename, blob };
+}
+
+// --- Payments history (issue #137, web half; restiq-backend#104, landing in
+// parallel). GET /admin/v1/reports/payments takes outletId/from/to plus an
+// optional cursor/limit and returns { items, nextCursor, totals } - a bare
+// envelope, same shape discipline as the rest of this file's reconciled
+// endpoints. Export is the same filters against .../reports/payments/export,
+// returning a raw CSV body exactly like exportReport above (not reused
+// directly - that one is keyed by reportKey/format, this one by
+// outletId/from/to - but filenameFromContentDisposition/ReportExport are).
+
+export interface FetchPaymentsParams {
+  outletId: string;
+  from: string;
+  to: string;
+  cursor?: string;
+  limit?: number;
+}
+
+function paymentsSearchParams({ outletId, from, to, cursor, limit }: FetchPaymentsParams): URLSearchParams {
+  const search = new URLSearchParams({ outletId, from, to });
+  if (cursor) search.set("cursor", cursor);
+  if (limit) search.set("limit", String(limit));
+  return search;
+}
+
+export function fetchPayments(params: FetchPaymentsParams): Promise<PaymentsResponse> {
+  return adminApi<PaymentsResponse>(`reports/payments?${paymentsSearchParams(params).toString()}`);
+}
+
+export async function exportPayments(params: Omit<FetchPaymentsParams, "cursor" | "limit">): Promise<ReportExport> {
+  let res: Response;
+  try {
+    res = await fetch(`/admin/api/reports/payments/export?${paymentsSearchParams(params).toString()}`);
+  } catch {
+    throw new AdminApiError("The API could not be reached", 0);
+  }
+  if (!res.ok) {
+    const body: unknown = await res.json().catch(() => null);
+    const error = (body as { error?: { code?: string; message?: string } } | null)?.error;
+    throw new AdminApiError(error?.message ?? "The export failed", res.status, error?.code);
+  }
+  const blob = await res.blob();
+  const filename = filenameFromContentDisposition(res.headers.get("content-disposition")) ?? "payments.csv";
   return { filename, blob };
 }

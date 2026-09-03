@@ -14,6 +14,23 @@
   `bill-finalised-panel` and `counter/counter-view.tsx`'s `counter-settled-panel`. See
   [wiki/features/pos-cashier-waiter.md](../features/pos-cashier-waiter.md)'s "Printable tax
   invoice (issue #137, restiq-backend#103/PR #105)" section. Issue AusPosRest/restiq-web#137.
+- **2026-09-03** - Owner Reports: Payments history page with filters, totals,
+  and CSV export (issue #137, web half of restiq-backend#104). New
+  `/admin/reports/payments` (linked from a "Payments" card atop the Reports
+  catalogue) lists every finalized bill for the outlet switcher's outlet
+  over a date range that defaults to today, outlet-local (computed from the
+  outlet's IANA timezone via `Intl` offset math - no date library in this
+  project). A totals strip (count/subtotal/discount/tax/total/tendered/
+  refunded), one row per bill (time, bill # linking to the not-yet-built
+  `/pos/bills/<id>/invoice`, table/token, source, cashier, subtotal,
+  discount, tax - real per-line breakdown when the backend sent one, else
+  `taxMinor` - total, `method=amount` tender chips, and a refunded total
+  summed from credit notes), cursor-paginated "Load more", and an "Export
+  CSV" button reusing CAP-9's download helper. `src/app/admin/api.ts` gained
+  `fetchPayments`/`exportPayments` against `GET /admin/v1/reports/payments`
+  and `.../reports/payments/export` (restiq-backend#104, landed in
+  parallel). See [wiki/features/tenant-admin.md](../features/tenant-admin.md)'s
+  "Reports → Payments" section. Issue AusPosRest/restiq-web#137.
 - **2026-09-02** - Floor plan: per-table self-order QR codes + printable QR
   sheet (issue #131). A QR button on every list row and canvas tile
   (canvas one is a corner button whose pointer-down `stopPropagation`s so it
