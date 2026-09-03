@@ -1,5 +1,19 @@
 # Completed
 
+- **2026-09-03** - POS: printable tax-invoice page with Print invoice entry points (issue
+  #137, web half of restiq-backend#103). New `/pos/bills/[billId]/invoice` route
+  (`bill-invoice-view.tsx`) renders the real, merged `GET bills/:id/invoice` `InvoiceView`
+  read-only: seller/GSTIN-or-ABN/FSSAI block, line table, subtotal, discount, a
+  `taxBreakdown` row per tax line (so India's CGST+SGST split and a flat AU GST render from
+  the same markup), total, a "Prices include tax" line, tenders, credit notes, and
+  verbatim notes, plus a `print:hidden` Print/Back row (Tailwind `print:` variant, same
+  mechanism as the floor-plan QR sheet). A 409 `not_finalized` shows a plain "This bill
+  isn't finalized yet." state distinct from the retryable `LoadErrorPanel` a 404 gets.
+  `api.ts` gained an additive `fetchInvoice(billId)`. New "Print invoice" links added to the
+  finalised-bill panels that already have a bill id: `settle/bill-settle-view.tsx`'s
+  `bill-finalised-panel` and `counter/counter-view.tsx`'s `counter-settled-panel`. See
+  [wiki/features/pos-cashier-waiter.md](../features/pos-cashier-waiter.md)'s "Printable tax
+  invoice (issue #137, restiq-backend#103/PR #105)" section. Issue AusPosRest/restiq-web#137.
 - **2026-09-02** - Floor plan: per-table self-order QR codes + printable QR
   sheet (issue #131). A QR button on every list row and canvas tile
   (canvas one is a corner button whose pointer-down `stopPropagation`s so it

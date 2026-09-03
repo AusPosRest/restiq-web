@@ -1154,6 +1154,58 @@ done now, this is what actually happened:
   `BillSummary` needed no changes at all to serve this screen's "read-only, never edited"
   requirement, since it already renders exactly that for a finalised bill.
 
+## Printable tax invoice (issue #137, restiq-backend#103/PR #105)
+
+- **Intent:** a printable tax invoice for a finalised bill - the actual GST/ABN-compliant
+  document a guest takes away, distinct from the in-app `BillSummary` line-item panel used
+  while settling. Built against the real, merged `GET /pos/v1/bills/:id/invoice` contract
+  (restiq-backend PR #105) - a single, fully server-computed `InvoiceView` (seller
+  registration block, per-item lines, subtotal, discount, a `taxBreakdown` array so
+  India's CGST/SGST split and Australia's flat GST both render as one loop over the same
+  rows, total, a `pricesIncludeTax` flag, tenders, credit notes, and free-text `notes`
+  printed verbatim) - this page only formats and prints it, no client-side computation of
+  any figure.
+- **Built:** `src/app/pos/bills/[billId]/invoice/` - a new top-level route
+  (`/pos/bills/[billId]/invoice`, mirroring the backend's own bill-scoped path rather than
+  nesting under `/pos/orders/[orderId]`, since the invoice endpoint is keyed by bill id
+  only) with `page.tsx` (reads `billId` from the route param, no cookie/session lookup
+  needed) and `bill-invoice-view.tsx`:
+  - a small `useInvoice` hook (same "landed keyed by attempt" shape every other `/pos`
+    screen's local fetch hook uses - see `bill-settle-view.tsx`/`refund-view.tsx`) adds one
+    branch existing hooks don't need: a 409 `not_finalized` response renders a plain "This
+    bill isn't finalized yet." state, distinct from the retryable `LoadErrorPanel` a 404 or
+    any other failure still gets.
+  - the loaded view renders every contract section - seller block (legal name, outlet
+    name/address, `registrationLabel: number` so GSTIN and ABN share one line, FSSAI license
+    only when present), invoice number + issued-at, a line table, subtotal, a discount row
+    only when `discountMinor` is non-null, one row per `taxBreakdown` entry (label + rate +
+    amount - this is what lets CGST+SGST and a flat GST render from the exact same markup),
+    grand total, a "Prices include tax" line gated on `pricesIncludeTax`, a tenders list, a
+    credit notes list, and `notes` printed verbatim - each list section only renders when
+    non-empty.
+  - **Print** (`window.print()`) and **Back to table map** sit in a `print:hidden` row -
+    Tailwind's `print:` variant (the same mechanism `floor-plan/qr-print-sheet.tsx` already
+    uses for its QR sheet) rather than a hand-written `@media print` block, so only the
+    invoice content itself prints.
+  - **Entry points:** a "Print invoice" link on the real, already-merged finalised-bill
+    panels that already have a bill id in hand - `settle/bill-settle-view.tsx`'s
+    `bill-finalised-panel` (alongside the existing Refund… link) and `counter/counter-view.tsx`'s
+    `counter-settled-panel` (alongside Start next order) - both link to
+    `/pos/bills/${bill.id}/invoice`. No table/token-number line on the invoice itself: the
+    route only ever has a bill id, not the order, so there's nothing to derive it from
+    without a second fetch the contract doesn't ask for (YAGNI).
+- **Tests:** 8 new (`bill-invoice-view.test.tsx`) - an India fixture (GSTIN, FSSAI, CGST+SGST
+  rows, a discount, tenders, a credit note, and notes) asserting every section renders, an
+  Australia fixture (ABN, one flat GST row, `pricesIncludeTax: true`) asserting the
+  "Prices include tax" line renders and the discount/tenders/credit-notes/notes sections
+  correctly stay absent, the Print button calling `window.print`, the 409 not-finalized
+  state, the 404 error panel plus its retry path - plus one assertion added to each of the
+  two existing entry-point tests (`bill-settle-view.test.tsx`'s "after finalization" test,
+  `counter-view.test.tsx`'s settle-in-one-flow test) confirming `print-invoice-link` points
+  at the right bill id. 1042/1042 tests passing repo-wide; lint/typecheck/build clean.
+- **Live verification:** none possible in this worktree (no running backend). Verified via
+  the 8 tests above stubbing global `fetch` against the real, merged contract.
+
 ## Reconciliation (2026-09-02, restiq-web#98)
 
 Every remaining self-authored `src/app/pos/api.ts` path (everything CAP-1/CAP-2/CAP-3/

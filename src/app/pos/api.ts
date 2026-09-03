@@ -344,3 +344,67 @@ import type { CreateRefundInput, CreditNoteView } from "./orders/[orderId]/refun
 export function createRefund(billId: string, input: CreateRefundInput): Promise<CreditNoteView> {
   return posApi<CreditNoteView>(`bills/${billId}/refund`, { method: "POST", body: JSON.stringify(input) });
 }
+
+// --- Printable tax invoice (issue #137 web / restiq-backend#103, merged via
+// restiq-backend PR #105). `GET bills/:id/invoice` returns one fully
+// server-computed InvoiceView - every total/tax-breakdown/tender/credit-note
+// figure already resolved, so `bills/[billId]/invoice/bill-invoice-view.tsx`
+// only formats and prints it. 409 `not_finalized` while the bill is still
+// open; 404 for any other unreachable/unknown bill id.
+export interface InvoiceSellerView {
+  legalEntityName: string;
+  registrationLabel: "GSTIN" | "ABN";
+  registrationNumber: string;
+  fssaiLicense?: string | null;
+  outletName: string;
+  outletAddress: string;
+}
+
+export interface InvoiceLineView {
+  name: string;
+  quantity: number;
+  unitPriceMinor: number;
+  lineTotalMinor: number;
+}
+
+export interface InvoiceTaxBreakdownView {
+  label: string;
+  ratePercent: number;
+  amountMinor: number;
+}
+
+export interface InvoiceTenderView {
+  method: string;
+  amountMinor: number;
+  createdAt: string;
+}
+
+export interface InvoiceCreditNoteView {
+  id: string;
+  amountMinor: number;
+  reason: string;
+  createdAt: string;
+}
+
+export interface InvoiceView {
+  invoiceNumber: string;
+  title: "Tax Invoice" | "Invoice";
+  issuedAt: string;
+  currency: string;
+  seller: InvoiceSellerView;
+  lines: InvoiceLineView[];
+  subtotalMinor: number;
+  discountMinor: number | null;
+  discountReason: string | null;
+  taxBreakdown: InvoiceTaxBreakdownView[];
+  taxMinor: number;
+  totalMinor: number;
+  pricesIncludeTax: boolean;
+  tenders: InvoiceTenderView[];
+  creditNotes: InvoiceCreditNoteView[];
+  notes: string[];
+}
+
+export function fetchInvoice(billId: string): Promise<InvoiceView> {
+  return posApi<InvoiceView>(`bills/${billId}/invoice`);
+}

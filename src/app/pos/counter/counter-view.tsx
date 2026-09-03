@@ -367,9 +367,14 @@ function CounterLoaded({
             <p className="text-sm text-muted-foreground">
               {bill.tenders.length} tender{bill.tenders.length === 1 ? "" : "s"} captured · no further changes are possible.
             </p>
-            <Button size="lg" data-testid="counter-start-next-order" onClick={onStartNextOrder}>
-              Start next order
-            </Button>
+            <div className="flex gap-2">
+              <Button size="lg" data-testid="counter-start-next-order" onClick={onStartNextOrder}>
+                Start next order
+              </Button>
+              <Button asChild size="lg" variant="outline" data-testid="print-invoice-link">
+                <Link href={`/pos/bills/${bill.id}/invoice`}>Print invoice</Link>
+              </Button>
+            </div>
           </section>
         ) : (
           <div className="flex flex-1 flex-col">
