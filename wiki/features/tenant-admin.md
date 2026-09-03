@@ -622,6 +622,53 @@ story. Backend counterpart: `restiq-backend/wiki/features/tenant-admin.md`.
   real Postgres to confirm the read contract, independent of this
   reconciliation.
 
+### Reports → Payments (issue #137)
+
+- **Intent:** an owner browses every finalized bill for an outlet over a date
+  range, sees a totals strip (count/subtotal/discount/tax/total/tendered/
+  refunded), and can export the same filtered range as a CSV.
+- **Built:** `/admin/reports/payments` (`src/app/admin/(shell)/reports/
+  payments/page.tsx` wraps `payments.tsx`), linked from a "Payments" card at
+  the top of `/admin/reports` (`reports-payments-link`, above the report card
+  grid - this screen isn't one of CAP-9's catalogue entries, since it isn't a
+  single-shot export but a filterable browse). Per-outlet, scoped by the
+  shell's outlet switcher (`useOutlets`, same `key={outlet.id}` remount shape
+  as Devices/Floor Plan so a filter or in-flight page for outlet A can never
+  bleed into outlet B). Talks to `GET /admin/v1/reports/payments` (restiq-
+  backend#104, landed in parallel with this story) via `api.ts#fetchPayments`
+  - `{ outletId, from, to, cursor?, limit? }` in, `{ items, nextCursor,
+  totals }` out; `.../reports/payments/export` (same filters) returns a raw
+  CSV body, read through `api.ts#exportPayments` and CAP-9's existing
+  `downloadReportExport` helper rather than a new one.
+- **Date filter defaults to today, outlet-local** - `payments-state.ts`
+  computes the outlet's local calendar date from its IANA `timezone` (`GET
+  /admin/v1/outlets`'s existing field) via `Intl.DateTimeFormat` offset math,
+  not a date library (none exists in this project). `outletDateStartIso`/
+  `outletDateEndIso` convert the two local calendar-date inputs back to the
+  UTC `from`/`to` instants the API expects; this is a same-day-offset
+  approximation (recomputes the zone offset near the target instant rather
+  than tracking DST transition tables), acceptable for a filter's default
+  and edit inputs.
+- **One row per bill**: time (outlet-local), bill number (linking to
+  `/pos/bills/<billId>/invoice`, built by a parallel story - this one only
+  links to it), table label or `Token #n` (`tableOrTokenLabel`), source (POS/
+  QR), cashier, subtotal, discount, tax, total, tenders as `method=amount`
+  chips, and a refunded total summed from the bill's credit notes
+  (`refundedMinorFor`). Tax renders the real per-line breakdown
+  (`taxLines` - `"GST (5%): ₹12"` per entry) when the backend sent one,
+  else a single unlabelled `taxMinor` line - the contract's `taxBreakdown?`
+  is explicitly optional. "Load more" appends a cursor-paginated page onto
+  what's loaded (`appendPaymentsPage`) rather than replacing it; the totals
+  strip always reflects the latest page's `totals` (the whole filtered
+  range's totals, not just what's loaded so far - the same value on every
+  page of one filter). Money has no per-row currency field on the wire, so
+  this follows the admin surface's existing INR-default convention (menu-
+  management.tsx, dashboard's outlet-kpi-tiles.tsx) and reuses menu-
+  state.ts's `formatPriceMinor` rather than adding a new formatter.
+- Five-state pattern throughout: loading skeleton, a no-outlets empty state,
+  a retryable load-error panel, an in-range empty state ("No payments in
+  this range"), and the loaded table.
+
 ## Data model
 
 Owned by the backend - see `restiq-backend/wiki/features/tenant-admin.md`.
