@@ -294,5 +294,6 @@ describe("BillSettleView - after finalization", () => {
     expect(screen.queryByTestId("finalize-bill")).toBeNull();
     expect(screen.queryByTestId("bill-add-discount")).toBeNull();
     expect(screen.getByTestId("bill-finalised-refund").getAttribute("href")).toBe(`/pos/orders/${ORDER_ID}/refund?billId=bill-1`);
+    expect(screen.getByTestId("print-invoice-link").getAttribute("href")).toBe("/pos/bills/bill-1/invoice");
   });
 });

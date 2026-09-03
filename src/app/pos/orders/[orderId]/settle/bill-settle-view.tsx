@@ -170,6 +170,9 @@ function BillSettleLoaded({
               <Button asChild size="sm" variant="outline" data-testid="bill-finalised-refund">
                 <Link href={`/pos/orders/${orderId}/refund?billId=${bill.id}`}>Refund…</Link>
               </Button>
+              <Button asChild size="sm" variant="outline" data-testid="print-invoice-link">
+                <Link href={`/pos/bills/${bill.id}/invoice`}>Print invoice</Link>
+              </Button>
             </div>
           </section>
         ) : (

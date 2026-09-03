@@ -192,6 +192,7 @@ describe("CounterView - ring up and settle in one continuous flow", () => {
     // No mutation UI survives finalization, same AD-14 discipline as bill-settle-view.
     expect(screen.queryByTestId("tender-keypad")).toBeNull();
     expect(screen.queryByTestId("item-grid")).toBeNull();
+    expect(screen.getByTestId("print-invoice-link").getAttribute("href")).toBe("/pos/bills/bill-order-47/invoice");
   });
 
   it("bumps the existing line's quantity on a repeat tap instead of adding a duplicate line (#129)", async () => {
