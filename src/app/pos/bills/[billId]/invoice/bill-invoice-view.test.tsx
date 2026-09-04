@@ -36,6 +36,8 @@ function inInvoice(overrides: Partial<InvoiceView> = {}): InvoiceView {
       fssaiLicense: "10023456789012",
       outletName: "Restiq - Indiranagar",
       outletAddress: "100 Ft Road, Indiranagar, Bengaluru",
+      phone: "+91 80 4567 8901",
+      email: "indiranagar@restiqfoods.example",
     },
     lines: [{ name: "Butter Naan", quantity: 2, unitPriceMinor: 6000, lineTotalMinor: 12000 }],
     subtotalMinor: 12000,
@@ -51,6 +53,7 @@ function inInvoice(overrides: Partial<InvoiceView> = {}): InvoiceView {
     tenders: [{ method: "cash", amountMinor: 11550, createdAt: "2026-09-02T10:31:00.000Z" }],
     creditNotes: [{ id: "cn-1", amountMinor: 500, reason: "Item returned", createdAt: "2026-09-02T10:45:00.000Z" }],
     notes: ["Thank you for dining with us.", "This is a computer-generated invoice."],
+    footerMessage: null,
     ...overrides,
   };
 }
@@ -68,6 +71,8 @@ function auInvoice(overrides: Partial<InvoiceView> = {}): InvoiceView {
       fssaiLicense: null,
       outletName: "Restiq - Bondi",
       outletAddress: "12 Beach Rd, Bondi NSW",
+      phone: "+61 2 9000 1234",
+      email: "bondi@restiqfoods.example",
     },
     lines: [{ name: "Flat White", quantity: 1, unitPriceMinor: 500, lineTotalMinor: 500 }],
     subtotalMinor: 500,
@@ -80,6 +85,7 @@ function auInvoice(overrides: Partial<InvoiceView> = {}): InvoiceView {
     tenders: [],
     creditNotes: [],
     notes: [],
+    footerMessage: null,
     ...overrides,
   };
 }
@@ -104,6 +110,8 @@ describe("BillInvoiceView - IN invoice (GSTIN, CGST+SGST)", () => {
     expect(seller.textContent).toContain("Restiq - Indiranagar");
     expect(seller.textContent).toContain("GSTIN: 29ABCDE1234F1Z5");
     expect(seller.textContent).toContain("FSSAI: 10023456789012");
+    expect(seller.textContent).toContain("+91 80 4567 8901");
+    expect(seller.textContent).toContain("indiranagar@restiqfoods.example");
 
     expect(screen.getByTestId("invoice-line-0").textContent).toContain("Butter Naan");
     expect(screen.getByTestId("invoice-subtotal").textContent).toBe("Subtotal₹120.00");
@@ -146,6 +154,58 @@ describe("BillInvoiceView - AU invoice (ABN, prices include tax)", () => {
     expect(screen.queryByTestId("invoice-tenders")).toBeNull();
     expect(screen.queryByTestId("invoice-credit-notes")).toBeNull();
     expect(screen.queryByTestId("invoice-notes")).toBeNull();
+  });
+});
+
+describe("BillInvoiceView - footerMessage", () => {
+  it("renders the footer message when present", async () => {
+    stubFetch(() => jsonResponse(inInvoice({ footerMessage: "Follow us @restiqfoods" })));
+    render(<BillInvoiceView billId={BILL_ID} />);
+
+    await screen.findByTestId("bill-invoice-view");
+    expect(screen.getByTestId("invoice-footer-message").textContent).toBe("Follow us @restiqfoods");
+  });
+
+  it("renders nothing when footerMessage is null", async () => {
+    stubFetch(() => jsonResponse(inInvoice({ footerMessage: null })));
+    render(<BillInvoiceView billId={BILL_ID} />);
+
+    await screen.findByTestId("bill-invoice-view");
+    expect(screen.queryByTestId("invoice-footer-message")).toBeNull();
+  });
+});
+
+describe("BillInvoiceView - AU not GST registered (Receipt)", () => {
+  it("shows Receipt, no tax-breakdown rows, and a prominent not-registered callout instead of a buried note", async () => {
+    stubFetch(() =>
+      jsonResponse(
+        auInvoice({
+          title: "Receipt",
+          taxMinor: 0,
+          taxBreakdown: [],
+          totalMinor: 500,
+          notes: ["Not registered for GST - this is a receipt, not a tax invoice"],
+        }),
+      ),
+    );
+    render(<BillInvoiceView billId={BILL_ID} />);
+
+    await screen.findByTestId("bill-invoice-view");
+
+    expect(screen.getByText("Receipt")).toBeTruthy();
+    expect(screen.queryByTestId("invoice-tax-0")).toBeNull();
+    expect(screen.getByTestId("invoice-not-registered-note").textContent).toContain("Not registered for GST");
+    // The note is shown in its own callout, not duplicated in the generic notes block.
+    expect(screen.queryByTestId("invoice-notes")).toBeNull();
+  });
+
+  it("keeps the tax-breakdown table for the ordinary Tax Invoice path", async () => {
+    stubFetch(() => jsonResponse(auInvoice()));
+    render(<BillInvoiceView billId={BILL_ID} />);
+
+    await screen.findByTestId("bill-invoice-view");
+    expect(screen.getByTestId("invoice-tax-0")).toBeTruthy();
+    expect(screen.queryByTestId("invoice-not-registered-note")).toBeNull();
   });
 });
 

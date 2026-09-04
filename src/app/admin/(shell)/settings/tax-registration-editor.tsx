@@ -182,6 +182,19 @@ function TaxRegistrationForm({ initial }: Readonly<{ initial: TaxRegistrationDra
         Composition scheme
       </label>
 
+      {draft.country === "AU" && (
+        <label className="flex items-center gap-2 text-sm">
+          <input
+            type="checkbox"
+            data-testid="tax-registration-gst-registered"
+            checked={draft.gstRegistered}
+            onChange={(event) => updateField({ gstRegistered: event.target.checked })}
+            className="size-4 rounded border-border accent-primary focus-visible:ring-2 focus-visible:ring-ring"
+          />
+          GST Registered
+        </label>
+      )}
+
       <div className="flex items-center justify-end border-t border-border/40 pt-4">
         <Button data-testid="tax-registration-save" disabled={!dirty || saving || !registrationNumberValid} onClick={() => void handleSave()}>
           {saving ? "Saving..." : "Save tax registration"}

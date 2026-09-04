@@ -351,6 +351,12 @@ export function createRefund(billId: string, input: CreateRefundInput): Promise<
 // figure already resolved, so `bills/[billId]/invoice/bill-invoice-view.tsx`
 // only formats and prints it. 409 `not_finalized` while the bill is still
 // open; 404 for any other unreachable/unknown bill id.
+//
+// restiq-backend#111 (issue #142, merged) added seller phone/email and a
+// nullable footerMessage, plus an AU-not-GST-registered path: when the
+// tenant is AU and gstRegistered is false, title is "Receipt" (not "Tax
+// Invoice"), taxMinor is 0, taxBreakdown is [], and notes carries the
+// "Not registered for GST..." string.
 export interface InvoiceSellerView {
   legalEntityName: string;
   registrationLabel: "GSTIN" | "ABN";
@@ -358,6 +364,8 @@ export interface InvoiceSellerView {
   fssaiLicense?: string | null;
   outletName: string;
   outletAddress: string;
+  phone: string;
+  email: string;
 }
 
 export interface InvoiceLineView {
@@ -388,7 +396,7 @@ export interface InvoiceCreditNoteView {
 
 export interface InvoiceView {
   invoiceNumber: string;
-  title: "Tax Invoice" | "Invoice";
+  title: "Tax Invoice" | "Invoice" | "Receipt";
   issuedAt: string;
   currency: string;
   seller: InvoiceSellerView;
@@ -403,6 +411,7 @@ export interface InvoiceView {
   tenders: InvoiceTenderView[];
   creditNotes: InvoiceCreditNoteView[];
   notes: string[];
+  footerMessage: string | null;
 }
 
 export function fetchInvoice(billId: string): Promise<InvoiceView> {

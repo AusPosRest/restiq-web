@@ -82,6 +82,9 @@ export function BillInvoiceView({ billId }: Readonly<{ billId: string }>) {
 
 function InvoiceLoaded({ invoice }: Readonly<{ invoice: InvoiceView }>) {
   const discountMinor = invoice.discountMinor ?? 0;
+  const isReceipt = invoice.title === "Receipt";
+  const notRegisteredNote = isReceipt ? invoice.notes.find((note) => note.toLowerCase().includes("not registered for gst")) : undefined;
+  const remainingNotes = notRegisteredNote ? invoice.notes.filter((note) => note !== notRegisteredNote) : invoice.notes;
 
   return (
     <div data-testid="bill-invoice-view" className="mx-auto flex max-w-2xl flex-1 flex-col gap-6 p-6 print:max-w-none print:gap-4 print:p-0">
@@ -109,6 +112,8 @@ function InvoiceLoaded({ invoice }: Readonly<{ invoice: InvoiceView }>) {
           {invoice.seller.registrationLabel}: {invoice.seller.registrationNumber}
         </p>
         {invoice.seller.fssaiLicense && <p className="text-muted-foreground">FSSAI: {invoice.seller.fssaiLicense}</p>}
+        <p className="text-muted-foreground">{invoice.seller.phone}</p>
+        <p className="text-muted-foreground">{invoice.seller.email}</p>
       </section>
 
       <table data-testid="invoice-lines" className="w-full text-left text-sm">
@@ -141,9 +146,10 @@ function InvoiceLoaded({ invoice }: Readonly<{ invoice: InvoiceView }>) {
             testId="invoice-discount"
           />
         )}
-        {invoice.taxBreakdown.map((tax, index) => (
-          <TotalRow key={index} label={`${tax.label} (${tax.ratePercent}%)`} value={formatMinor(tax.amountMinor, invoice.currency)} testId={`invoice-tax-${index}`} />
-        ))}
+        {invoice.title !== "Receipt" &&
+          invoice.taxBreakdown.map((tax, index) => (
+            <TotalRow key={index} label={`${tax.label} (${tax.ratePercent}%)`} value={formatMinor(tax.amountMinor, invoice.currency)} testId={`invoice-tax-${index}`} />
+          ))}
         <div className="mt-1 flex items-center justify-between border-t border-border/60 pt-2">
           <span className="font-label text-sm font-semibold uppercase tracking-wider text-foreground">Total</span>
           <span data-testid="invoice-grand-total" className="tabular-nums text-lg font-bold text-primary">
@@ -156,6 +162,12 @@ function InvoiceLoaded({ invoice }: Readonly<{ invoice: InvoiceView }>) {
           </p>
         )}
       </dl>
+
+      {notRegisteredNote && (
+        <section data-testid="invoice-not-registered-note" className="rounded-lg border border-status-warning/60 bg-status-warning/10 p-3 text-sm text-status-warning">
+          {notRegisteredNote}
+        </section>
+      )}
 
       {invoice.tenders.length > 0 && (
         <section data-testid="invoice-tenders" className="text-sm">
@@ -189,11 +201,17 @@ function InvoiceLoaded({ invoice }: Readonly<{ invoice: InvoiceView }>) {
         </section>
       )}
 
-      {invoice.notes.length > 0 && (
+      {remainingNotes.length > 0 && (
         <section data-testid="invoice-notes" className="whitespace-pre-wrap border-t border-border/60 pt-3 text-xs text-muted-foreground">
-          {invoice.notes.map((note, index) => (
+          {remainingNotes.map((note, index) => (
             <p key={index}>{note}</p>
           ))}
+        </section>
+      )}
+
+      {invoice.footerMessage && (
+        <section data-testid="invoice-footer-message" className="whitespace-pre-wrap border-t border-border/60 pt-3 text-center text-xs text-muted-foreground">
+          {invoice.footerMessage}
         </section>
       )}
     </div>
