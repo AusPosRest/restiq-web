@@ -206,6 +206,52 @@ story. Backend counterpart: `restiq-backend/wiki/features/tenant-admin.md`.
   usual `ConfirmReasonDialog` (branding edits are audited there, unlike this
   console's routine-edit branding).
 
+### Settings → Tax Registration (issue #140)
+
+- **Intent:** an owner reviews their tenant's tax registration (GSTIN for
+  India, ABN for Australia) and edits the parts that legitimately change
+  after provisioning - the registration number itself, legal entity name,
+  tax profile, FSSAI license, and composition-scheme flag - without ever
+  being able to change which country or registration type the tenant is on.
+- **Built:** a third Settings tab, `/admin/settings/tax-registration`
+  (`tax-registration/page.tsx` wraps `tax-registration-editor.tsx`), added to
+  `settings-tabs.tsx` alongside Branding/Capabilities
+  (`settings-tab-tax-registration`). `TaxRegistrationEditor` follows
+  `BrandingEditor`'s exact GET-then-PUT-merge shape: `useAdminLoad
+  <TaxRegistrationView>("tax-registration")` gates loading/failed states, and
+  a `TaxRegistrationForm` is seeded once from the landed
+  `GET /admin/v1/tax-registration` response (`tax-registration-state.ts
+  #normalizeTaxRegistration` flattens its nullable text fields to `""` for
+  the controlled inputs). `country` and `registrationType` render as plain
+  read-only text (`tax-registration-country`, `tax-registration-type`) -
+  never inputs - with the registration-number field's own label switching
+  between "GSTIN Number" and "ABN Number" based on `registrationType`
+  (`registrationTypeLabel`). Save is a plain pessimistic button (disabled
+  until dirty, and while the registration number is blank) that PUTs only
+  the five patchable fields (`buildTaxRegistrationPatch` - blank optional
+  text fields go back as `null`, never `""`) and replaces the draft with the
+  full record PUT returns, same reconciliation as branding's Save.
+- **409 conflict is a field-level error, not a toast.** A `registrationNumber`
+  that collides with another tenant surfaces inline on that field
+  (`tax-registration-number-conflict-error`, "Already used by another
+  tenant") by checking `AdminApiError.status === 409` in the catch block -
+  every other save failure (network, 500, etc.) still falls back to the
+  existing generic error toast with retry, same as branding's Save failure
+  path. A required-registration-number validation error
+  (`tax-registration-number-required-error`) is separate and purely
+  client-side, shown live as the field is edited.
+- **data-testid** on every interactive element (`tax-registration-number`,
+  `tax-registration-legal-entity-name`, `tax-registration-tax-profile`,
+  `tax-registration-fssai-license`, `tax-registration-composition-scheme`,
+  `tax-registration-save`, `settings-tab-tax-registration`); keyboard
+  operable throughout (native form controls, visible focus rings).
+- **api.ts:** added `fetchTaxRegistration`/`updateTaxRegistration` against
+  `GET`/`PUT admin/v1/tax-registration` (restiq-backend#108, landed in
+  parallel), same additive placement as `saveBranding`.
+- Out of scope: editing `country`/`registrationType` (fixed at provisioning),
+  and the buyer-side GSTIN/B2B invoice fields POS bills over in
+  `wiki/features/pos-cashier-waiter.md`.
+
 ## CAP-5 - Floor plan & stations
 
 - **Intent:** an owner lays out floors and tables, defines kitchen Stations
