@@ -8,7 +8,7 @@ function jsonResponse(body: unknown, status = 200): Response {
   return new Response(JSON.stringify(body), { status, headers: { "content-type": "application/json" } });
 }
 
-// Matches restiq-backend#108's actual GET admin/v1/tax-registration shape.
+// Matches restiq-backend#108/#111's actual GET admin/v1/tax-registration shape.
 const TAX_REGISTRATION = {
   country: "IN",
   registrationType: "gstin",
@@ -17,6 +17,7 @@ const TAX_REGISTRATION = {
   taxProfile: "restaurant",
   fssaiLicense: "12345678901234",
   compositionScheme: false,
+  gstRegistered: true,
 };
 
 function stubFetch({ get = TAX_REGISTRATION, putStatus = 200 }: { get?: unknown; putStatus?: number } = {}) {
@@ -65,6 +66,8 @@ describe("TaxRegistrationEditor", () => {
     expect((screen.getByTestId("tax-registration-number") as HTMLInputElement).value).toBe("27ABCDE1234F1Z5");
     expect((screen.getByTestId("tax-registration-legal-entity-name") as HTMLInputElement).value).toBe("Acme Foods Pvt Ltd");
     expect((screen.getByTestId("tax-registration-composition-scheme") as HTMLInputElement).checked).toBe(false);
+    // GST Registered is an AU-only concept - never rendered for IN, not even disabled.
+    expect(screen.queryByTestId("tax-registration-gst-registered")).toBeNull();
   });
 
   it("labels the registration number field ABN when registrationType is abn", async () => {
@@ -74,6 +77,29 @@ describe("TaxRegistrationEditor", () => {
     await screen.findByTestId("tax-registration-form");
     expect(screen.getByTestId("tax-registration-type").textContent).toBe("ABN");
     expect(screen.getByLabelText("ABN Number")).toBeTruthy();
+  });
+
+  it("shows the GST Registered toggle only for AU tenants, seeded from the loaded value", async () => {
+    stubFetch({ get: { ...TAX_REGISTRATION, country: "AU", registrationType: "abn", registrationNumber: "51824753556", gstRegistered: false } });
+    renderEditor();
+
+    await screen.findByTestId("tax-registration-form");
+    const toggle = screen.getByTestId("tax-registration-gst-registered") as HTMLInputElement;
+    expect(toggle.checked).toBe(false);
+  });
+
+  it("saves the GST Registered toggle via the merge-PUT", async () => {
+    const fetchMock = stubFetch({ get: { ...TAX_REGISTRATION, country: "AU", registrationType: "abn", registrationNumber: "51824753556", gstRegistered: true } });
+    renderEditor();
+    await screen.findByTestId("tax-registration-form");
+
+    await userEvent.click(screen.getByTestId("tax-registration-gst-registered"));
+    await userEvent.click(screen.getByTestId("tax-registration-save"));
+    await waitFor(() => expect(screen.getByTestId("tax-registration-save")).toHaveProperty("disabled", true));
+
+    const putCall = fetchMock.mock.calls.find(([, init]) => (init as RequestInit | undefined)?.method === "PUT");
+    const sentBody = JSON.parse((putCall?.[1] as RequestInit).body as string) as Record<string, unknown>;
+    expect(sentBody).toMatchObject({ gstRegistered: false });
   });
 
   it("shows a retryable error panel when the load fails", async () => {

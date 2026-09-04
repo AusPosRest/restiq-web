@@ -3,12 +3,15 @@
 //
 // Shape matches restiq-backend#108's actual GET/PUT admin/v1/tax-registration
 // contract: `{ country, registrationType, registrationNumber, legalEntityName,
-// taxProfile, fssaiLicense, compositionScheme }`. `country` and
-// `registrationType` are set once at tenant provisioning and are never part
-// of the PUT body - this editor only ever patches
-// registrationNumber/legalEntityName/taxProfile/fssaiLicense/
-// compositionScheme, and PUT **merges** those into the stored record (same
-// merge-PUT discipline as branding), returning the full record back.
+// taxProfile, fssaiLicense, compositionScheme }`, plus `gstRegistered`
+// (restiq-backend#111). `country` and `registrationType` are set once at
+// tenant provisioning and are never part of the PUT body - this editor only
+// ever patches registrationNumber/legalEntityName/taxProfile/fssaiLicense/
+// compositionScheme/gstRegistered, and PUT **merges** those into the stored
+// record (same merge-PUT discipline as branding), returning the full record
+// back. `gstRegistered` is only editable for AU tenants - the backend 400s a
+// PUT with `gstRegistered: false` for an IN tenant, so the editor never
+// renders the toggle (or sends a changed value) for country === "IN".
 
 export type TaxRegistrationType = "gstin" | "abn";
 
@@ -20,6 +23,7 @@ export interface TaxRegistrationView {
   taxProfile: string | null;
   fssaiLicense: string | null;
   compositionScheme: boolean;
+  gstRegistered: boolean;
 }
 
 /** The editable draft shape this form works with - nullable text fields
@@ -32,6 +36,7 @@ export interface TaxRegistrationDraft {
   taxProfile: string;
   fssaiLicense: string;
   compositionScheme: boolean;
+  gstRegistered: boolean;
 }
 
 /** Only the fields PUT accepts - country/registrationType are read-only and
@@ -42,6 +47,7 @@ export interface TaxRegistrationPatch {
   taxProfile?: string | null;
   fssaiLicense?: string | null;
   compositionScheme?: boolean;
+  gstRegistered?: boolean;
 }
 
 export function normalizeTaxRegistration(raw: Partial<TaxRegistrationView> | null | undefined): TaxRegistrationDraft {
@@ -53,6 +59,7 @@ export function normalizeTaxRegistration(raw: Partial<TaxRegistrationView> | nul
     taxProfile: raw?.taxProfile ?? "",
     fssaiLicense: raw?.fssaiLicense ?? "",
     compositionScheme: raw?.compositionScheme ?? false,
+    gstRegistered: raw?.gstRegistered ?? true,
   };
 }
 
@@ -62,7 +69,8 @@ export function taxRegistrationEqual(a: TaxRegistrationDraft, b: TaxRegistration
     a.legalEntityName === b.legalEntityName &&
     a.taxProfile === b.taxProfile &&
     a.fssaiLicense === b.fssaiLicense &&
-    a.compositionScheme === b.compositionScheme
+    a.compositionScheme === b.compositionScheme &&
+    a.gstRegistered === b.gstRegistered
   );
 }
 
@@ -84,5 +92,6 @@ export function buildTaxRegistrationPatch(draft: TaxRegistrationDraft): TaxRegis
     taxProfile: orNull(draft.taxProfile),
     fssaiLicense: orNull(draft.fssaiLicense),
     compositionScheme: draft.compositionScheme,
+    gstRegistered: draft.gstRegistered,
   };
 }

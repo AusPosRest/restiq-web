@@ -1206,6 +1206,32 @@ done now, this is what actually happened:
 - **Live verification:** none possible in this worktree (no running backend). Verified via
   the 8 tests above stubbing global `fetch` against the real, merged contract.
 
+### GST-registered / not-registered split, footer message, seller phone/email (issue #142, restiq-backend#111)
+
+- **Intent:** an AU tenant that toggles off `gstRegistered` in Settings → Tax Registration
+  (see `wiki/features/tenant-admin.md`) must never print a document that claims to be a tax
+  invoice it isn't legally entitled to issue. `InvoiceView` gained `footerMessage: string |
+  null` and `InvoiceSellerView` gained `phone`/`email`; when the tenant is AU and not GST
+  registered, the backend itself changes `title` to `"Receipt"`, zeroes `taxMinor`, empties
+  `taxBreakdown`, and adds a `"Not registered for GST - this is a receipt, not a tax
+  invoice"` string to `notes` - the web side never computes this, only renders what the
+  contract already decided.
+- **Built (`bill-invoice-view.tsx`):** the seller block now prints `phone`/`email` under the
+  existing legal-name/registration lines. `footerMessage` renders as its own
+  `invoice-footer-message` section near the bottom (below tenders/credit notes, above/next to
+  `notes`) only when non-null - nothing renders when it's `null`. When `invoice.title ===
+  "Receipt"`, the tax-breakdown rows inside the totals `<dl>` are skipped entirely (an empty
+  table/zero row would look broken even though `taxBreakdown` is already `[]`), and the
+  not-registered string is pulled out of `notes` and shown in its own bordered/muted
+  `invoice-not-registered-note` callout instead of being buried in the generic `notes` list
+  (it's filtered out of that list so it isn't printed twice). The existing `"Tax
+  Invoice"`/`"Invoice"` path (tax-breakdown table, no callout) is unchanged.
+- **Tests:** added to `bill-invoice-view.test.tsx` - footerMessage present/absent, phone/email
+  render in the seller block, a `title: "Receipt"` fixture asserting no tax-breakdown row and
+  the prominent callout (and that it isn't duplicated in `invoice-notes`), and a control test
+  confirming the ordinary AU Tax Invoice path still renders its tax-breakdown row with no
+  callout.
+
 ## Reconciliation (2026-09-02, restiq-web#98)
 
 Every remaining self-authored `src/app/pos/api.ts` path (everything CAP-1/CAP-2/CAP-3/

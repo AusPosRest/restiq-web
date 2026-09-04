@@ -251,6 +251,15 @@ story. Backend counterpart: `restiq-backend/wiki/features/tenant-admin.md`.
 - Out of scope: editing `country`/`registrationType` (fixed at provisioning),
   and the buyer-side GSTIN/B2B invoice fields POS bills over in
   `wiki/features/pos-cashier-waiter.md`.
+- **GST Registered toggle (issue #142, restiq-backend#111).** `gstRegistered`
+  is now part of the GET/PUT record, but the checkbox
+  (`tax-registration-gst-registered`) only ever renders when the loaded
+  `country === "AU"` - never for India, not even disabled, since the backend
+  hard-rejects a `PUT` with `gstRegistered: false` for an IN tenant (`400
+  validation_failed`) and India has no "unregistered" state to represent. It
+  follows the exact same controlled-checkbox/merge-PUT pattern as
+  `compositionScheme`. Feeds the POS invoice's AU Tax-Invoice-vs-Receipt split
+  documented in `wiki/features/pos-cashier-waiter.md`.
 
 ## CAP-5 - Floor plan & stations
 

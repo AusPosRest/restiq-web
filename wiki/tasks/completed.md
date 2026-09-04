@@ -1,5 +1,19 @@
 # Completed
 
+- **2026-09-05** - GST-registered UI: AU "GST Registered" toggle + Receipt-vs-Tax-Invoice
+  printing (issue #142, web half of restiq-backend#111, already merged). Tax Registration
+  settings (`tax-registration-editor.tsx`/`-state.ts`) gained a `gstRegistered` checkbox
+  (`tax-registration-gst-registered`) rendered only when the loaded `country === "AU"` -
+  never for India, not even disabled, since the backend 400s a `PUT gstRegistered: false` for
+  an IN tenant - wired into the existing merge-PUT exactly like `compositionScheme`. The
+  printable invoice (`bill-invoice-view.tsx`) now renders the seller's `phone`/`email` and a
+  nullable `footerMessage` (nothing when `null`), and when the backend sets
+  `title: "Receipt"` (AU + not GST registered) it skips the tax-breakdown rows entirely and
+  shows the not-registered note in its own prominent callout instead of the generic notes
+  list - the existing Tax Invoice/Invoice path is unchanged. See
+  [wiki/features/tenant-admin.md](../features/tenant-admin.md)'s "GST Registered toggle" note
+  and [wiki/features/pos-cashier-waiter.md](../features/pos-cashier-waiter.md)'s
+  "GST-registered / not-registered split" section. Issue AusPosRest/restiq-web#142.
 - **2026-09-05** - Tenant Admin: Tax Registration settings screen (issue
   #140, web half of restiq-backend#108). New `/admin/settings/tax-
   registration` tab (`tax-registration-editor.tsx` + `tax-registration-
