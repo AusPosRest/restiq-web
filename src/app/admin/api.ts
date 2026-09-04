@@ -13,6 +13,7 @@ import type {
 } from "./(shell)/menu/menu-state";
 import type { BrandingTokens } from "./(shell)/settings/branding-state";
 import type { OutletCapabilityView } from "./(shell)/settings/capability-state";
+import type { TaxRegistrationPatch, TaxRegistrationView } from "./(shell)/settings/tax-registration-state";
 import type { DiningTableView, FloorPlanView, FloorView, PrinterRenderMode, PrinterView, StationView, TableShape } from "./(shell)/floor-plan/floor-plan-state";
 import type { AdminDeviceView, DeviceType, EnrolmentCodeResult } from "./(shell)/devices/devices-state";
 import type { RoleView, StaffView } from "./(shell)/staff/staff-state";
@@ -603,4 +604,19 @@ export async function exportPayments(params: Omit<FetchPaymentsParams, "cursor" 
   const blob = await res.blob();
   const filename = filenameFromContentDisposition(res.headers.get("content-disposition")) ?? "payments.csv";
   return { filename, blob };
+}
+
+// --- Tax registration (issue #140, web half; restiq-backend#108, landing in
+// parallel). GET/PUT admin/v1/tax-registration - country/registrationType are
+// set at provisioning and never sent in the PUT body; PUT merges the given
+// fields into the stored record and returns the full record back, same
+// merge-PUT discipline as saveBranding above. GET is read via
+// useAdminLoad("tax-registration") directly, same shape as branding's GET.
+
+export function fetchTaxRegistration(): Promise<TaxRegistrationView> {
+  return adminApi<TaxRegistrationView>("tax-registration");
+}
+
+export function updateTaxRegistration(patch: TaxRegistrationPatch): Promise<TaxRegistrationView> {
+  return adminApi<TaxRegistrationView>("tax-registration", { method: "PUT", body: JSON.stringify(patch) });
 }

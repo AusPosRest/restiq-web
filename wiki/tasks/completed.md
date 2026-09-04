@@ -1,5 +1,19 @@
 # Completed
 
+- **2026-09-05** - Tenant Admin: Tax Registration settings screen (issue
+  #140, web half of restiq-backend#108). New `/admin/settings/tax-
+  registration` tab (`tax-registration-editor.tsx` + `tax-registration-
+  state.ts`), following `branding-editor.tsx`'s GET-then-PUT-merge pattern:
+  loads `GET admin/v1/tax-registration`, renders `country`/`registrationType`
+  as read-only text (never editable), and lets an owner edit
+  registrationNumber (required), legalEntityName, taxProfile, fssaiLicense,
+  and a compositionScheme checkbox. Save sends a merge-PUT of just those five
+  fields. A 409 (registration number already used by another tenant)
+  surfaces as a specific inline error on the registration-number field
+  rather than the generic error toast. `api.ts` gained additive
+  `fetchTaxRegistration`/`updateTaxRegistration`. See
+  [wiki/features/tenant-admin.md](../features/tenant-admin.md)'s "Settings →
+  Tax Registration" section. Issue AusPosRest/restiq-web#140.
 - **2026-09-03** - POS: printable tax-invoice page with Print invoice entry points (issue
   #137, web half of restiq-backend#103). New `/pos/bills/[billId]/invoice` route
   (`bill-invoice-view.tsx`) renders the real, merged `GET bills/:id/invoice` `InvoiceView`
