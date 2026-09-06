@@ -14,6 +14,29 @@
   landing in parallel; no live-backend verification. See
   [Tenant Admin CAP-1](../features/tenant-admin.md).
 
+- **2026-09-06** - Ops tenant lifecycle actions (issue #146, web half of
+  restiq-backend#117): Platform Console's O5 Tenant Detail page
+  (`detail.tsx`) gained Deactivate (`active` tenants), Reactivate
+  (`inactive` tenants) and Delete (any non-deleted tenant) alongside the
+  existing Activate button, all through one `lifecycleAction`/`ConfirmReason
+  Dialog` pair mirroring `subscription-tab.tsx`'s suspend/reactivate
+  `confirmKind` pattern - posting `POST tenants/:id/deactivate`,
+  `POST tenants/:id/reactivate` and `DELETE tenants/:id` (all `{reason}`
+  bodies) against the tenant status enum's new `provisioning | active |
+  inactive` shape plus soft delete. `ConfirmReasonDialog` gained an optional
+  `confirmCheckboxLabel` prop - Delete's dialog states the action is
+  irreversible and won't enable submit until that checkbox is checked, on
+  top of the reason it already requires; a `409 tenant_has_open_activity`/
+  `invalid_transition` from the backend surfaces as an error toast with the
+  backend's own message and leaves the page as-is, while a successful
+  delete navigates back to `/ops/tenants`. The tenant directory
+  (`tenants-table.tsx`/`table-state.ts`) now filters and renders the
+  `inactive` status alongside `provisioning`/`active` (badge color: warning,
+  matching arrears/overdue). New `detail.test.tsx` (7 tests) plus additions
+  to `confirm-reason-dialog.test.tsx`, `table-state.test.ts` and
+  `tenants-table.test.tsx`. See
+  [wiki/features/platform-console.md](../features/platform-console.md)'s
+  "Tenant lifecycle actions" section.
 - **2026-09-05** - GST-registered UI: AU "GST Registered" toggle + Receipt-vs-Tax-Invoice
   printing (issue #142, web half of restiq-backend#111, already merged). Tax Registration
   settings (`tax-registration-editor.tsx`/`-state.ts`) gained a `gstRegistered` checkbox

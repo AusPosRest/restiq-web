@@ -2,6 +2,7 @@
 // always carry text, never color alone.
 const STYLES: Record<string, string> = {
   active: "border-status-healthy/50 bg-status-healthy/10 text-status-healthy",
+  inactive: "border-status-warning/50 bg-status-warning/10 text-status-warning",
   provisioning: "border-status-pending/50 bg-status-pending/10 text-status-pending",
   pending: "border-status-pending/50 bg-status-pending/10 text-status-pending",
   expired: "border-status-critical/50 bg-status-critical/10 text-status-critical",
