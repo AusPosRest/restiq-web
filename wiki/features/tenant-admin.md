@@ -26,6 +26,22 @@ story. Backend counterpart: `restiq-backend/wiki/features/tenant-admin.md`.
   doesn't try to greet the owner by name or business - it stays generic
   until CAP-1 grows one.
 
+- **Returning-owner sign-in (issue #144, restiq-backend#118):**
+  `/admin/login` now mirrors the ops email/password form, including the
+  session-expired banner. `POST /admin/auth/login` forwards `{ email, password }`
+  to `/admin/v1/auth/login`, stores `token` in the httpOnly `admin_session`
+  cookie with the shared admin lifetime, and returns only `{ owner }`.
+  The route is public in `decideAdminRoute`; successful sign-in uses
+  `sanitizeAdminNextPath` for `?next=` or returns to `/admin`. Bad credentials
+  (401) and ambiguous owners (409) show generic credential copy; lockout
+  (429) asks the owner to try again later. The invite-link reminder remains
+  below the form. The shell sidebar posts to `/admin/auth/logout`, which
+  clears the cookie and redirects to `/admin/login` with 303. No backend
+  logout endpoint is assumed. The landing card includes the copyable Bay Leaf
+  demo email/password documented in `wiki/testing-credentials.md`.
+  Contract assumed exactly as supplied for backend #118, landing in parallel;
+  verification uses mocked backend responses, not a live backend.
+
 ## CAP-2 - Go-Live Checklist
 
 - **Intent:** a new tenant sees per-step completion for outlet details, floor
@@ -50,9 +66,8 @@ story. Backend counterpart: `restiq-backend/wiki/features/tenant-admin.md`.
   `/ops` branch (unchanged) - `src/lib/admin-session.ts` decides routing the
   same way `src/lib/ops-session.ts` does for `/ops`, sharing the JWT-expiry
   check via `src/lib/session-token.ts`. Public without a session:
-  `/admin/invite/:token`, `/admin/login` (placeholder - no sign-in flow
-  exists yet, see Key decisions) and the `/admin/auth/accept-invite` route
-  handler. `src/app/admin/api/[...path]/route.ts` mirrors the `/ops/api`
+  `/admin/invite/:token`, `/admin/login`, `/admin/auth/login` and the
+  `/admin/auth/accept-invite` route handler. `src/app/admin/api/[...path]/route.ts` mirrors the `/ops/api`
   pass-through (attaches the `admin_session` cookie's JWT as a bearer token)
   and additionally forwards `PATCH`, which `/ops/api` doesn't need.
 - No sidebar shell yet - `/admin/onboarding` renders standalone, matching the
@@ -765,11 +780,9 @@ endpoint) takes `{ renderMode }`.
 
 ## Key decisions
 
-- `/admin/login` exists only as a placeholder redirect target for the proxy -
-  there is no sign-in flow for a returning owner in this story (CAP-1 is
-  invite-only). It exists so an unauthenticated `/admin/*` request never
-  dead-ends on a 404; a later story can replace its contents once a real
-  login flow is built.
+- `/admin/login` supports returning owners as of issue #144 (CAP-1 note
+  above), while invite acceptance remains the account-setup flow. Auth stays
+  in the admin realm and the backend token never reaches client-side JS.
 - The checklist's "first incomplete required step" and per-step labels/links
   are derived client-side (`checklist-state.ts`) rather than trusted from an
   API field, since the backend doesn't return one - this also means the UI

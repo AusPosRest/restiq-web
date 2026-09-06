@@ -9,8 +9,8 @@ export const ADMIN_SESSION_COOKIE = "admin_session";
 export const ADMIN_SESSION_MAX_AGE_SECONDS = 12 * 60 * 60;
 
 export const ADMIN_LOGIN_PATH = "/admin/login";
-/** Reachable without a session: login, and accepting an owner invite. */
-const PUBLIC_ADMIN_PATHS = new Set([ADMIN_LOGIN_PATH, "/admin/auth/accept-invite"]);
+/** Reachable without a session: login, its route handler, and accepting an owner invite. */
+const PUBLIC_ADMIN_PATHS = new Set([ADMIN_LOGIN_PATH, "/admin/auth/login", "/admin/auth/accept-invite"]);
 const INVITE_PATH = /^\/admin\/invite\/[^/]+$/;
 
 function isPublicAdminPath(pathname: string): boolean {

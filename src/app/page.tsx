@@ -40,9 +40,12 @@ const SURFACES: Surface[] = [
     name: "Tenant Admin",
     who: "Restaurant owner",
     blurb: "The owner console: go-live checklist, menu, floor plan, staff, devices and branding.",
-    href: "/admin",
+    href: "/admin/login",
     cta: "Open owner console",
-    creds: [{ label: "Access", value: "By owner invite link (no password login yet)" }],
+    creds: [
+      { label: "Email", value: "anita@bayleaf.example" },
+      { label: "Password", value: "BayLeaf#2026Demo" },
+    ],
   },
   {
     name: "POS · Cashier & Waiter",

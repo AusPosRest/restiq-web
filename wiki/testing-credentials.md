@@ -46,12 +46,17 @@ session never works on admin/pos/guest routes and vice versa.
 
 | Field | Value |
 |---|---|
-| Owner | `meera@spiceroute.example` |
+| URL | http://localhost:3100/admin/login |
+| Email | `anita@bayleaf.example` |
+| Password | `BayLeaf#2026Demo` |
 
-Rules: **there is no owner login endpoint yet** (known gap). Access is only via
-the one-time invite-accept link (`POST /admin/v1/auth/accept-invite`). If the
-session is lost, regenerate an invite from the ops console
-(`POST /ops/v1/tenants/:id/owner-invite/regenerate`) and accept it again.
+Rules: returning owners sign in with email and password (`POST
+/admin/v1/auth/login`, restiq-backend#118). The web route stores the JWT in
+an httpOnly `admin_session` cookie, separate from ops/POS sessions. Success
+returns to the requested admin page, or `/admin` by default. A 429 shows a
+lockout message; wait before retrying. Use **Sign out** in the owner sidebar
+to clear the session and return to `/admin/login`. New owners still open
+their invite link to set a password (`POST /admin/v1/auth/accept-invite`).
 
 **Getting a table's QR / guest URL:** open `/admin/floor-plan`, then click the
 QR icon on any table (the small corner button on a canvas tile, or the QR

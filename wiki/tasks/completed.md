@@ -1,5 +1,19 @@
 # Completed
 
+- **2026-09-06** - Owner sign-in (issue #144, web half of restiq-backend#118):
+  replaced the `/admin/login` stub with the ops-pattern email/password form,
+  generic credential errors, lockout copy, an expired-session banner and
+  sanitized return URLs. Added login/logout handlers using `admin_session`,
+  made the login handler public, and added sidebar Sign out. Updated the
+  landing card and testing guide with copyable Bay Leaf owner credentials.
+  Added focused login, auth-contract and landing coverage: typecheck and lint
+  pass on Node 22.22.3; the requested targeted Vitest run passes 27/27 tests.
+  `pnpm build` is blocked by the environment: Google Fonts fetch failed in
+  the sandbox, then the network-enabled retry hit Turbopack's denied local
+  port bind (`Operation not permitted`). Backend contract supplied for #118,
+  landing in parallel; no live-backend verification. See
+  [Tenant Admin CAP-1](../features/tenant-admin.md).
+
 - **2026-09-05** - GST-registered UI: AU "GST Registered" toggle + Receipt-vs-Tax-Invoice
   printing (issue #142, web half of restiq-backend#111, already merged). Tax Registration
   settings (`tax-registration-editor.tsx`/`-state.ts`) gained a `gstRegistered` checkbox
