@@ -1,4 +1,4 @@
-import { cleanup, render, screen } from "@testing-library/react";
+import { cleanup, render, screen, within } from "@testing-library/react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { DEMO_STAFF } from "./demo-logins";
 import Home from "./page";
@@ -41,7 +41,7 @@ describe("Landing page", () => {
   it("renders a navigable card for every user surface with its entry route", async () => {
     stubDevicesFetch();
     render(await Home());
-    const routes = ["/ops/login", "/admin", "/pos/login", "/kds", "/device"];
+    const routes = ["/ops/login", "/admin/login", "/pos/login", "/kds", "/device"];
     for (const href of routes) {
       const card = screen.getByTestId(`landing-card-${href}`);
       // The card is a stretched-link container; the CTA anchor carries the href.
@@ -55,9 +55,13 @@ describe("Landing page", () => {
   it("makes each credential value a copy button", async () => {
     stubDevicesFetch();
     render(await Home());
-    const emailCopy = screen.getByTestId("landing-copy-Email");
+    const emailCopy = within(screen.getByTestId("landing-card-/ops/login")).getByTestId("landing-copy-Email");
     expect(emailCopy.tagName).toBe("BUTTON");
     expect(emailCopy.getAttribute("aria-label")).toContain("admin@restiq.example");
+    const ownerCard = within(screen.getByTestId("landing-card-/admin/login"));
+    expect(ownerCard.getByRole("button", { name: "Copy Email: anita@bayleaf.example" })).toBeTruthy();
+    expect(ownerCard.getByRole("button", { name: "Copy Password: BayLeaf#2026Demo" })).toBeTruthy();
+    expect(ownerCard.getByRole("link", { name: /Open owner console/ }).getAttribute("href")).toBe("/admin/login");
   });
 
   it("lists live devices sorted by tenant, with Open links mapped by type and revoked devices skipped", async () => {
