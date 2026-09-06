@@ -29,6 +29,10 @@ describe("parseTableQuery", () => {
     expect(query.health).toBe("");
   });
 
+  it("accepts inactive as a valid status filter", () => {
+    expect(parseTableQuery(new URLSearchParams("status=inactive")).status).toBe("inactive");
+  });
+
   it("defaults order per sort column: createdAt desc, name asc", () => {
     expect(parseTableQuery(new URLSearchParams()).order).toBe("desc");
     expect(parseTableQuery(new URLSearchParams("sort=name")).order).toBe("asc");

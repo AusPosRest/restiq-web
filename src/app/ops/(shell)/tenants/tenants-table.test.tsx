@@ -108,6 +108,16 @@ describe("TenantsTable", () => {
     expect(replace).toHaveBeenCalledWith("/ops/tenants?status=active&country=IN&plan=enterprise");
   });
 
+  it("renders the inactive status badge and offers it in the status filter", async () => {
+    vi.stubGlobal("fetch", vi.fn().mockResolvedValue(listResponse([tenant({ status: "inactive" })])));
+    render(<TenantsTable />);
+    const row = await screen.findByTestId("tenants-row-0192aaaa-0000-7000-8000-000000000001");
+    expect(row.textContent).toContain("inactive");
+
+    const statusSelect = screen.getByTestId("tenants-filter-status") as HTMLSelectElement;
+    expect(Array.from(statusSelect.options).map((option) => option.value)).toContain("inactive");
+  });
+
   it("puts sort state in the URL when a header is clicked", async () => {
     vi.stubGlobal("fetch", vi.fn().mockResolvedValue(listResponse([tenant({})])));
     render(<TenantsTable />);

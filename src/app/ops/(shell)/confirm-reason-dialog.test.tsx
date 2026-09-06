@@ -60,4 +60,29 @@ describe("ConfirmReasonDialog", () => {
     render(<ConfirmReasonDialog open destructive title="T" description="D" verb="Revoke" onCancel={vi.fn()} onConfirm={vi.fn()} />);
     expect((screen.getByTestId("confirm-submit") as HTMLButtonElement).className).toContain("bg-status-critical");
   });
+
+  it("requires the optional confirm checkbox in addition to the reason when configured", async () => {
+    const onConfirm = vi.fn();
+    render(
+      <ConfirmReasonDialog
+        open
+        destructive
+        title="Delete Foo"
+        description="This cannot be undone."
+        verb="Delete"
+        confirmCheckboxLabel="I understand this is permanent."
+        onCancel={vi.fn()}
+        onConfirm={onConfirm}
+      />,
+    );
+    const submit = screen.getByTestId("confirm-submit") as HTMLButtonElement;
+    await userEvent.type(screen.getByTestId("confirm-reason"), "Tenant requested closure");
+    expect(submit.disabled).toBe(true);
+
+    await userEvent.click(screen.getByTestId("confirm-checkbox"));
+    expect(submit.disabled).toBe(false);
+
+    await userEvent.click(submit);
+    expect(onConfirm).toHaveBeenCalledWith("Tenant requested closure");
+  });
 });

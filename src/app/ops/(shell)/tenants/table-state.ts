@@ -2,7 +2,7 @@
 // pattern: sort/filter/pagination state lives in the URL so views are
 // shareable). Pure functions, unit-tested.
 
-export const STATUS_OPTIONS = ["provisioning", "active"] as const;
+export const STATUS_OPTIONS = ["provisioning", "active", "inactive"] as const;
 export const COUNTRY_OPTIONS = ["IN", "AU"] as const;
 export const PLAN_OPTIONS = ["standard", "enterprise"] as const;
 export const HEALTH_OPTIONS = ["healthy", "lagging", "silent", "unknown"] as const;

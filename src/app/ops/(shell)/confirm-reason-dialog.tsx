@@ -15,6 +15,8 @@ export interface ConfirmReasonDialogProps {
   verb: string;
   destructive?: boolean;
   busy?: boolean;
+  /** Extra guard for irreversible actions: submit stays disabled until this is checked too. */
+  confirmCheckboxLabel?: string;
   onCancel: () => void;
   onConfirm: (reason: string) => void;
 }
@@ -24,9 +26,20 @@ export function ConfirmReasonDialog(props: Readonly<ConfirmReasonDialogProps>) {
   return props.open ? <DialogBody key="open" {...props} /> : null;
 }
 
-function DialogBody({ title, description, verb, destructive, busy, onCancel, onConfirm }: Readonly<ConfirmReasonDialogProps>) {
+function DialogBody({
+  title,
+  description,
+  verb,
+  destructive,
+  busy,
+  confirmCheckboxLabel,
+  onCancel,
+  onConfirm,
+}: Readonly<ConfirmReasonDialogProps>) {
   const [reason, setReason] = useState("");
+  const [checked, setChecked] = useState(false);
   const trimmed = reason.trim();
+  const canSubmit = trimmed !== "" && (!confirmCheckboxLabel || checked) && !busy;
 
   return (
     <Dialog.Root open onOpenChange={(next) => !next && !busy && onCancel()}>
@@ -43,7 +56,7 @@ function DialogBody({ title, description, verb, destructive, busy, onCancel, onC
             className="mt-4"
             onSubmit={(event) => {
               event.preventDefault();
-              if (trimmed && !busy) onConfirm(trimmed);
+              if (canSubmit) onConfirm(trimmed);
             }}
           >
             <label
@@ -63,6 +76,18 @@ function DialogBody({ title, description, verb, destructive, busy, onCancel, onC
               onChange={(event) => setReason(event.target.value)}
               className="w-full resize-none rounded-lg border border-border bg-input px-3 py-2 text-sm text-foreground placeholder:text-muted-foreground/60 focus:outline-none focus-visible:ring-2 focus-visible:ring-ring"
             />
+            {confirmCheckboxLabel && (
+              <label className="mt-3 flex items-start gap-2 text-sm text-foreground">
+                <input
+                  type="checkbox"
+                  data-testid="confirm-checkbox"
+                  checked={checked}
+                  onChange={(event) => setChecked(event.target.checked)}
+                  className="mt-0.5 size-4 rounded border-border focus-visible:ring-2 focus-visible:ring-ring"
+                />
+                {confirmCheckboxLabel}
+              </label>
+            )}
             <div className="mt-4 flex justify-end gap-2">
               <Button type="button" variant="secondary" data-testid="confirm-cancel" disabled={busy} onClick={onCancel}>
                 Cancel
@@ -70,7 +95,7 @@ function DialogBody({ title, description, verb, destructive, busy, onCancel, onC
               <Button
                 type="submit"
                 data-testid="confirm-submit"
-                disabled={!trimmed || busy}
+                disabled={!canSubmit}
                 className={destructive ? "bg-status-critical text-white hover:bg-status-critical/90" : undefined}
               >
                 {busy ? "Working..." : verb}

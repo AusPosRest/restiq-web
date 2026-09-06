@@ -11,6 +11,10 @@ the task entry to `tasks/completed.md` after every feature or bug fix.
 
 ## Features
 
+- [Platform Console (internal ops) - web](features/platform-console.md) -
+  O2 dashboard, O3 tenant directory, O4 onboarding wizard, O5 tenant detail
+  with lifecycle actions (activate/deactivate/reactivate/delete), CAP-4
+  devices, CAP-5 subscriptions, CAP-6 sync health, CAP-7 dead-letter queue.
 - [Tenant Admin (Owner Web Console) - web](features/tenant-admin.md) -
   CAP-1 owner invite & account setup, CAP-2 go-live checklist, CAP-3 menu
   import, CAP-4 menu management, CAP-5 floor plan & stations, CAP-6 devices

@@ -3,7 +3,7 @@
 // O5 Tenant Detail: tab-bar page over the detail aggregate. Every mutation
 // goes through the confirm-modal-with-required-reason; the status badge
 // reflects lifecycle changes immediately.
-import { ChevronRight, Rocket } from "lucide-react";
+import { ChevronRight, PauseCircle, PlayCircle, Rocket, Trash2 } from "lucide-react";
 import Link from "next/link";
 import { useParams, usePathname, useRouter, useSearchParams } from "next/navigation";
 import { useState } from "react";
@@ -22,6 +22,48 @@ import { OutletsTab, OverviewTab, OwnersTab } from "./tabs";
 
 const TABS = ["overview", "outlets", "devices", "subscription", "capabilities", "branding", "owners"] as const;
 export type TabKey = (typeof TABS)[number];
+
+type LifecycleAction = "activate" | "deactivate" | "reactivate" | "delete";
+
+const LIFECYCLE_SUCCESS: Record<LifecycleAction, string> = {
+  activate: "Tenant activated.",
+  deactivate: "Tenant deactivated.",
+  reactivate: "Tenant reactivated.",
+  delete: "Tenant deleted.",
+};
+
+const LIFECYCLE_FAILURE: Record<LifecycleAction, string> = {
+  activate: "Activation failed.",
+  deactivate: "Deactivation failed.",
+  reactivate: "Reactivation failed.",
+  delete: "Deletion failed.",
+};
+
+const LIFECYCLE_DIALOG: Record<
+  LifecycleAction,
+  { title: (name: string) => string; description: string; verb: string }
+> = {
+  activate: {
+    title: (name) => `Activate ${name}`,
+    description: "The tenant moves from provisioning to active and its owner surfaces go live.",
+    verb: "Activate tenant",
+  },
+  deactivate: {
+    title: (name) => `Deactivate ${name}`,
+    description: "The tenant's owner and staff surfaces go offline immediately. Reactivating restores access.",
+    verb: "Deactivate",
+  },
+  reactivate: {
+    title: (name) => `Reactivate ${name}`,
+    description: "The tenant's owner and staff surfaces come back online immediately.",
+    verb: "Reactivate",
+  },
+  delete: {
+    title: (name) => `Delete ${name}`,
+    description: "This permanently deletes the tenant and all of its data for operators. This cannot be undone.",
+    verb: "Delete tenant",
+  },
+};
 
 const TAB_LABELS: Record<TabKey, string> = {
   overview: "Overview",
@@ -44,27 +86,34 @@ export function TenantDetailPage() {
   const tab: TabKey = (TABS as readonly string[]).includes(tabParam ?? "") ? (tabParam as TabKey) : "overview";
 
   const { loading, failed, data, retry: load } = useOpsLoad<TenantDetail>(`tenants/${params.id}`);
-  const [activateOpen, setActivateOpen] = useState(false);
-  const [activateBusy, setActivateBusy] = useState(false);
+  const [lifecycleAction, setLifecycleAction] = useState<LifecycleAction | null>(null);
+  const [lifecycleBusy, setLifecycleBusy] = useState(false);
 
   function selectTab(next: TabKey) {
     router.replace(next === "overview" ? pathname : `${pathname}?tab=${next}`);
   }
 
-  async function activate(reason: string) {
-    setActivateBusy(true);
+  async function runLifecycleAction(reason: string) {
+    if (!lifecycleAction) return;
+    setLifecycleBusy(true);
     try {
-      await opsApi(`tenants/${params.id}/activate`, { method: "POST", body: JSON.stringify({ reason }) });
-      setActivateOpen(false);
-      toast({ kind: "success", message: "Tenant activated." });
+      if (lifecycleAction === "delete") {
+        await opsApi(`tenants/${params.id}`, { method: "DELETE", body: JSON.stringify({ reason }) });
+        toast({ kind: "success", message: "Tenant deleted." });
+        router.push("/ops/tenants");
+        return;
+      }
+      await opsApi(`tenants/${params.id}/${lifecycleAction}`, { method: "POST", body: JSON.stringify({ reason }) });
+      setLifecycleAction(null);
+      toast({ kind: "success", message: LIFECYCLE_SUCCESS[lifecycleAction] });
       load();
     } catch (error) {
       toast({
         kind: "error",
-        message: error instanceof OpsApiError ? error.message : "Activation failed.",
+        message: error instanceof OpsApiError ? error.message : LIFECYCLE_FAILURE[lifecycleAction],
       });
     } finally {
-      setActivateBusy(false);
+      setLifecycleBusy(false);
     }
   }
 
@@ -118,11 +167,30 @@ export function TenantDetailPage() {
             {new Date(tenant.createdAt).toLocaleDateString(undefined, { day: "2-digit", month: "short", year: "numeric" })}
           </p>
         </div>
-        {tenant.status === "provisioning" && (
-          <Button data-testid="tenant-activate" onClick={() => setActivateOpen(true)}>
-            <Rocket aria-hidden="true" /> Activate tenant
+        <div className="flex items-center gap-2">
+          {tenant.status === "provisioning" && (
+            <Button data-testid="tenant-activate" onClick={() => setLifecycleAction("activate")}>
+              <Rocket aria-hidden="true" /> Activate tenant
+            </Button>
+          )}
+          {tenant.status === "active" && (
+            <Button
+              variant="outline"
+              data-testid="tenant-deactivate"
+              onClick={() => setLifecycleAction("deactivate")}
+            >
+              <PauseCircle aria-hidden="true" /> Deactivate
+            </Button>
+          )}
+          {tenant.status === "inactive" && (
+            <Button data-testid="tenant-reactivate" onClick={() => setLifecycleAction("reactivate")}>
+              <PlayCircle aria-hidden="true" /> Reactivate
+            </Button>
+          )}
+          <Button variant="destructive" data-testid="tenant-delete" onClick={() => setLifecycleAction("delete")}>
+            <Trash2 aria-hidden="true" /> Delete tenant
           </Button>
-        )}
+        </div>
       </div>
 
       <div role="tablist" aria-label="Tenant sections" className="mt-6 flex gap-1 border-b border-border/40">
@@ -156,15 +224,23 @@ export function TenantDetailPage() {
         {tab === "owners" && <OwnersTab detail={detail} />}
       </div>
 
-      <ConfirmReasonDialog
-        open={activateOpen}
-        title={`Activate ${tenant.name}`}
-        description="The tenant moves from provisioning to active and its owner surfaces go live."
-        verb="Activate tenant"
-        busy={activateBusy}
-        onCancel={() => setActivateOpen(false)}
-        onConfirm={(reason) => void activate(reason)}
-      />
+      {lifecycleAction && (
+        <ConfirmReasonDialog
+          open
+          title={LIFECYCLE_DIALOG[lifecycleAction].title(tenant.name)}
+          description={LIFECYCLE_DIALOG[lifecycleAction].description}
+          verb={LIFECYCLE_DIALOG[lifecycleAction].verb}
+          destructive={lifecycleAction === "deactivate" || lifecycleAction === "delete"}
+          confirmCheckboxLabel={
+            lifecycleAction === "delete"
+              ? `I understand this permanently deletes ${tenant.name} and cannot be undone.`
+              : undefined
+          }
+          busy={lifecycleBusy}
+          onCancel={() => setLifecycleAction(null)}
+          onConfirm={(reason) => void runLifecycleAction(reason)}
+        />
+      )}
     </section>
   );
 }
