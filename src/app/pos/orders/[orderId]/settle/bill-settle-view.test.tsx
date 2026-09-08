@@ -196,6 +196,19 @@ describe("BillSettleView - tenders", () => {
   });
 });
 
+describe("BillSettleView - print bill (issue #160)", () => {
+  it("shows a Print bill link next to Finalise while the bill is still open", async () => {
+    stubFetch();
+    render(<BillSettleView orderId={ORDER_ID} />);
+
+    await screen.findByTestId("bill-summary");
+    const printBillLink = screen.getByTestId("print-bill-link");
+    expect(printBillLink.getAttribute("href")).toBe("/pos/bills/bill-1/invoice");
+    expect(printBillLink.getAttribute("target")).toBe("_blank");
+    expect(printBillLink.getAttribute("rel")).toBe("noopener");
+  });
+});
+
 describe("BillSettleView - finalize", () => {
   it("disables Finalize until pending tenders exactly cover the total, then submits discount + tenders together", async () => {
     const fetchMock = stubFetch({

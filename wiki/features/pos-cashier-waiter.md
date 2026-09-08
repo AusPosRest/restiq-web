@@ -1240,6 +1240,36 @@ done now, this is what actually happened:
   confirming the ordinary AU Tax Invoice path still renders its tax-breakdown row with no
   callout.
 
+### "Print bill" before payment (issue #160)
+
+- **Intent:** let staff print the in-progress bill for a guest before the bill is finalized
+  (settling paper bills, guests who want to see the total before paying) - distinct from the
+  post-finalize "Print invoice" links above, which stay exactly as they are. Built against
+  the real, parallel `GET /pos/v1/bills/:id/invoice` contract change: the endpoint now
+  returns 200 for an open bill (previously 409 `not_finalized`) with the same `InvoiceView`
+  shape, `status: "open"`, `invoiceNumber: null`, `title: "Bill"`, and `tenders`/
+  `creditNotes` always empty. Finalized bills are unchanged.
+- **Built:** a new "Print bill" outline link, `data-testid="print-bill-link"`, next to the
+  Charge/Finalise button in `counter-view.tsx`'s and `bill-settle-view.tsx`'s open-bill
+  footer - both footers changed from a single full-width button to a `flex gap-2` row so the
+  tender column's height doesn't grow. The link opens `/pos/bills/${bill.id}/invoice` in a
+  new tab (`target="_blank" rel="noopener"`), shown for the whole life of the open bill (not
+  gated on any tenders being captured yet).
+  - `bill-invoice-view.tsx` reuses the exact same page and `useInvoice` hook for both cases:
+    when `invoice.status === "open"` it shows an "Unpaid" badge
+    (`data-testid="invoice-unpaid-badge"`) next to the title and omits the "Invoice #…" line
+    (`invoiceNumber` is `null`). The payments section needs no extra gating - it was already
+    conditioned on `tenders.length > 0`, which the open-bill contract satisfies by sending an
+    empty array. The Print button is unchanged and works identically in both states.
+  - `InvoiceView.invoiceNumber` widened to `string | null`, `title` widened to include
+    `"Bill"`, and a new optional `status?: "open" | "finalized"` field added - all additive,
+    no existing fixture needed changes.
+- **Tests:** an href/target/rel assertion added to `counter-view.test.tsx`'s existing
+  ring-up-and-settle flow test (asserted while the bill is still open, before tendering), one
+  new `bill-settle-view.test.tsx` test for the same link, and two new
+  `bill-invoice-view.test.tsx` cases - the open-bill Unpaid badge/omitted invoice
+  number/hidden payments section, and a finalized-bill control confirming neither shows.
+
 ## Reconciliation (2026-09-02, restiq-web#98)
 
 Every remaining self-authored `src/app/pos/api.ts` path (everything CAP-1/CAP-2/CAP-3/

@@ -181,6 +181,13 @@ describe("CounterView - ring up and settle in one continuous flow", () => {
     expect(screen.getByTestId("bill-line-line-1").textContent).toContain("Butter Naan");
     expect(screen.getByTestId("bill-line-line-1").textContent).not.toContain("item-naan");
 
+    // Print bill (issue #160): available next to Charge while the bill is
+    // still open, opens the same invoice route in a new tab.
+    const printBillLink = screen.getByTestId("print-bill-link");
+    expect(printBillLink.getAttribute("href")).toBe("/pos/bills/bill-order-47/invoice");
+    expect(printBillLink.getAttribute("target")).toBe("_blank");
+    expect(printBillLink.getAttribute("rel")).toBe("noopener");
+
     // Settle right here, no navigation to a /settle route.
     await user.click(screen.getByTestId("tender-fill-remaining"));
     await waitFor(() => expect(screen.getByTestId("finalize-bill")).toHaveProperty("disabled", false));

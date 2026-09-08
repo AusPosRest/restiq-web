@@ -190,15 +190,22 @@ function BillSettleLoaded({
                   {finalizeError}
                 </p>
               )}
-              <Button
-                size="lg"
-                className="w-full"
-                data-testid="finalize-bill"
-                disabled={!canFinalizeBill(bill, totalMinor, pendingTenders) || finalizeBusy}
-                onClick={handleFinalize}
-              >
-                {finalizeBusy ? "Finalising…" : "Finalise"}
-              </Button>
+              <div className="flex gap-2">
+                <Button
+                  size="lg"
+                  className="flex-1"
+                  data-testid="finalize-bill"
+                  disabled={!canFinalizeBill(bill, totalMinor, pendingTenders) || finalizeBusy}
+                  onClick={handleFinalize}
+                >
+                  {finalizeBusy ? "Finalising…" : "Finalise"}
+                </Button>
+                <Button asChild size="lg" variant="outline" data-testid="print-bill-link">
+                  <Link href={`/pos/bills/${bill.id}/invoice`} target="_blank" rel="noopener">
+                    Print bill
+                  </Link>
+                </Button>
+              </div>
             </footer>
           </div>
         )}
