@@ -163,6 +163,18 @@ export function MenuImport() {
           <p className="text-sm font-medium">{phase === "uploading" ? "Reading your menu..." : "Drag a file here, or click to browse"}</p>
           <p className="text-xs text-muted-foreground">CSV, XLSX, photo (JPG/PNG) or PDF</p>
         </div>
+        <p className="mt-3 text-center text-xs text-muted-foreground">
+          New to this?{" "}
+          <a
+            href="/menu-import-template.xlsx"
+            download
+            data-testid="menu-import-template-link"
+            className="font-medium text-primary underline-offset-2 hover:underline focus:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+          >
+            Download the sample spreadsheet
+          </a>
+          , fill in Category, Item, Short name and Price, then upload it here.
+        </p>
         <input
           ref={fileInputRef}
           data-testid="menu-import-file-input"
