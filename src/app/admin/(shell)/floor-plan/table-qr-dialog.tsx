@@ -16,12 +16,11 @@ import { useEffect, useState } from "react";
 import QRCode from "qrcode";
 import { Button } from "@/components/ui/button";
 import type { DiningTableView } from "./floor-plan-state";
-import { downloadUrl, guestOrderUrl, qrPngFilename } from "./table-qr-state";
+import { downloadUrl, guestOrderUrl, qrPngFilename, renderTableQrPng } from "./table-qr-state";
+import type { QrSheetTemplate } from "./qr-sheet-template";
 
 export const QR_SIZE_PX = 200;
 export const QR_OPTIONS = { errorCorrectionLevel: "M" as const, width: QR_SIZE_PX };
-// ~87mm at 300dpi - sticker-sized when handed to a print shop (issue #161).
-export const QR_DOWNLOAD_PX = 1024;
 
 /**
  * Generates a table's QR as a data: URL client-side - no separate hook file
@@ -50,21 +49,27 @@ export function useQrDataUrl(text: string | null): string | null {
 
 interface TableQrDialogProps {
   table: DiningTableView | null;
+  floorName: string;
+  template: QrSheetTemplate;
   outletId: string;
   qrOrderingEnabled: boolean | null;
   onClose: () => void;
 }
 
-export function TableQrDialog({ table, outletId, qrOrderingEnabled, onClose }: Readonly<TableQrDialogProps>) {
-  return table ? <DialogBody key={table.id} table={table} outletId={outletId} qrOrderingEnabled={qrOrderingEnabled} onClose={onClose} /> : null;
+export function TableQrDialog({ table, floorName, template, outletId, qrOrderingEnabled, onClose }: Readonly<TableQrDialogProps>) {
+  return table ? (
+    <DialogBody key={table.id} table={table} floorName={floorName} template={template} outletId={outletId} qrOrderingEnabled={qrOrderingEnabled} onClose={onClose} />
+  ) : null;
 }
 
 function DialogBody({
   table,
+  floorName,
+  template,
   outletId,
   qrOrderingEnabled,
   onClose,
-}: Readonly<{ table: DiningTableView; outletId: string; qrOrderingEnabled: boolean | null; onClose: () => void }>) {
+}: Readonly<{ table: DiningTableView; floorName: string; template: QrSheetTemplate; outletId: string; qrOrderingEnabled: boolean | null; onClose: () => void }>) {
   const url = guestOrderUrl(window.location.origin, outletId, table.id);
   const qrDataUrl = useQrDataUrl(url);
   const [copied, setCopied] = useState(false);
@@ -151,7 +156,7 @@ function DialogBody({
               variant="outline"
               data-testid="table-qr-dialog-download"
               onClick={() => {
-                void QRCode.toDataURL(url, { ...QR_OPTIONS, width: QR_DOWNLOAD_PX }).then((png) => downloadUrl(qrPngFilename(table.label), png));
+                void renderTableQrPng(table, floorName, url, template).then((png) => downloadUrl(qrPngFilename(table.label), png));
               }}
             >
               <Download aria-hidden="true" /> Download PNG

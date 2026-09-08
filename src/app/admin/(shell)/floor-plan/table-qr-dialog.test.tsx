@@ -3,8 +3,22 @@ import userEvent from "@testing-library/user-event";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { TableQrDialog } from "./table-qr-dialog";
 import type { DiningTableView } from "./floor-plan-state";
+import type { QrSheetTemplate } from "./qr-sheet-template";
 
 const TABLE: DiningTableView = { id: "t1", floorId: "f1", label: "T1", x: 0, y: 0, width: 40, height: 40, shape: "square", seatCapacity: 4 };
+
+// All toggles off: the download button then resolves straight to qrcode's
+// mocked toDataURL output with no canvas compositing step, matching this
+// suite's earlier "downloads the raw QR" assertions. renderTableQrPng's own
+// text-overlay behaviour is covered by table-qr-state.test.ts.
+const TEMPLATE: QrSheetTemplate = {
+  heading: "",
+  instruction: "",
+  showTableLabel: false,
+  showFloorName: false,
+  showUrl: false,
+  cardSize: "medium",
+};
 
 // The qrcode package does real image-encoding work that's slow and
 // irrelevant here - this dialog only needs to know it renders whatever
@@ -20,7 +34,7 @@ afterEach(() => cleanup());
 
 describe("TableQrDialog", () => {
   it("shows the table's label, guest URL, and a QR image with a data: src", async () => {
-    render(<TableQrDialog table={TABLE} outletId="outlet-1" qrOrderingEnabled onClose={vi.fn()} />);
+    render(<TableQrDialog table={TABLE} floorName="Ground Floor" template={TEMPLATE} outletId="outlet-1" qrOrderingEnabled onClose={vi.fn()} />);
 
     expect(screen.getByTestId("table-qr-dialog-label").textContent).toBe("T1");
     expect(screen.getByTestId("table-qr-dialog-url").textContent).toBe(`${window.location.origin}/qr/t/outlet-1/t1`);
@@ -31,7 +45,7 @@ describe("TableQrDialog", () => {
   });
 
   it("copies the guest URL to the clipboard", async () => {
-    render(<TableQrDialog table={TABLE} outletId="outlet-1" qrOrderingEnabled onClose={vi.fn()} />);
+    render(<TableQrDialog table={TABLE} floorName="Ground Floor" template={TEMPLATE} outletId="outlet-1" qrOrderingEnabled onClose={vi.fn()} />);
 
     await userEvent.click(screen.getByTestId("table-qr-dialog-copy"));
 
@@ -40,7 +54,7 @@ describe("TableQrDialog", () => {
 
   it("downloads a print-resolution PNG named after the table", async () => {
     const click = vi.spyOn(HTMLAnchorElement.prototype, "click").mockImplementation(() => {});
-    render(<TableQrDialog table={TABLE} outletId="outlet-1" qrOrderingEnabled onClose={vi.fn()} />);
+    render(<TableQrDialog table={TABLE} floorName="Ground Floor" template={TEMPLATE} outletId="outlet-1" qrOrderingEnabled onClose={vi.fn()} />);
 
     await userEvent.click(screen.getByTestId("table-qr-dialog-download"));
 
@@ -54,7 +68,7 @@ describe("TableQrDialog", () => {
   });
 
   it("opens the guest URL in a new tab via the Open link", async () => {
-    render(<TableQrDialog table={TABLE} outletId="outlet-1" qrOrderingEnabled onClose={vi.fn()} />);
+    render(<TableQrDialog table={TABLE} floorName="Ground Floor" template={TEMPLATE} outletId="outlet-1" qrOrderingEnabled onClose={vi.fn()} />);
 
     const open = screen.getByTestId("table-qr-dialog-open");
     expect(open.getAttribute("href")).toBe(`${window.location.origin}/qr/t/outlet-1/t1`);
@@ -62,7 +76,7 @@ describe("TableQrDialog", () => {
   });
 
   it("shows a note when qr_ordering is off for the outlet, but still shows the QR", async () => {
-    render(<TableQrDialog table={TABLE} outletId="outlet-1" qrOrderingEnabled={false} onClose={vi.fn()} />);
+    render(<TableQrDialog table={TABLE} floorName="Ground Floor" template={TEMPLATE} outletId="outlet-1" qrOrderingEnabled={false} onClose={vi.fn()} />);
 
     expect(screen.getByTestId("table-qr-dialog-capability-note").textContent).toContain("Self-ordering is off for this outlet");
     await waitFor(() => expect(screen.getByTestId("table-qr-dialog-image")).toBeTruthy());
@@ -70,7 +84,7 @@ describe("TableQrDialog", () => {
 
   it("closes when the close button is clicked", async () => {
     const onClose = vi.fn();
-    render(<TableQrDialog table={TABLE} outletId="outlet-1" qrOrderingEnabled onClose={onClose} />);
+    render(<TableQrDialog table={TABLE} floorName="Ground Floor" template={TEMPLATE} outletId="outlet-1" qrOrderingEnabled onClose={onClose} />);
 
     await userEvent.click(screen.getByTestId("table-qr-dialog-close"));
 
@@ -78,7 +92,7 @@ describe("TableQrDialog", () => {
   });
 
   it("renders nothing when no table is selected", () => {
-    render(<TableQrDialog table={null} outletId="outlet-1" qrOrderingEnabled={null} onClose={vi.fn()} />);
+    render(<TableQrDialog table={null} floorName="Ground Floor" template={TEMPLATE} outletId="outlet-1" qrOrderingEnabled={null} onClose={vi.fn()} />);
     expect(screen.queryByTestId("table-qr-dialog")).toBeNull();
   });
 });

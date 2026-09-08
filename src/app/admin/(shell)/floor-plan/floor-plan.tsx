@@ -9,7 +9,7 @@
 // toolbar) so a brand-new outlet with zero floors can reach the Go-Live
 // Checklist's floor_plan step through the console - see floor-plan-state.ts
 // and api.ts's file headers for the create-endpoint contract this reuses.
-import { Download, LayoutGrid, Pencil, Printer as PrinterIcon, Table2, TableProperties, Trash2 } from "lucide-react";
+import { Download, LayoutGrid, Pencil, Printer as PrinterIcon, SlidersHorizontal, Table2, TableProperties, Trash2 } from "lucide-react";
 import { useEffect, useState } from "react";
 import type { FormEvent } from "react";
 import QRCode from "qrcode";
@@ -26,8 +26,10 @@ import type { DiningTableView, FloorPlanView, FloorView, PrinterView, StationVie
 import { FloorPlanListView, type EditableTableField } from "./floor-plan-list-view";
 import { StationsPanel } from "./stations-panel";
 import { QR_OPTIONS, TableQrDialog } from "./table-qr-dialog";
-import { downloadUrl, guestOrderUrl, qrSheetHtml } from "./table-qr-state";
+import { downloadUrl, guestOrderUrl, qrSheetHtml, qrZipPngFilename, renderTableQrPng, slug } from "./table-qr-state";
 import { QrPrintSheet, type PrintQrCard } from "./qr-print-sheet";
+import { loadQrSheetTemplate, type QrSheetTemplate } from "./qr-sheet-template";
+import { QrSheetTemplateDialog } from "./qr-sheet-template-dialog";
 
 type ViewMode = "canvas" | "list";
 
@@ -113,6 +115,8 @@ function OutletFloorPlan({ outletId }: Readonly<{ outletId: string }>) {
 
 function FloorPlanEditor({ outletId, initial }: Readonly<{ outletId: string; initial: FloorPlanView }>) {
   const pushToast = useToast();
+  const { outlets } = useOutlets();
+  const outletName = outlets.find((outlet) => outlet.id === outletId)?.name ?? outletId;
   const [floors, setFloors] = useState<FloorView[]>(initial.floors);
   const [tables, setTables] = useState<DiningTableView[]>(initial.tables);
   const [stations, setStations] = useState<StationView[]>(initial.stations);
@@ -126,6 +130,8 @@ function FloorPlanEditor({ outletId, initial }: Readonly<{ outletId: string; ini
   const [qrTableId, setQrTableId] = useState<string | null>(null);
   const [qrOrderingEnabled, setQrOrderingEnabled] = useState<boolean | null>(null);
   const [printCards, setPrintCards] = useState<PrintQrCard[] | null>(null);
+  const [qrTemplate, setQrTemplate] = useState<QrSheetTemplate>(() => loadQrSheetTemplate(outletId, outletName));
+  const [qrTemplateDialogOpen, setQrTemplateDialogOpen] = useState(false);
 
   // Optimistic write, reconciled against the backend's actual REJECT-with-409
   // overlap policy (see floor-plan-state.ts's file header) - a save either
@@ -255,10 +261,25 @@ function FloorPlanEditor({ outletId, initial }: Readonly<{ outletId: string; ini
     setPrintCards(await buildQrCards());
   }
 
-  // Same cards as the print sheet, saved as one standalone HTML file (issue #161).
+  // Same cards as the print sheet, now zipped alongside one standalone PNG
+  // per table (issue #175) - a print shop or designer can pull the HTML
+  // sheet, or drop the PNGs straight onto table stickers, without the app.
+  // jszip is lazy-imported so it never lands in the initial bundle - most
+  // floor-plan visits never click this button.
   async function handleDownloadQrSheet() {
-    const href = URL.createObjectURL(new Blob([qrSheetHtml(await buildQrCards())], { type: "text/html" }));
-    downloadUrl("table-qr-codes.html", href);
+    const cards = await buildQrCards();
+    const { default: JSZip } = await import("jszip");
+    const zip = new JSZip();
+    zip.file("qr-sheet.html", qrSheetHtml(cards, qrTemplate));
+    await Promise.all(
+      cards.map(async (card) => {
+        const png = await renderTableQrPng(card.table, card.floorName, card.url, qrTemplate);
+        zip.file(qrZipPngFilename(card.floorName, card.table.label), png.slice(png.indexOf(",") + 1), { base64: true });
+      }),
+    );
+    const blob = await zip.generateAsync({ type: "blob" });
+    const href = URL.createObjectURL(blob);
+    downloadUrl(`${slug(outletName)}-qr-codes.zip`, href);
     URL.revokeObjectURL(href);
   }
 
@@ -321,6 +342,9 @@ function FloorPlanEditor({ outletId, initial }: Readonly<{ outletId: string; ini
               <Button size="sm" variant="secondary" data-testid="floor-plan-download-qr-sheet-button" onClick={() => void handleDownloadQrSheet()}>
                 <Download aria-hidden="true" /> Download QR sheet
               </Button>
+              <Button size="sm" variant="secondary" data-testid="floor-plan-customise-qr-sheet-button" onClick={() => setQrTemplateDialogOpen(true)}>
+                <SlidersHorizontal aria-hidden="true" /> Customise sheet
+              </Button>
             </div>
 
             <div className="grid flex-1 grid-cols-[1fr_320px] gap-6">
@@ -377,12 +401,23 @@ function FloorPlanEditor({ outletId, initial }: Readonly<{ outletId: string; ini
 
         <TableQrDialog
           table={tables.find((table) => table.id === qrTableId) ?? null}
+          floorName={floors.find((floor) => floor.id === tables.find((table) => table.id === qrTableId)?.floorId)?.name ?? ""}
+          template={qrTemplate}
           outletId={outletId}
           qrOrderingEnabled={qrOrderingEnabled}
           onClose={() => setQrTableId(null)}
         />
+
+        <QrSheetTemplateDialog
+          open={qrTemplateDialogOpen}
+          outletId={outletId}
+          outletName={outletName}
+          template={qrTemplate}
+          onSave={setQrTemplate}
+          onClose={() => setQrTemplateDialogOpen(false)}
+        />
       </div>
-      {printCards && <QrPrintSheet cards={printCards} />}
+      {printCards && <QrPrintSheet cards={printCards} template={qrTemplate} />}
     </>
   );
 }
