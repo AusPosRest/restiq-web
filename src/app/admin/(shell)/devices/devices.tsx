@@ -107,7 +107,7 @@ function DevicesEditor({ outletId, initial }: Readonly<{ outletId: string; initi
         </Button>
       </div>
 
-      <div className="grid grid-cols-[1fr_320px] gap-6">
+      <div className="grid grid-cols-1 gap-6 2xl:grid-cols-[minmax(0,1fr)_320px]">
         <DevicesTable devices={initial.devices} />
         {activeCode ? (
           <CodeChip key={activeCode.code} code={activeCode.code} expiresAt={activeCode.expiresAt} onRegenerate={() => setGenerateOpen(true)} />
