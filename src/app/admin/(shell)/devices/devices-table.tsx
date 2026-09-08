@@ -10,10 +10,12 @@ import { formatLastSeen, type AdminDeviceView } from "./devices-state";
 // Where an enrolled device's surface lives, so an owner can click straight
 // through to log in and take orders (issue #112). Kiosk/CDS have no web
 // surface yet. Mirrors src/app/device/device-state.ts's continueTargetFor -
-// not imported across route trees (AD-4).
-const SURFACE_LINKS: Record<string, { href: string; label: string }> = {
-  pos: { href: "/pos/login", label: "Open POS" },
-  kds: { href: "/kds", label: "Open KDS" },
+// not imported across route trees (AD-4). POS carries `?device=&tenant=` so
+// the shared PIN pad can bind itself to this device's tenant (issue #150,
+// terminal-binding.ts) instead of relying on POS_TENANT_ID.
+const SURFACE_LINKS: Record<string, { href: (device: Pick<AdminDeviceView, "id" | "tenantId">) => string; label: string }> = {
+  pos: { href: (device) => `/pos/login?device=${encodeURIComponent(device.id)}&tenant=${encodeURIComponent(device.tenantId)}`, label: "Open POS" },
+  kds: { href: () => "/kds", label: "Open KDS" },
 };
 
 const STATUS_LABELS: Record<string, string> = { active: "Enrolled", revoked: "Revoked" };
@@ -86,7 +88,7 @@ export function DevicesTable({ devices }: Readonly<{ devices: readonly AdminDevi
               <td className="px-4 text-right">
                 {device.status === "active" && SURFACE_LINKS[device.type] ? (
                   <a
-                    href={SURFACE_LINKS[device.type].href}
+                    href={SURFACE_LINKS[device.type].href(device)}
                     target="_blank"
                     rel="noopener"
                     data-testid={`device-open-${device.id}`}

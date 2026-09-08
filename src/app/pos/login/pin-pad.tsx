@@ -19,7 +19,8 @@
 // window the static caption below already advertised.
 import { Delete } from "lucide-react";
 import { useEffect, useRef, useState } from "react";
-import { useRouter } from "next/navigation";
+import { useRouter, useSearchParams } from "next/navigation";
+import { clearTerminalBinding, getTerminalBinding, saveTerminalBinding, type TerminalBinding } from "../terminal-binding";
 import {
   appendDigit,
   backspacePin,
@@ -105,8 +106,8 @@ async function postJson(path: string, body: unknown): Promise<SubmitResult> {
   return { kind: "failure", message: errorMessage(errBody, "Sign-in failed. Check your connection and try again.") };
 }
 
-function submitPin(pin: string): Promise<SubmitResult> {
-  return postJson("/pos/auth/login", { pin });
+function submitPin(pin: string, tenantId: string | undefined): Promise<SubmitResult> {
+  return postJson("/pos/auth/login", tenantId ? { pin, tenantId } : { pin });
 }
 
 function submitOutletSelection(pendingToken: string, outletId: string): Promise<SubmitResult> {
@@ -115,10 +116,35 @@ function submitOutletSelection(pendingToken: string, outletId: string): Promise<
 
 export function PinPad({ nextPath }: { nextPath: string }) {
   const router = useRouter();
+  const searchParams = useSearchParams();
   const [state, setState] = useState<PinScreenState>(INITIAL_PIN_STATE);
   const [pending, setPending] = useState(false);
   const [remaining, setRemaining] = useState(0);
+  const [rebound, setRebound] = useState(false);
   const containerRef = useRef<HTMLDivElement>(null);
+
+  // ?device=&tenant= (set by the admin Devices table's/landing page's "Open
+  // POS" link - issue #150) takes priority the moment it's present, and gets
+  // persisted below so a later reload with no query string still finds it -
+  // computed directly during render (mirrors kds-entry.tsx's
+  // getSavedStationId call) rather than mirrored into state, so there's no
+  // synchronous setState-in-effect for React's linter to flag.
+  const queryTenantId = searchParams.get("tenant");
+  const queryDeviceId = searchParams.get("device");
+  const binding: TerminalBinding | null = rebound
+    ? null
+    : queryTenantId && queryDeviceId
+      ? { tenantId: queryTenantId, deviceId: queryDeviceId }
+      : getTerminalBinding();
+
+  useEffect(() => {
+    if (queryTenantId && queryDeviceId) saveTerminalBinding({ tenantId: queryTenantId, deviceId: queryDeviceId });
+  }, [queryTenantId, queryDeviceId]);
+
+  function rebind() {
+    clearTerminalBinding();
+    setRebound(true);
+  }
 
   // Live lockout countdown, timed off this tab's own clock from the moment
   // the 429 arrived (see file header - the backend's fixed 30s window isn't
@@ -155,7 +181,7 @@ export function PinPad({ nextPath }: { nextPath: string }) {
 
   async function attemptLogin(pin: string) {
     setPending(true);
-    const result = await submitPin(pin);
+    const result = await submitPin(pin, binding?.tenantId);
     setPending(false);
     handleResult(result);
   }
@@ -262,6 +288,22 @@ export function PinPad({ nextPath }: { nextPath: string }) {
           <p className="mt-1 text-xs text-muted-foreground">5 attempts, then 30 second lockout</p>
         </>
       )}
+
+      {binding ? (
+        <div className="mt-6 flex flex-col items-center gap-1">
+          <p data-testid="pos-terminal-binding" className="text-xs text-muted-foreground">
+            Terminal bound to {binding.tenantName ?? binding.tenantId}
+          </p>
+          <button
+            type="button"
+            data-testid="pos-rebind"
+            onClick={rebind}
+            className="text-xs font-medium text-primary underline-offset-2 hover:underline focus:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+          >
+            Not this restaurant? Re-enrol
+          </button>
+        </div>
+      ) : null}
     </div>
   );
 }

@@ -8,6 +8,7 @@
 //   GET  ops/v1/devices    -> { devices: DeviceListItem[], nextCursor, total }
 export interface LandingDevice {
   id: string;
+  tenantId: string;
   label: string;
   type: string;
   status: string;
@@ -22,10 +23,14 @@ export type LandingDevicesResult =
 // pos/kiosk terminals sign in at the shared POS PIN pad; kds shares that
 // auth realm at its own route; other device types (cds - customer display)
 // have no standalone login surface to open. A revoked device is never
-// openable regardless of type.
-export function deviceOpenHref(device: Pick<LandingDevice, "type" | "status">): string | null {
+// openable regardless of type. pos/kiosk carry `?device=&tenant=` so the PIN
+// pad can bind itself to this device's tenant (issue #150,
+// src/app/pos/terminal-binding.ts) instead of relying on POS_TENANT_ID.
+export function deviceOpenHref(device: Pick<LandingDevice, "id" | "tenantId" | "type" | "status">): string | null {
   if (device.status === "revoked") return null;
-  if (device.type === "pos" || device.type === "kiosk") return "/pos/login";
+  if (device.type === "pos" || device.type === "kiosk") {
+    return `/pos/login?device=${encodeURIComponent(device.id)}&tenant=${encodeURIComponent(device.tenantId)}`;
+  }
   if (device.type === "kds") return "/kds";
   return null;
 }

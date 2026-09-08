@@ -1,3 +1,4 @@
+import { Suspense } from "react";
 import { Wifi } from "lucide-react";
 import { sanitizePosNextPath } from "@/lib/pos-session";
 import { LiveClock } from "./live-clock";
@@ -56,7 +57,12 @@ export default async function PosLoginPage({
               Session expired. Enter your PIN again to continue.
             </p>
           ) : null}
-          <PinPad nextPath={nextPath} />
+          {/* Suspense: PinPad reads useSearchParams (?device=&tenant=), which Next
+              requires a boundary around even though this route is already forced
+              dynamic by this page's own searchParams await - mirrors kds's page.tsx. */}
+          <Suspense>
+            <PinPad nextPath={nextPath} />
+          </Suspense>
         </div>
       </section>
     </main>
