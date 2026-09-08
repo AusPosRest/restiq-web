@@ -567,6 +567,11 @@ describe("FloorPlan", () => {
       expect(screen.getByTestId("qr-print-card-t1").textContent).toContain(`${window.location.origin}/qr/t/outlet-1/t1`);
       await waitFor(() => expect(printSpy).toHaveBeenCalled());
 
+      // The editor chrome (toolbar, canvas/list, stations panel) must not
+      // print alongside the sheet - only the print sheet's own cards should.
+      expect(screen.getByTestId("floor-plan-toolbar").closest(".print\\:hidden")).toBeTruthy();
+      expect(screen.getByTestId("qr-print-card-t1").closest(".print\\:hidden")).toBeNull();
+
       printSpy.mockRestore();
     });
 

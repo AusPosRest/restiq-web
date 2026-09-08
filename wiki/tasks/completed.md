@@ -1,5 +1,21 @@
 # Completed
 
+- **2026-09-09** - Fix: Print QR sheet printed the admin console chrome
+  alongside the QR cards (post-#161/#131 validation pass). Neither the admin
+  shell's sidebar/header (`(shell)/layout.tsx`) nor the floor-plan editor's
+  own screen (`floor-plan.tsx`) had `print:hidden`, so `window.print()` from
+  "Print QR sheet" rendered the sidebar, header, toolbar, canvas/list and
+  stations panel above/around the printable sheet instead of just the QR
+  cards. Added `print:hidden` to both; `QrPrintSheet` is now the only thing
+  `window.print()` shows. Everything else audited in this pass - the
+  per-table QR dialog (open/copy/download), edit-then-reopen (the URL is
+  keyed on table id, never regenerates on a label/seat/shape edit),
+  "Download QR sheet"'s standalone HTML, and the guest URL contract against
+  `/qr/t/[outletId]/[tableId]` - checked out working as built; no
+  regenerate/rotate control exists and none was added. 1 new assertion in
+  `floor-plan.test.tsx`; lint/typecheck/full test suite (1138 tests)/build
+  clean.
+
 - **2026-09-09** - Download table QR as PNG + download all as a printable HTML sheet
   (issue #161): the per-table QR dialog gains a "Download PNG" button that saves a 1024px
   `<label>-qr.png`, and the floor-plan toolbar gains "Download QR sheet" beside "Print QR

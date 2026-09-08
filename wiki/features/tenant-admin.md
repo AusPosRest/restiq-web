@@ -455,10 +455,14 @@ story. Backend counterpart: `restiq-backend/wiki/features/tenant-admin.md`.
     still mid-generation, since each card's `<img>` gets a pre-computed
     `data:` URL as a prop, not its own async effect. An in-page print
     stylesheet (Tailwind's `print:` variant, `hidden print:block`) rather
-    than a dedicated `/admin/floor-plan/qr-sheet` route - the admin shell's
-    sidebar/toolbar/outlet-switcher chrome would print alongside a
-    route-based page too, and this needed no new route, layout, or
-    outlet-id-from-search-params plumbing to avoid that.
+    than a dedicated `/admin/floor-plan/qr-sheet` route - no new route,
+    layout, or outlet-id-from-search-params plumbing needed. The admin
+    shell's sidebar/header (`(shell)/layout.tsx`) and the floor-plan editor's
+    own screen (toolbar, canvas/list, stations panel - everything but
+    `QrPrintSheet`, `floor-plan.tsx`) both carry `print:hidden` so
+    `window.print()` renders only the QR cards, not the console chrome
+    around them (bug found and fixed post-#161: the chrome had no
+    `print:hidden` at all, so it printed alongside the sheet).
   - **Download QR / Download QR sheet (issue #161):** the dialog's "Download
     PNG" button (`table-qr-dialog-download`) re-encodes the same URL at
     `QR_DOWNLOAD_PX` (1024px, ~87mm at 300dpi) and saves it as
