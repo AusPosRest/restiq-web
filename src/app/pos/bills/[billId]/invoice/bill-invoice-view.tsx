@@ -120,7 +120,7 @@ function InvoiceLoaded({ invoice }: Readonly<{ invoice: InvoiceView }>) {
         </h1>
         <p className="text-sm text-muted-foreground">
           {invoice.invoiceNumber && `Invoice #${invoice.invoiceNumber} · `}
-          {formatIssuedAt(invoice.issuedAt)}
+          {invoice.issuedAt ? formatIssuedAt(invoice.issuedAt) : "Not yet issued"}
         </p>
       </header>
 

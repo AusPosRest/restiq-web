@@ -402,7 +402,8 @@ export interface InvoiceView {
   invoiceNumber: string | null;
   status?: "open" | "finalized";
   title: "Tax Invoice" | "Invoice" | "Receipt" | "Bill";
-  issuedAt: string;
+  /** null for an open (pro-forma) bill - it is issued at finalize. */
+  issuedAt: string | null;
   currency: string;
   seller: InvoiceSellerView;
   lines: InvoiceLineView[];
