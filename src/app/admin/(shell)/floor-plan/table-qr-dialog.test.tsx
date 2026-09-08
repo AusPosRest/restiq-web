@@ -38,6 +38,21 @@ describe("TableQrDialog", () => {
     expect(navigator.clipboard.writeText).toHaveBeenCalledWith(`${window.location.origin}/qr/t/outlet-1/t1`);
   });
 
+  it("downloads a print-resolution PNG named after the table", async () => {
+    const click = vi.spyOn(HTMLAnchorElement.prototype, "click").mockImplementation(() => {});
+    render(<TableQrDialog table={TABLE} outletId="outlet-1" qrOrderingEnabled onClose={vi.fn()} />);
+
+    await userEvent.click(screen.getByTestId("table-qr-dialog-download"));
+
+    const { default: QRCode } = await import("qrcode");
+    expect(QRCode.toDataURL).toHaveBeenCalledWith(`${window.location.origin}/qr/t/outlet-1/t1`, expect.objectContaining({ width: 1024 }));
+    await waitFor(() => expect(click).toHaveBeenCalled());
+    const anchor = click.mock.instances[0] as HTMLAnchorElement;
+    expect(anchor.download).toBe("T1-qr.png");
+    expect(anchor.href).toBe("data:image/png;base64,FAKE");
+    click.mockRestore();
+  });
+
   it("opens the guest URL in a new tab via the Open link", async () => {
     render(<TableQrDialog table={TABLE} outletId="outlet-1" qrOrderingEnabled onClose={vi.fn()} />);
 

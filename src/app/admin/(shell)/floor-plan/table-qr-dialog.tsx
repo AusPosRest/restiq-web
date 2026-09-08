@@ -11,15 +11,17 @@
 // rather than imported since the admin/ops route trees never import from
 // each other (AD-4, see code-chip.tsx's file header for the same rule).
 import { Dialog } from "radix-ui";
-import { Check, Copy, ExternalLink } from "lucide-react";
+import { Check, Copy, Download, ExternalLink } from "lucide-react";
 import { useEffect, useState } from "react";
 import QRCode from "qrcode";
 import { Button } from "@/components/ui/button";
 import type { DiningTableView } from "./floor-plan-state";
-import { guestOrderUrl } from "./table-qr-state";
+import { downloadUrl, guestOrderUrl, qrPngFilename } from "./table-qr-state";
 
 export const QR_SIZE_PX = 200;
 export const QR_OPTIONS = { errorCorrectionLevel: "M" as const, width: QR_SIZE_PX };
+// ~87mm at 300dpi - sticker-sized when handed to a print shop (issue #161).
+export const QR_DOWNLOAD_PX = 1024;
 
 /**
  * Generates a table's QR as a data: URL client-side - no separate hook file
@@ -133,15 +135,28 @@ function DialogBody({
             </Button>
           </div>
 
-          <a
-            href={url}
-            target="_blank"
-            rel="noreferrer"
-            data-testid="table-qr-dialog-open"
-            className="mt-3 inline-flex items-center gap-1 text-sm font-medium text-primary hover:underline"
-          >
-            Open <ExternalLink className="size-3.5" aria-hidden="true" />
-          </a>
+          <div className="mt-3 flex items-center justify-between">
+            <a
+              href={url}
+              target="_blank"
+              rel="noreferrer"
+              data-testid="table-qr-dialog-open"
+              className="inline-flex items-center gap-1 text-sm font-medium text-primary hover:underline"
+            >
+              Open <ExternalLink className="size-3.5" aria-hidden="true" />
+            </a>
+            <Button
+              type="button"
+              size="sm"
+              variant="outline"
+              data-testid="table-qr-dialog-download"
+              onClick={() => {
+                void QRCode.toDataURL(url, { ...QR_OPTIONS, width: QR_DOWNLOAD_PX }).then((png) => downloadUrl(qrPngFilename(table.label), png));
+              }}
+            >
+              <Download aria-hidden="true" /> Download PNG
+            </Button>
+          </div>
         </Dialog.Content>
       </Dialog.Portal>
     </Dialog.Root>

@@ -15,7 +15,7 @@ export default function AdminShellLayout({
   return (
     <OutletProvider>
       <div className="flex min-h-screen flex-1">
-        <aside className="flex w-60 shrink-0 flex-col border-r border-border/40 bg-card">
+        <aside className="flex w-60 shrink-0 flex-col border-r border-border/40 bg-card print:hidden">
           <div className="px-6 py-6">
             <p className="font-headline text-2xl font-bold tracking-tight text-primary">RESTIQ</p>
             <p className="font-label mt-1 text-xs font-semibold uppercase tracking-wider text-muted-foreground">Owner Console</p>
@@ -35,7 +35,7 @@ export default function AdminShellLayout({
 
         <div className="flex min-w-0 flex-1 flex-col">
           <ToastProvider>
-            <header className="flex h-14 items-center justify-end gap-3 border-b border-border/40 bg-card px-6">
+            <header className="flex h-14 items-center justify-end gap-3 border-b border-border/40 bg-card px-6 print:hidden">
               <OutletSwitcher />
             </header>
             <main className="flex-1 p-8">{children}</main>
