@@ -214,6 +214,7 @@ describe("BillInvoiceView - open bill (issue #160, print before payment)", () =>
     return inInvoice({
       status: "open",
       invoiceNumber: null,
+      issuedAt: null,
       title: "Bill",
       tenders: [],
       creditNotes: [],
@@ -230,6 +231,8 @@ describe("BillInvoiceView - open bill (issue #160, print before payment)", () =>
     expect(screen.getByText("Bill")).toBeTruthy();
     expect(screen.getByTestId("invoice-unpaid-badge").textContent).toBe("Unpaid");
     expect(screen.queryByText(/Invoice #/)).toBeNull();
+    expect(screen.getByText("Not yet issued")).toBeTruthy();
+    expect(screen.queryByText(/1970/)).toBeNull();
     expect(screen.queryByTestId("invoice-tenders")).toBeNull();
     expect(screen.queryByTestId("invoice-credit-notes")).toBeNull();
     expect(screen.getByTestId("invoice-print")).toBeTruthy();
