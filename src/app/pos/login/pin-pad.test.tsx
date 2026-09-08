@@ -4,8 +4,10 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { PinPad } from "./pin-pad";
 
 const replace = vi.fn();
+let search = "";
 vi.mock("next/navigation", () => ({
   useRouter: () => ({ replace }),
+  useSearchParams: () => new URLSearchParams(search),
 }));
 
 function jsonResponse(status: number, body: unknown): Response {
@@ -21,6 +23,8 @@ async function typePin(digits: string) {
 describe("PinPad", () => {
   beforeEach(() => {
     replace.mockReset();
+    search = "";
+    window.localStorage.clear();
     vi.unstubAllGlobals();
   });
   afterEach(cleanup);
@@ -35,6 +39,38 @@ describe("PinPad", () => {
       expect(screen.getByTestId(`pos-pin-digit-${digit}`)).toBeTruthy();
     }
     expect(screen.getByTestId("pos-pin-backspace")).toBeTruthy();
+    expect(screen.queryByTestId("pos-terminal-binding")).toBeNull();
+  });
+
+  it("saves ?device=&tenant= as a terminal binding, shows it, and posts tenantId with the PIN", async () => {
+    search = "device=dev-1&tenant=tenant-9";
+    const fetchMock = vi.fn().mockResolvedValue(
+      jsonResponse(200, { status: "authenticated", staff: { id: "s1", name: "Priya" }, outlet: { id: "o1", name: "Spice Route" } }),
+    );
+    vi.stubGlobal("fetch", fetchMock);
+    render(<PinPad nextPath="/pos" />);
+
+    expect(await screen.findByTestId("pos-terminal-binding")).toHaveProperty("textContent", "Terminal bound to tenant-9");
+    expect(JSON.parse(window.localStorage.getItem("pos:terminal-binding") ?? "null")).toEqual({ tenantId: "tenant-9", deviceId: "dev-1" });
+
+    await typePin("1234");
+
+    await waitFor(() => expect(replace).toHaveBeenCalledWith("/pos"));
+    const [, init] = fetchMock.mock.calls[0] as [string, RequestInit];
+    expect(JSON.parse(init.body as string)).toEqual({ pin: "1234", tenantId: "tenant-9" });
+  });
+
+  it("reuses a previously saved binding with no query string, and clears it on Re-enrol", async () => {
+    window.localStorage.setItem("pos:terminal-binding", JSON.stringify({ tenantId: "tenant-5", deviceId: "dev-5" }));
+    vi.stubGlobal("fetch", vi.fn());
+    render(<PinPad nextPath="/pos" />);
+
+    expect(await screen.findByTestId("pos-terminal-binding")).toHaveProperty("textContent", "Terminal bound to tenant-5");
+
+    await userEvent.click(screen.getByTestId("pos-rebind"));
+
+    expect(screen.queryByTestId("pos-terminal-binding")).toBeNull();
+    expect(window.localStorage.getItem("pos:terminal-binding")).toBeNull();
   });
 
   it("auto-submits at 4 digits and redirects on a correct PIN", async () => {

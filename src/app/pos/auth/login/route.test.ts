@@ -130,4 +130,37 @@ describe("POST /pos/auth/login", () => {
     expect(res.status).toBe(500);
     expect(fetchMock).not.toHaveBeenCalled();
   });
+
+  it("sends the request body's tenantId instead of POS_TENANT_ID when the terminal is bound to a tenant", async () => {
+    const BOUND_TENANT_ID = "0193aaaa-0000-7000-8000-000000000002";
+    const fetchMock = vi.fn().mockResolvedValue(
+      upstreamJson(200, { status: "authenticated", token: "the-jwt", staff: { id: "s1", name: "Priya" }, outlet: { id: "o1", name: "Spice Route" } }),
+    );
+    vi.stubGlobal("fetch", fetchMock);
+
+    await POST(jsonRequest({ pin: "1234", tenantId: BOUND_TENANT_ID }));
+
+    const [, init] = fetchMock.mock.calls[0] as [string, RequestInit];
+    expect(JSON.parse(init.body as string)).toEqual({ tenantId: BOUND_TENANT_ID, pin: "1234" });
+  });
+
+  it("rejects a non-UUID tenantId before ever calling the backend", async () => {
+    const fetchMock = vi.fn();
+    vi.stubGlobal("fetch", fetchMock);
+    const res = await POST(jsonRequest({ pin: "1234", tenantId: "not-a-uuid" }));
+    expect(res.status).toBe(400);
+    expect(fetchMock).not.toHaveBeenCalled();
+  });
+
+  it("falls back to POS_TENANT_ID when the request carries no tenantId", async () => {
+    const fetchMock = vi.fn().mockResolvedValue(
+      upstreamJson(200, { status: "authenticated", token: "the-jwt", staff: { id: "s1", name: "Priya" }, outlet: { id: "o1", name: "Spice Route" } }),
+    );
+    vi.stubGlobal("fetch", fetchMock);
+
+    await POST(jsonRequest({ pin: "1234" }));
+
+    const [, init] = fetchMock.mock.calls[0] as [string, RequestInit];
+    expect(JSON.parse(init.body as string)).toEqual({ tenantId: TENANT_ID, pin: "1234" });
+  });
 });

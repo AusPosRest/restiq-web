@@ -16,6 +16,7 @@ import type { PrinterView, StationView } from "../floor-plan/floor-plan-state";
 
 export interface AdminDeviceView {
   id: string;
+  tenantId: string;
   label: string;
   type: string;
   role: string;

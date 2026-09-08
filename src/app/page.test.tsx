@@ -10,11 +10,11 @@ function jsonResponse(status: number, body: unknown): Response {
 }
 
 const DEVICES = [
-  { id: "d-pos", label: "POS-1", type: "pos", status: "active", tenantName: "Spice Route Hospitality", outletName: "Spice Route Outlet" },
-  { id: "d-kiosk", label: "KIOSK-1", type: "kiosk", status: "active", tenantName: "Bay Leaf Kitchens", outletName: null },
-  { id: "d-kds", label: "KDS-1", type: "kds", status: "active", tenantName: "Spice Route Hospitality", outletName: "Spice Route Outlet" },
-  { id: "d-cds", label: "CDS-1", type: "cds", status: "active", tenantName: "Bay Leaf Kitchens", outletName: null },
-  { id: "d-revoked", label: "POS-OLD", type: "pos", status: "revoked", tenantName: "Bay Leaf Kitchens", outletName: null },
+  { id: "d-pos", tenantId: "tenant-spice", label: "POS-1", type: "pos", status: "active", tenantName: "Spice Route Hospitality", outletName: "Spice Route Outlet" },
+  { id: "d-kiosk", tenantId: "tenant-bayleaf", label: "KIOSK-1", type: "kiosk", status: "active", tenantName: "Bay Leaf Kitchens", outletName: null },
+  { id: "d-kds", tenantId: "tenant-spice", label: "KDS-1", type: "kds", status: "active", tenantName: "Spice Route Hospitality", outletName: "Spice Route Outlet" },
+  { id: "d-cds", tenantId: "tenant-bayleaf", label: "CDS-1", type: "cds", status: "active", tenantName: "Bay Leaf Kitchens", outletName: null },
+  { id: "d-revoked", tenantId: "tenant-bayleaf", label: "POS-OLD", type: "pos", status: "revoked", tenantName: "Bay Leaf Kitchens", outletName: null },
 ];
 
 function stubDevicesFetch() {
@@ -68,8 +68,8 @@ describe("Landing page", () => {
     stubDevicesFetch();
     render(await Home());
 
-    expect(screen.getByTestId("landing-device-open-d-pos").getAttribute("href")).toBe("/pos/login");
-    expect(screen.getByTestId("landing-device-open-d-kiosk").getAttribute("href")).toBe("/pos/login");
+    expect(screen.getByTestId("landing-device-open-d-pos").getAttribute("href")).toBe("/pos/login?device=d-pos&tenant=tenant-spice");
+    expect(screen.getByTestId("landing-device-open-d-kiosk").getAttribute("href")).toBe("/pos/login?device=d-kiosk&tenant=tenant-bayleaf");
     expect(screen.getByTestId("landing-device-open-d-kds").getAttribute("href")).toBe("/kds");
     // cds has no login surface; the revoked pos device is never openable.
     expect(screen.queryByTestId("landing-device-open-d-cds")).toBeNull();

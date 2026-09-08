@@ -6,6 +6,7 @@ import type { AdminDeviceView } from "./devices-state";
 function device(overrides: Partial<AdminDeviceView> = {}): AdminDeviceView {
   return {
     id: "device-1",
+    tenantId: "tenant-1",
     label: "Terminal 1",
     type: "pos",
     role: "hub",
@@ -60,7 +61,7 @@ describe("DevicesTable", () => {
         ]}
       />,
     );
-    expect(screen.getByTestId("device-open-pos-1").getAttribute("href")).toBe("/pos/login");
+    expect(screen.getByTestId("device-open-pos-1").getAttribute("href")).toBe("/pos/login?device=pos-1&tenant=tenant-1");
     expect(screen.getByTestId("device-open-kds-1").getAttribute("href")).toBe("/kds");
     expect(screen.queryByTestId("device-open-kiosk-1")).toBeNull();
     expect(screen.queryByTestId("device-open-gone-1")).toBeNull();

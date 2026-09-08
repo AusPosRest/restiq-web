@@ -1,5 +1,26 @@
 # Completed
 
+- **2026-09-09** - POS terminal-to-tenant binding (issue #150): owners now enrol POS/kiosk
+  devices across several tenants, so the shared PIN pad (`src/app/pos/login`) can no longer
+  assume the single-deployment `POS_TENANT_ID` env var is the only source of truth for which
+  tenant a terminal belongs to. The admin Devices table's "Open POS" link
+  (`devices-table.tsx`, now carrying `tenantId` on `AdminDeviceView`) and the landing page's
+  live device fleet (`landing-devices.ts`'s `deviceOpenHref`, now carrying `LandingDevice.
+  tenantId`) point pos/kiosk devices at `/pos/login?device=<id>&tenant=<tenantId>`. New
+  `src/app/pos/terminal-binding.ts` (mirrors `kds-station-storage.ts`'s try/catch
+  localStorage pattern) reads that query string on mount, saves it as a per-browser binding,
+  and the PIN pad always posts the stored `tenantId` alongside the PIN from then on - even on
+  a later visit with no query string. A one-line "Terminal bound to `<tenantName or
+  tenantId>`" caption with a "Not this restaurant? Re-enrol" button (`pos-rebind`) clears the
+  binding. `POST /pos/auth/login`'s route handler now accepts an optional `tenantId` in the
+  body (must be a well-formed UUID, else 400), using it when present and falling back to
+  `POS_TENANT_ID` only when the terminal has no binding at all; the 500 misconfigured
+  response now only fires when neither is set. Updated
+  [wiki/features/pos-cashier-waiter.md](../features/pos-cashier-waiter.md)'s Key decisions
+  to replace the old "no tenant binding" open question. 9 new/updated tests
+  (`route.test.ts`, `terminal-binding.test.ts`, `pin-pad.test.tsx`,
+  `devices-table.test.tsx`); lint/typecheck/test/build clean.
+
 - **2026-09-09** - GST applicable toggle + GST rate (issue #148, web half of
   the parallel backend contract): the O4 onboarding wizard's Tax &
   Compliance step gained a `GST applicable` toggle (`onb-gst-applicable`)

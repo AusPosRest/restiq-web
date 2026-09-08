@@ -424,11 +424,10 @@ actually built here, story by story. Backend counterpart:
   both differ from `table-map-state.ts`/`api.ts`'s current self-authored guess
   (`ownerStaffName`/`ownerStaffId` inline on the table entry, `occupied`/`needs_bill`
   status, no outlet segment in the table-map URL).
-- **Real tenant/outlet terminal scope is still an open question.** CAP-1's login has no
-  tenant-picker step and a pos session isn't device-bound (AD-13), so the web app has no
-  way to learn which tenant a terminal belongs to; `POS_TENANT_ID` (a server-only env var
-  read only by the login route handler) is the concrete placeholder until real multi-tenant
-  terminal provisioning is designed.
+- **Real tenant/outlet terminal scope - resolved by issue #150, see Key decisions.** CAP-1's
+  login itself still has no tenant-picker step, but the terminal now learns its tenant from
+  a localStorage binding set when it's opened via an enrolled device's `?device=&tenant=`
+  link, not from `POS_TENANT_ID` alone.
 
 ## Key decisions
 
@@ -449,10 +448,19 @@ actually built here, story by story. Backend counterpart:
   `clockedIn`/`clockedInAt` fields, a `clock/toggle` write, and an `auth/me` read-back -
   none of which the real backend has. All four have been removed; the real
   `pendingToken`/`select-outlet` handshake and `clock/out`-only write replace them.
-- **No tenant/outlet-set selection before PIN entry**, and the real backend's
-  `PosLoginDto` requires an explicit `tenantId` - `POS_TENANT_ID` (server-only env var) is
-  the concrete stand-in for "this terminal deployment belongs to this tenant" until real
-  multi-tenant terminal provisioning exists (see Integration points).
+- **No tenant/outlet-set selection before PIN entry** - the real backend's `PosLoginDto`
+  still requires an explicit `tenantId`, but as of issue #150 that no longer means one web
+  deployment can only ever serve one tenant. Owners now enrol devices across several
+  tenants, so the admin Devices table's and the ops fleet landing page's "Open POS"/kiosk
+  links carry `?device=<id>&tenant=<tenantId>`; `src/app/pos/terminal-binding.ts` saves that
+  as a per-browser localStorage binding (mirrors `kds-station-storage.ts`'s pattern) on
+  first load, and the PIN pad always posts the stored `tenantId` alongside the PIN from then
+  on, even on a later visit with no query string. The login route handler accepts an
+  optional `tenantId` in the request body (rejecting anything that isn't a well-formed UUID
+  with 400), falling back to `POS_TENANT_ID` only when the terminal has no binding at all -
+  e.g. a bare `/pos/login` in dev. A one-line "Terminal bound to `<tenantName or tenantId>`"
+  caption with a "Not this restaurant? Re-enrol" control (`pos-rebind`) lets a
+  misconfigured terminal clear its binding and be repointed via a fresh enrolled-device link.
 - **Lockout has no server-echoed `lockedUntil`** - the real backend's 30s window
   (`lockout.ts`'s `LOCKOUT_MS`) is a fixed constant, not part of the response, so the
   client times its own countdown against that same constant from the moment the `429`
