@@ -46,11 +46,11 @@ export function AmountKeypad({ digits, onDigit, onBackspace, onClear, testId, cu
   }
 
   return (
-    <div data-testid={testId} onKeyDown={handleKeyDown} tabIndex={0} className="flex flex-col items-center gap-4 focus:outline-none">
+    <div data-testid={testId} onKeyDown={handleKeyDown} tabIndex={0} className="flex min-h-fit flex-1 flex-col items-center gap-3 focus:outline-none">
       <output data-testid={`${testId}-display`} className="font-headline min-w-[10ch] text-center text-4xl font-bold tabular-nums tracking-tight text-foreground">
         {display ?? formatMinor(parseInt(digits || "0", 10), currency)}
       </output>
-      <div className="grid grid-cols-3 gap-3">
+      <div className="grid min-h-fit flex-1 auto-rows-[minmax(2.5rem,1fr)] grid-cols-3 gap-2">
         {KEYS.map((key) => {
           if (key === "clear") {
             return (
@@ -60,7 +60,7 @@ export function AmountKeypad({ digits, onDigit, onBackspace, onClear, testId, cu
                 data-testid={`${testId}-clear`}
                 disabled={disabled}
                 onClick={onClear}
-                className="flex h-14 w-20 items-center justify-center rounded-lg bg-secondary text-sm font-semibold uppercase tracking-wide text-secondary-foreground transition-colors hover:bg-accent focus:outline-none focus-visible:ring-2 focus-visible:ring-ring disabled:pointer-events-none disabled:opacity-50"
+                className="flex h-full min-h-10 w-20 items-center justify-center rounded-lg bg-secondary text-sm font-semibold uppercase tracking-wide text-secondary-foreground transition-colors hover:bg-accent focus:outline-none focus-visible:ring-2 focus-visible:ring-ring disabled:pointer-events-none disabled:opacity-50"
               >
                 Clear
               </button>
@@ -75,7 +75,7 @@ export function AmountKeypad({ digits, onDigit, onBackspace, onClear, testId, cu
                 data-testid={`${testId}-backspace`}
                 disabled={disabled}
                 onClick={onBackspace}
-                className="flex h-14 w-20 items-center justify-center rounded-lg bg-secondary text-lg font-semibold text-secondary-foreground transition-colors hover:bg-accent focus:outline-none focus-visible:ring-2 focus-visible:ring-ring disabled:pointer-events-none disabled:opacity-50"
+                className="flex h-full min-h-10 w-20 items-center justify-center rounded-lg bg-secondary text-lg font-semibold text-secondary-foreground transition-colors hover:bg-accent focus:outline-none focus-visible:ring-2 focus-visible:ring-ring disabled:pointer-events-none disabled:opacity-50"
               >
                 ⌫
               </button>
@@ -88,7 +88,7 @@ export function AmountKeypad({ digits, onDigit, onBackspace, onClear, testId, cu
               data-testid={`${testId}-digit-${key}`}
               disabled={disabled}
               onClick={() => onDigit(key)}
-              className="flex h-14 w-20 items-center justify-center rounded-lg bg-card text-xl font-semibold tabular-nums text-foreground transition-colors hover:bg-accent focus:outline-none focus-visible:ring-2 focus-visible:ring-ring disabled:pointer-events-none disabled:opacity-50"
+              className="flex h-full min-h-10 w-20 items-center justify-center rounded-lg bg-card text-xl font-semibold tabular-nums text-foreground transition-colors hover:bg-accent focus:outline-none focus-visible:ring-2 focus-visible:ring-ring disabled:pointer-events-none disabled:opacity-50"
             >
               {key}
             </button>

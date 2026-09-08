@@ -47,7 +47,7 @@ export function TenderKeypad({ currency, remainingMinor, tenders, onAddTender, o
   }
 
   return (
-    <section data-testid="tender-keypad" className="flex flex-1 flex-col gap-4 p-6">
+    <section data-testid="tender-keypad" className="flex min-h-fit flex-1 flex-col gap-3 p-4">
       <div className="text-center">
         <p className="font-label text-xs font-semibold uppercase tracking-wider text-muted-foreground">Remaining amount due</p>
         <p data-testid="tender-remaining" className="font-headline text-3xl font-bold tabular-nums text-foreground">
@@ -101,7 +101,7 @@ export function TenderKeypad({ currency, remainingMinor, tenders, onAddTender, o
         </div>
       </div>
 
-      <div className="flex flex-1 flex-col items-center justify-center gap-4">
+      <div className="flex min-h-fit flex-1 flex-col items-center justify-center gap-2">
         <AmountKeypad
           testId="tender-keypad-amount"
           digits={digits}

@@ -377,14 +377,16 @@ function CounterLoaded({
             </div>
           </section>
         ) : (
-          <div className="flex w-80 shrink-0 flex-col overflow-y-auto">
-            <TenderKeypad
-              currency={menu.currency}
-              remainingMinor={remainingMinor}
-              tenders={pendingTenders}
-              onAddTender={handleAddTender}
-              onRemoveTender={handleRemoveTender}
-            />
+          <div className="flex w-80 shrink-0 flex-col">
+            <div className="flex min-h-0 flex-1 flex-col overflow-y-auto">
+              <TenderKeypad
+                currency={menu.currency}
+                remainingMinor={remainingMinor}
+                tenders={pendingTenders}
+                onAddTender={handleAddTender}
+                onRemoveTender={handleRemoveTender}
+              />
+            </div>
             <footer className="border-t border-border/60 p-4">
               {finalizeError && (
                 <p role="alert" data-testid="finalize-error" className="mb-2 text-sm text-status-alert">
