@@ -575,7 +575,7 @@ describe("FloorPlan", () => {
       printSpy.mockRestore();
     });
 
-    it("downloads every table's QR as one HTML sheet from the toolbar's Download QR sheet button", async () => {
+    it("downloads a ZIP with the HTML sheet and one PNG per table from the toolbar's Download QR sheet button", async () => {
       stubFetch({ floors: TWO_TABLE_FLOORS });
       const createObjectURL = vi.fn((blob: Blob) => (blob ? "blob:mock-url" : ""));
       const revokeObjectURL = vi.fn();
@@ -588,14 +588,83 @@ describe("FloorPlan", () => {
 
       await waitFor(() => expect(click).toHaveBeenCalled());
       const anchor = click.mock.instances[0] as HTMLAnchorElement;
-      expect(anchor.download).toBe("table-qr-codes.html");
-      const html = await createObjectURL.mock.calls[0][0].text();
+      expect(anchor.download).toBe("indiranagar-qr-codes.zip");
+      expect(revokeObjectURL).toHaveBeenCalledWith("blob:mock-url");
+
+      const zipBlob = createObjectURL.mock.calls[0][0] as Blob;
+      const { default: JSZip } = await import("jszip");
+      const zip = await JSZip.loadAsync(await zipBlob.arrayBuffer());
+      expect(Object.keys(zip.files).sort()).toEqual(["ground-floor-t1-qr.png", "qr-sheet.html", "terrace-t2-qr.png"]);
+      const html = await zip.file("qr-sheet.html")?.async("string");
       expect(html).toContain(`${window.location.origin}/qr/t/outlet-1/t1`);
       expect(html).toContain(`${window.location.origin}/qr/t/outlet-1/t2`);
-      expect(revokeObjectURL).toHaveBeenCalledWith("blob:mock-url");
 
       click.mockRestore();
       vi.unstubAllGlobals();
+    });
+  });
+
+  describe("Customise QR sheet", () => {
+    const TWO_TABLE_FLOORS = [
+      {
+        id: "floor-1",
+        outletId: "outlet-1",
+        name: "Ground Floor",
+        sortOrder: 0,
+        tables: [{ id: "t1", floorId: "floor-1", label: "T1", x: 40, y: 40, width: 40, height: 40, shape: "square", seatCapacity: 4 }],
+      },
+      {
+        id: "floor-2",
+        outletId: "outlet-1",
+        name: "Terrace",
+        sortOrder: 1,
+        tables: [{ id: "t2", floorId: "floor-2", label: "T2", x: 40, y: 40, width: 40, height: 40, shape: "square", seatCapacity: 2 }],
+      },
+    ];
+
+    it("defaults the heading to the outlet name and applies saved edits to the print sheet", async () => {
+      stubFetch({ floors: TWO_TABLE_FLOORS });
+      const printSpy = vi.spyOn(window, "print").mockImplementation(() => {});
+      renderFloorPlan();
+      await screen.findByTestId("table-shape-t1");
+
+      await userEvent.click(screen.getByTestId("floor-plan-customise-qr-sheet-button"));
+      expect(screen.getByTestId("qr-template-heading")).toHaveProperty("value", "Indiranagar");
+
+      await userEvent.click(screen.getByTestId("qr-template-show-url"));
+      const heading = screen.getByTestId("qr-template-heading");
+      await userEvent.clear(heading);
+      await userEvent.type(heading, "Indiranagar Diner");
+      await userEvent.click(screen.getByTestId("qr-template-save"));
+
+      expect(screen.queryByTestId("qr-template-dialog")).toBeNull();
+
+      await userEvent.click(screen.getByTestId("floor-plan-print-qr-sheet-button"));
+
+      const header = await screen.findByTestId("qr-print-sheet-header");
+      expect(header.textContent).toContain("Indiranagar Diner");
+      expect(screen.getByTestId("qr-print-card-t1").textContent).not.toContain(`${window.location.origin}/qr/t/outlet-1/t1`);
+
+      printSpy.mockRestore();
+    });
+
+    it("persists the customised template across a remount of the floor plan for the same outlet", async () => {
+      stubFetch({ floors: TWO_TABLE_FLOORS });
+      const { unmount } = renderFloorPlan();
+      await screen.findByTestId("table-shape-t1");
+
+      await userEvent.click(screen.getByTestId("floor-plan-customise-qr-sheet-button"));
+      const heading = screen.getByTestId("qr-template-heading");
+      await userEvent.clear(heading);
+      await userEvent.type(heading, "Saved heading");
+      await userEvent.click(screen.getByTestId("qr-template-save"));
+      unmount();
+
+      renderFloorPlan();
+      await screen.findByTestId("table-shape-t1");
+      await userEvent.click(screen.getByTestId("floor-plan-customise-qr-sheet-button"));
+
+      expect(screen.getByTestId("qr-template-heading")).toHaveProperty("value", "Saved heading");
     });
   });
 });

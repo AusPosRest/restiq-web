@@ -1212,3 +1212,12 @@ faked.
   lint/typecheck/build clean. See
   [wiki/features/pos-cashier-waiter.md](../features/pos-cashier-waiter.md)'s
   printable tax invoice section for the full writeup.
+- **2026-09-09** - Floor plan QR sheet: ZIP of PNGs + customisable template
+  (issue #175). "Download QR sheet" now produces `<outlet>-qr-codes.zip` with
+  one 1024px PNG per table (heading/label/instruction rendered under the
+  code) plus the HTML sheet; a "Customise sheet" dialog sets heading,
+  instruction, per-card fields and card size, stored per outlet in
+  localStorage and applied to print, HTML and PNG output. `jszip` added
+  (lazy-imported). Tests: template load/save/defaults, ZIP entries per
+  table, dialog round-trip, print sheet toggles. See
+  [wiki/features/tenant-admin.md](../features/tenant-admin.md) CAP-5.

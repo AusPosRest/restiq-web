@@ -474,9 +474,22 @@ story. Backend counterpart: `restiq-backend/wiki/features/tenant-admin.md`.
     (`table-qr-state.ts#qrSheetHtml`) with a dashed cut-out card per table
     (floor, label, QR, "Scan to order", URL) on a print-friendly grid, inline
     CSS only, forced light so it reads on a dark-mode screen. Owner-entered
-    labels are HTML-escaped. Chosen over a ZIP of PNGs (no zip writer in the
-    platform, would need a new dependency) - the HTML prints to PDF from any
-    browser for a print shop.
+    labels are HTML-escaped.
+  - **ZIP of PNGs + customisable sheet (issue #175):** owner feedback was
+    that an HTML file is not what a print shop wants and the sheet could not
+    be edited. "Download QR sheet" now saves `<outlet-slug>-qr-codes.zip`
+    containing one `<floor-slug>-<table-slug>-qr.png` per table (1024px,
+    `table-qr-state.ts#renderTableQrPng` - the same generator as the
+    dialog's Download PNG, with the heading/label/instruction drawn under the
+    code so each PNG stands alone) plus `qr-sheet.html`. `jszip` is the one
+    new dependency, lazy-imported inside the handler so it never joins the
+    initial bundle. A "Customise sheet" toolbar button
+    (`floor-plan-customise-qr-sheet-button`) opens `qr-sheet-template-dialog.tsx`:
+    heading (defaults to the outlet name), instruction line, toggles for
+    table label / floor name / URL, and card size. The template is stored
+    per outlet in localStorage (`qr-sheet-template.ts`,
+    `qr-sheet-template:<outletId>`) and applied to the print sheet, the
+    ZIP's HTML and the PNGs alike.
 
 ## CAP-6 - Devices & printers
 
