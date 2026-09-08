@@ -331,7 +331,7 @@ function CounterLoaded({
               ))}
             </nav>
 
-            <main className="flex-1 overflow-y-auto p-4">
+            <main className="min-w-0 flex-1 overflow-y-auto p-4">
               <h2 className="mb-3 font-headline text-base font-semibold text-foreground">
                 {query.trim() ? "Search results" : activeCategory?.name} <span className="font-normal text-muted-foreground">· {visibleItems.length} items</span>
               </h2>
@@ -340,7 +340,7 @@ function CounterLoaded({
                   No items match.
                 </p>
               ) : (
-                <div data-testid="item-grid" className="grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-4">
+                <div data-testid="item-grid" className="grid grid-cols-[repeat(auto-fill,minmax(8.5rem,1fr))] gap-3">
                   {visibleItems.map((item) => (
                     <PosItemTile key={item.id} item={item} currency={menu.currency} onTap={() => item.available && handleTapItem(item)} />
                   ))}
@@ -362,7 +362,7 @@ function CounterLoaded({
         />
 
         {readOnly ? (
-          <section data-testid="counter-settled-panel" className="flex flex-1 flex-col items-center justify-center gap-3 p-6 text-center">
+          <section data-testid="counter-settled-panel" className="flex w-80 shrink-0 flex-col items-center justify-center gap-3 p-6 text-center">
             <p className="font-headline text-xl font-semibold text-status-available">Order settled</p>
             <p className="text-sm text-muted-foreground">
               {bill.tenders.length} tender{bill.tenders.length === 1 ? "" : "s"} captured · no further changes are possible.
@@ -377,7 +377,7 @@ function CounterLoaded({
             </div>
           </section>
         ) : (
-          <div className="flex flex-1 flex-col">
+          <div className="flex w-80 shrink-0 flex-col">
             <TenderKeypad
               currency={menu.currency}
               remainingMinor={remainingMinor}

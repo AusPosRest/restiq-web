@@ -62,7 +62,7 @@ export function BillSummary({
   const totalMinor = billTotalMinor(bill, pendingDiscount?.amountMinor ?? 0);
 
   return (
-    <section data-testid="bill-summary" className="flex w-96 shrink-0 flex-col border-r border-border/60 bg-card">
+    <section data-testid="bill-summary" className="flex w-80 shrink-0 flex-col border-r border-border/60 bg-card">
       <header className="border-b border-border/60 px-4 py-3">
         <p className="font-headline text-sm font-semibold text-foreground">
           Bill {bill.billNumber !== null ? `· #${bill.billNumber} ` : ""}· {originLabel}
