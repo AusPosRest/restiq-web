@@ -1165,3 +1165,25 @@ faked.
   tests passing, tsc/lint clean in both repos. See
   [wiki/features/pos-cashier-waiter.md](../features/pos-cashier-waiter.md)'s
   CAP-2/CAP-3 sections for the full reconciliation writeup.
+
+- **2026-09-09** - "Print bill" before payment (issue #160). A new "Print
+  bill" outline link sits next to the Charge/Finalise button in
+  `counter-view.tsx`'s and `bill-settle-view.tsx`'s open-bill footer (both
+  now a single `flex gap-2` row so the tender column's height doesn't grow),
+  opening `/pos/bills/${bill.id}/invoice` in a new tab
+  (`target="_blank" rel="noopener"`) while the bill is still open - built
+  against the real, parallel `GET /pos/v1/bills/:id/invoice` contract change
+  that now returns 200 for an open bill (`status: "open"`,
+  `invoiceNumber: null`, `title: "Bill"`, `tenders`/`creditNotes` empty)
+  instead of 409 `not_finalized`. `bill-invoice-view.tsx` reuses the same
+  page for both cases: an "Unpaid" badge next to the title and no invoice
+  number when `status === "open"` - the payments section already stays
+  hidden on its own since `tenders` is empty, no extra logic needed. Tests:
+  an href/target/rel assertion added to `counter-view.test.tsx`'s existing
+  ring-up-and-settle flow, one new `bill-settle-view.test.tsx` test for the
+  same link, and two new `bill-invoice-view.test.tsx` cases (open-bill Unpaid
+  badge/omitted invoice number/payments section, and a finalized-bill
+  control case confirming neither shows). 1134/1134 web tests passing,
+  lint/typecheck/build clean. See
+  [wiki/features/pos-cashier-waiter.md](../features/pos-cashier-waiter.md)'s
+  printable tax invoice section for the full writeup.

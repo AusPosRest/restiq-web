@@ -209,6 +209,42 @@ describe("BillInvoiceView - AU not GST registered (Receipt)", () => {
   });
 });
 
+describe("BillInvoiceView - open bill (issue #160, print before payment)", () => {
+  function openInvoice(overrides: Partial<InvoiceView> = {}): InvoiceView {
+    return inInvoice({
+      status: "open",
+      invoiceNumber: null,
+      title: "Bill",
+      tenders: [],
+      creditNotes: [],
+      ...overrides,
+    });
+  }
+
+  it("shows an Unpaid badge, omits the invoice number and payments section, but keeps Print", async () => {
+    stubFetch(() => jsonResponse(openInvoice()));
+    render(<BillInvoiceView billId={BILL_ID} />);
+
+    await screen.findByTestId("bill-invoice-view");
+
+    expect(screen.getByText("Bill")).toBeTruthy();
+    expect(screen.getByTestId("invoice-unpaid-badge").textContent).toBe("Unpaid");
+    expect(screen.queryByText(/Invoice #/)).toBeNull();
+    expect(screen.queryByTestId("invoice-tenders")).toBeNull();
+    expect(screen.queryByTestId("invoice-credit-notes")).toBeNull();
+    expect(screen.getByTestId("invoice-print")).toBeTruthy();
+  });
+
+  it("does not show the Unpaid badge or hide the invoice number for a finalized bill", async () => {
+    stubFetch(() => jsonResponse(inInvoice({ status: "finalized" })));
+    render(<BillInvoiceView billId={BILL_ID} />);
+
+    await screen.findByTestId("bill-invoice-view");
+    expect(screen.queryByTestId("invoice-unpaid-badge")).toBeNull();
+    expect(screen.getByText(/INV-2026-0042/)).toBeTruthy();
+  });
+});
+
 describe("BillInvoiceView - not finalized", () => {
   it("shows a plain not-finalized state on a 409", async () => {
     stubFetch(() => jsonResponse({ error: { code: "not_finalized", message: "This bill is still open" } }, 409));

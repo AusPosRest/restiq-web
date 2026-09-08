@@ -394,9 +394,14 @@ export interface InvoiceCreditNoteView {
   createdAt: string;
 }
 
+// issue #160: `GET bills/:id/invoice` now also returns 200 for an OPEN bill
+// (previously a 409 `not_finalized`) - the same shape, but `invoiceNumber` is
+// null (no invoice has been issued yet), `title` is `"Bill"`, and
+// `tenders`/`creditNotes` are always empty. Finalized bills are unchanged.
 export interface InvoiceView {
-  invoiceNumber: string;
-  title: "Tax Invoice" | "Invoice" | "Receipt";
+  invoiceNumber: string | null;
+  status?: "open" | "finalized";
+  title: "Tax Invoice" | "Invoice" | "Receipt" | "Bill";
   issuedAt: string;
   currency: string;
   seller: InvoiceSellerView;

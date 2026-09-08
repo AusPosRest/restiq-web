@@ -7,10 +7,18 @@
 // headers. Everything here is read-only, server-computed display: no
 // mutation of any kind, matching AD-14's posture once a bill is finalised.
 //
-// `GET bills/:id/invoice` 409s with `not_finalized` while the bill is still
-// open (a plain, non-retryable state - the bill just isn't ready yet) and
-// 404s for any other unreachable/unknown bill id (the existing
-// LoadErrorPanel/retry pattern).
+// `GET bills/:id/invoice` 404s for any unreachable/unknown bill id (the
+// existing LoadErrorPanel/retry pattern). The `notFinalized`/409 branch below
+// predates issue #160: the real backend still keeps it wired for callers that
+// somehow reach this route before a Bill exists at all.
+//
+// issue #160 ("Print bill" before payment): the same endpoint now also
+// returns 200 for an OPEN bill (`status: "open"`, `invoiceNumber: null`,
+// `title: "Bill"`, `tenders`/`creditNotes` empty) - reached via a new "Print
+// bill" link next to the Charge/Finalise button while a bill is still being
+// settled (`counter-view.tsx`/`bill-settle-view.tsx`). `InvoiceLoaded` shows
+// an "Unpaid" badge and omits the invoice number for that case; the payments
+// section already stays hidden on its own since `tenders` is empty.
 import Link from "next/link";
 import { useEffect, useState } from "react";
 import { Button } from "@/components/ui/button";
@@ -82,6 +90,7 @@ export function BillInvoiceView({ billId }: Readonly<{ billId: string }>) {
 
 function InvoiceLoaded({ invoice }: Readonly<{ invoice: InvoiceView }>) {
   const discountMinor = invoice.discountMinor ?? 0;
+  const isOpen = invoice.status === "open";
   const isReceipt = invoice.title === "Receipt";
   const notRegisteredNote = isReceipt ? invoice.notes.find((note) => note.toLowerCase().includes("not registered for gst")) : undefined;
   const remainingNotes = notRegisteredNote ? invoice.notes.filter((note) => note !== notRegisteredNote) : invoice.notes;
@@ -98,9 +107,20 @@ function InvoiceLoaded({ invoice }: Readonly<{ invoice: InvoiceView }>) {
       </div>
 
       <header className="border-b border-border/60 pb-4 text-center">
-        <h1 className="font-headline text-xl font-bold text-foreground">{invoice.title}</h1>
+        <h1 className="flex items-center justify-center gap-2 font-headline text-xl font-bold text-foreground">
+          {invoice.title}
+          {isOpen && (
+            <span
+              data-testid="invoice-unpaid-badge"
+              className="rounded-full bg-status-warning/15 px-2 py-0.5 text-xs font-semibold uppercase tracking-wider text-status-warning"
+            >
+              Unpaid
+            </span>
+          )}
+        </h1>
         <p className="text-sm text-muted-foreground">
-          Invoice #{invoice.invoiceNumber} · {formatIssuedAt(invoice.issuedAt)}
+          {invoice.invoiceNumber && `Invoice #${invoice.invoiceNumber} · `}
+          {formatIssuedAt(invoice.issuedAt)}
         </p>
       </header>
 
