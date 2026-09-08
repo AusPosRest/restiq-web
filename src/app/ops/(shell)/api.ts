@@ -78,6 +78,8 @@ export interface TenantDetail {
     taxProfile: string;
     fssaiLicense: string | null;
     compositionScheme: boolean;
+    gstRegistered: boolean;
+    gstRatePercent: number | null;
   }>;
   brands: Array<{ id: string; name: string }>;
   outlets: Array<{

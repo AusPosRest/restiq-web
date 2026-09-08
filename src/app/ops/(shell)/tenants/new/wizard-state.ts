@@ -30,6 +30,8 @@ export interface TaxData {
   taxProfile: string;
   fssaiLicense: string;
   compositionScheme: boolean;
+  gstApplicable: boolean;
+  gstRatePercent: string;
 }
 
 export interface OutletData {
@@ -80,6 +82,11 @@ export const TAX_PROFILES: Record<CountryCode, string[]> = {
   AU: ["Australia GST 10%"],
 };
 
+export const DEFAULT_GST_RATE: Record<CountryCode, string> = {
+  IN: "5",
+  AU: "10",
+};
+
 export function emptyOutlet(country: CountryCode): OutletData {
   return { name: "", address: "", type: "", timezone: TIMEZONES[country][0] };
 }
@@ -94,6 +101,8 @@ export function emptyWizardData(): WizardData {
       taxProfile: TAX_PROFILES.IN[0],
       fssaiLicense: "",
       compositionScheme: false,
+      gstApplicable: true,
+      gstRatePercent: DEFAULT_GST_RATE.IN,
     },
     brandsOutlets: { brandName: "", outlets: [emptyOutlet("IN")] },
     subscription: { plan: "", billingPeriod: "monthly" },
@@ -147,6 +156,17 @@ export function validateTax(data: TaxData): StepErrors {
   if (legal) errors.legalEntityName = legal;
   const profile = required(data.taxProfile, "Tax profile");
   if (profile) errors.taxProfile = profile;
+  if (data.gstApplicable) {
+    const rate = data.gstRatePercent.trim();
+    if (!rate) {
+      errors.gstRatePercent = "GST rate is required";
+    } else {
+      const parsed = Number(rate);
+      if (Number.isNaN(parsed) || parsed < 0 || parsed > 100) {
+        errors.gstRatePercent = "Enter a GST rate between 0 and 100";
+      }
+    }
+  }
   return errors;
 }
 
@@ -228,6 +248,8 @@ export function toSubmitPayload(data: WizardData): Record<string, unknown> {
       taxProfile: data.tax.taxProfile,
       ...(data.tax.country === "IN" && data.tax.fssaiLicense.trim() ? { fssaiLicense: data.tax.fssaiLicense.trim() } : {}),
       compositionScheme: data.tax.compositionScheme,
+      gstRegistered: data.tax.gstApplicable,
+      ...(data.tax.gstApplicable ? { gstRatePercent: Number(data.tax.gstRatePercent) } : {}),
     },
     brandsOutlets: data.brandsOutlets,
     subscription: data.subscription,

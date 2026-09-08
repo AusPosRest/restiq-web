@@ -206,4 +206,29 @@ describe("TenantDetailPage lifecycle actions", () => {
     await userEvent.click(screen.getByTestId("confirm-cancel"));
     expect(fetchMock.mock.calls.some(([url]) => (url as string).includes("/deactivate"))).toBe(false);
   });
+
+  it("shows the GST rate on Overview when registered, and 'Not applicable' otherwise", async () => {
+    const detail = tenantDetail({ status: "active" });
+    detail.taxRegistrations = [
+      {
+        registrationType: "gstin",
+        registrationNumber: "29ABCDE1234F1Z5",
+        legalEntityName: "Bombay Bistro Group",
+        taxProfile: "India GST - CGST/SGST split",
+        fssaiLicense: null,
+        compositionScheme: false,
+        gstRegistered: true,
+        gstRatePercent: 5,
+      },
+    ];
+    renderPage(detail);
+    await screen.findByTestId("tenant-detail");
+    expect(screen.getByTestId("overview-gst").textContent).toContain("Applicable · 5%");
+  });
+
+  it("shows 'Not applicable' when the tenant has no GST registration", async () => {
+    renderPage(tenantDetail({ status: "active" }));
+    await screen.findByTestId("tenant-detail");
+    expect(screen.getByTestId("overview-gst").textContent).toContain("Not applicable");
+  });
 });

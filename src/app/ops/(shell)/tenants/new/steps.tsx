@@ -10,6 +10,7 @@ import {
   BrandsOutletsData,
   BusinessData,
   CountryCode,
+  DEFAULT_GST_RATE,
   OUTLET_TYPES,
   OwnerInviteData,
   StepErrors,
@@ -101,7 +102,14 @@ export function BusinessStep({ data, errors, onChange, onFieldBlur }: StepProps<
 export function TaxStep({ data, errors, onChange, onFieldBlur }: StepProps<TaxData>) {
   const set = (patch: Partial<TaxData>) => onChange({ ...data, ...patch });
   const setCountry = (country: CountryCode) =>
-    onChange({ ...data, country, taxProfile: TAX_PROFILES[country][0], registrationNumber: "", fssaiLicense: "" });
+    onChange({
+      ...data,
+      country,
+      taxProfile: TAX_PROFILES[country][0],
+      registrationNumber: "",
+      fssaiLicense: "",
+      gstRatePercent: DEFAULT_GST_RATE[country],
+    });
   const isIndia = data.country === "IN";
 
   return (
@@ -151,6 +159,27 @@ export function TaxStep({ data, errors, onChange, onFieldBlur }: StepProps<TaxDa
         onChange={(legalEntityName) => set({ legalEntityName })}
         onBlur={() => onFieldBlur("legalEntityName")}
       />
+      <ToggleField
+        id="onb-gst-applicable"
+        label="GST applicable"
+        description="Turn off if this business does not collect GST. No GST rate will be seeded for its outlets."
+        checked={data.gstApplicable}
+        onChange={(gstApplicable) => set({ gstApplicable })}
+      />
+      {data.gstApplicable ? (
+        <TextField
+          id="onb-gst-rate"
+          label="GST rate %"
+          type="number"
+          min={0}
+          max={100}
+          step={0.5}
+          value={data.gstRatePercent}
+          error={errors.gstRatePercent}
+          onChange={(gstRatePercent) => set({ gstRatePercent })}
+          onBlur={() => onFieldBlur("gstRatePercent")}
+        />
+      ) : null}
       <div className="grid gap-4 sm:grid-cols-2">
         <SelectField
           id="onb-tax-profile"
@@ -172,7 +201,7 @@ export function TaxStep({ data, errors, onChange, onFieldBlur }: StepProps<TaxDa
           />
         ) : null}
       </div>
-      {isIndia ? (
+      {isIndia && data.gstApplicable ? (
         <ToggleField
           id="onb-composition-scheme"
           label="Composition scheme"

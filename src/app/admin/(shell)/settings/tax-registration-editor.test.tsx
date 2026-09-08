@@ -18,6 +18,7 @@ const TAX_REGISTRATION = {
   fssaiLicense: "12345678901234",
   compositionScheme: false,
   gstRegistered: true,
+  gstRatePercent: 5,
 };
 
 function stubFetch({ get = TAX_REGISTRATION, putStatus = 200 }: { get?: unknown; putStatus?: number } = {}) {
@@ -68,6 +69,45 @@ describe("TaxRegistrationEditor", () => {
     expect((screen.getByTestId("tax-registration-composition-scheme") as HTMLInputElement).checked).toBe(false);
     // GST Registered is an AU-only concept - never rendered for IN, not even disabled.
     expect(screen.queryByTestId("tax-registration-gst-registered")).toBeNull();
+    // But the GST rate shows for IN too, since IN is always gstRegistered.
+    expect((screen.getByTestId("tax-gst-rate") as HTMLInputElement).value).toBe("5");
+  });
+
+  it("round-trips the GST rate through a merge-PUT and hides it once GST Registered is unchecked", async () => {
+    const fetchMock = stubFetch({
+      get: { ...TAX_REGISTRATION, country: "AU", registrationType: "abn", registrationNumber: "51824753556", gstRatePercent: 10 },
+    });
+    renderEditor();
+    await screen.findByTestId("tax-registration-form");
+
+    const rateInput = screen.getByTestId("tax-gst-rate") as HTMLInputElement;
+    expect(rateInput.value).toBe("10");
+    await userEvent.clear(rateInput);
+    await userEvent.type(rateInput, "12.5");
+    await userEvent.click(screen.getByTestId("tax-registration-save"));
+    await waitFor(() => expect(screen.getByTestId("tax-registration-save")).toHaveProperty("disabled", true));
+
+    const putCall = fetchMock.mock.calls.find(([, init]) => (init as RequestInit | undefined)?.method === "PUT");
+    const sentBody = JSON.parse((putCall?.[1] as RequestInit).body as string) as Record<string, unknown>;
+    expect(sentBody).toMatchObject({ gstRatePercent: 12.5 });
+    expect((screen.getByTestId("tax-gst-rate") as HTMLInputElement).value).toBe("12.5");
+
+    await userEvent.click(screen.getByTestId("tax-registration-gst-registered"));
+    expect(screen.queryByTestId("tax-gst-rate")).toBeNull();
+  });
+
+  it("sends a null GST rate when the field is cleared", async () => {
+    const fetchMock = stubFetch();
+    renderEditor();
+    await screen.findByTestId("tax-registration-form");
+
+    await userEvent.clear(screen.getByTestId("tax-gst-rate"));
+    await userEvent.click(screen.getByTestId("tax-registration-save"));
+    await waitFor(() => expect(screen.getByTestId("tax-registration-save")).toHaveProperty("disabled", true));
+
+    const putCall = fetchMock.mock.calls.find(([, init]) => (init as RequestInit | undefined)?.method === "PUT");
+    const sentBody = JSON.parse((putCall?.[1] as RequestInit).body as string) as Record<string, unknown>;
+    expect(sentBody).toMatchObject({ gstRatePercent: null });
   });
 
   it("labels the registration number field ABN when registrationType is abn", async () => {
