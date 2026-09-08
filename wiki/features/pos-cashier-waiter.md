@@ -1270,6 +1270,36 @@ done now, this is what actually happened:
   `bill-invoice-view.test.tsx` cases - the open-bill Unpaid badge/omitted invoice
   number/hidden payments section, and a finalized-bill control confirming neither shows.
 
+### Simulated receipt printer (issue #172 web / restiq-backend#127)
+
+- **Intent:** printers were routing config only (Floor Plan stations → primary/fallback) and
+  "Print" was the browser's own dialog - nothing ever showed a bill "coming out" of a printer.
+  A fifth device type, `printer`, is a browser tab that stands in for a receipt printer.
+- **Built:**
+  - **Device type everywhere a type is listed:** `DEVICE_TYPE_OPTIONS`/`DEVICE_TYPE_LABELS` in
+    admin (`devices-state.ts`) and ops (`table-state.ts`) gain `printer` ("Receipt printer
+    (simulated)"); `/device`'s `continueTargetFor("printer")` redirects to `/pos/printer` and
+    `humanizeType` says "Receipt printer"; the landing page's `deviceOpenHref` opens a printer
+    device at `/pos/login?next=/pos/printer` (it shares the POS staff session, like KDS).
+  - **`/pos/printer`** (`src/app/pos/printer/`): `page.tsx` reads the outlet from the
+    `pos_staff` cookie (the `(shell)/status/page.tsx` pattern); `printer-screen.tsx` polls
+    `GET outlets/:outletId/print-jobs` every 5s (the KDS boards' stale-on-failure poll shape),
+    acks each job with `POST print-jobs/:id/printed`, and renders it onto a paper roll
+    (`printer-roll`, `printer-receipt-<jobId>`, last 10 kept) using the invoice page's receipt
+    body. A `printer-status` chip shows Ready / Reconnecting; `printer-empty` while idle.
+  - **"Send to printer"** (`invoice-send-to-printer`) beside Print on `bill-invoice-view.tsx`:
+    `POST bills/:id/print` spools a snapshot of the current `InvoiceView`; the button reads
+    "Sent to printer" / "Couldn't send" for 2s then resets so it can be pressed again for a
+    reprint. The receipt body was extracted as the exported `InvoiceReceipt` so the printer
+    renders the identical markup without the page's back-link/print chrome.
+  - **api.ts:** `PrintJobView` + `sendBillToPrinter`, `listPendingPrintJobs`,
+    `markPrintJobPrinted`.
+- **Not built:** KOT/kitchen-ticket jobs (only bills are spooled), printer selection (one
+  spool per outlet, not per Floor Plan printer), ESC/POS output.
+- **Tests:** `printer-screen.test.tsx` (empty roll, print+ack, reconnecting), a Send-to-printer
+  case in `bill-invoice-view.test.tsx`, printer rows in `device-state.test.ts` and
+  `page.test.tsx`; ops `table-state.test.ts` now treats `printer` as a known type.
+
 ## Reconciliation (2026-09-02, restiq-web#98)
 
 Every remaining self-authored `src/app/pos/api.ts` path (everything CAP-1/CAP-2/CAP-3/

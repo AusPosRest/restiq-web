@@ -1,5 +1,13 @@
 # Completed
 
+- **2026-09-09** - Simulated receipt printer device (issue #172, web half of restiq-backend#127):
+  `printer` joins pos/kds/kiosk/cds in the admin and ops enrolment dialogs, `/device`
+  "Continue", and the landing page's device fleet. New `/pos/printer` screen polls the outlet's
+  print-job spool every 5s, acks each job, and renders it as a receipt on a paper roll; the bill
+  invoice page gains "Send to printer" next to Print. Details in
+  [wiki/features/pos-cashier-waiter.md](../features/pos-cashier-waiter.md). 7 new/updated
+  tests; lint/typecheck clean.
+
 - **2026-09-09** - Download table QR as PNG + download all as a printable HTML sheet
   (issue #161): the per-table QR dialog gains a "Download PNG" button that saves a 1024px
   `<label>-qr.png`, and the floor-plan toolbar gains "Download QR sheet" beside "Print QR
