@@ -52,6 +52,28 @@ orders/bills) or `invalid_transition` from the backend surfaces as an error
 toast with the backend's own message; the page and dialog state are left as
 they were so the operator can read the reason and retry or cancel.
 
+### GST applicable + rate (issue #148)
+
+The O4 wizard's Tax & Compliance step (`steps.tsx#TaxStep`) gained a `GST
+applicable` toggle (`onb-gst-applicable`, the same `ToggleField` composition
+scheme already used) placed above the Tax profile fields. Turning it off
+hides both the `GST rate %` number input (`onb-gst-rate`, 0-100, 0.5 step)
+and the India-only Composition scheme toggle - there is no rate to seed and
+nothing to enable a scheme against. Switching country resets the rate to that
+country's default (`DEFAULT_GST_RATE`: 5% for IN, 10% for AU), same as the
+existing tax-profile/registration-number reset. `validateTax` requires a
+numeric 0-100 rate only when applicable; `toSubmitPayload` sends
+`tax.gstRegistered` always, and `tax.gstRatePercent` (as a `number`) only when
+applicable - matching `restiq-backend`'s wizard submit contract.
+
+O5 Tenant Detail's Overview tab (`tabs.tsx#OverviewTab`) gained a fifth stat
+card, `overview-gst`, reading the first `taxRegistrations` entry: "Applicable
+· `<rate>`%" when `gstRegistered` is true and a rate is set, "Applicable" when
+registered with no rate on file, otherwise "Not applicable". Same shape as the
+owner console's tax registration editor - see
+[Tenant Admin's Tax Registration section](tenant-admin.md#settings--tax-registration-issue-140)
+for the `gstRatePercent` GET/PUT field this reads from.
+
 ## Integration points for later stories
 
 - `ConfirmReasonDialog`'s `confirmCheckboxLabel` prop is reusable for any

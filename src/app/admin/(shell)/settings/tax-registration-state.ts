@@ -4,14 +4,17 @@
 // Shape matches restiq-backend#108's actual GET/PUT admin/v1/tax-registration
 // contract: `{ country, registrationType, registrationNumber, legalEntityName,
 // taxProfile, fssaiLicense, compositionScheme }`, plus `gstRegistered`
-// (restiq-backend#111). `country` and `registrationType` are set once at
-// tenant provisioning and are never part of the PUT body - this editor only
-// ever patches registrationNumber/legalEntityName/taxProfile/fssaiLicense/
-// compositionScheme/gstRegistered, and PUT **merges** those into the stored
-// record (same merge-PUT discipline as branding), returning the full record
-// back. `gstRegistered` is only editable for AU tenants - the backend 400s a
-// PUT with `gstRegistered: false` for an IN tenant, so the editor never
-// renders the toggle (or sends a changed value) for country === "IN".
+// (restiq-backend#111) and `gstRatePercent` (issue #148, number | null).
+// `country` and `registrationType` are set once at tenant provisioning and
+// are never part of the PUT body - this editor only ever patches
+// registrationNumber/legalEntityName/taxProfile/fssaiLicense/
+// compositionScheme/gstRegistered/gstRatePercent, and PUT **merges** those
+// into the stored record (same merge-PUT discipline as branding), returning
+// the full record back. `gstRegistered` is only editable for AU tenants - the
+// backend 400s a PUT with `gstRegistered: false` for an IN tenant, so the
+// editor never renders the toggle (or sends a changed value) for
+// country === "IN". `gstRatePercent` is shown whenever `gstRegistered` is
+// true (always for IN, opt-in for AU); a blank input sends `null`.
 
 export type TaxRegistrationType = "gstin" | "abn";
 
@@ -24,6 +27,7 @@ export interface TaxRegistrationView {
   fssaiLicense: string | null;
   compositionScheme: boolean;
   gstRegistered: boolean;
+  gstRatePercent: number | null;
 }
 
 /** The editable draft shape this form works with - nullable text fields
@@ -37,6 +41,7 @@ export interface TaxRegistrationDraft {
   fssaiLicense: string;
   compositionScheme: boolean;
   gstRegistered: boolean;
+  gstRatePercent: string;
 }
 
 /** Only the fields PUT accepts - country/registrationType are read-only and
@@ -48,6 +53,7 @@ export interface TaxRegistrationPatch {
   fssaiLicense?: string | null;
   compositionScheme?: boolean;
   gstRegistered?: boolean;
+  gstRatePercent?: number | null;
 }
 
 export function normalizeTaxRegistration(raw: Partial<TaxRegistrationView> | null | undefined): TaxRegistrationDraft {
@@ -60,6 +66,7 @@ export function normalizeTaxRegistration(raw: Partial<TaxRegistrationView> | nul
     fssaiLicense: raw?.fssaiLicense ?? "",
     compositionScheme: raw?.compositionScheme ?? false,
     gstRegistered: raw?.gstRegistered ?? true,
+    gstRatePercent: raw?.gstRatePercent != null ? String(raw.gstRatePercent) : "",
   };
 }
 
@@ -70,7 +77,8 @@ export function taxRegistrationEqual(a: TaxRegistrationDraft, b: TaxRegistration
     a.taxProfile === b.taxProfile &&
     a.fssaiLicense === b.fssaiLicense &&
     a.compositionScheme === b.compositionScheme &&
-    a.gstRegistered === b.gstRegistered
+    a.gstRegistered === b.gstRegistered &&
+    a.gstRatePercent === b.gstRatePercent
   );
 }
 
@@ -93,5 +101,6 @@ export function buildTaxRegistrationPatch(draft: TaxRegistrationDraft): TaxRegis
     fssaiLicense: orNull(draft.fssaiLicense),
     compositionScheme: draft.compositionScheme,
     gstRegistered: draft.gstRegistered,
+    gstRatePercent: draft.gstRatePercent.trim() ? Number(draft.gstRatePercent) : null,
   };
 }

@@ -1,5 +1,6 @@
 import { describe, expect, it } from "vitest";
 import {
+  DEFAULT_GST_RATE,
   dataFromDraft,
   emptyWizardData,
   firstIncompleteStep,
@@ -23,6 +24,8 @@ function completeData() {
     taxProfile: "India GST - CGST/SGST split",
     fssaiLicense: "",
     compositionScheme: false,
+    gstApplicable: true,
+    gstRatePercent: "5",
   };
   data.brandsOutlets = {
     brandName: "Spice Route",
@@ -76,6 +79,20 @@ describe("validateStep", () => {
     expect(validateStep(2, data)).toEqual({});
   });
 
+  it("requires a GST rate 0-100 only when GST is applicable", () => {
+    const data = completeData();
+    data.tax.gstRatePercent = "";
+    expect(validateStep(2, data)).toHaveProperty("gstRatePercent");
+    data.tax.gstRatePercent = "150";
+    expect(validateStep(2, data)).toHaveProperty("gstRatePercent");
+    data.tax.gstRatePercent = "5.5";
+    expect(validateStep(2, data)).toEqual({});
+
+    data.tax.gstApplicable = false;
+    data.tax.gstRatePercent = "";
+    expect(validateStep(2, data)).toEqual({});
+  });
+
   it("indexes outlet errors per outlet", () => {
     const data = completeData();
     data.brandsOutlets.outlets.push({ name: "", address: "", type: "", timezone: "Asia/Kolkata" });
@@ -92,6 +109,14 @@ describe("validateStep", () => {
     expect(validateStep(4, data)).toHaveProperty("plan");
     data.ownerInvite.email = "";
     expect(validateStep(5, data)).toHaveProperty("email");
+  });
+});
+
+describe("emptyWizardData", () => {
+  it("defaults to GST applicable at India's 5% rate", () => {
+    const data = emptyWizardData();
+    expect(data.tax.gstApplicable).toBe(true);
+    expect(data.tax.gstRatePercent).toBe(DEFAULT_GST_RATE.IN);
   });
 });
 
@@ -129,5 +154,20 @@ describe("toSubmitPayload", () => {
     const payload = toSubmitPayload(data) as { tax: Record<string, unknown> };
     expect(payload.tax.registrationNumber).toBe("29ABCDE1234F1Z5");
     expect(payload.tax).not.toHaveProperty("fssaiLicense");
+  });
+
+  it("sends gstRegistered true with a numeric gstRatePercent when GST applies", () => {
+    const data = completeData();
+    const payload = toSubmitPayload(data) as { tax: Record<string, unknown> };
+    expect(payload.tax.gstRegistered).toBe(true);
+    expect(payload.tax.gstRatePercent).toBe(5);
+  });
+
+  it("omits gstRatePercent and sends gstRegistered false when GST does not apply", () => {
+    const data = completeData();
+    data.tax.gstApplicable = false;
+    const payload = toSubmitPayload(data) as { tax: Record<string, unknown> };
+    expect(payload.tax.gstRegistered).toBe(false);
+    expect(payload.tax).not.toHaveProperty("gstRatePercent");
   });
 });

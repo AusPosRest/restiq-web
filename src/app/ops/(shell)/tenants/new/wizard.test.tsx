@@ -97,6 +97,24 @@ describe("OnboardingWizard", () => {
     });
   });
 
+  it("hides the GST rate and composition-scheme fields when GST applicable is turned off", async () => {
+    const user = userEvent.setup();
+    await renderFresh();
+    await fillStep1(user);
+    await user.click(screen.getByTestId("onb-next"));
+    await screen.findByRole("heading", { name: "Tax & Compliance" });
+
+    expect(screen.getByTestId("onb-gst-rate")).toBeDefined();
+    expect(screen.getByTestId("onb-composition-scheme")).toBeDefined();
+
+    await user.click(screen.getByTestId("onb-gst-applicable"));
+    expect(screen.queryByTestId("onb-gst-rate")).toBeNull();
+    expect(screen.queryByTestId("onb-composition-scheme")).toBeNull();
+
+    await user.click(screen.getByTestId("onb-gst-applicable"));
+    expect(screen.getByTestId("onb-gst-rate")).toBeDefined();
+  });
+
   it("lets the step indicator navigate backwards but never forwards", async () => {
     const user = userEvent.setup();
     await renderFresh();

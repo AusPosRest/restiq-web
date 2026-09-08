@@ -46,6 +46,12 @@ function StatCard({ label, value, testId }: Readonly<{ label: string; value: str
 
 // --- Overview: at-a-glance stats + editable business basics.
 
+function gstStat(detail: TenantDetail): string {
+  const gst = detail.taxRegistrations[0];
+  if (!gst?.gstRegistered) return "Not applicable";
+  return gst.gstRatePercent != null ? `Applicable · ${gst.gstRatePercent}%` : "Applicable";
+}
+
 export function OverviewTab({ detail, onMutated }: Readonly<TabProps>) {
   const toast = useToast();
   const { tenant } = detail;
@@ -87,6 +93,7 @@ export function OverviewTab({ detail, onMutated }: Readonly<TabProps>) {
         <StatCard label="Roles" value={String(detail.rolesCount)} testId="overview-roles" />
         <StatCard label="Plan" value={`${tenant.plan} · ${tenant.billingPeriod}`} testId="overview-plan" />
         <StatCard label="Region" value={tenant.region} testId="overview-region" />
+        <StatCard label="GST" value={gstStat(detail)} testId="overview-gst" />
       </div>
 
       <form

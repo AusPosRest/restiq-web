@@ -38,11 +38,14 @@ interface ControlProps {
   error?: string;
   placeholder?: string;
   type?: string;
+  min?: number;
+  max?: number;
+  step?: number;
   onChange: (value: string) => void;
   onBlur?: () => void;
 }
 
-export function TextField({ id, label, value, error, placeholder, type = "text", onChange, onBlur }: ControlProps) {
+export function TextField({ id, label, value, error, placeholder, type = "text", min, max, step, onChange, onBlur }: ControlProps) {
   return (
     <div>
       <FieldLabel htmlFor={id}>{label}</FieldLabel>
@@ -52,6 +55,9 @@ export function TextField({ id, label, value, error, placeholder, type = "text",
         type={type}
         value={value}
         placeholder={placeholder}
+        min={min}
+        max={max}
+        step={step}
         aria-invalid={error ? true : undefined}
         aria-describedby={error ? `${id}-error` : undefined}
         onChange={(event) => onChange(event.target.value)}

@@ -1,5 +1,29 @@
 # Completed
 
+- **2026-09-09** - GST applicable toggle + GST rate (issue #148, web half of
+  the parallel backend contract): the O4 onboarding wizard's Tax &
+  Compliance step gained a `GST applicable` toggle (`onb-gst-applicable`)
+  above Tax profile - switching it off hides the new `GST rate %` input
+  (`onb-gst-rate`, 0-100, 0.5 step) and the India-only Composition scheme
+  toggle. Country switches reset the rate to that country's default (5% IN,
+  10% AU via `DEFAULT_GST_RATE`); `validateTax` requires a numeric 0-100 rate
+  only when applicable, and `toSubmitPayload` sends `tax.gstRegistered`
+  always plus `tax.gstRatePercent` only when applicable. The owner console's
+  Settings → Tax Registration editor gained a matching `GST Rate %` input
+  (`tax-gst-rate`), shown whenever `gstRegistered` is true, round-tripping
+  `gstRatePercent: number | null` through the existing merge-PUT. Platform
+  Console's O5 Tenant Detail Overview tab gained a `GST` stat card
+  (`overview-gst`) showing "Applicable · `<rate>`%" or "Not applicable" from
+  the tenant's tax registration. `TextField` (wizard `fields.tsx`) picked up
+  optional `min`/`max`/`step` props to support the new numeric input without
+  a new component. Added/updated coverage in `wizard-state.test.ts`,
+  `wizard.test.tsx`, `tax-registration-editor.test.tsx` and `detail.test.tsx`;
+  `pnpm lint`, `pnpm run typecheck`, `pnpm test` (1119/1119) and `pnpm build`
+  all pass on Node 22.22.3. Backend contract supplied for #148, landing in
+  parallel; no live-backend verification. See
+  [Platform Console](../features/platform-console.md#gst-applicable--rate-issue-148)
+  and [Tenant Admin](../features/tenant-admin.md#settings--tax-registration-issue-140).
+
 - **2026-09-06** - Owner sign-in (issue #144, web half of restiq-backend#118):
   replaced the `/admin/login` stub with the ops-pattern email/password form,
   generic credential errors, lockout copy, an expired-session banner and

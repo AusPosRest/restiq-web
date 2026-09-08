@@ -275,6 +275,15 @@ story. Backend counterpart: `restiq-backend/wiki/features/tenant-admin.md`.
   follows the exact same controlled-checkbox/merge-PUT pattern as
   `compositionScheme`. Feeds the POS invoice's AU Tax-Invoice-vs-Receipt split
   documented in `wiki/features/pos-cashier-waiter.md`.
+- **GST rate % (issue #148).** `gstRatePercent` (`number | null`) joined the
+  GET/PUT record alongside `gstRegistered`. The editor shows a `GST Rate %`
+  number input (`tax-gst-rate`, 0.5-step, matching the onboarding wizard's tax
+  step) whenever `gstRegistered` is true - always for IN (which has no
+  "unregistered" state) and only when the AU toggle is checked. `normalize
+  TaxRegistration` flattens the nullable number to `""` for the controlled
+  input; `buildTaxRegistrationPatch` sends back `Number(draft.gstRatePercent)`
+  or `null` when the field is blank, same merge-PUT discipline as every other
+  patchable field here.
 
 ## CAP-5 - Floor plan & stations
 

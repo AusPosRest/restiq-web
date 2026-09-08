@@ -195,6 +195,25 @@ function TaxRegistrationForm({ initial }: Readonly<{ initial: TaxRegistrationDra
         </label>
       )}
 
+      {draft.gstRegistered && (
+        <div>
+          <label htmlFor="tax-gst-rate" className="font-label mb-1 block text-xs font-semibold uppercase tracking-wider text-muted-foreground">
+            GST Rate %
+          </label>
+          <input
+            id="tax-gst-rate"
+            data-testid="tax-gst-rate"
+            type="number"
+            min={0}
+            max={100}
+            step={0.5}
+            value={draft.gstRatePercent}
+            onChange={(event) => updateField({ gstRatePercent: event.target.value })}
+            className={FIELD_CLASS}
+          />
+        </div>
+      )}
+
       <div className="flex items-center justify-end border-t border-border/40 pt-4">
         <Button data-testid="tax-registration-save" disabled={!dirty || saving || !registrationNumberValid} onClick={() => void handleSave()}>
           {saving ? "Saving..." : "Save tax registration"}
