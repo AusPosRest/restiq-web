@@ -269,7 +269,7 @@ function CounterLoaded({
   const remainingMinor = Math.max(0, totalMinor - pendingTenderedMinor(pendingTenders));
 
   return (
-    <div data-testid="counter-view" className="flex flex-1 flex-col">
+    <div data-testid="counter-view" className="flex h-dvh flex-col overflow-hidden">
       <header className="flex items-center gap-4 border-b border-border/60 px-6 py-3">
         <div>
           <p className="font-headline text-lg font-bold text-primary">RESTIQ POS</p>
@@ -377,7 +377,7 @@ function CounterLoaded({
             </div>
           </section>
         ) : (
-          <div className="flex w-80 shrink-0 flex-col">
+          <div className="flex w-80 shrink-0 flex-col overflow-y-auto">
             <TenderKeypad
               currency={menu.currency}
               remainingMinor={remainingMinor}
