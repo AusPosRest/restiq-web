@@ -56,6 +56,11 @@ describe("billTotalMinor", () => {
   it("prefers the bill's own discountMinor once it's real, over any pending preview", () => {
     expect(billTotalMinor(bill({ discountMinor: 5000 }), 10000)).toBe(100000);
   });
+
+  it("never adds tax on top of a tax-inclusive (AU) subtotal (issue #156)", () => {
+    expect(billTotalMinor(bill({ pricesIncludeTax: true }))).toBe(100000);
+    expect(billTotalMinor(bill({ pricesIncludeTax: true }), 10000)).toBe(90000);
+  });
 });
 
 describe("pendingTenderedMinor", () => {

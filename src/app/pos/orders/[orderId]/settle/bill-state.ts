@@ -50,7 +50,9 @@ export interface BillView {
   taxMinor: number;
   discountMinor: number | null;
   discountReason: string | null;
-  /** subtotal + tax - discount, never persisted as its own column - always derived server-side (bill-core.ts's `toBillView`). */
+  /** True for tax-inclusive pricing (AU): subtotalMinor already contains taxMinor, so the payable total is subtotal - discount. Optional only for older fixtures; the backend always sends it. */
+  pricesIncludeTax?: boolean;
+  /** subtotal (+ tax when not inclusive) - discount, never persisted as its own column - always derived server-side (bill-core.ts's `toBillView`). */
   totalMinor: number;
   status: BillStatus;
   createdAt: string;
@@ -97,9 +99,13 @@ export function pendingTenderedMinor(tenders: readonly PendingTender[]): number 
 }
 
 /** subtotal + tax - discount, mirroring bill-core.ts's `toBillView`/`commitFinalize` math exactly. `pendingDiscountMinor` lets the settle screen preview the total for a discount that hasn't been submitted yet (an already-finalized bill's own `discountMinor` always wins once it's non-null). */
-export function billTotalMinor(bill: Pick<BillView, "subtotalMinor" | "taxMinor" | "discountMinor">, pendingDiscountMinor = 0): number {
+export function billTotalMinor(
+  bill: Pick<BillView, "subtotalMinor" | "taxMinor" | "discountMinor" | "pricesIncludeTax">,
+  pendingDiscountMinor = 0,
+): number {
   const discountMinor = bill.discountMinor ?? pendingDiscountMinor;
-  return bill.subtotalMinor + bill.taxMinor - discountMinor;
+  // Mirrors bill-core.ts's computeTotalMinor: inclusive pricing (AU) never adds tax on top (issue #156).
+  return (bill.pricesIncludeTax ? bill.subtotalMinor : bill.subtotalMinor + bill.taxMinor) - discountMinor;
 }
 
 /** Finalize is disabled until the pending tenders exactly cover the total - `bill-core.ts`'s `commitFinalize` rejects any other sum with a 400 `tender_mismatch`, this mirrors that gate client-side, same posture as `order-taking-state.ts`'s `canSendToKitchen`. */
