@@ -459,6 +459,20 @@ story. Backend counterpart: `restiq-backend/wiki/features/tenant-admin.md`.
     sidebar/toolbar/outlet-switcher chrome would print alongside a
     route-based page too, and this needed no new route, layout, or
     outlet-id-from-search-params plumbing to avoid that.
+  - **Download QR / Download QR sheet (issue #161):** the dialog's "Download
+    PNG" button (`table-qr-dialog-download`) re-encodes the same URL at
+    `QR_DOWNLOAD_PX` (1024px, ~87mm at 300dpi) and saves it as
+    `<label>-qr.png` (`table-qr-state.ts#qrPngFilename`) via a synthetic
+    anchor click (`downloadUrl`, same shape as reports' `downloadReportExport`).
+    The toolbar's "Download QR sheet" (`floor-plan-download-qr-sheet-button`)
+    reuses the print sheet's card builder (`floor-plan.tsx#buildQrCards`) and
+    saves `table-qr-codes.html` - one self-contained file
+    (`table-qr-state.ts#qrSheetHtml`) with a dashed cut-out card per table
+    (floor, label, QR, "Scan to order", URL) on a print-friendly grid, inline
+    CSS only, forced light so it reads on a dark-mode screen. Owner-entered
+    labels are HTML-escaped. Chosen over a ZIP of PNGs (no zip writer in the
+    platform, would need a new dependency) - the HTML prints to PDF from any
+    browser for a print shop.
 
 ## CAP-6 - Devices & printers
 

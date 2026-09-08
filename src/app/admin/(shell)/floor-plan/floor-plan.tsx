@@ -9,7 +9,7 @@
 // toolbar) so a brand-new outlet with zero floors can reach the Go-Live
 // Checklist's floor_plan step through the console - see floor-plan-state.ts
 // and api.ts's file headers for the create-endpoint contract this reuses.
-import { LayoutGrid, Pencil, Printer as PrinterIcon, Table2, TableProperties, Trash2 } from "lucide-react";
+import { Download, LayoutGrid, Pencil, Printer as PrinterIcon, Table2, TableProperties, Trash2 } from "lucide-react";
 import { useEffect, useState } from "react";
 import type { FormEvent } from "react";
 import QRCode from "qrcode";
@@ -26,7 +26,7 @@ import type { DiningTableView, FloorPlanView, FloorView, PrinterView, StationVie
 import { FloorPlanListView, type EditableTableField } from "./floor-plan-list-view";
 import { StationsPanel } from "./stations-panel";
 import { QR_OPTIONS, TableQrDialog } from "./table-qr-dialog";
-import { guestOrderUrl } from "./table-qr-state";
+import { downloadUrl, guestOrderUrl, qrSheetHtml } from "./table-qr-state";
 import { QrPrintSheet, type PrintQrCard } from "./qr-print-sheet";
 
 type ViewMode = "canvas" | "list";
@@ -242,13 +242,24 @@ function FloorPlanEditor({ outletId, initial }: Readonly<{ outletId: string; ini
   // Generates every table's QR up front and only then flips printCards,
   // which the effect below turns into window.print() - printing off a
   // fully-rendered sheet, never a still-loading one (see qr-print-sheet.tsx).
-  async function handlePrintQrSheet() {
+  async function buildQrCards(): Promise<PrintQrCard[]> {
     const origin = window.location.origin;
     const entries = groupTablesByFloor(floors, tables).flatMap(({ floor, tables: floorTables }) =>
       floorTables.map((table) => ({ floorName: floor.name, table, url: guestOrderUrl(origin, outletId, table.id) })),
     );
     const qrDataUrls = await Promise.all(entries.map((entry) => QRCode.toDataURL(entry.url, QR_OPTIONS)));
-    setPrintCards(entries.map((entry, index) => ({ ...entry, qrDataUrl: qrDataUrls[index] })));
+    return entries.map((entry, index) => ({ ...entry, qrDataUrl: qrDataUrls[index] }));
+  }
+
+  async function handlePrintQrSheet() {
+    setPrintCards(await buildQrCards());
+  }
+
+  // Same cards as the print sheet, saved as one standalone HTML file (issue #161).
+  async function handleDownloadQrSheet() {
+    const href = URL.createObjectURL(new Blob([qrSheetHtml(await buildQrCards())], { type: "text/html" }));
+    downloadUrl("table-qr-codes.html", href);
+    URL.revokeObjectURL(href);
   }
 
   useEffect(() => {
@@ -304,6 +315,9 @@ function FloorPlanEditor({ outletId, initial }: Readonly<{ outletId: string; ini
             />
             <Button size="sm" variant="secondary" data-testid="floor-plan-print-qr-sheet-button" onClick={() => void handlePrintQrSheet()}>
               <PrinterIcon aria-hidden="true" /> Print QR sheet
+            </Button>
+            <Button size="sm" variant="secondary" data-testid="floor-plan-download-qr-sheet-button" onClick={() => void handleDownloadQrSheet()}>
+              <Download aria-hidden="true" /> Download QR sheet
             </Button>
           </div>
 
