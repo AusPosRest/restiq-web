@@ -30,6 +30,17 @@ the task entry to `tasks/completed.md` after every feature or bug fix.
   shell (reuses the pos auth realm), station picker, and the K1 station
   queue (oldest-left ticket columns, client-computed ageing colors, ADD-ON
   separation, struck-through void lines, bump/recall/refire).
+- [Payments (real rails) - web + backend architecture](features/payments.md) -
+  CAP-P1 provider abstraction, CAP-P2 payment intents, CAP-P3 guest UPI
+  checkout, CAP-P4 POS dynamic UPI QR, CAP-P5 refunds on the original rail,
+  CAP-P6 reconciliation. Designed 2026-09-09; build tracked in epic #177 /
+  restiq-backend#129. Decision records in [docs/DECISIONS.md](../docs/DECISIONS.md).
+
+## Tracking
+
+- [docs/CHANGELOG.md](../docs/CHANGELOG.md) - what shipped per release
+- [docs/KNOWN_ISSUES.md](../docs/KNOWN_ISSUES.md) - current gaps and workarounds
+- [docs/DECISIONS.md](../docs/DECISIONS.md) - architecture decision records
 
 ## Tasks
 
