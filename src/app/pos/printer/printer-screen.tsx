@@ -28,9 +28,13 @@ export function PrinterScreen({ outletId, outletName }: Readonly<{ outletId: str
         if (cancelled) return;
         setFailed(false);
         for (const job of pending) {
-          const printed = await markPrintJobPrinted(job.id);
-          if (cancelled) return;
-          setRoll((current) => [...current.filter((entry) => entry.id !== printed.id), printed].slice(-ROLL_LENGTH));
+          // Print first, ack second: acking before the roll update lost the
+          // job whenever the effect was torn down mid-ack (React dev
+          // double-mount, a quick unmount) - the spool marked it printed
+          // but nothing ever showed it. An un-acked job is simply listed
+          // again next poll and de-duplicated by id.
+          setRoll((current) => [...current.filter((entry) => entry.id !== job.id), job].slice(-ROLL_LENGTH));
+          await markPrintJobPrinted(job.id);
         }
       } catch {
         if (!cancelled) setFailed(true);
