@@ -22,7 +22,10 @@ export interface PrintQrCard {
 export function QrPrintSheet({ cards, template }: Readonly<{ cards: readonly PrintQrCard[]; template: QrSheetTemplate }>) {
   const qrPx = QR_CARD_SIZE_PX[template.cardSize];
   return (
-    <div data-testid="qr-print-sheet" className="hidden print:block">
+    // Off-canvas on screen (not display:none) so every <img> is laid out and
+    // decoded before window.print(): Chrome's print preview can otherwise
+    // paint a display:none image as an empty box. Restored to flow in print.
+    <div data-testid="qr-print-sheet" className="fixed top-0 -left-full w-full print:static print:w-auto" aria-hidden="true">
       {(template.heading || template.instruction) && (
         <div data-testid="qr-print-sheet-header" className="mb-6 text-center">
           {template.heading && <h1 className="text-xl font-semibold">{template.heading}</h1>}
