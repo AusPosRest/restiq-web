@@ -17,10 +17,11 @@ import { useOpsLoad } from "../../use-ops-load";
 import { DevicesTable } from "../../devices/devices-table";
 import { BrandingTab } from "./branding-tab";
 import { CapabilitiesTab } from "./capabilities-tab";
+import { AgreementsTab } from "./agreements-tab";
 import { SubscriptionTab } from "./subscription-tab";
 import { OutletsTab, OverviewTab, OwnersTab } from "./tabs";
 
-const TABS = ["overview", "outlets", "devices", "subscription", "capabilities", "branding", "owners"] as const;
+const TABS = ["overview", "outlets", "devices", "subscription", "capabilities", "branding", "owners", "agreements"] as const;
 export type TabKey = (typeof TABS)[number];
 
 type LifecycleAction = "activate" | "deactivate" | "reactivate" | "delete";
@@ -73,6 +74,7 @@ const TAB_LABELS: Record<TabKey, string> = {
   capabilities: "Capabilities",
   branding: "Branding",
   owners: "Owners",
+  agreements: "Agreements",
 };
 
 export function TenantDetailPage() {
@@ -222,6 +224,7 @@ export function TenantDetailPage() {
         {tab === "capabilities" && <CapabilitiesTab tenantId={tenant.id} capabilities={detail.capabilities} />}
         {tab === "branding" && <BrandingTab detail={detail} onMutated={load} />}
         {tab === "owners" && <OwnersTab detail={detail} />}
+        {tab === "agreements" && <AgreementsTab tenantId={tenant.id} />}
       </div>
 
       {lifecycleAction && (

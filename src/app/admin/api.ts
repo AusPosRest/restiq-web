@@ -620,3 +620,26 @@ export function fetchTaxRegistration(): Promise<TaxRegistrationView> {
 export function updateTaxRegistration(patch: TaxRegistrationPatch): Promise<TaxRegistrationView> {
   return adminApi<TaxRegistrationView>("tax-registration", { method: "PUT", body: JSON.stringify(patch) });
 }
+
+// --- Agreement (issue #192; contract reconciled against restiq-backend#133's
+// src/ops/agreements/agreements.dtos.ts OwnerAgreementView / SignAgreementDto).
+
+export interface AgreementSignatureView {
+  agreementVersionId: string;
+  version: number;
+  title: string;
+  signerName: string;
+  signerEmail: string;
+  signedAt: string;
+  evidenceSha256: string;
+}
+
+export interface OwnerAgreementView {
+  current: { id: string; version: number; title: string; body: string; publishedAt: string } | null;
+  signature: AgreementSignatureView | null;
+  history: AgreementSignatureView[];
+}
+
+export function signAgreement(versionId: string, signerName: string): Promise<{ signature: AgreementSignatureView }> {
+  return adminApi(`agreement/${versionId}/sign`, { method: "POST", body: JSON.stringify({ signerName, accepted: true }) });
+}

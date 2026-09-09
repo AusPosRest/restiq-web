@@ -1,5 +1,14 @@
 # Completed
 
+- **2026-09-09** - Agreements with versioning + owner digital signature (issue #192, web half
+  of restiq-backend#133): `/ops/agreements` (publish through the reason dialog, expand a row
+  to read a version), Tenant Detail **Agreements** tab (signed / pending badge + signature
+  record), and owner **Settings ▸ Agreement** (read the current version, sign with typed name
+  + consent, signed panel with evidence hash, previously-signed list). Details in
+  [platform-console.md](../features/platform-console.md#agreements-issue-192-restiq-backend133)
+  and [tenant-admin.md](../features/tenant-admin.md#settings--agreement---read-and-sign-the-platform-agreement-issue-192).
+  11 new component tests; lint/typecheck clean.
+
 - **2026-09-09** - Simulated receipt printer device (issue #172, web half of restiq-backend#127):
   `printer` joins pos/kds/kiosk/cds in the admin and ops enrolment dialogs, `/device`
   "Continue", and the landing page's device fleet. New `/pos/printer` screen polls the outlet's
