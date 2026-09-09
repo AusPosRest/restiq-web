@@ -97,7 +97,7 @@ describe("StationQueueScreen", () => {
     renderScreen();
 
     await vi.waitFor(() => expect(screen.getByTestId("kds-station-empty")).toBeTruthy());
-    expect(screen.getByTestId("kds-tab-subtitle").textContent).toBe("Tickets for this station, oldest first — bump when plated");
+    expect(screen.getByTestId("kds-tab-subtitle").textContent).toBe("Station queue — tickets for this station, oldest first; bump when plated");
   });
 
   it("separates ADD-ON batches and strikes through voided lines, from a real-shaped response", async () => {
