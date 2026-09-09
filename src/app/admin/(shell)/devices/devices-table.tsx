@@ -16,6 +16,13 @@ import { formatLastSeen, type AdminDeviceView } from "./devices-state";
 const SURFACE_LINKS: Record<string, { href: (device: Pick<AdminDeviceView, "id" | "tenantId">) => string; label: string }> = {
   pos: { href: (device) => `/pos/login?device=${encodeURIComponent(device.id)}&tenant=${encodeURIComponent(device.tenantId)}`, label: "Open POS" },
   kds: { href: () => "/kds", label: "Open KDS" },
+  // The simulated receipt printer (issue #172) is a POS-realm screen: bind the
+  // PIN pad to this device's tenant, then land on /pos/printer after sign-in.
+  printer: {
+    href: (device) =>
+      `/pos/login?device=${encodeURIComponent(device.id)}&tenant=${encodeURIComponent(device.tenantId)}&next=${encodeURIComponent("/pos/printer")}`,
+    label: "Open printer",
+  },
 };
 
 const STATUS_LABELS: Record<string, string> = { active: "Enrolled", revoked: "Revoked" };

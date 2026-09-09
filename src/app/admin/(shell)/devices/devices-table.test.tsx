@@ -56,6 +56,7 @@ describe("DevicesTable", () => {
         devices={[
           device({ id: "pos-1", type: "pos" }),
           device({ id: "kds-1", type: "kds" }),
+          device({ id: "printer-1", type: "printer" }),
           device({ id: "kiosk-1", type: "kiosk" }),
           device({ id: "gone-1", type: "pos", status: "revoked" }),
         ]}
@@ -63,6 +64,8 @@ describe("DevicesTable", () => {
     );
     expect(screen.getByTestId("device-open-pos-1").getAttribute("href")).toBe("/pos/login?device=pos-1&tenant=tenant-1");
     expect(screen.getByTestId("device-open-kds-1").getAttribute("href")).toBe("/kds");
+    expect(screen.getByTestId("device-open-printer-1").getAttribute("href")).toBe("/pos/login?device=printer-1&tenant=tenant-1&next=%2Fpos%2Fprinter");
+    expect(screen.getByTestId("device-open-printer-1").textContent).toContain("Open printer");
     expect(screen.queryByTestId("device-open-kiosk-1")).toBeNull();
     expect(screen.queryByTestId("device-open-gone-1")).toBeNull();
   });
