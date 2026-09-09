@@ -299,6 +299,7 @@ export type {
   FinalizeBillInput,
   PendingDiscount,
   PendingTender,
+  PostableTenderMethod,
 } from "./orders/[orderId]/settle/bill-state";
 import type { FinalizeBillInput, BillView } from "./orders/[orderId]/settle/bill-state";
 
@@ -445,4 +446,47 @@ export function listPendingPrintJobs(outletId: string): Promise<PrintJobView[]> 
 
 export function markPrintJobPrinted(jobId: string): Promise<PrintJobView> {
   return posApi<PrintJobView>(`print-jobs/${encodeURIComponent(jobId)}/printed`, { method: "POST" });
+}
+
+// --- Payments: the simulated card terminal (issue #188 web / restiq-backend
+// #130 - the first slice of epic #177/#129). RECONCILED against that PR's
+// src/pos/payments/{intents.controller,intents.dtos,intents.service}.ts,
+// read directly. The intent view is the shared src/lib/payment-intent.ts
+// shape; the backend's intents.dtos.ts mirrors it field for field.
+//  - POST bills/:id/intents        201 new / 200 same clientKey; 400
+//    amount_exceeds_remaining; 409 intent_active / already_finalized
+//  - GET  payment-intents/:id       expires lazily past expiresAt
+//  - POST payment-intents/:id/cancel   409 already_succeeded
+//  - GET  outlets/:outletId/payment-intents   the terminal device's poll
+//  - POST payment-intents/:id/simulate { outcome }   the simulated
+//    provider's "webhook" (ADR-004): what /pos/terminal posts on Approve /
+//    Decline; 409 already_terminal on a contradictory second tap
+export type { PaymentIntentView } from "@/lib/payment-intent";
+import type { PaymentIntentView } from "@/lib/payment-intent";
+
+export interface CreatePaymentIntentInput {
+  rail: "card_terminal";
+  amountMinor: number;
+  /** Client-generated idempotency key - a retried POST with the same key returns the same intent. */
+  clientKey: string;
+}
+
+export function createPaymentIntent(billId: string, input: CreatePaymentIntentInput): Promise<PaymentIntentView> {
+  return posApi<PaymentIntentView>(`bills/${encodeURIComponent(billId)}/intents`, { method: "POST", body: JSON.stringify(input) });
+}
+
+export function getPaymentIntent(intentId: string): Promise<PaymentIntentView> {
+  return posApi<PaymentIntentView>(`payment-intents/${encodeURIComponent(intentId)}`);
+}
+
+export function cancelPaymentIntent(intentId: string): Promise<PaymentIntentView> {
+  return posApi<PaymentIntentView>(`payment-intents/${encodeURIComponent(intentId)}/cancel`, { method: "POST" });
+}
+
+export function listPendingPaymentIntents(outletId: string): Promise<PaymentIntentView[]> {
+  return posApi<PaymentIntentView[]>(`outlets/${encodeURIComponent(outletId)}/payment-intents`);
+}
+
+export function simulatePaymentIntent(intentId: string, outcome: "success" | "failure"): Promise<PaymentIntentView> {
+  return posApi<PaymentIntentView>(`payment-intents/${encodeURIComponent(intentId)}/simulate`, { method: "POST", body: JSON.stringify({ outcome }) });
 }

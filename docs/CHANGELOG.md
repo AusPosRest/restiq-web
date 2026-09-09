@@ -7,6 +7,10 @@ with the payments epic.
 ## [Unreleased]
 
 ### Added
+- Simulated card terminal (#188): `terminal` device type, `/pos/terminal`
+  (Approve / Decline a pending request), and a **Card terminal** tender on
+  settle and counter whose tender is written by the terminal's approval
+  (restiq-backend#130's payment intents).
 - Payments architecture, decision records, and task plan (#177):
   `wiki/features/payments.md`, `docs/DECISIONS.md` ADR-001..012,
   `wiki/tasks/planned.md`.

@@ -10,6 +10,7 @@ import userEvent from "@testing-library/user-event";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { CounterView } from "./counter-view";
 import type { BillView } from "../orders/[orderId]/settle/bill-state";
+import type { PaymentIntentView } from "@/lib/payment-intent";
 import type { PosMenuView, RawOrder } from "../orders/[orderId]/order-taking-state";
 
 const OUTLET_ID = "outlet-1";
@@ -270,5 +271,82 @@ describe("CounterView - ring up and settle in one continuous flow", () => {
 
     await waitFor(() => expect(screen.getByTestId("token-badge-number").textContent).toBe("#48"));
     expect(screen.getByTestId("item-grid")).toBeTruthy();
+  });
+});
+
+describe("CounterView - card terminal (issue #188)", () => {
+  it("charges through the terminal: approval lands the server-written tender and Charge finalises with no cashier tender", async () => {
+    const user = userEvent.setup();
+    const rungUp = counterOrder({
+      lines: [
+        {
+          id: "line-1",
+          orderId: "order-47",
+          itemId: "item-naan",
+          variantId: null,
+          quantity: 1,
+          unitPriceMinor: 6000,
+          seatNumber: null,
+          addedByStaffId: "staff-priya",
+          createdAt: "2026-08-25T09:01:00.000Z",
+          modifiers: [],
+        },
+      ],
+    });
+    const openBill = bill("order-47", { subtotalMinor: 6000, taxMinor: 300, totalMinor: 6300 });
+    const pending: PaymentIntentView = {
+      id: "pi-7",
+      billId: openBill.id,
+      shareGuestId: null,
+      rail: "card_terminal",
+      provider: "simulated",
+      amountMinor: 6300,
+      currency: "INR",
+      status: "pending",
+      failureReason: null,
+      providerRef: null,
+      client: { simulated: true },
+      createdAt: "2026-08-25T09:02:00.000Z",
+      expiresAt: "2099-01-01T00:00:00.000Z",
+      succeededAt: null,
+      tenderId: null,
+    };
+    const captured = { id: "tender-c1", method: "card_terminal" as const, amountMinor: 6300, paymentIntentId: "pi-7", riskAcknowledged: false, createdAt: "2026-08-25T09:02:30.000Z" };
+
+    stubFetch({
+      "GET menu": () => jsonResponse(MENU),
+      [`POST outlets/${OUTLET_ID}/counter-orders`]: () => jsonResponse(rungUp, 201),
+      "POST orders/order-47/bill": () => jsonResponse(openBill, 201),
+      [`POST bills/${openBill.id}/intents`]: (init) => {
+        expect(JSON.parse(String(init?.body))).toMatchObject({ rail: "card_terminal", amountMinor: 6300 });
+        return jsonResponse(pending, 201);
+      },
+      "GET payment-intents/pi-7": () => jsonResponse({ ...pending, status: "succeeded", succeededAt: "2026-08-25T09:02:30.000Z", tenderId: "tender-c1" }),
+      [`GET bills/${openBill.id}`]: () => jsonResponse({ ...openBill, tenders: [captured] }),
+      [`POST bills/${openBill.id}/finalize`]: (init) => {
+        expect(JSON.parse(String(init?.body)).tenders).toEqual([]);
+        return jsonResponse({ ...openBill, status: "finalized", billNumber: 12, finalizedAt: "2026-08-25T09:03:00.000Z", tenders: [captured] });
+      },
+    });
+    render(<CounterView outletId={OUTLET_ID} currentStaffId={CURRENT_STAFF_ID} />);
+
+    await screen.findByTestId("counter-view");
+    expect(screen.getByTestId("tender-remaining").textContent).toBe("₹63.00");
+    expect(screen.getByTestId("finalize-bill").hasAttribute("disabled")).toBe(true);
+
+    await user.click(screen.getByTestId("tender-method-card_terminal"));
+    await user.click(screen.getByTestId("tender-fill-remaining"));
+
+    const panel = await screen.findByTestId("intent-panel");
+    await waitFor(() => expect(panel.getAttribute("data-phase")).toBe("paid"));
+    await user.click(screen.getByTestId("intent-dismiss"));
+
+    expect(screen.getByTestId("tender-captured-server-tender-c1").textContent).toContain("Card terminal");
+    expect(screen.getByTestId("tender-remaining").textContent).toBe("₹0.00");
+    await waitFor(() => expect(screen.getByTestId("finalize-bill").hasAttribute("disabled")).toBe(false));
+
+    await user.click(screen.getByTestId("finalize-bill"));
+    await screen.findByTestId("counter-settled-panel");
+    expect(screen.getByTestId("counter-settled-panel").textContent).toContain("1 tender captured");
   });
 });

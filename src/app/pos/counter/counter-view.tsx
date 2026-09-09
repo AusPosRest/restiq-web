@@ -37,11 +37,12 @@ import {
   addOrderLine,
   fetchOrCreateBill,
   finalizeBill,
+  getBill,
   PosApiError,
   removeOrderLine,
   startCounterOrder,
   updateOrderLineQuantity,
-  type BillTenderMethod,
+  type PostableTenderMethod,
   type BillView,
   type PendingTender,
 } from "../api";
@@ -61,7 +62,10 @@ import {
 } from "../orders/[orderId]/order-taking-state";
 import { BillSummary } from "../orders/[orderId]/settle/bill-summary";
 import { TenderKeypad } from "../orders/[orderId]/settle/tender-keypad";
-import { billTotalMinor, canFinalizeBill, isBillReadOnly, pendingTenderedMinor } from "../orders/[orderId]/settle/bill-state";
+import { billTotalMinor, isBillReadOnly } from "../orders/[orderId]/settle/bill-state";
+import { canFinalizeWithElectronic, isElectronicMethod, remainingToTenderMinor } from "../orders/[orderId]/settle/electronic-tender-state";
+import { TerminalIntentPanel } from "../orders/[orderId]/settle/terminal-intent-panel";
+import { useTerminalIntent } from "../orders/[orderId]/settle/use-terminal-intent";
 import { TokenBadge } from "./token-badge";
 
 export function CounterView({ outletId, currentStaffId }: Readonly<{ outletId: string; currentStaffId: string }>) {
@@ -131,6 +135,15 @@ function CounterLoaded({
       .catch(() => setBillError(true))
       .finally(() => setBillLoading(false));
   }
+
+  // Card terminal (issue #188): a quiet re-read once the terminal approves -
+  // the tender is already on the server; no loading shell for a refresh.
+  const terminal = useTerminalIntent(bill?.id ?? null, () => {
+    if (!bill) return;
+    getBill(bill.id)
+      .then(setBill)
+      .catch(() => undefined);
+  });
 
   // Runs once per mounted counter order (this component remounts wholesale -
   // see the `key={order.id}` above - rather than re-running for the same
@@ -241,7 +254,7 @@ function CounterLoaded({
       .finally(() => setBusyLineId(null));
   }
 
-  function handleAddTender(method: BillTenderMethod, amountMinor: number) {
+  function handleAddTender(method: PostableTenderMethod, amountMinor: number) {
     setPendingTenders((current) => [...current, { method, amountMinor }]);
   }
 
@@ -266,7 +279,8 @@ function CounterLoaded({
 
   const readOnly = isBillReadOnly(bill);
   const totalMinor = billTotalMinor(bill);
-  const remainingMinor = Math.max(0, totalMinor - pendingTenderedMinor(pendingTenders));
+  const remainingMinor = remainingToTenderMinor(totalMinor, bill, pendingTenders);
+  const intents = terminal.intent ? [terminal.intent] : [];
 
   return (
     <div data-testid="counter-view" className="flex h-dvh flex-col overflow-hidden">
@@ -379,15 +393,27 @@ function CounterLoaded({
         ) : (
           <div className="flex w-80 shrink-0 flex-col">
             <div className="flex min-h-0 flex-1 flex-col overflow-y-auto">
-              <TenderKeypad
-                currency={menu.currency}
-                remainingMinor={remainingMinor}
-                tenders={pendingTenders}
-                onAddTender={handleAddTender}
-                onRemoveTender={handleRemoveTender}
-              />
+              {terminal.intent ? (
+                <TerminalIntentPanel intent={terminal.intent} currency={menu.currency} busy={terminal.busy} onCancel={terminal.cancel} onDismiss={terminal.dismiss} />
+              ) : (
+                <TenderKeypad
+                  currency={menu.currency}
+                  remainingMinor={Math.max(0, remainingMinor)}
+                  tenders={pendingTenders}
+                  capturedTenders={bill.tenders.filter((tender) => isElectronicMethod(tender.method))}
+                  onAddTender={handleAddTender}
+                  onRemoveTender={handleRemoveTender}
+                  onSendToTerminal={terminal.send}
+                  terminalBusy={terminal.busy}
+                />
+              )}
             </div>
             <footer className="border-t border-border/60 p-4">
+              {terminal.error && (
+                <p role="alert" data-testid="intent-error" className="mb-2 text-sm text-status-alert">
+                  {terminal.error}
+                </p>
+              )}
               {finalizeError && (
                 <p role="alert" data-testid="finalize-error" className="mb-2 text-sm text-status-alert">
                   {finalizeError}
@@ -398,7 +424,7 @@ function CounterLoaded({
                   size="lg"
                   className="flex-1"
                   data-testid="finalize-bill"
-                  disabled={!canFinalizeBill(bill, totalMinor, pendingTenders) || finalizeBusy}
+                  disabled={!canFinalizeWithElectronic(bill, totalMinor, pendingTenders, intents) || finalizeBusy}
                   onClick={handleFinalize}
                 >
                   {finalizeBusy ? "Charging…" : "Charge"}
