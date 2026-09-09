@@ -121,7 +121,7 @@ export default async function Home() {
             <div
               key={s.name}
               data-testid={`landing-card-${s.href}`}
-              className="group relative flex flex-col gap-3 rounded-xl border border-border bg-card p-5 transition-colors hover:border-primary focus-within:border-primary"
+              className="group relative flex min-w-0 flex-col gap-3 rounded-xl border border-border bg-card p-5 transition-colors hover:border-primary focus-within:border-primary"
             >
               <div className="flex flex-col gap-1">
                 <span className="font-label text-[11px] font-semibold uppercase tracking-wider text-primary">
