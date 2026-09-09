@@ -23,6 +23,13 @@ const SURFACE_LINKS: Record<string, { href: (device: Pick<AdminDeviceView, "id" 
       `/pos/login?device=${encodeURIComponent(device.id)}&tenant=${encodeURIComponent(device.tenantId)}&next=${encodeURIComponent("/pos/printer")}`,
     label: "Open printer",
   },
+  // The simulated card terminal (issue #188) is a POS-realm screen too - same
+  // bind-then-land shape as the printer above.
+  terminal: {
+    href: (device) =>
+      `/pos/login?device=${encodeURIComponent(device.id)}&tenant=${encodeURIComponent(device.tenantId)}&next=${encodeURIComponent("/pos/terminal")}`,
+    label: "Open terminal",
+  },
 };
 
 const STATUS_LABELS: Record<string, string> = { active: "Enrolled", revoked: "Revoked" };
