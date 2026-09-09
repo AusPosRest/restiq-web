@@ -101,6 +101,10 @@ describe("continueTargetFor", () => {
     expect(continueTargetFor("kds")).toEqual({ kind: "redirect", path: "/kds" });
   });
 
+  it("sends a printer to the simulated receipt printer under the POS realm", () => {
+    expect(continueTargetFor("printer")).toEqual({ kind: "redirect", path: "/pos/printer" });
+  });
+
   it("has no web surface for kiosk or cds", () => {
     expect(continueTargetFor("kiosk")).toEqual({ kind: "unsupported" });
     expect(continueTargetFor("cds")).toEqual({ kind: "unsupported" });
@@ -113,6 +117,7 @@ describe("humanize helpers", () => {
     expect(humanizeType("kds")).toBe("Kitchen display");
     expect(humanizeType("kiosk")).toBe("Kiosk");
     expect(humanizeType("cds")).toBe("Customer display");
+    expect(humanizeType("printer")).toBe("Receipt printer");
   });
 
   it("warms up the raw status", () => {

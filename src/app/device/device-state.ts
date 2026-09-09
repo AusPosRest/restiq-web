@@ -103,10 +103,11 @@ export function clearStoredDevice(): void {
 
 export type ContinueTarget = { kind: "redirect"; path: string } | { kind: "unsupported" };
 
-/** Where "Continue" sends this device type - only pos/kds have a web surface today (kiosk/cds do not exist yet). */
+/** Where "Continue" sends this device type - pos/kds/printer have a web surface today (kiosk/cds do not exist yet). The simulated printer (issue #172) lives under /pos so it shares the POS staff session. */
 export function continueTargetFor(type: string): ContinueTarget {
   if (type === "pos") return { kind: "redirect", path: "/pos/login" };
   if (type === "kds") return { kind: "redirect", path: "/kds" };
+  if (type === "printer") return { kind: "redirect", path: "/pos/printer" };
   return { kind: "unsupported" };
 }
 
@@ -115,6 +116,7 @@ const TYPE_LABELS: Record<string, string> = {
   kds: "Kitchen display",
   kiosk: "Kiosk",
   cds: "Customer display",
+  printer: "Receipt printer",
 };
 
 export function humanizeType(type: string): string {

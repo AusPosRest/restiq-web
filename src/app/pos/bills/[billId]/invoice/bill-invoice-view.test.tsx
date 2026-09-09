@@ -1,7 +1,7 @@
 // Component tests for the printable tax invoice (issue #137 web /
 // restiq-backend#103, merged via restiq-backend PR #105) against the real
 // `GET bills/:id/invoice` contract - see api.ts's `fetchInvoice` header.
-import { cleanup, render, screen } from "@testing-library/react";
+import { cleanup, render, screen, waitFor } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { BillInvoiceView } from "./bill-invoice-view";
@@ -16,6 +16,7 @@ function jsonResponse(body: unknown, status = 200): Response {
 function stubFetch(respond: (init?: RequestInit) => Response) {
   const fetchMock = vi.fn((input: RequestInfo | URL, init?: RequestInit) => {
     const url = String(input);
+    if (url.includes(`bills/${BILL_ID}/print`)) return Promise.resolve(jsonResponse({ id: "job-1", billId: BILL_ID, payload: inInvoice(), createdAt: "2026-09-09T00:00:00.000Z", printedAt: null }, 201));
     if (url.includes(`bills/${BILL_ID}/invoice`)) return Promise.resolve(respond(init));
     return Promise.resolve(jsonResponse({ error: { code: "not_found", message: `unhandled ${url}` } }, 404));
   });
@@ -136,6 +137,18 @@ describe("BillInvoiceView - IN invoice (GSTIN, CGST+SGST)", () => {
     await userEvent.click(screen.getByTestId("invoice-print"));
 
     expect(printSpy).toHaveBeenCalledOnce();
+  });
+
+  it("POSTs the bill to the printer spool from Send to printer and confirms inline", async () => {
+    const fetchMock = stubFetch(() => jsonResponse(inInvoice()));
+    render(<BillInvoiceView billId={BILL_ID} />);
+
+    await screen.findByTestId("bill-invoice-view");
+    await userEvent.click(screen.getByTestId("invoice-send-to-printer"));
+
+    await waitFor(() => expect(screen.getByTestId("invoice-send-to-printer").textContent).toBe("Sent to printer"));
+    const printCall = fetchMock.mock.calls.find(([input]) => String(input).includes(`bills/${BILL_ID}/print`));
+    expect(printCall?.[1]?.method).toBe("POST");
   });
 });
 

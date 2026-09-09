@@ -423,3 +423,26 @@ export interface InvoiceView {
 export function fetchInvoice(billId: string): Promise<InvoiceView> {
   return posApi<InvoiceView>(`bills/${billId}/invoice`);
 }
+
+// --- Simulated printer spool (issue #172 web / restiq-backend#127). The
+// backend snapshots the InvoiceView at "Send to printer" time; /pos/printer
+// polls the outlet's unprinted jobs and acks each one it has rendered.
+export interface PrintJobView {
+  id: string;
+  billId: string;
+  payload: InvoiceView;
+  createdAt: string;
+  printedAt: string | null;
+}
+
+export function sendBillToPrinter(billId: string): Promise<PrintJobView> {
+  return posApi<PrintJobView>(`bills/${billId}/print`, { method: "POST" });
+}
+
+export function listPendingPrintJobs(outletId: string): Promise<PrintJobView[]> {
+  return posApi<PrintJobView[]>(`outlets/${encodeURIComponent(outletId)}/print-jobs`);
+}
+
+export function markPrintJobPrinted(jobId: string): Promise<PrintJobView> {
+  return posApi<PrintJobView>(`print-jobs/${encodeURIComponent(jobId)}/printed`, { method: "POST" });
+}

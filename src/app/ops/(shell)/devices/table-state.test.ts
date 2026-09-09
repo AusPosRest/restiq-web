@@ -19,7 +19,8 @@ describe("parseDeviceTableQuery", () => {
     const query = parseDeviceTableQuery(new URLSearchParams("type=pos&status=revoked&tenantId=abc"));
     expect(query).toEqual({ tenantId: "abc", type: "pos", status: "revoked", cursor: "" });
 
-    expect(parseDeviceTableQuery(new URLSearchParams("type=printer")).type).toBe("");
+    expect(parseDeviceTableQuery(new URLSearchParams("type=printer")).type).toBe("printer");
+    expect(parseDeviceTableQuery(new URLSearchParams("type=toaster")).type).toBe("");
     expect(parseDeviceTableQuery(new URLSearchParams("status=deleted")).status).toBe("");
   });
 });
