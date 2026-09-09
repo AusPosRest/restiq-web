@@ -1228,3 +1228,26 @@ faked.
   (lazy-imported). Tests: template load/save/defaults, ZIP entries per
   table, dialog round-trip, print sheet toggles. See
   [wiki/features/tenant-admin.md](../features/tenant-admin.md) CAP-5.
+- **2026-09-09** - Payments W1: architecture, ADRs, task plan, client state
+  modules (epic #177). Designed the real-rails payments slice the spine had
+  deferred: `wiki/features/payments.md` (capabilities CAP-P1..P6, target
+  architecture, Prisma additions for `payment_provider_configs` /
+  `payment_intents` / `payment_events` / `payment_refunds` /
+  `payment_exceptions` plus `tenders.payment_intent_id` and
+  `risk_acknowledged`, the `PaymentProvider` interface with
+  `SimulatedProvider` and `RazorpayProvider`, the intent lifecycle, every
+  guest/pos/admin/webhook contract, flows, failure modes, testing, rollout),
+  `docs/DECISIONS.md` ADR-001..012, `docs/KNOWN_ISSUES.md`,
+  `docs/CHANGELOG.md`, and the phased plan in `wiki/tasks/planned.md`
+  (backend epic restiq-backend#129 mirrors it). Code: five framework-free
+  state modules with 51 unit tests - `src/lib/payment-intent.ts` (shared
+  status machine, monotonic `mergeIntentPoll`, 2 s → 5 s poll cadence,
+  countdown), `pos/…/settle/electronic-tender-state.ts` (captured electronic
+  sum, remaining-to-tender, `canFinalizeWithElectronic`, FR-52 manual-UPI
+  risk ack), `qr/checkout/payment-rail-state.ts` (UPI-first options, app
+  deep links, share phase, intent handoff),
+  `admin/(shell)/settings/payment-settings-state.ts` (write-only secrets,
+  key-prefix-vs-mode rule), `admin/(shell)/reports/reconciliation-state.ts`
+  (severity, queue order, resolution rule). Every module header is marked
+  PROVISIONAL with the backend file it must be reconciled against. No UI
+  change; screens land in W2-W6 after their backend stories merge.
