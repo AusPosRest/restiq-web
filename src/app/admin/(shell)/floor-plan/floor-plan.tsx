@@ -9,7 +9,7 @@
 // toolbar) so a brand-new outlet with zero floors can reach the Go-Live
 // Checklist's floor_plan step through the console - see floor-plan-state.ts
 // and api.ts's file headers for the create-endpoint contract this reuses.
-import { Download, LayoutGrid, Pencil, Printer as PrinterIcon, Table2, TableProperties, Trash2 } from "lucide-react";
+import { Download, LayoutGrid, Pencil, Printer as PrinterIcon, SlidersHorizontal, Table2, TableProperties, Trash2 } from "lucide-react";
 import { useEffect, useState } from "react";
 import type { FormEvent } from "react";
 import QRCode from "qrcode";
@@ -26,8 +26,10 @@ import type { DiningTableView, FloorPlanView, FloorView, PrinterView, StationVie
 import { FloorPlanListView, type EditableTableField } from "./floor-plan-list-view";
 import { StationsPanel } from "./stations-panel";
 import { QR_OPTIONS, TableQrDialog } from "./table-qr-dialog";
-import { downloadUrl, guestOrderUrl, qrSheetHtml } from "./table-qr-state";
+import { downloadUrl, guestOrderUrl, qrSheetHtml, qrZipPngFilename, renderTableQrPng, slug } from "./table-qr-state";
 import { QrPrintSheet, type PrintQrCard } from "./qr-print-sheet";
+import { loadQrSheetTemplate, type QrSheetTemplate } from "./qr-sheet-template";
+import { QrSheetTemplateDialog } from "./qr-sheet-template-dialog";
 
 type ViewMode = "canvas" | "list";
 
@@ -113,6 +115,8 @@ function OutletFloorPlan({ outletId }: Readonly<{ outletId: string }>) {
 
 function FloorPlanEditor({ outletId, initial }: Readonly<{ outletId: string; initial: FloorPlanView }>) {
   const pushToast = useToast();
+  const { outlets } = useOutlets();
+  const outletName = outlets.find((outlet) => outlet.id === outletId)?.name ?? outletId;
   const [floors, setFloors] = useState<FloorView[]>(initial.floors);
   const [tables, setTables] = useState<DiningTableView[]>(initial.tables);
   const [stations, setStations] = useState<StationView[]>(initial.stations);
@@ -126,6 +130,8 @@ function FloorPlanEditor({ outletId, initial }: Readonly<{ outletId: string; ini
   const [qrTableId, setQrTableId] = useState<string | null>(null);
   const [qrOrderingEnabled, setQrOrderingEnabled] = useState<boolean | null>(null);
   const [printCards, setPrintCards] = useState<PrintQrCard[] | null>(null);
+  const [qrTemplate, setQrTemplate] = useState<QrSheetTemplate>(() => loadQrSheetTemplate(outletId, outletName));
+  const [qrTemplateDialogOpen, setQrTemplateDialogOpen] = useState(false);
 
   // Optimistic write, reconciled against the backend's actual REJECT-with-409
   // overlap policy (see floor-plan-state.ts's file header) - a save either
@@ -255,10 +261,25 @@ function FloorPlanEditor({ outletId, initial }: Readonly<{ outletId: string; ini
     setPrintCards(await buildQrCards());
   }
 
-  // Same cards as the print sheet, saved as one standalone HTML file (issue #161).
+  // Same cards as the print sheet, now zipped alongside one standalone PNG
+  // per table (issue #175) - a print shop or designer can pull the HTML
+  // sheet, or drop the PNGs straight onto table stickers, without the app.
+  // jszip is lazy-imported so it never lands in the initial bundle - most
+  // floor-plan visits never click this button.
   async function handleDownloadQrSheet() {
-    const href = URL.createObjectURL(new Blob([qrSheetHtml(await buildQrCards())], { type: "text/html" }));
-    downloadUrl("table-qr-codes.html", href);
+    const cards = await buildQrCards();
+    const { default: JSZip } = await import("jszip");
+    const zip = new JSZip();
+    zip.file("qr-sheet.html", qrSheetHtml(cards, qrTemplate));
+    await Promise.all(
+      cards.map(async (card) => {
+        const png = await renderTableQrPng(card.table, card.floorName, card.url, qrTemplate);
+        zip.file(qrZipPngFilename(card.floorName, card.table.label), png.slice(png.indexOf(",") + 1), { base64: true });
+      }),
+    );
+    const blob = await zip.generateAsync({ type: "blob" });
+    const href = URL.createObjectURL(blob);
+    downloadUrl(`${slug(outletName)}-qr-codes.zip`, href);
     URL.revokeObjectURL(href);
   }
 
@@ -267,120 +288,137 @@ function FloorPlanEditor({ outletId, initial }: Readonly<{ outletId: string; ini
   }, [printCards]);
 
   return (
-    <div className="flex flex-1 flex-col gap-6">
-      <div className="flex items-center justify-between gap-4">
-        <div>
-          <h1 className="font-headline text-2xl font-semibold">Floor Plan</h1>
-          <p className="mt-1 text-sm text-muted-foreground" data-testid="floor-plan-summary">
-            {tables.length} table{tables.length === 1 ? "" : "s"} across {floors.length} floor{floors.length === 1 ? "" : "s"}
-          </p>
-        </div>
-        {floors.length > 0 && (
-          <div className="flex gap-1 rounded-lg border border-border bg-input p-1" role="tablist" aria-label="Floor plan view" data-testid="floor-plan-view-toggle">
-            <ViewToggleButton mode="canvas" current={view} onSelect={setView} icon={LayoutGrid} label="Canvas" />
-            <ViewToggleButton mode="list" current={view} onSelect={setView} icon={TableProperties} label="List" />
+    <>
+      {/* print:hidden: window.print() (Print QR sheet) must render only QrPrintSheet below, never the editor chrome around it. */}
+      <div className="flex flex-1 flex-col gap-6 print:hidden">
+        <div className="flex items-center justify-between gap-4">
+          <div>
+            <h1 className="font-headline text-2xl font-semibold">Floor Plan</h1>
+            <p className="mt-1 text-sm text-muted-foreground" data-testid="floor-plan-summary">
+              {tables.length} table{tables.length === 1 ? "" : "s"} across {floors.length} floor{floors.length === 1 ? "" : "s"}
+            </p>
           </div>
-        )}
-      </div>
-
-      {floors.length === 0 ? (
-        <div data-testid="floor-plan-no-floors" className="flex flex-col items-center gap-2 rounded-lg border border-dashed border-border/60 bg-card/50 px-8 py-16 text-center">
-          <Table2 className="size-8 text-muted-foreground" aria-hidden="true" />
-          <p className="font-headline text-lg font-medium">No floor plan yet</p>
-          <p className="max-w-md text-sm text-muted-foreground">Add your first floor to start laying out tables.</p>
-          <div className="mt-3">
-            <AddFloorControl outletId={outletId} triggerLabel="Add your first floor" triggerTestId="floor-plan-add-first-floor" onCreated={handleFloorCreated} />
-          </div>
-        </div>
-      ) : (
-        <>
-          <FloorTabsBar
-            outletId={outletId}
-            floors={floors}
-            tables={tables}
-            selectedFloorId={selectedFloorId}
-            onSelectFloor={setSelectedFloorId}
-            onFloorRenamed={handleFloorRenamed}
-            onDeleteRequested={setFloorPendingDeleteId}
-          />
-
-          <div className="flex flex-wrap items-start gap-2" data-testid="floor-plan-toolbar">
-            <AddFloorControl outletId={outletId} triggerLabel="Add floor" triggerTestId="floor-plan-add-floor-button" onCreated={handleFloorCreated} />
-            <AddTableControl
-              outletId={outletId}
-              floorId={selectedFloorId}
-              tables={tables}
-              onOptimisticAdd={handleOptimisticTableAdd}
-              onSettled={handleTableCreateSettled}
-            />
-            <Button size="sm" variant="secondary" data-testid="floor-plan-print-qr-sheet-button" onClick={() => void handlePrintQrSheet()}>
-              <PrinterIcon aria-hidden="true" /> Print QR sheet
-            </Button>
-            <Button size="sm" variant="secondary" data-testid="floor-plan-download-qr-sheet-button" onClick={() => void handleDownloadQrSheet()}>
-              <Download aria-hidden="true" /> Download QR sheet
-            </Button>
-          </div>
-
-          <div className="grid flex-1 grid-cols-[1fr_320px] gap-6">
-            <div>
-              {view === "canvas" ? (
-                <FloorPlanCanvas tables={tables} selectedFloorId={selectedFloorId} onTableMoved={handleTableMoved} onQrRequested={handleQrRequested} />
-              ) : (
-                <FloorPlanListView
-                  floors={floors}
-                  tables={tables}
-                  onFieldCommitted={handleListFieldCommitted}
-                  onDeleteRequested={setTablePendingDeleteId}
-                  onQrRequested={handleQrRequested}
-                />
-              )}
+          {floors.length > 0 && (
+            <div className="flex gap-1 rounded-lg border border-border bg-input p-1" role="tablist" aria-label="Floor plan view" data-testid="floor-plan-view-toggle">
+              <ViewToggleButton mode="canvas" current={view} onSelect={setView} icon={LayoutGrid} label="Canvas" />
+              <ViewToggleButton mode="list" current={view} onSelect={setView} icon={TableProperties} label="List" />
             </div>
-            <StationsPanel
-              outletId={outletId}
-              stations={stations}
-              printers={printers}
-              onStationUpdated={(saved) => setStations((current) => current.map((s) => (s.id === saved.id ? saved : s)))}
-              onStationCreated={(created) => setStations((current) => [...current, created])}
-              onPrinterCreated={(created) => setPrinters((current) => [...current, created])}
-            />
+          )}
+        </div>
+
+        {floors.length === 0 ? (
+          <div data-testid="floor-plan-no-floors" className="flex flex-col items-center gap-2 rounded-lg border border-dashed border-border/60 bg-card/50 px-8 py-16 text-center">
+            <Table2 className="size-8 text-muted-foreground" aria-hidden="true" />
+            <p className="font-headline text-lg font-medium">No floor plan yet</p>
+            <p className="max-w-md text-sm text-muted-foreground">Add your first floor to start laying out tables.</p>
+            <div className="mt-3">
+              <AddFloorControl outletId={outletId} triggerLabel="Add your first floor" triggerTestId="floor-plan-add-first-floor" onCreated={handleFloorCreated} />
+            </div>
           </div>
-        </>
-      )}
+        ) : (
+          <>
+            <FloorTabsBar
+              outletId={outletId}
+              floors={floors}
+              tables={tables}
+              selectedFloorId={selectedFloorId}
+              onSelectFloor={setSelectedFloorId}
+              onFloorRenamed={handleFloorRenamed}
+              onDeleteRequested={setFloorPendingDeleteId}
+            />
 
-      <ConfirmReasonDialog
-        open={floorPendingDeleteId !== null}
-        title="Delete this floor?"
-        description={(() => {
-          const floor = floors.find((f) => f.id === floorPendingDeleteId);
-          return floor ? `"${floor.name}" will be removed from this outlet's floor plan.` : "";
-        })()}
-        verb="Delete floor"
-        busy={floorDeleteBusy}
-        onCancel={() => setFloorPendingDeleteId(null)}
-        onConfirm={() => void handleConfirmFloorDelete()}
-      />
+            <div className="flex flex-wrap items-start gap-2" data-testid="floor-plan-toolbar">
+              <AddFloorControl outletId={outletId} triggerLabel="Add floor" triggerTestId="floor-plan-add-floor-button" onCreated={handleFloorCreated} />
+              <AddTableControl
+                outletId={outletId}
+                floorId={selectedFloorId}
+                tables={tables}
+                onOptimisticAdd={handleOptimisticTableAdd}
+                onSettled={handleTableCreateSettled}
+              />
+              <Button size="sm" variant="secondary" data-testid="floor-plan-print-qr-sheet-button" onClick={() => void handlePrintQrSheet()}>
+                <PrinterIcon aria-hidden="true" /> Print QR sheet
+              </Button>
+              <Button size="sm" variant="secondary" data-testid="floor-plan-download-qr-sheet-button" onClick={() => void handleDownloadQrSheet()}>
+                <Download aria-hidden="true" /> Download QR sheet
+              </Button>
+              <Button size="sm" variant="secondary" data-testid="floor-plan-customise-qr-sheet-button" onClick={() => setQrTemplateDialogOpen(true)}>
+                <SlidersHorizontal aria-hidden="true" /> Customise sheet
+              </Button>
+            </div>
 
-      <ConfirmReasonDialog
-        open={tablePendingDeleteId !== null}
-        title="Delete this table?"
-        description={(() => {
-          const table = tables.find((t) => t.id === tablePendingDeleteId);
-          return table ? `"${table.label}" will be removed from the floor plan.` : "";
-        })()}
-        verb="Delete table"
-        busy={tableDeleteBusy}
-        onCancel={() => setTablePendingDeleteId(null)}
-        onConfirm={() => void handleConfirmTableDelete()}
-      />
+            <div className="grid flex-1 grid-cols-[1fr_320px] gap-6">
+              <div>
+                {view === "canvas" ? (
+                  <FloorPlanCanvas tables={tables} selectedFloorId={selectedFloorId} onTableMoved={handleTableMoved} onQrRequested={handleQrRequested} />
+                ) : (
+                  <FloorPlanListView
+                    floors={floors}
+                    tables={tables}
+                    onFieldCommitted={handleListFieldCommitted}
+                    onDeleteRequested={setTablePendingDeleteId}
+                    onQrRequested={handleQrRequested}
+                  />
+                )}
+              </div>
+              <StationsPanel
+                outletId={outletId}
+                stations={stations}
+                printers={printers}
+                onStationUpdated={(saved) => setStations((current) => current.map((s) => (s.id === saved.id ? saved : s)))}
+                onStationCreated={(created) => setStations((current) => [...current, created])}
+                onPrinterCreated={(created) => setPrinters((current) => [...current, created])}
+              />
+            </div>
+          </>
+        )}
 
-      <TableQrDialog
-        table={tables.find((table) => table.id === qrTableId) ?? null}
-        outletId={outletId}
-        qrOrderingEnabled={qrOrderingEnabled}
-        onClose={() => setQrTableId(null)}
-      />
-      {printCards && <QrPrintSheet cards={printCards} />}
-    </div>
+        <ConfirmReasonDialog
+          open={floorPendingDeleteId !== null}
+          title="Delete this floor?"
+          description={(() => {
+            const floor = floors.find((f) => f.id === floorPendingDeleteId);
+            return floor ? `"${floor.name}" will be removed from this outlet's floor plan.` : "";
+          })()}
+          verb="Delete floor"
+          busy={floorDeleteBusy}
+          onCancel={() => setFloorPendingDeleteId(null)}
+          onConfirm={() => void handleConfirmFloorDelete()}
+        />
+
+        <ConfirmReasonDialog
+          open={tablePendingDeleteId !== null}
+          title="Delete this table?"
+          description={(() => {
+            const table = tables.find((t) => t.id === tablePendingDeleteId);
+            return table ? `"${table.label}" will be removed from the floor plan.` : "";
+          })()}
+          verb="Delete table"
+          busy={tableDeleteBusy}
+          onCancel={() => setTablePendingDeleteId(null)}
+          onConfirm={() => void handleConfirmTableDelete()}
+        />
+
+        <TableQrDialog
+          table={tables.find((table) => table.id === qrTableId) ?? null}
+          floorName={floors.find((floor) => floor.id === tables.find((table) => table.id === qrTableId)?.floorId)?.name ?? ""}
+          template={qrTemplate}
+          outletId={outletId}
+          qrOrderingEnabled={qrOrderingEnabled}
+          onClose={() => setQrTableId(null)}
+        />
+
+        <QrSheetTemplateDialog
+          open={qrTemplateDialogOpen}
+          outletId={outletId}
+          outletName={outletName}
+          template={qrTemplate}
+          onSave={setQrTemplate}
+          onClose={() => setQrTemplateDialogOpen(false)}
+        />
+      </div>
+      {printCards && <QrPrintSheet cards={printCards} template={qrTemplate} />}
+    </>
   );
 }
 

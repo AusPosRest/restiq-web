@@ -455,10 +455,14 @@ story. Backend counterpart: `restiq-backend/wiki/features/tenant-admin.md`.
     still mid-generation, since each card's `<img>` gets a pre-computed
     `data:` URL as a prop, not its own async effect. An in-page print
     stylesheet (Tailwind's `print:` variant, `hidden print:block`) rather
-    than a dedicated `/admin/floor-plan/qr-sheet` route - the admin shell's
-    sidebar/toolbar/outlet-switcher chrome would print alongside a
-    route-based page too, and this needed no new route, layout, or
-    outlet-id-from-search-params plumbing to avoid that.
+    than a dedicated `/admin/floor-plan/qr-sheet` route - no new route,
+    layout, or outlet-id-from-search-params plumbing needed. The admin
+    shell's sidebar/header (`(shell)/layout.tsx`) and the floor-plan editor's
+    own screen (toolbar, canvas/list, stations panel - everything but
+    `QrPrintSheet`, `floor-plan.tsx`) both carry `print:hidden` so
+    `window.print()` renders only the QR cards, not the console chrome
+    around them (bug found and fixed post-#161: the chrome had no
+    `print:hidden` at all, so it printed alongside the sheet).
   - **Download QR / Download QR sheet (issue #161):** the dialog's "Download
     PNG" button (`table-qr-dialog-download`) re-encodes the same URL at
     `QR_DOWNLOAD_PX` (1024px, ~87mm at 300dpi) and saves it as
@@ -470,9 +474,22 @@ story. Backend counterpart: `restiq-backend/wiki/features/tenant-admin.md`.
     (`table-qr-state.ts#qrSheetHtml`) with a dashed cut-out card per table
     (floor, label, QR, "Scan to order", URL) on a print-friendly grid, inline
     CSS only, forced light so it reads on a dark-mode screen. Owner-entered
-    labels are HTML-escaped. Chosen over a ZIP of PNGs (no zip writer in the
-    platform, would need a new dependency) - the HTML prints to PDF from any
-    browser for a print shop.
+    labels are HTML-escaped.
+  - **ZIP of PNGs + customisable sheet (issue #175):** owner feedback was
+    that an HTML file is not what a print shop wants and the sheet could not
+    be edited. "Download QR sheet" now saves `<outlet-slug>-qr-codes.zip`
+    containing one `<floor-slug>-<table-slug>-qr.png` per table (1024px,
+    `table-qr-state.ts#renderTableQrPng` - the same generator as the
+    dialog's Download PNG, with the heading/label/instruction drawn under the
+    code so each PNG stands alone) plus `qr-sheet.html`. `jszip` is the one
+    new dependency, lazy-imported inside the handler so it never joins the
+    initial bundle. A "Customise sheet" toolbar button
+    (`floor-plan-customise-qr-sheet-button`) opens `qr-sheet-template-dialog.tsx`:
+    heading (defaults to the outlet name), instruction line, toggles for
+    table label / floor name / URL, and card size. The template is stored
+    per outlet in localStorage (`qr-sheet-template.ts`,
+    `qr-sheet-template:<outletId>`) and applied to the print sheet, the
+    ZIP's HTML and the PNGs alike.
 
 ## CAP-6 - Devices & printers
 

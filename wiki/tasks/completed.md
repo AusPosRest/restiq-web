@@ -7,6 +7,21 @@
   invoice page gains "Send to printer" next to Print. Details in
   [wiki/features/pos-cashier-waiter.md](../features/pos-cashier-waiter.md). 7 new/updated
   tests; lint/typecheck clean.
+- **2026-09-09** - Fix: Print QR sheet printed the admin console chrome
+  alongside the QR cards (post-#161/#131 validation pass). Neither the admin
+  shell's sidebar/header (`(shell)/layout.tsx`) nor the floor-plan editor's
+  own screen (`floor-plan.tsx`) had `print:hidden`, so `window.print()` from
+  "Print QR sheet" rendered the sidebar, header, toolbar, canvas/list and
+  stations panel above/around the printable sheet instead of just the QR
+  cards. Added `print:hidden` to both; `QrPrintSheet` is now the only thing
+  `window.print()` shows. Everything else audited in this pass - the
+  per-table QR dialog (open/copy/download), edit-then-reopen (the URL is
+  keyed on table id, never regenerates on a label/seat/shape edit),
+  "Download QR sheet"'s standalone HTML, and the guest URL contract against
+  `/qr/t/[outletId]/[tableId]` - checked out working as built; no
+  regenerate/rotate control exists and none was added. 1 new assertion in
+  `floor-plan.test.tsx`; lint/typecheck/full test suite (1138 tests)/build
+  clean.
 
 - **2026-09-09** - Download table QR as PNG + download all as a printable HTML sheet
   (issue #161): the per-table QR dialog gains a "Download PNG" button that saves a 1024px
@@ -1204,3 +1219,12 @@ faked.
   lint/typecheck/build clean. See
   [wiki/features/pos-cashier-waiter.md](../features/pos-cashier-waiter.md)'s
   printable tax invoice section for the full writeup.
+- **2026-09-09** - Floor plan QR sheet: ZIP of PNGs + customisable template
+  (issue #175). "Download QR sheet" now produces `<outlet>-qr-codes.zip` with
+  one 1024px PNG per table (heading/label/instruction rendered under the
+  code) plus the HTML sheet; a "Customise sheet" dialog sets heading,
+  instruction, per-card fields and card size, stored per outlet in
+  localStorage and applied to print, HTML and PNG output. `jszip` added
+  (lazy-imported). Tests: template load/save/defaults, ZIP entries per
+  table, dialog round-trip, print sheet toggles. See
+  [wiki/features/tenant-admin.md](../features/tenant-admin.md) CAP-5.
