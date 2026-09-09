@@ -7,6 +7,13 @@ with the payments epic.
 ## [Unreleased]
 
 ### Added
+- Agreements with versioning and owner digital signature (#192, web half of
+  restiq-backend#133): `/ops/agreements` publishes versions through the
+  reason dialog, Tenant Detail gains an **Agreements** tab (signed / pending
+  badge and signature record), and owners sign in Settings → Agreement with a
+  typed name; the evidence is the typed name plus a content hash. Left out on
+  purpose: pending-agreement banner, go-live gate, platform countersign, PDF
+  export, third-party e-sign.
 - Simulated card terminal (#188): `terminal` device type, `/pos/terminal`
   (Approve / Decline a pending request), and a **Card terminal** tender on
   settle and counter whose tender is written by the terminal's approval

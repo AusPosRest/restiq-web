@@ -5,6 +5,7 @@ const STYLES: Record<string, string> = {
   inactive: "border-status-warning/50 bg-status-warning/10 text-status-warning",
   provisioning: "border-status-pending/50 bg-status-pending/10 text-status-pending",
   pending: "border-status-pending/50 bg-status-pending/10 text-status-pending",
+  signed: "border-status-healthy/50 bg-status-healthy/10 text-status-healthy",
   expired: "border-status-critical/50 bg-status-critical/10 text-status-critical",
   suspended: "border-status-critical/50 bg-status-critical/10 text-status-critical",
   arrears: "border-status-warning/50 bg-status-warning/10 text-status-warning",

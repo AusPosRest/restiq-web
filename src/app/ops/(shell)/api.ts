@@ -203,3 +203,38 @@ export interface ReplayResult {
   id: string;
   status: ReplayStatus;
 }
+
+// --- Agreements (issue #192; contract reconciled against restiq-backend#133's
+// src/ops/agreements/agreements.dtos.ts).
+
+export interface AgreementVersionSummary {
+  id: string;
+  version: number;
+  title: string;
+  publishedBy: string;
+  publishedAt: string;
+  signatureCount: number;
+}
+
+export interface AgreementVersionView extends AgreementVersionSummary {
+  body: string;
+  bodySha256: string;
+}
+
+export interface AgreementSignatureView {
+  agreementVersionId: string;
+  version: number;
+  title: string;
+  signerName: string;
+  signerEmail: string;
+  signedAt: string;
+  evidenceSha256: string;
+}
+
+export type TenantAgreementStatus = "signed" | "pending" | "no_agreement";
+
+export interface TenantAgreementsView {
+  current: Omit<AgreementVersionSummary, "signatureCount"> | null;
+  status: TenantAgreementStatus;
+  signatures: AgreementSignatureView[];
+}

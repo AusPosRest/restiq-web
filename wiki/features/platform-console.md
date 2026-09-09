@@ -74,6 +74,31 @@ owner console's tax registration editor - see
 [Tenant Admin's Tax Registration section](tenant-admin.md#settings--tax-registration-issue-140)
 for the `gstRatePercent` GET/PUT field this reads from.
 
+### Agreements (issue #192, restiq-backend#133)
+
+`/ops/agreements` (`src/app/ops/(shell)/agreements/agreements-index.tsx`,
+nav item `ops-nav-agreements`): the platform's agreement versions newest
+first (version, title, publisher, published-at, signature count; the newest
+row carries a "current" marker), each row expanding (`agreement-expand-N`)
+to lazily load `GET ops/v1/agreements/:id` and show the full text. Above the
+table, a publish form (`agreement-title`, `agreement-body`,
+`agreement-publish` - disabled until both are non-blank) whose submit opens
+`ConfirmReasonDialog`; the reason travels in the `POST ops/v1/agreements`
+body with title and text and lands in the control-plane audit trail. On
+success the form clears, the list refetches, and a toast names the new
+version; on failure the dialog and form stay so the operator can read the
+backend's message. There is deliberately no edit or delete - a published
+version is immutable and stays signable-history forever.
+
+O5 Tenant Detail gains an eighth tab, **Agreements**
+(`tenants/[id]/agreements-tab.tsx`, `tenant-tab-agreements`), reading
+`GET ops/v1/tenants/:id/agreements`: a `StatusBadge` for
+`signed` / `pending` / `no_agreement` against the current version
+(`agreement-status`, `agreement-current`) and a read-only signature table
+(`agreement-signature-N`: version, signer name + email, signed-at, and the
+first 12 characters of the SHA-256 evidence hash with the full hash in the
+`title`). Only the owner can sign, from their own console.
+
 ## Integration points for later stories
 
 - `ConfirmReasonDialog`'s `confirmCheckboxLabel` prop is reusable for any

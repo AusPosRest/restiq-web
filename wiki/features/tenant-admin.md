@@ -1235,3 +1235,33 @@ mocked-fetch component tests (`reports.test.tsx`,
 
 - A table's default footprint is derived from its seat capacity: side = clamp(40 + 12·seats, 56, 160) px, rectangles 1.5× as wide (`sizeForSeats` in `floor-plan-state.ts`), so a 2-top is visibly smaller than a 6-top on the canvas.
 - Every canvas tile shows its label and "N seats"; width/height are editable per table in the list view (`PATCH .../floor-plan/tables/:id` already accepted them).
+
+## Settings ▸ Agreement - read and sign the platform agreement (issue #192)
+
+- **Intent:** the owner reads the current platform agreement in full, signs
+  it by typing their name and confirming consent, and can always see what
+  they signed and when; a newly published version re-opens signing without
+  losing the earlier record.
+- **Built:** `/admin/settings/agreement` (`settings/agreement/page.tsx` wraps
+  `settings/agreement-signer.tsx`; fourth `SettingsTabs` entry,
+  `settings-tab-agreement`). Loads `GET /admin/api/agreement`
+  (restiq-backend#133's `OwnerAgreementView`: `current` with body,
+  `signature` for the current version, `history` of every signature). The
+  current version renders as title, "Version N · published …" and the text
+  in a `whitespace-pre-wrap` block (`agreement-body`) - no markdown
+  rendering, owners see exactly what the operator entered. When unsigned,
+  a form (`agreement-sign-form`) asks for the full name
+  (`agreement-signer-name`) and a consent checkbox (`agreement-accept`);
+  `agreement-sign` stays disabled until both are present and while the
+  request is in flight (pessimistic - legal record). `POST
+  /admin/api/agreement/:versionId/sign` with `{ signerName, accepted: true }`
+  replaces the form with the signed panel (`agreement-signed`: signer,
+  time, email, full SHA-256 evidence hash) and toasts. A 409
+  (`already_signed` / `stale_version`) means the server's view moved on, so
+  the screen shows the backend's message and reloads instead of guessing;
+  any other failure keeps the form with a retry toast. Signatures on older
+  versions list under "Previously signed" (`agreement-history-N`); the
+  current signature is never repeated there. Empty state
+  (`agreement-empty`) when nothing has been published.
+- **Not built:** a pending-agreement banner elsewhere in the shell, gating
+  go-live on a signature, PDF download.
