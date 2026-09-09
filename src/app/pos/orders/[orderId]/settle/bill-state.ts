@@ -26,18 +26,29 @@
 //    separately by the settle screen alongside the Bill.
 
 export type BillStatus = "open" | "finalized";
-export type BillTenderMethod = "cash" | "upi_manual";
+
+/** The two methods a cashier can post in the finalize call (bills.dtos.ts's `TENDER_METHODS`). */
+export type PostableTenderMethod = "cash" | "upi_manual";
+/** Every method a bill's tenders can carry (prisma's `TenderMethod`, widened by restiq-backend#130): the four electronic ones are only ever written by the server when a payment intent confirms (ADR-001). */
+export type BillTenderMethod = PostableTenderMethod | "upi_intent" | "upi_qr" | "card_online" | "card_terminal";
 
 export const TENDER_METHOD_LABEL: Record<BillTenderMethod, string> = {
   cash: "Cash",
   upi_manual: "UPI",
+  upi_intent: "UPI app",
+  upi_qr: "UPI QR",
+  card_online: "Card (online)",
+  card_terminal: "Card terminal",
 };
 
-/** The real, verified wire shape of one entry in `BillView.tenders` (bills.dtos.ts's `TenderView`, read directly). */
+/** The real, verified wire shape of one entry in `BillView.tenders` (bills.dtos.ts's `TenderView`, read directly; `paymentIntentId`/`riskAcknowledged` per restiq-backend#130). */
 export interface BillTenderView {
   id: string;
   method: BillTenderMethod;
   amountMinor: number;
+  /** The confirmed intent an electronic tender came from; null for cash / manual UPI. Optional only for older fixtures - the backend always sends it. */
+  paymentIntentId?: string | null;
+  riskAcknowledged?: boolean;
   createdAt: string;
 }
 
@@ -67,7 +78,7 @@ export interface BillView {
  * actually posts them.
  */
 export interface PendingTender {
-  method: BillTenderMethod;
+  method: PostableTenderMethod;
   amountMinor: number;
 }
 

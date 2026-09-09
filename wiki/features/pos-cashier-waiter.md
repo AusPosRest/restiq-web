@@ -1270,6 +1270,62 @@ done now, this is what actually happened:
   `bill-invoice-view.test.tsx` cases - the open-bill Unpaid badge/omitted invoice
   number/hidden payments section, and a finalized-bill control confirming neither shows.
 
+### Simulated card terminal (issue #188 web / restiq-backend#130)
+
+- **Intent:** the payments sibling of the simulated printer below, and the
+  first screen-level slice of the payments epic (#177): a `terminal` device
+  is a browser tab that plays a card terminal, and settle / counter gain a
+  **Card terminal** tender whose money is confirmed by that device, never
+  keyed by the cashier (ADR-001 in `docs/DECISIONS.md`).
+- **Device:** `terminal` joins `DEVICE_TYPE_OPTIONS` in Tenant Admin
+  (`devices-state.ts`, "Card terminal (simulated)") and the ops fleet filter
+  (`ops/(shell)/devices/table-state.ts`); the enrolment page's Continue
+  (`device-state.ts#continueTargetFor`) and the landing page's Open
+  (`landing-devices.ts#deviceOpenHref`) both send it to `/pos/terminal`
+  via the PIN pad's `?next=`.
+- **`/pos/terminal`** (`src/app/pos/terminal/terminal-screen.tsx`): polls
+  `GET outlets/:outletId/payment-intents` every 2 s, shows the oldest
+  pending request as an amount to tap for, and its **Approve** / **Decline**
+  buttons post `POST payment-intents/:id/simulate { outcome }` - the
+  simulated provider's "webhook" (ADR-004). Approve is the one thing that
+  writes the `card_terminal` tender on the bill. Status light and
+  stale-on-failure posture copied from the printer. Test ids:
+  `terminal-screen`, `terminal-status`, `terminal-idle`,
+  `terminal-request-<id>`, `terminal-amount`, `terminal-approve`,
+  `terminal-decline`, `terminal-queue-depth`, `terminal-last-result`.
+- **Settle + counter:** `tender-keypad.tsx` has a third method,
+  `tender-method-card_terminal`; with it selected the primary button is
+  `tender-send-terminal` ("Send to terminal") and "Exact remaining" sends
+  what is still due. `use-terminal-intent.ts` creates the intent (`POST
+  bills/:id/intents`, a `crypto.randomUUID()` clientKey), polls it
+  immediately and then on `src/lib/payment-intent.ts`'s 2 s → 5 s cadence
+  with the monotonic `mergeIntentPoll`, and tells the view once when it
+  succeeds so the view re-reads the bill (`getBill`) - the tender is
+  already on the server. `terminal-intent-panel.tsx` replaces the keypad
+  while an intent exists: `intent-panel` (`data-phase` = showing /
+  checking / paid / retry), `intent-amount`, `intent-status`,
+  `intent-countdown`, `intent-cancel`, `intent-dismiss`, `intent-retry`.
+  Captured electronic tenders list in the keypad as
+  `tender-captured-server-<id>` (not removable). `remainingMinor` is
+  `electronic-tender-state.ts#remainingToTenderMinor` (total − captured
+  electronic − pending cash/manual) and Finalise / Charge is gated by
+  `canFinalizeWithElectronic` (disabled while an intent is pending, mirrors
+  the backend's 409 `payment_pending`). A bill fully covered by the terminal
+  finalises with `tenders: []`.
+- **Key decisions:** `BillTenderMethod` widened to the full `TenderMethod`
+  and `PendingTender.method` narrowed to the new `PostableTenderMethod`
+  (`cash | upi_manual`) - the web can only ever *post* those two; the
+  electronic ones only ever arrive from the server. The first poll fires
+  immediately (a terminal may approve within the same second, and it keeps
+  the component tests free of fake timers). No `online_payments` capability
+  check yet - like "Send to printer", the terminal option shows whether or
+  not a terminal device is enrolled; the gate lands with epic #177 W2/B8.
+- **Tests:** `terminal-screen.test.tsx` (4), one flow each in
+  `bill-settle-view.test.tsx` (approve → captured tender → finalise with no
+  cashier tender; declined → retry) and `counter-view.test.tsx`
+  (approve → Charge), `device-state.test.ts` and `page.test.tsx` cases for
+  the device type.
+
 ### Simulated receipt printer (issue #172 web / restiq-backend#127)
 
 - **Intent:** printers were routing config only (Floor Plan stations → primary/fallback) and
