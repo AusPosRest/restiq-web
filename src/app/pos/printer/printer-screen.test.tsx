@@ -73,6 +73,26 @@ describe("PrinterScreen", () => {
     expect(screen.queryByTestId("printer-empty")).toBeNull();
   });
 
+  it("shows a job on the roll before its ack completes, so a torn-down effect never loses an acked job", async () => {
+    let resolveAck: (value: Response) => void = () => undefined;
+    const ackPending = new Promise<Response>((resolve) => {
+      resolveAck = resolve;
+    });
+    const fetchMock = vi.fn<(input: RequestInfo | URL) => Promise<Response>>((input) => {
+      const url = String(input);
+      if (url.includes("outlets/outlet-1/print-jobs")) return Promise.resolve(jsonResponse([job("j2")]));
+      if (url.includes("print-jobs/j2/printed")) return ackPending;
+      return Promise.resolve(jsonResponse({ error: { code: "not_found", message: url } }, 404));
+    });
+    vi.stubGlobal("fetch", fetchMock);
+    const { unmount } = render(<PrinterScreen outletId="outlet-1" outletName="One - BLR" />);
+
+    // The receipt is on the roll while the ack is still in flight.
+    expect((await screen.findByTestId("printer-receipt-j2")).textContent).toContain("Flat white");
+    unmount();
+    resolveAck(jsonResponse({ ...job("j2"), printedAt: "2026-09-09T00:00:05.000Z" }));
+  });
+
   it("keeps the roll and shows Reconnecting when a poll fails", async () => {
     vi.stubGlobal("fetch", vi.fn(() => Promise.reject(new Error("offline"))));
     render(<PrinterScreen outletId="outlet-1" outletName="One - BLR" />);
