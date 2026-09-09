@@ -1251,3 +1251,18 @@ faked.
   (severity, queue order, resolution rule). Every module header is marked
   PROVISIONAL with the backend file it must be reconciled against. No UI
   change; screens land in W2-W6 after their backend stories merge.
+- **2026-09-09** - Simulated card terminal device (issue #188 web /
+  restiq-backend#130) - the first screen-level slice of the payments epic
+  (#177). `terminal` device type in Tenant Admin, ops, enrolment and the
+  landing page; `/pos/terminal` polls the outlet's pending payment intents
+  and its Approve / Decline post the simulated provider's outcome; settle
+  and counter gain a **Card terminal** tender method (`tender-keypad.tsx` →
+  `use-terminal-intent.ts` → `terminal-intent-panel.tsx`) whose tender
+  arrives from the server on approval and counts through
+  `electronic-tender-state.ts`'s `canFinalizeWithElectronic`; a bill fully
+  covered by the terminal finalises with no cashier tender.
+  `BillTenderMethod` widened to the full `TenderMethod`, `PendingTender`
+  narrowed to `PostableTenderMethod`. Tests: `terminal-screen.test.tsx`,
+  one flow each on settle and counter, device-type cases. See
+  [wiki/features/pos-cashier-waiter.md](../features/pos-cashier-waiter.md)
+  (Simulated card terminal) and [wiki/features/payments.md](../features/payments.md).

@@ -15,7 +15,10 @@ gaps are listed here when the web surface is where a user meets them.
   tapping "Add UPI tender" (the FR-52 merchant-verification posture, minus
   the risk-acknowledgement dialog that ships with W4).
 - **Status:** Architecture and plan merged (`wiki/features/payments.md`);
-  build in progress - web epic #177, backend epic restiq-backend#129.
+  build in progress - web epic #177, backend epic restiq-backend#129. First
+  slice shipped: a simulated card terminal device (issue #188 /
+  restiq-backend#130) - the `card_terminal` rail on the `simulated`
+  provider, with the tender written only on the terminal's approval.
 
 ### [#173] Owner console: React hydration mismatch on load
 - **Severity:** Medium

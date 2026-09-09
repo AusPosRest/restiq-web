@@ -33,7 +33,7 @@ export interface EnrolmentCodeResult {
   expiresAt: string;
 }
 
-export const DEVICE_TYPE_OPTIONS = ["pos", "kds", "kiosk", "cds", "printer"] as const;
+export const DEVICE_TYPE_OPTIONS = ["pos", "kds", "kiosk", "cds", "printer", "terminal"] as const;
 export type DeviceType = (typeof DEVICE_TYPE_OPTIONS)[number];
 
 export const DEVICE_TYPE_LABELS: Record<DeviceType, string> = {
@@ -42,6 +42,7 @@ export const DEVICE_TYPE_LABELS: Record<DeviceType, string> = {
   kiosk: "Kiosk",
   cds: "Customer Display (CDS)",
   printer: "Receipt printer (simulated)",
+  terminal: "Card terminal (simulated)",
 };
 
 // --- Enrolment code countdown. Mirrors Platform Console's code-chip.tsx

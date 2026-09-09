@@ -17,32 +17,58 @@
 // affordance this needs that the old always-committed-server-side tenders
 // never did) since a mis-entered amount has to be fixable before that one
 // finalize call, not undone after the fact.
+//
+// Card terminal (issue #188, restiq-backend#130 - ADR-001): a third method
+// that is NOT a pending tender. "Send to terminal" hands the keyed amount to
+// `onSendToTerminal`; the caller creates a payment intent and, once the
+// terminal approves, the server-written tender arrives in `bill.tenders` and
+// is listed here as captured (`capturedTenders`) - never removable, since
+// the money already moved.
 import { useState } from "react";
 import { X } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { AmountKeypad } from "../../../(shell)/shift/amount-keypad";
 import { appendDigit, digitsToMinor, formatMinor } from "../../../(shell)/shift/shift-state";
-import { TENDER_METHOD_LABEL, type BillTenderMethod, type PendingTender } from "./bill-state";
+import { TENDER_METHOD_LABEL, type BillTenderView, type PendingTender, type PostableTenderMethod } from "./bill-state";
+
+type KeypadMethod = PostableTenderMethod | "card_terminal";
 
 export interface TenderKeypadProps {
   currency: string;
   remainingMinor: number;
   tenders: PendingTender[];
-  onAddTender: (method: BillTenderMethod, amountMinor: number) => void;
+  /** Server-written electronic tenders already on the bill (isElectronicMethod) - shown as captured, never removable. */
+  capturedTenders?: BillTenderView[];
+  onAddTender: (method: PostableTenderMethod, amountMinor: number) => void;
   onRemoveTender: (index: number) => void;
+  /** Present when the outlet can send an amount to the card terminal. */
+  onSendToTerminal?: (amountMinor: number) => void;
+  terminalBusy?: boolean;
 }
 
-const METHODS: BillTenderMethod[] = ["cash", "upi_manual"];
+const METHODS: PostableTenderMethod[] = ["cash", "upi_manual"];
 
-export function TenderKeypad({ currency, remainingMinor, tenders, onAddTender, onRemoveTender }: Readonly<TenderKeypadProps>) {
-  const [method, setMethod] = useState<BillTenderMethod>("cash");
+export function TenderKeypad({
+  currency,
+  remainingMinor,
+  tenders,
+  capturedTenders = [],
+  onAddTender,
+  onRemoveTender,
+  onSendToTerminal,
+  terminalBusy = false,
+}: Readonly<TenderKeypadProps>) {
+  const [method, setMethod] = useState<KeypadMethod>("cash");
   const [digits, setDigits] = useState("");
   const amountMinor = digitsToMinor(digits);
-  const canAdd = amountMinor > 0;
+  const isTerminal = method === "card_terminal";
+  const canAdd = amountMinor > 0 && (!isTerminal || (amountMinor <= remainingMinor && !terminalBusy));
+  const methods: KeypadMethod[] = onSendToTerminal ? [...METHODS, "card_terminal"] : METHODS;
 
   function submit(minor: number) {
     if (minor <= 0) return;
-    onAddTender(method, minor);
+    if (isTerminal) onSendToTerminal?.(minor);
+    else onAddTender(method, minor);
     setDigits("");
   }
 
@@ -55,8 +81,20 @@ export function TenderKeypad({ currency, remainingMinor, tenders, onAddTender, o
         </p>
       </div>
 
-      {tenders.length > 0 && (
+      {(capturedTenders.length > 0 || tenders.length > 0) && (
         <ul data-testid="tender-captured-list" className="flex flex-col gap-1.5">
+          {capturedTenders.map((tender) => (
+            <li
+              key={tender.id}
+              data-testid={`tender-captured-server-${tender.id}`}
+              className="flex items-center justify-between rounded-lg bg-muted px-3 py-2 text-sm"
+            >
+              <span className="text-status-available">
+                {TENDER_METHOD_LABEL[tender.method]} <span className="text-muted-foreground">· captured</span>
+              </span>
+              <span className="tabular-nums font-semibold text-foreground">{formatMinor(tender.amountMinor, currency)}</span>
+            </li>
+          ))}
           {tenders.map((tender, index) => (
             <li
               key={index}
@@ -83,8 +121,8 @@ export function TenderKeypad({ currency, remainingMinor, tenders, onAddTender, o
 
       <div>
         <p className="font-label mb-1.5 text-xs font-semibold uppercase tracking-wider text-muted-foreground">Payment method</p>
-        <div data-testid="tender-method-group" className="grid grid-cols-2 gap-2">
-          {METHODS.map((option) => (
+        <div data-testid="tender-method-group" className={`grid gap-2 ${methods.length === 3 ? "grid-cols-3" : "grid-cols-2"}`}>
+          {methods.map((option) => (
             <button
               key={option}
               type="button"
@@ -115,15 +153,15 @@ export function TenderKeypad({ currency, remainingMinor, tenders, onAddTender, o
           variant="outline"
           size="sm"
           data-testid="tender-fill-remaining"
-          disabled={remainingMinor <= 0}
+          disabled={remainingMinor <= 0 || (isTerminal && terminalBusy)}
           onClick={() => submit(remainingMinor)}
         >
-          Exact remaining · {formatMinor(remainingMinor, currency)}
+          {isTerminal ? "Send exact remaining" : "Exact remaining"} · {formatMinor(remainingMinor, currency)}
         </Button>
       </div>
 
-      <Button size="lg" data-testid="tender-add" disabled={!canAdd} onClick={() => submit(amountMinor)}>
-        {`Add ${TENDER_METHOD_LABEL[method]} tender`}
+      <Button size="lg" data-testid={isTerminal ? "tender-send-terminal" : "tender-add"} disabled={!canAdd} onClick={() => submit(amountMinor)}>
+        {isTerminal ? (terminalBusy ? "Sending…" : "Send to terminal") : `Add ${TENDER_METHOD_LABEL[method]} tender`}
       </Button>
     </section>
   );

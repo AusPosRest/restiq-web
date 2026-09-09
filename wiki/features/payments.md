@@ -59,11 +59,34 @@ Decision records for every non-obvious choice below: [docs/DECISIONS.md](../../d
    creation, one active intent per target, unique provider event ids on the
    webhook ledger, monotonic status merges on the client.
 
+## What's built
+
+- **Simulated card terminal (issue #188 web / restiq-backend#130) - the
+  first slice of this epic, on the `card_terminal` rail and the `simulated`
+  provider.** Backend: `payment_intents` table + `tenders.payment_intent_id`
+  / `risk_acknowledged` (B1's core), `src/pos/payments/` (`intents.service`,
+  `intent-core`'s `confirmIntent` - the one code path that writes an
+  electronic Tender), `POST pos/v1/bills/:id/intents`, `GET
+  payment-intents/:id`, `POST …/cancel`, `POST …/simulate`, `GET
+  outlets/:outletId/payment-intents`, and `commitFinalize`'s 409
+  `payment_pending` gate. Web: `terminal` device type across Tenant Admin /
+  ops / enrolment / landing, `/pos/terminal` (`terminal-screen.tsx`, the
+  device that polls its outlet's pending intents and taps Approve /
+  Decline), and on settle + counter a third tender method **Card terminal**
+  (`tender-keypad.tsx` → `use-terminal-intent.ts` → `terminal-intent-panel.tsx`)
+  whose tender arrives from the server after approval and counts through
+  `electronic-tender-state.ts`'s `canFinalizeWithElectronic`. `FinalizeBillDto.tenders`
+  may now be empty when the terminal covered the whole bill. Deferred from
+  this slice: the `online_payments` capability gate (B8), the FR-52
+  `risk_ack_required` enforcement (B5), guest shares (B4), real providers.
+- **W1 (issue #178):** this document, the ADRs, the task plan, and the five
+  client state modules.
+
 ## What exists today (the ground this builds on)
 
 | Piece | Where | State |
 | --- | --- | --- |
-| `Bill` (open → finalized once), `Tender` (`cash` \| `upi_manual`), gapless `BillNumberCounter` | `restiq-backend/prisma/schema.prisma`, `src/pos/bills/bill-core.ts` | done - every tender rides in the one `POST bills/:id/finalize` call; `commitFinalize` sums *all* tenders on the bill and 400s `tender_mismatch` |
+| `Bill` (open → finalized once), `Tender` (`cash` \| `upi_manual` cashier-posted; `card_terminal` server-written since restiq-backend#130), gapless `BillNumberCounter` | `restiq-backend/prisma/schema.prisma`, `src/pos/bills/bill-core.ts` | done - cashier tenders ride in the one `POST bills/:id/finalize` call; `commitFinalize` sums *all* tenders on the bill (electronic ones included), 400s `tender_mismatch`, and 409s `payment_pending` while an intent is open |
 | Guest checkout: `BillShare` per guest, `payShare` / `payAll` with `SimulatedPaymentDto { simulatedOutcome }` | `src/guest/bills/bills.service.ts` | done - the caller picks the outcome; a success writes a real `upi_manual` Tender and marks the share paid; all shares paid ⇒ `completeBill` |
 | Refunds: `CreditNote` + lines, manager-gated | `bills.service.ts#refund` | done - no money moves; the note is the record |
 | Manager authorisation | `src/platform/manager-auth.service.ts` | done - `MANAGER_GATED_ACTIONS` incl. `refund`, `discount_above_threshold` |

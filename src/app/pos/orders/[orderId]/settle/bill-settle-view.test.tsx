@@ -7,6 +7,7 @@ import userEvent from "@testing-library/user-event";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { BillSettleView } from "./bill-settle-view";
 import type { BillView } from "./bill-state";
+import type { PaymentIntentView } from "@/lib/payment-intent";
 import type { PosMenuView, RawOrder } from "../order-taking-state";
 
 const ORDER_ID = "order-1042";
@@ -308,5 +309,89 @@ describe("BillSettleView - after finalization", () => {
     expect(screen.queryByTestId("bill-add-discount")).toBeNull();
     expect(screen.getByTestId("bill-finalised-refund").getAttribute("href")).toBe(`/pos/orders/${ORDER_ID}/refund?billId=bill-1`);
     expect(screen.getByTestId("print-invoice-link").getAttribute("href")).toBe("/pos/bills/bill-1/invoice");
+  });
+});
+
+describe("BillSettleView - card terminal (issue #188)", () => {
+  const pending: PaymentIntentView = {
+    id: "pi-1",
+    billId: "bill-1",
+    shareGuestId: null,
+    rail: "card_terminal",
+    provider: "simulated",
+    amountMinor: 81900,
+    currency: "INR",
+    status: "pending",
+    failureReason: null,
+    providerRef: null,
+    client: { simulated: true },
+    createdAt: "2026-09-09T10:00:00.000Z",
+    expiresAt: "2099-01-01T00:00:00.000Z",
+    succeededAt: null,
+    tenderId: null,
+  };
+  const capturedTender = { id: "tender-t1", method: "card_terminal" as const, amountMinor: 81900, paymentIntentId: "pi-1", riskAcknowledged: false, createdAt: "2026-09-09T10:00:30.000Z" };
+
+  it("sends what is still due to the terminal; once it approves, the server-written tender lands on the bill and Finalise goes through with no cashier tender", async () => {
+    const fetchMock = stubFetch({
+      "POST bills/bill-1/intents": (init) => {
+        expect(JSON.parse(String(init?.body))).toMatchObject({ rail: "card_terminal", amountMinor: 81900 });
+        return jsonResponse(pending, 201);
+      },
+      "GET payment-intents/pi-1": () => jsonResponse({ ...pending, status: "succeeded", succeededAt: "2026-09-09T10:00:30.000Z", tenderId: "tender-t1" }),
+      "GET bills/bill-1": () => jsonResponse(makeBill({ tenders: [capturedTender] })),
+      "POST bills/bill-1/finalize": (init) => {
+        expect(JSON.parse(String(init?.body)).tenders).toEqual([]);
+        return jsonResponse(makeBill({ status: "finalized", billNumber: 7, finalizedAt: "2026-09-09T10:01:00.000Z", tenders: [capturedTender] }));
+      },
+    });
+    render(<BillSettleView orderId={ORDER_ID} />);
+    await screen.findByTestId("bill-summary");
+    expect(screen.getByTestId("finalize-bill").hasAttribute("disabled")).toBe(true);
+
+    await userEvent.click(screen.getByTestId("tender-method-card_terminal"));
+    await userEvent.click(screen.getByTestId("tender-fill-remaining"));
+
+    const panel = await screen.findByTestId("intent-panel");
+    expect(screen.getByTestId("intent-amount").textContent).toBe("₹819.00");
+    await waitFor(() => expect(panel.getAttribute("data-phase")).toBe("paid"));
+    await userEvent.click(screen.getByTestId("intent-dismiss"));
+
+    expect(screen.getByTestId("tender-captured-server-tender-t1").textContent).toContain("Card terminal");
+    expect(screen.getByTestId("tender-remaining").textContent).toBe("₹0.00");
+    await waitFor(() => expect(screen.getByTestId("finalize-bill").hasAttribute("disabled")).toBe(false));
+
+    await userEvent.click(screen.getByTestId("finalize-bill"));
+    await screen.findByTestId("bill-finalised-panel");
+    expect(fetchMock.mock.calls.some(([input, init]) => String(input).includes("bills/bill-1/finalize") && init?.method === "POST")).toBe(true);
+  });
+
+  it("keeps Finalise disabled while the terminal is still waiting, and a declined card offers a retry with the bill untouched", async () => {
+    const partial = { ...pending, amountMinor: 50000 };
+    stubFetch({
+      "POST bills/bill-1/intents": (init) => {
+        expect(JSON.parse(String(init?.body)).amountMinor).toBe(50000);
+        return jsonResponse(partial, 201);
+      },
+      "GET payment-intents/pi-1": () => jsonResponse({ ...partial, status: "failed", failureReason: "declined" }),
+    });
+    render(<BillSettleView orderId={ORDER_ID} />);
+    await screen.findByTestId("bill-summary");
+
+    await userEvent.click(screen.getByTestId("tender-method-card_terminal"));
+    for (const digit of ["5", "0", "0", "0", "0"]) {
+      await userEvent.click(screen.getByTestId(`tender-keypad-amount-digit-${digit}`));
+    }
+    await userEvent.click(screen.getByTestId("tender-send-terminal"));
+
+    const panel = await screen.findByTestId("intent-panel");
+    expect(screen.getByTestId("intent-amount").textContent).toBe("₹500.00");
+    await waitFor(() => expect(panel.getAttribute("data-phase")).toBe("retry"));
+    expect(screen.getByTestId("intent-status").textContent).toContain("declined");
+    expect(screen.queryByTestId("finalize-bill")?.hasAttribute("disabled")).toBe(true);
+
+    await userEvent.click(screen.getByTestId("intent-retry"));
+    expect(screen.getByTestId("tender-remaining").textContent).toBe("₹819.00");
+    expect(screen.queryByTestId("tender-captured-list")).toBeNull();
   });
 });

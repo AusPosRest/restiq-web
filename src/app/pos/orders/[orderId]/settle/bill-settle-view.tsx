@@ -21,10 +21,11 @@ import { Button } from "@/components/ui/button";
 import {
   fetchOrCreateBill,
   finalizeBill,
+  getBill,
   PosApiError,
-  type BillTenderMethod,
   type PendingDiscount,
   type PendingTender,
+  type PostableTenderMethod,
 } from "../../../api";
 import { LoadErrorPanel, Skeleton } from "../../../data-states";
 import { usePosLoad } from "../../../use-pos-load";
@@ -32,7 +33,10 @@ import { orderOriginLabel, toOrderView, type PosMenuView, type RawOrder } from "
 import { BillSummary } from "./bill-summary";
 import { TenderKeypad } from "./tender-keypad";
 import { DiscountDialog } from "./discount-dialog";
-import { billTotalMinor, canFinalizeBill, isBillReadOnly, pendingTenderedMinor, type BillView } from "./bill-state";
+import { billTotalMinor, isBillReadOnly, type BillView } from "./bill-state";
+import { canFinalizeWithElectronic, isElectronicMethod, remainingToTenderMinor } from "./electronic-tender-state";
+import { TerminalIntentPanel } from "./terminal-intent-panel";
+import { useTerminalIntent } from "./use-terminal-intent";
 
 interface BillLanded {
   attempt: number;
@@ -104,13 +108,21 @@ function BillSettleLoaded({
   const [pendingTenders, setPendingTenders] = useState<PendingTender[]>([]);
   const [finalizeBusy, setFinalizeBusy] = useState(false);
   const [finalizeError, setFinalizeError] = useState<string | null>(null);
+  // Card terminal (issue #188): once the terminal approves, the tender is
+  // already on the server - re-read the bill rather than inventing it here.
+  const terminal = useTerminalIntent(bill.id, () => {
+    getBill(bill.id)
+      .then(setBill)
+      .catch(() => undefined);
+  });
 
   const order = toOrderView(rawOrder, menu);
   const readOnly = isBillReadOnly(bill);
   const totalMinor = billTotalMinor(bill, pendingDiscount?.amountMinor ?? 0);
-  const remainingMinor = Math.max(0, totalMinor - pendingTenderedMinor(pendingTenders));
+  const remainingMinor = remainingToTenderMinor(totalMinor, bill, pendingTenders);
+  const intents = terminal.intent ? [terminal.intent] : [];
 
-  function handleAddTender(method: BillTenderMethod, amountMinor: number) {
+  function handleAddTender(method: PostableTenderMethod, amountMinor: number) {
     setPendingTenders((current) => [...current, { method, amountMinor }]);
   }
 
@@ -177,14 +189,26 @@ function BillSettleLoaded({
           </section>
         ) : (
           <div className="flex flex-1 flex-col">
-            <TenderKeypad
-              currency={menu.currency}
-              remainingMinor={remainingMinor}
-              tenders={pendingTenders}
-              onAddTender={handleAddTender}
-              onRemoveTender={handleRemoveTender}
-            />
+            {terminal.intent ? (
+              <TerminalIntentPanel intent={terminal.intent} currency={menu.currency} busy={terminal.busy} onCancel={terminal.cancel} onDismiss={terminal.dismiss} />
+            ) : (
+              <TenderKeypad
+                currency={menu.currency}
+                remainingMinor={Math.max(0, remainingMinor)}
+                tenders={pendingTenders}
+                capturedTenders={bill.tenders.filter((tender) => isElectronicMethod(tender.method))}
+                onAddTender={handleAddTender}
+                onRemoveTender={handleRemoveTender}
+                onSendToTerminal={terminal.send}
+                terminalBusy={terminal.busy}
+              />
+            )}
             <footer className="border-t border-border/60 p-4">
+              {terminal.error && (
+                <p role="alert" data-testid="intent-error" className="mb-2 text-sm text-status-alert">
+                  {terminal.error}
+                </p>
+              )}
               {finalizeError && (
                 <p role="alert" data-testid="finalize-error" className="mb-2 text-sm text-status-alert">
                   {finalizeError}
@@ -195,7 +219,7 @@ function BillSettleLoaded({
                   size="lg"
                   className="flex-1"
                   data-testid="finalize-bill"
-                  disabled={!canFinalizeBill(bill, totalMinor, pendingTenders) || finalizeBusy}
+                  disabled={!canFinalizeWithElectronic(bill, totalMinor, pendingTenders, intents) || finalizeBusy}
                   onClick={handleFinalize}
                 >
                   {finalizeBusy ? "Finalising…" : "Finalise"}
