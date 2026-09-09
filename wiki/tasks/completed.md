@@ -1221,3 +1221,11 @@ faked.
   (lazy-imported). Tests: template load/save/defaults, ZIP entries per
   table, dialog round-trip, print sheet toggles. See
   [wiki/features/tenant-admin.md](../features/tenant-admin.md) CAP-5.
+- **2026-09-09** - KDS: plain-language tab names (issue #184). The header
+  tabs now read Cook / Serve / Done / Counts instead of Station / Expo /
+  Bumped / All-Day, and each `TAB_SUBTITLES` line leads with the kitchen
+  term it replaced ("Station queue — …", "Expo — …", "Bumped tickets — …",
+  "All-day summary — …") so trained staff still recognise the view. One-file
+  copy change in `kds-header.tsx`; routes, `KdsMode` values and test ids
+  unchanged; the four screen tests' subtitle assertions updated. See
+  [wiki/features/kitchen-display.md](../features/kitchen-display.md).
