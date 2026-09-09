@@ -32,6 +32,8 @@ export function deviceOpenHref(device: Pick<LandingDevice, "id" | "tenantId" | "
     return `/pos/login?device=${encodeURIComponent(device.id)}&tenant=${encodeURIComponent(device.tenantId)}`;
   }
   if (device.type === "kds") return "/kds";
+  // The simulated receipt printer (issue #172) is a POS-realm screen: it signs in at the PIN pad, then drains the outlet's spool.
+  if (device.type === "printer") return `/pos/login?next=${encodeURIComponent("/pos/printer")}`;
   return null;
 }
 

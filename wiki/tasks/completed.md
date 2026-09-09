@@ -1,5 +1,12 @@
 # Completed
 
+- **2026-09-09** - Simulated receipt printer device (issue #172, web half of restiq-backend#127):
+  `printer` joins pos/kds/kiosk/cds in the admin and ops enrolment dialogs, `/device`
+  "Continue", and the landing page's device fleet. New `/pos/printer` screen polls the outlet's
+  print-job spool every 5s, acks each job, and renders it as a receipt on a paper roll; the bill
+  invoice page gains "Send to printer" next to Print. Details in
+  [wiki/features/pos-cashier-waiter.md](../features/pos-cashier-waiter.md). 7 new/updated
+  tests; lint/typecheck clean.
 - **2026-09-09** - Fix: Print QR sheet printed the admin console chrome
   alongside the QR cards (post-#161/#131 validation pass). Neither the admin
   shell's sidebar/header (`(shell)/layout.tsx`) nor the floor-plan editor's

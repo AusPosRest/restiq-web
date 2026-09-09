@@ -2,7 +2,7 @@
 // DataTable pattern: filter state lives in the URL so views are shareable).
 // Pure functions, unit-tested.
 
-export const DEVICE_TYPE_OPTIONS = ["pos", "kds", "kiosk", "cds"] as const;
+export const DEVICE_TYPE_OPTIONS = ["pos", "kds", "kiosk", "cds", "printer"] as const;
 export const DEVICE_STATUS_OPTIONS = ["active", "revoked"] as const;
 
 export const DEVICE_TYPE_LABELS: Record<string, string> = {
@@ -10,6 +10,7 @@ export const DEVICE_TYPE_LABELS: Record<string, string> = {
   kds: "KDS (Kitchen Display)",
   kiosk: "Kiosk",
   cds: "Customer Display (CDS)",
+  printer: "Receipt printer (simulated)",
 };
 
 export interface DeviceTableQuery {

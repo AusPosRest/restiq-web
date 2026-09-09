@@ -22,7 +22,7 @@
 import Link from "next/link";
 import { useEffect, useState } from "react";
 import { Button } from "@/components/ui/button";
-import { fetchInvoice, PosApiError, type InvoiceView } from "../../../api";
+import { fetchInvoice, PosApiError, sendBillToPrinter, type InvoiceView } from "../../../api";
 import { LoadErrorPanel, Skeleton } from "../../../data-states";
 import { formatMinor } from "../../../(shell)/shift/shift-state";
 import { TENDER_METHOD_LABEL, type BillTenderMethod } from "../../../orders/[orderId]/settle/bill-state";
@@ -85,10 +85,44 @@ export function BillInvoiceView({ billId }: Readonly<{ billId: string }>) {
     return <LoadErrorPanel testId="invoice-error" message="Couldn't load this invoice." onRetry={load.retry} />;
   }
 
-  return <InvoiceLoaded invoice={load.invoice} />;
+  return <InvoiceLoaded invoice={load.invoice} billId={billId} />;
 }
 
-function InvoiceLoaded({ invoice }: Readonly<{ invoice: InvoiceView }>) {
+function InvoiceLoaded({ invoice, billId }: Readonly<{ invoice: InvoiceView; billId: string }>) {
+  // "idle" -> "sending" -> "sent" | "failed"; resets to idle so the button can be pressed again for a reprint.
+  const [sendState, setSendState] = useState<"idle" | "sending" | "sent" | "failed">("idle");
+
+  function sendToPrinter() {
+    setSendState("sending");
+    sendBillToPrinter(billId)
+      .then(() => setSendState("sent"))
+      .catch(() => setSendState("failed"))
+      .finally(() => setTimeout(() => setSendState("idle"), 2000));
+  }
+
+  return (
+    <div data-testid="bill-invoice-view" className="mx-auto flex max-w-2xl flex-1 flex-col gap-6 p-6 print:max-w-none print:gap-4 print:p-0">
+      <div className="flex items-center justify-between gap-2 print:hidden">
+        <Link href="/pos/table-map" data-testid="invoice-back" className="text-sm text-primary underline-offset-4 hover:underline">
+          ← Back to table map
+        </Link>
+        <div className="flex items-center gap-2">
+          <Button size="sm" variant="outline" data-testid="invoice-send-to-printer" disabled={sendState === "sending"} onClick={sendToPrinter}>
+            {sendState === "sent" ? "Sent to printer" : sendState === "failed" ? "Couldn't send" : "Send to printer"}
+          </Button>
+          <Button size="sm" data-testid="invoice-print" onClick={() => window.print()}>
+            Print
+          </Button>
+        </div>
+      </div>
+
+      <InvoiceReceipt invoice={invoice} />
+    </div>
+  );
+}
+
+/** The receipt body alone - shared by this page and the simulated printer's paper roll (src/app/pos/printer/printer-screen.tsx, issue #172). */
+export function InvoiceReceipt({ invoice }: Readonly<{ invoice: InvoiceView }>) {
   const discountMinor = invoice.discountMinor ?? 0;
   const isOpen = invoice.status === "open";
   const isReceipt = invoice.title === "Receipt";
@@ -96,16 +130,7 @@ function InvoiceLoaded({ invoice }: Readonly<{ invoice: InvoiceView }>) {
   const remainingNotes = notRegisteredNote ? invoice.notes.filter((note) => note !== notRegisteredNote) : invoice.notes;
 
   return (
-    <div data-testid="bill-invoice-view" className="mx-auto flex max-w-2xl flex-1 flex-col gap-6 p-6 print:max-w-none print:gap-4 print:p-0">
-      <div className="flex items-center justify-between print:hidden">
-        <Link href="/pos/table-map" data-testid="invoice-back" className="text-sm text-primary underline-offset-4 hover:underline">
-          ← Back to table map
-        </Link>
-        <Button size="sm" data-testid="invoice-print" onClick={() => window.print()}>
-          Print
-        </Button>
-      </div>
-
+    <>
       <header className="border-b border-border/60 pb-4 text-center">
         <h1 className="flex items-center justify-center gap-2 font-headline text-xl font-bold text-foreground">
           {invoice.title}
@@ -234,7 +259,7 @@ function InvoiceLoaded({ invoice }: Readonly<{ invoice: InvoiceView }>) {
           {invoice.footerMessage}
         </section>
       )}
-    </div>
+    </>
   );
 }
 
