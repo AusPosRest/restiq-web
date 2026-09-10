@@ -7,6 +7,12 @@ with the payments epic.
 ## [Unreleased]
 
 ### Changed
+- The simulated card terminal is drawn as the physical device (#198): body,
+  brand bar with a status LED, inset screen, and reader hardware along the
+  bottom edge. It opens on a UPI / Cards / Wallets / EMI method screen; only
+  Cards continues, since `card_terminal` is the only rail the backend mints
+  intents for. Cancel steps back one screen at a time and declines only from
+  the first screen.
 - The simulated card terminal now walks a real reader's card flow (#196):
   present card (Tap / Insert / Swipe), masked 4-digit PIN entry, a
   processing hold, then an Approved / Declined result screen. A contactless
