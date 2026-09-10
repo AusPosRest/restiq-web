@@ -1284,15 +1284,32 @@ done now, this is what actually happened:
   (`landing-devices.ts#deviceOpenHref`) both send it to `/pos/terminal`
   via the PIN pad's `?next=`.
 - **`/pos/terminal`** (`src/app/pos/terminal/terminal-screen.tsx`): polls
-  `GET outlets/:outletId/payment-intents` every 2 s, shows the oldest
-  pending request as an amount to tap for, and its **Approve** / **Decline**
-  buttons post `POST payment-intents/:id/simulate { outcome }` - the
-  simulated provider's "webhook" (ADR-004). Approve is the one thing that
+  `GET outlets/:outletId/payment-intents` every 2 s and shows the oldest
+  pending request as an amount to pay. Only the last step touches the
+  server: `POST payment-intents/:id/simulate { outcome }`, the simulated
+  provider's "webhook" (ADR-004), whose `success` is the one thing that
   writes the `card_terminal` tender on the bill. Status light and
-  stale-on-failure posture copied from the printer. Test ids:
-  `terminal-screen`, `terminal-status`, `terminal-idle`,
-  `terminal-request-<id>`, `terminal-amount`, `terminal-approve`,
-  `terminal-decline`, `terminal-queue-depth`, `terminal-last-result`.
+  stale-on-failure posture copied from the printer.
+- **Card flow (issue #196):** the screen walks what a real reader walks -
+  **Present card** (Tap / Insert / Swipe), then **Enter PIN** (a 4-dot
+  masked keypad), then *Processing… do not remove card*, then a full-screen
+  **Approved** / **Declined** result that clears itself after 3 s. A
+  contactless tap under the per-currency floor limit
+  (`TAP_PIN_LIMIT_MINOR`: ₹5,000 / A$200) skips the PIN, as a real reader
+  does; anything above it, and every insert or swipe, asks. "Cancel
+  payment" on the card screen declines the intent; "Cancel PIN" only
+  returns to the card screen and touches nothing. The method and PIN are
+  terminal-side theatre - no part of the contract carries them, and a real
+  reader would never hand us a PIN. The bank's answer is a two-button
+  **Simulator · bank answers** strip (Approve / Decline) rather than any
+  "right PIN" rule, since no part of this demo stores a PIN per card. Test
+  ids: `terminal-screen`, `terminal-status`, `terminal-idle`,
+  `terminal-request-<id>`, `terminal-amount`, `terminal-method-tap|insert|swipe`,
+  `terminal-method-in-use`, `terminal-pin-pad`, `terminal-pin-<digit>`,
+  `terminal-pin-backspace`, `terminal-pin-confirm`, `terminal-pin-dots`,
+  `terminal-cancel`, `terminal-processing`, `terminal-result`,
+  `terminal-outcome-approve`, `terminal-outcome-decline`,
+  `terminal-queue-depth`, `terminal-last-result`.
 - **Settle + counter:** `tender-keypad.tsx` has a third method,
   `tender-method-card_terminal`; with it selected the primary button is
   `tender-send-terminal` ("Send to terminal") and "Exact remaining" sends
