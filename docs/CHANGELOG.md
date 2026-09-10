@@ -6,6 +6,13 @@ with the payments epic.
 
 ## [Unreleased]
 
+### Changed
+- The simulated card terminal now walks a real reader's card flow (#196):
+  present card (Tap / Insert / Swipe), masked 4-digit PIN entry, a
+  processing hold, then an Approved / Declined result screen. A contactless
+  tap under the floor limit (₹5,000 / A$200) skips the PIN. The bank's
+  answer is a Simulator strip; only the final outcome reaches the server.
+
 ### Added
 - Agreements with versioning and owner digital signature (#192, web half of
   restiq-backend#133): `/ops/agreements` publishes versions through the

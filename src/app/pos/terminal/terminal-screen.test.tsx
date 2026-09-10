@@ -4,6 +4,10 @@ import { afterEach, describe, expect, it, vi } from "vitest";
 import { TerminalScreen } from "./terminal-screen";
 import type { PaymentIntentView } from "../api";
 
+// The card flow holds "Processing" for over a second on purpose, so every
+// assertion past a settle waits longer than testing-library's 1 s default.
+const SETTLED = { timeout: 5_000 };
+
 function intent(id: string, overrides: Partial<PaymentIntentView> = {}): PaymentIntentView {
   return {
     id,
@@ -29,6 +33,34 @@ function jsonResponse(body: unknown, status = 200): Response {
   return new Response(JSON.stringify(body), { status, headers: { "content-type": "application/json" } });
 }
 
+/** One pending intent, and a simulate endpoint that echoes the posted outcome back as a settled intent. */
+function stubTerminal(pending: PaymentIntentView[]) {
+  const fetchMock = vi.fn<(input: RequestInfo | URL, init?: RequestInit) => Promise<Response>>((input, init) => {
+    const url = String(input);
+    if (url.includes("outlets/outlet-1/payment-intents")) return Promise.resolve(jsonResponse(pending));
+    const simulate = /payment-intents\/([^/]+)\/simulate/.exec(url);
+    if (simulate) {
+      const outcome = (JSON.parse(String(init?.body)) as { outcome: string }).outcome;
+      const source = pending.find((entry) => entry.id === simulate[1]) ?? pending[0];
+      return Promise.resolve(
+        jsonResponse(
+          outcome === "success"
+            ? intent(simulate[1], { amountMinor: source.amountMinor, currency: source.currency, status: "succeeded", tenderId: "tender-1" })
+            : intent(simulate[1], { amountMinor: source.amountMinor, currency: source.currency, status: "failed", failureReason: "declined" }),
+        ),
+      );
+    }
+    return Promise.resolve(jsonResponse({ error: { code: "not_found", message: url } }, 404));
+  });
+  vi.stubGlobal("fetch", fetchMock);
+  return fetchMock;
+}
+
+async function enterPin(digits: string) {
+  for (const digit of digits) await userEvent.click(screen.getByTestId(`terminal-pin-${digit}`));
+  await userEvent.click(screen.getByTestId("terminal-pin-confirm"));
+}
+
 afterEach(() => {
   cleanup();
   vi.unstubAllGlobals();
@@ -43,50 +75,86 @@ describe("TerminalScreen", () => {
     expect(screen.getByTestId("terminal-idle")).toBeTruthy();
   });
 
-  it("shows the oldest pending amount and Approve posts the simulated success that writes the tender", async () => {
-    const fetchMock = vi.fn<(input: RequestInfo | URL, init?: RequestInit) => Promise<Response>>((input, init) => {
-      const url = String(input);
-      if (url.includes("outlets/outlet-1/payment-intents")) return Promise.resolve(jsonResponse([intent("pi-1"), intent("pi-2", { amountMinor: 100 })]));
-      if (url.includes("payment-intents/pi-1/simulate")) {
-        expect(JSON.parse(String(init?.body))).toEqual({ outcome: "success" });
-        return Promise.resolve(jsonResponse(intent("pi-1", { status: "succeeded", tenderId: "tender-1", succeededAt: "2026-09-09T06:01:00.000Z" })));
-      }
-      return Promise.resolve(jsonResponse({ error: { code: "not_found", message: url } }, 404));
-    });
-    vi.stubGlobal("fetch", fetchMock);
+  it("shows the oldest amount and a contactless tap under the floor limit approves with no PIN", async () => {
+    const fetchMock = stubTerminal([intent("pi-1"), intent("pi-2", { amountMinor: 100 })]);
     render(<TerminalScreen outletId="outlet-1" outletName="One - BLR" />);
 
     await screen.findByTestId("terminal-request-pi-1");
     expect(screen.getByTestId("terminal-amount").textContent).toBe("₹525.00");
     expect(screen.getByTestId("terminal-queue-depth").textContent).toContain("1 more waiting");
 
-    await userEvent.click(screen.getByTestId("terminal-approve"));
+    await userEvent.click(screen.getByTestId("terminal-method-tap"));
+    expect(screen.getByTestId("terminal-processing")).toBeTruthy();
+    expect(screen.queryByTestId("terminal-pin-pad")).toBeNull();
 
-    await waitFor(() => expect(screen.getByTestId("terminal-last-result").textContent).toContain("Approved · ₹525.00"));
-    // The next request in the queue is up straight away, without waiting for a poll.
-    expect(screen.getByTestId("terminal-request-pi-2")).toBeTruthy();
+    await waitFor(() => expect(screen.getByTestId("terminal-result").textContent).toContain("Approved"), SETTLED);
+    expect(screen.getByTestId("terminal-last-result").textContent).toContain("Approved · ₹525.00");
     const simulate = fetchMock.mock.calls.find(([input]) => String(input).includes("payment-intents/pi-1/simulate"));
     expect(simulate?.[1]?.method).toBe("POST");
+    expect(JSON.parse(String(simulate?.[1]?.body))).toEqual({ outcome: "success" });
   });
 
-  it("Decline posts the simulated failure and reports it", async () => {
-    const fetchMock = vi.fn<(input: RequestInfo | URL, init?: RequestInit) => Promise<Response>>((input, init) => {
-      const url = String(input);
-      if (url.includes("outlets/outlet-1/payment-intents")) return Promise.resolve(jsonResponse([intent("pi-9")]));
-      if (url.includes("payment-intents/pi-9/simulate")) {
-        expect(JSON.parse(String(init?.body))).toEqual({ outcome: "failure" });
-        return Promise.resolve(jsonResponse(intent("pi-9", { status: "failed", failureReason: "declined" })));
-      }
-      return Promise.resolve(jsonResponse({ error: { code: "not_found", message: url } }, 404));
-    });
-    vi.stubGlobal("fetch", fetchMock);
+  it("asks for a PIN on insert and only settles once four digits are confirmed", async () => {
+    const fetchMock = stubTerminal([intent("pi-3")]);
+    render(<TerminalScreen outletId="outlet-1" outletName="One - BLR" />);
+
+    await screen.findByTestId("terminal-request-pi-3");
+    await userEvent.click(screen.getByTestId("terminal-method-insert"));
+
+    expect(screen.getByTestId("terminal-pin-pad")).toBeTruthy();
+    expect((screen.getByTestId("terminal-pin-confirm") as HTMLButtonElement).disabled).toBe(true);
+
+    await userEvent.click(screen.getByTestId("terminal-pin-1"));
+    await userEvent.click(screen.getByTestId("terminal-pin-2"));
+    expect((screen.getByTestId("terminal-pin-confirm") as HTMLButtonElement).disabled).toBe(true);
+    expect(fetchMock.mock.calls.some(([input]) => String(input).includes("/simulate"))).toBe(false);
+
+    await userEvent.click(screen.getByTestId("terminal-pin-3"));
+    await userEvent.click(screen.getByTestId("terminal-pin-4"));
+    await userEvent.click(screen.getByTestId("terminal-pin-confirm"));
+
+    await waitFor(() => expect(screen.getByTestId("terminal-result").textContent).toContain("Approved"), SETTLED);
+  });
+
+  it("asks for a PIN on a tap above the contactless floor limit", async () => {
+    stubTerminal([intent("pi-4", { amountMinor: 600_000 })]);
+    render(<TerminalScreen outletId="outlet-1" outletName="One - BLR" />);
+
+    await screen.findByTestId("terminal-request-pi-4");
+    await userEvent.click(screen.getByTestId("terminal-method-tap"));
+
+    expect(screen.getByTestId("terminal-pin-pad")).toBeTruthy();
+    expect(screen.queryByTestId("terminal-processing")).toBeNull();
+  });
+
+  it("declines when the simulated bank answer is set to Decline", async () => {
+    const fetchMock = stubTerminal([intent("pi-9")]);
     render(<TerminalScreen outletId="outlet-1" outletName="One - BLR" />);
 
     await screen.findByTestId("terminal-request-pi-9");
-    await userEvent.click(screen.getByTestId("terminal-decline"));
+    await userEvent.click(screen.getByTestId("terminal-outcome-decline"));
+    await userEvent.click(screen.getByTestId("terminal-method-swipe"));
+    await enterPin("1234");
 
-    await waitFor(() => expect(screen.getByTestId("terminal-last-result").textContent).toContain("Declined · ₹525.00"));
-    expect(screen.getByTestId("terminal-idle")).toBeTruthy();
+    await waitFor(() => expect(screen.getByTestId("terminal-result").textContent).toContain("Declined"), SETTLED);
+    expect(screen.getByTestId("terminal-last-result").textContent).toContain("Declined · ₹525.00");
+    const simulate = fetchMock.mock.calls.find(([input]) => String(input).includes("payment-intents/pi-9/simulate"));
+    expect(JSON.parse(String(simulate?.[1]?.body))).toEqual({ outcome: "failure" });
+  });
+
+  it("Cancel payment fails the intent; Cancel PIN only returns to the card screen", async () => {
+    const fetchMock = stubTerminal([intent("pi-5")]);
+    render(<TerminalScreen outletId="outlet-1" outletName="One - BLR" />);
+
+    await screen.findByTestId("terminal-request-pi-5");
+    await userEvent.click(screen.getByTestId("terminal-method-insert"));
+    await userEvent.click(screen.getByTestId("terminal-cancel"));
+
+    expect(screen.getByTestId("terminal-method-tap")).toBeTruthy();
+    expect(fetchMock.mock.calls.some(([input]) => String(input).includes("/simulate"))).toBe(false);
+
+    await userEvent.click(screen.getByTestId("terminal-cancel"));
+    await waitFor(() => expect(screen.getByTestId("terminal-result").textContent).toContain("Declined"), SETTLED);
   });
 
   it("flips the status light when the poll fails and keeps whatever it last showed", async () => {
