@@ -1290,6 +1290,20 @@ done now, this is what actually happened:
   provider's "webhook" (ADR-004), whose `success` is the one thing that
   writes the `card_terminal` tender on the bill. Status light and
   stale-on-failure posture copied from the printer.
+- **Drawn as the device (issue #198):** the page renders the physical
+  terminal, not a web panel - a light body, a brand bar with a status LED,
+  an inset dark screen, and reader hardware (contactless arc, card slot)
+  along the bottom edge (`terminal-device`). Everything a person touches
+  lives inside the screen; the simulator strip sits outside the body, where
+  a real bank's answer comes from. The flow now opens on the four buttons an
+  Indian terminal opens with - **UPI / Cards / Wallets / EMI**
+  (`terminal-rail-<rail>`). Only Cards continues: `card_terminal` is the
+  only rail the backend mints intents for (`INTENT_RAILS`), so the others
+  are drawn as the device draws them and answer with
+  `terminal-rail-note` rather than charging on a rail that would then be
+  recorded as a card. `Cancel` steps back one screen at a time (Cancel PIN →
+  card screen, Back → method screen) and only declines the intent from the
+  first screen, like a terminal's red key.
 - **Card flow (issue #196):** the screen walks what a real reader walks -
   **Present card** (Tap / Insert / Swipe), then **Enter PIN** (a 4-dot
   masked keypad), then *Processing… do not remove card*, then a full-screen
