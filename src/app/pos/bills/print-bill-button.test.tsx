@@ -17,14 +17,14 @@ afterEach(() => {
 
 describe("PrintBillButton", () => {
   it("posts to bills/:id/print and shows Sent to printer, then resets to the label", async () => {
-    const fetchMock = vi.fn(() => Promise.resolve(jsonResponse({ id: "job-1" }, 201)));
+    const fetchMock = vi.fn<(input: RequestInfo | URL, init?: RequestInit) => Promise<Response>>(() => Promise.resolve(jsonResponse({ id: "job-1" }, 201)));
     vi.stubGlobal("fetch", fetchMock);
     render(<PrintBillButton billId="bill-7" label="Print bill" testId="print-bill" />);
 
     await userEvent.click(screen.getByTestId("print-bill"));
     await waitFor(() => expect(screen.getByTestId("print-bill").textContent).toBe("Sent to printer"));
     expect(String(fetchMock.mock.calls[0]?.[0])).toContain("/pos/api/bills/bill-7/print");
-    expect((fetchMock.mock.calls[0]?.[1] as RequestInit | undefined)?.method).toBe("POST");
+    expect(fetchMock.mock.calls[0]?.[1]?.method).toBe("POST");
     await waitFor(() => expect(screen.getByTestId("print-bill").textContent).toBe("Print bill"), { timeout: 3_000 });
   });
 
