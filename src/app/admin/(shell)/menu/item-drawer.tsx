@@ -49,6 +49,23 @@ const FIELD_CLASS =
   "w-full rounded-lg border border-border bg-input px-3 py-2 text-sm text-foreground placeholder:text-muted-foreground/60 focus:outline-none focus-visible:ring-2 focus-visible:ring-ring";
 const LABEL_CLASS = "font-label mb-1 block text-xs font-semibold uppercase tracking-wider text-muted-foreground";
 
+// Item photo upload (issue #218). No object storage: the photo is shrunk in
+// the browser to a small JPEG and stored inline as a data:image URL
+// (restiq-backend#142 caps it at PHOTO_MAX_CHARS).
+const PHOTO_MAX_PX = 480;
+const PHOTO_MAX_CHARS = 280_000;
+
+async function photoToDataUrl(file: File): Promise<string> {
+  const bitmap = await createImageBitmap(file);
+  const scale = Math.min(1, PHOTO_MAX_PX / Math.max(bitmap.width, bitmap.height));
+  const canvas = document.createElement("canvas");
+  canvas.width = Math.round(bitmap.width * scale);
+  canvas.height = Math.round(bitmap.height * scale);
+  canvas.getContext("2d")?.drawImage(bitmap, 0, 0, canvas.width, canvas.height);
+  bitmap.close();
+  return canvas.toDataURL("image/jpeg", 0.8);
+}
+
 interface PriceLine {
   variantId: string | null;
   label: string;
@@ -101,6 +118,7 @@ function DrawerBody({
   const [selectedAllergenIds, setSelectedAllergenIds] = useState<string[]>(item?.allergens.map((a) => a.id) ?? []);
   const [saving, setSaving] = useState(false);
   const [saveError, setSaveError] = useState<string | null>(null);
+  const [photoBusy, setPhotoBusy] = useState(false);
   const [priceLine, setPriceLine] = useState<PriceLine | null>(null);
   const [priceBusy, setPriceBusy] = useState(false);
   const [priceError, setPriceError] = useState<string | null>(null);
@@ -162,6 +180,44 @@ function DrawerBody({
       setSaveError(error instanceof Error ? error.message : "That didn't save. Try again.");
     } finally {
       setSaving(false);
+    }
+  }
+
+  async function handlePhoto(file: File | undefined) {
+    if (!liveItem || !file) return;
+    setSaveError(null);
+    if (!file.type.startsWith("image/")) {
+      setSaveError("Choose an image file (JPEG, PNG or WebP).");
+      return;
+    }
+    setPhotoBusy(true);
+    try {
+      const photoUrl = await photoToDataUrl(file);
+      if (photoUrl.length > PHOTO_MAX_CHARS) {
+        setSaveError("That photo is too large - try a smaller one.");
+        return;
+      }
+      const updated = await updateMenuItem(liveItem.id, { photoUrl });
+      setLiveItem(updated);
+      onSaved(updated);
+    } catch (error) {
+      setSaveError(error instanceof Error ? error.message : "That photo didn't upload. Try another one.");
+    } finally {
+      setPhotoBusy(false);
+    }
+  }
+
+  async function handleRemovePhoto() {
+    if (!liveItem) return;
+    setPhotoBusy(true);
+    try {
+      const updated = await updateMenuItem(liveItem.id, { photoUrl: null });
+      setLiveItem(updated);
+      onSaved(updated);
+    } catch (error) {
+      setSaveError(error instanceof Error ? error.message : "That photo couldn't be removed. Try again.");
+    } finally {
+      setPhotoBusy(false);
     }
   }
 
@@ -337,6 +393,50 @@ function DrawerBody({
                 ))}
               </select>
             </div>
+
+            {!isCreate && liveItem && (
+              <div data-testid="item-photo-section">
+                <p className={LABEL_CLASS}>Photo</p>
+                <div className="flex items-center gap-4">
+                  <div className="flex size-24 shrink-0 items-center justify-center overflow-hidden rounded-lg border border-border/60 bg-muted text-xs text-muted-foreground">
+                    {liveItem.photoUrl ? (
+                      // eslint-disable-next-line @next/next/no-img-element -- an https or data: URL, not something next/image's optimizer can handle
+                      <img data-testid="item-photo-preview" src={liveItem.photoUrl} alt={`${liveItem.name} photo`} className="size-full object-cover" />
+                    ) : (
+                      "No photo"
+                    )}
+                  </div>
+                  <div className="flex flex-col items-start gap-2">
+                    <label className="cursor-pointer rounded-md border border-border/60 px-3 py-1.5 text-sm font-medium hover:bg-accent focus-within:ring-2 focus-within:ring-ring">
+                      {photoBusy ? "Uploading…" : liveItem.photoUrl ? "Replace photo" : "Upload photo"}
+                      <input
+                        type="file"
+                        accept="image/jpeg,image/png,image/webp"
+                        data-testid="item-photo-input"
+                        disabled={photoBusy}
+                        className="sr-only"
+                        onChange={(event) => {
+                          void handlePhoto(event.target.files?.[0]);
+                          event.target.value = "";
+                        }}
+                      />
+                    </label>
+                    {liveItem.photoUrl && (
+                      <button
+                        type="button"
+                        data-testid="item-photo-remove"
+                        disabled={photoBusy}
+                        onClick={() => void handleRemovePhoto()}
+                        className="text-xs font-medium text-muted-foreground hover:text-status-error focus:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+                      >
+                        Remove photo
+                      </button>
+                    )}
+                    <p className="text-xs text-muted-foreground">Shown on the QR menu and the kiosk.</p>
+                  </div>
+                </div>
+              </div>
+            )}
 
             {!isCreate && liveItem && (
               <VariantsSection

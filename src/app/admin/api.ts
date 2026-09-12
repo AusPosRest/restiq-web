@@ -175,6 +175,8 @@ export interface UpdateItemInput {
   name?: string;
   shortName?: string;
   categoryId?: string;
+  /** null removes the photo (restiq-backend#142). */
+  photoUrl?: string | null;
 }
 
 export function updateMenuItem(itemId: string, input: UpdateItemInput): Promise<ItemView> {

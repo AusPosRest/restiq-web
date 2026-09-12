@@ -61,6 +61,8 @@ export interface ItemView {
   name: string;
   shortName: string;
   available: boolean;
+  // https or an uploaded data:image URL (issue #218); optional for older backends.
+  photoUrl?: string | null;
   variants: VariantView[];
   modifierGroups: ModifierGroupView[];
   allergens: AllergenView[];
