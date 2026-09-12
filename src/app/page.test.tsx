@@ -10,13 +10,13 @@ function jsonResponse(status: number, body: unknown): Response {
 }
 
 const DEVICES = [
-  { id: "d-pos", tenantId: "tenant-spice", label: "POS-1", type: "pos", status: "active", tenantName: "Spice Route Hospitality", outletName: "Spice Route Outlet" },
-  { id: "d-kiosk", tenantId: "tenant-bayleaf", label: "KIOSK-1", type: "kiosk", status: "active", tenantName: "Bay Leaf Kitchens", outletName: null },
-  { id: "d-kds", tenantId: "tenant-spice", label: "KDS-1", type: "kds", status: "active", tenantName: "Spice Route Hospitality", outletName: "Spice Route Outlet" },
-  { id: "d-cds", tenantId: "tenant-bayleaf", label: "CDS-1", type: "cds", status: "active", tenantName: "Bay Leaf Kitchens", outletName: null },
-  { id: "d-printer", tenantId: "tenant-spice", label: "Counter printer", type: "printer", status: "active", tenantName: "Spice Route Hospitality", outletName: "Spice Route Outlet" },
-  { id: "d-terminal", tenantId: "tenant-spice", label: "Counter terminal", type: "terminal", status: "active", tenantName: "Spice Route Hospitality", outletName: "Spice Route Outlet" },
-  { id: "d-revoked", tenantId: "tenant-bayleaf", label: "POS-OLD", type: "pos", status: "revoked", tenantName: "Bay Leaf Kitchens", outletName: null },
+  { id: "d-pos", tenantId: "tenant-spice", label: "POS-1", type: "pos", status: "active", tenantName: "Spice Route Hospitality", outletId: null, outletName: "Spice Route Outlet" },
+  { id: "d-kiosk", tenantId: "tenant-bayleaf", label: "KIOSK-1", type: "kiosk", status: "active", tenantName: "Bay Leaf Kitchens", outletId: "outlet-bayleaf", outletName: "Bay Leaf Counter" },
+  { id: "d-kds", tenantId: "tenant-spice", label: "KDS-1", type: "kds", status: "active", tenantName: "Spice Route Hospitality", outletId: null, outletName: "Spice Route Outlet" },
+  { id: "d-cds", tenantId: "tenant-bayleaf", label: "CDS-1", type: "cds", status: "active", tenantName: "Bay Leaf Kitchens", outletId: null, outletName: null },
+  { id: "d-printer", tenantId: "tenant-spice", label: "Counter printer", type: "printer", status: "active", tenantName: "Spice Route Hospitality", outletId: null, outletName: "Spice Route Outlet" },
+  { id: "d-terminal", tenantId: "tenant-spice", label: "Counter terminal", type: "terminal", status: "active", tenantName: "Spice Route Hospitality", outletId: null, outletName: "Spice Route Outlet" },
+  { id: "d-revoked", tenantId: "tenant-bayleaf", label: "POS-OLD", type: "pos", status: "revoked", tenantName: "Bay Leaf Kitchens", outletId: null, outletName: null },
 ];
 
 function stubDevicesFetch() {
@@ -71,7 +71,7 @@ describe("Landing page", () => {
     render(await Home());
 
     expect(screen.getByTestId("landing-device-open-d-pos").getAttribute("href")).toBe("/pos/login?device=d-pos&tenant=tenant-spice");
-    expect(screen.getByTestId("landing-device-open-d-kiosk").getAttribute("href")).toBe("/pos/login?device=d-kiosk&tenant=tenant-bayleaf");
+    expect(screen.getByTestId("landing-device-open-d-kiosk").getAttribute("href")).toBe("/qr/kiosk/outlet-bayleaf?device=d-kiosk");
     expect(screen.getByTestId("landing-device-open-d-kds").getAttribute("href")).toBe("/kds");
     expect(screen.getByTestId("landing-device-open-d-printer").getAttribute("href")).toBe("/pos/login?next=%2Fpos%2Fprinter");
     expect(screen.getByTestId("landing-device-open-d-terminal").getAttribute("href")).toBe("/pos/login?next=%2Fpos%2Fterminal");

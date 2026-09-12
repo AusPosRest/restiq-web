@@ -10,6 +10,7 @@
 // invariant exactly.
 import { Check } from "lucide-react";
 import Link from "next/link";
+import { isKioskTab } from "../kiosk-session";
 import { SessionEndedView } from "../session-ended-view";
 import type { GuestOrderStatusView, GuestOrderStep } from "./status-api";
 import { formatReachedAt, reachedAtFor, sortOrdersNewestFirst, STEP_LABELS, STEP_ORDER, stepState, type StepState } from "./status-state";
@@ -57,14 +58,22 @@ function OrderCard({ order }: Readonly<{ order: GuestOrderStatusView }>) {
       <p data-testid={`status-order-id-${order.orderId}`} className="text-sm font-semibold text-foreground">
         Order #{order.orderId.slice(-6).toUpperCase()}
       </p>
+      {order.tokenNumber != null && (
+        <p data-testid={`status-order-token-${order.orderId}`} className="mt-1 text-sm text-muted-foreground">
+          Number <span className="font-headline text-2xl font-bold tabular-nums text-primary">{order.tokenNumber}</span> · pay at the counter
+        </p>
+      )}
       <Stepper order={order} />
-      <Link
-        href={`${CHECKOUT_ROUTE}?orderId=${order.orderId}`}
-        data-testid={`status-request-bill-${order.orderId}`}
-        className="mt-4 inline-flex items-center justify-center rounded-lg border border-border px-3 py-2 text-xs font-medium text-foreground focus-visible:outline focus-visible:outline-2 focus-visible:outline-ring"
-      >
-        Request bill
-      </Link>
+      {/* A kiosk order is paid at the counter (issue #214) - no bill to request from here. */}
+      {order.tokenNumber == null && !isKioskTab() && (
+        <Link
+          href={`${CHECKOUT_ROUTE}?orderId=${order.orderId}`}
+          data-testid={`status-request-bill-${order.orderId}`}
+          className="mt-4 inline-flex items-center justify-center rounded-lg border border-border px-3 py-2 text-xs font-medium text-foreground focus-visible:outline focus-visible:outline-2 focus-visible:outline-ring"
+        >
+          Request bill
+        </Link>
+      )}
     </section>
   );
 }

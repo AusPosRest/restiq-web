@@ -22,6 +22,8 @@ export interface GuestOrderStepView {
 export interface GuestOrderStatusView {
   orderId: string;
   tableId: string | null;
+  // Set for a kiosk order (issue #214) - the pickup number the counter calls.
+  tokenNumber: number | null;
   /** The furthest step this order has reached - what the stepper highlights. */
   step: GuestOrderStep;
   steps: GuestOrderStepView[];

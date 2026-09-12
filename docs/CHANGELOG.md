@@ -25,6 +25,20 @@ with the payments epic.
   answer is a Simulator strip; only the final outcome reaches the server.
 
 ### Added
+- Devices: enrolled kiosks get "Open kiosk" and a scan QR in the admin
+  devices table (#214). The link opens `/qr/kiosk/[outletId]?device=`; the
+  attract screen is always drawn as a kiosk, and a successful start stores
+  the kiosk in the tab so the menu, cart and status stay in kiosk mode.
+- Kiosk: simulated kiosk screen and ordering from the kiosk (#214, web half
+  of restiq-backend#138). An enrolled kiosk tab's "Continue" (and the
+  landing page) opens `/qr/kiosk/[outletId]`: "Tap to start your order"
+  starts a device-bound, table-less guest session and lands on the
+  existing menu / cart flow. Placing shows the token number with "Pay at
+  the counter"; the status page shows it too and hides Request bill. A
+  "Start over" bar and a 90 s idle timeout end the session and return to
+  the attract screen. On a kiosk tab every screen is drawn inside a standing
+  kiosk (bezel, portrait screen, printer / card / scanner panel, pedestal),
+  and the attract screen is a full-screen tap-to-start poster.
 - Device topology (#210, web half of restiq-backend#134 / #136): the owner
   Devices page opens with a **Topology** map - each POS with the printer and
   card terminal linked to it, devices shared by the whole outlet, and other

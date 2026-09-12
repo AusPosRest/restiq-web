@@ -10,12 +10,12 @@ import { QR_SIZE_PX, useQrDataUrl } from "../floor-plan/table-qr-dialog";
 import { formatLastSeen, type AdminDeviceView } from "./devices-state";
 
 // Where an enrolled device's surface lives, so an owner can click straight
-// through to log in and take orders (issue #112). Kiosk/CDS have no web
-// surface yet. Mirrors src/app/device/device-state.ts's continueTargetFor -
+// through to log in and take orders (issue #112). CDS has no web surface
+// yet; a kiosk opens its attract screen (issue #214). Mirrors src/app/device/device-state.ts's continueTargetFor -
 // not imported across route trees (AD-4). POS carries `?device=&tenant=` so
 // the shared PIN pad can bind itself to this device's tenant (issue #150,
 // terminal-binding.ts) instead of relying on POS_TENANT_ID.
-const SURFACE_LINKS: Record<string, { href: (device: Pick<AdminDeviceView, "id" | "tenantId">) => string; label: string }> = {
+const SURFACE_LINKS: Record<string, { href: (device: Pick<AdminDeviceView, "id" | "tenantId" | "outletId">) => string; label: string }> = {
   pos: { href: (device) => `/pos/login?device=${encodeURIComponent(device.id)}&tenant=${encodeURIComponent(device.tenantId)}`, label: "Open POS" },
   kds: { href: () => "/kds", label: "Open KDS" },
   // The simulated receipt printer (issue #172) is a POS-realm screen: bind the
@@ -31,6 +31,12 @@ const SURFACE_LINKS: Record<string, { href: (device: Pick<AdminDeviceView, "id" 
     href: (device) =>
       `/pos/login?device=${encodeURIComponent(device.id)}&tenant=${encodeURIComponent(device.tenantId)}&next=${encodeURIComponent("/pos/terminal")}`,
     label: "Open terminal",
+  },
+  // Kiosk (issue #214): the guest-realm attract screen, bound by `?device=`.
+  // ponytail: the list is outlet-scoped, so outletId is always set here.
+  kiosk: {
+    href: (device) => `/qr/kiosk/${encodeURIComponent(device.outletId ?? "")}?device=${encodeURIComponent(device.id)}`,
+    label: "Open kiosk",
   },
 };
 

@@ -1,5 +1,6 @@
 import type { Metadata } from "next";
 import { Hanken_Grotesk, Inter, Public_Sans } from "next/font/google";
+import { KioskFrame } from "./kiosk-chrome";
 
 const hankenGrotesk = Hanken_Grotesk({
   variable: "--font-hanken-grotesk",
@@ -36,7 +37,7 @@ export default function GuestLayout({
     <div
       className={`${hankenGrotesk.variable} ${inter.variable} ${publicSans.variable} qr-theme flex min-h-screen flex-1 flex-col bg-background text-foreground antialiased`}
     >
-      {children}
+      <KioskFrame>{children}</KioskFrame>
     </div>
   );
 }

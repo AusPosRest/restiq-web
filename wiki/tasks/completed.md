@@ -1,5 +1,13 @@
 # Completed
 
+- **2026-09-12** - Kiosk: simulated kiosk screen + ordering from the kiosk (issue #214, web
+  half of restiq-backend#138). `/qr/kiosk/[outletId]` attract screen starts a device-bound
+  guest session and reuses the menu / cart / status screens in kiosk mode (token number
+  headline, pay at the counter, no Request bill); "Start over" and a 90 s idle timeout reset
+  the kiosk. Device "Continue" and the landing page open it. Details in
+  [qr-self-order.md](../features/qr-self-order.md#kiosk---simulated-kiosk-screen-and-ordering-from-the-kiosk-issue-214).
+  13 new tests, 236 passing across the touched folders; lint clean.
+
 - **2026-09-09** - Agreements with versioning + owner digital signature (issue #192, web half
   of restiq-backend#133): `/ops/agreements` (publish through the reason dialog, expand a row
   to read a version), Tenant Detail **Agreements** tab (signed / pending badge + signature

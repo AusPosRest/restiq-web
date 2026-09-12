@@ -79,9 +79,11 @@ export interface PlacedOrderLineView {
 
 export interface PlacedOrderView {
   orderId: string;
-  tableId: string;
+  // null for a kiosk order (issue #214 / restiq-backend#138), which carries tokenNumber instead.
+  tableId: string | null;
   status: "sent";
-  source: "qr";
+  source: "qr" | "kiosk";
+  tokenNumber: number | null;
   sessionId: string;
   lines: PlacedOrderLineView[];
 }

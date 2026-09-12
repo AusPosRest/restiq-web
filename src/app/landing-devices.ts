@@ -13,6 +13,7 @@ export interface LandingDevice {
   type: string;
   status: string;
   tenantName: string;
+  outletId: string | null;
   outletName: string | null;
 }
 
@@ -20,16 +21,20 @@ export type LandingDevicesResult =
   | { kind: "available"; devices: LandingDevice[] }
   | { kind: "unavailable" };
 
-// pos/kiosk terminals sign in at the shared POS PIN pad; kds shares that
+// pos terminals sign in at the shared POS PIN pad; kds shares that
 // auth realm at its own route; other device types (cds - customer display)
 // have no standalone login surface to open. A revoked device is never
-// openable regardless of type. pos/kiosk carry `?device=&tenant=` so the PIN
+// openable regardless of type. pos carries `?device=&tenant=` so the PIN
 // pad can bind itself to this device's tenant (issue #150,
 // src/app/pos/terminal-binding.ts) instead of relying on POS_TENANT_ID.
-export function deviceOpenHref(device: Pick<LandingDevice, "id" | "tenantId" | "type" | "status">): string | null {
+export function deviceOpenHref(device: Pick<LandingDevice, "id" | "tenantId" | "type" | "status" | "outletId">): string | null {
   if (device.status === "revoked") return null;
-  if (device.type === "pos" || device.type === "kiosk") {
+  if (device.type === "pos") {
     return `/pos/login?device=${encodeURIComponent(device.id)}&tenant=${encodeURIComponent(device.tenantId)}`;
+  }
+  // The kiosk (issue #214) is a guest-realm screen bound to its outlet - no PIN pad.
+  if (device.type === "kiosk") {
+    return device.outletId ? `/qr/kiosk/${encodeURIComponent(device.outletId)}?device=${encodeURIComponent(device.id)}` : null;
   }
   if (device.type === "kds") return "/kds";
   // The simulated receipt printer (issue #172) is a POS-realm screen: it signs in at the PIN pad, then drains the outlet's spool.

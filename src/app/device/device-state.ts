@@ -101,6 +101,16 @@ export function clearStoredDevice(): void {
   tabStore()?.removeItem(DEVICE_KEY);
 }
 
+/** The kiosk attract screen for an enrolled kiosk device (issue #214). */
+export function kioskAttractPath(outletId: string, deviceId: string): string {
+  return `/qr/kiosk/${encodeURIComponent(outletId)}?device=${encodeURIComponent(deviceId)}`;
+}
+
+/** True when this browser tab is enrolled as a kiosk - the guest screens switch to kiosk mode (issue #214). */
+export function isKioskTab(): boolean {
+  return readStoredDevice()?.type === "kiosk";
+}
+
 export type ContinueTarget = { kind: "redirect"; path: string } | { kind: "unsupported" };
 
 /**
@@ -111,9 +121,11 @@ export type ContinueTarget = { kind: "redirect"; path: string } | { kind: "unsup
  * the same links admin/(shell)/devices/devices-table.tsx builds (not imported
  * across route trees, AD-4).
  */
-export function continueTargetFor(device: Pick<DeviceView, "id" | "tenantId" | "type">): ContinueTarget {
+export function continueTargetFor(device: Pick<DeviceView, "id" | "tenantId" | "type" | "outletId">): ContinueTarget {
   const login = `/pos/login?device=${encodeURIComponent(device.id)}&tenant=${encodeURIComponent(device.tenantId)}`;
   if (device.type === "pos") return { kind: "redirect", path: login };
+  // The kiosk (issue #214) is a guest-realm screen: no staff PIN, the enrolled device is the identity.
+  if (device.type === "kiosk" && device.outletId) return { kind: "redirect", path: kioskAttractPath(device.outletId, device.id) };
   if (device.type === "kds") return { kind: "redirect", path: "/kds" };
   if (device.type === "printer") return { kind: "redirect", path: `${login}&next=${encodeURIComponent("/pos/printer")}` };
   if (device.type === "terminal") return { kind: "redirect", path: `${login}&next=${encodeURIComponent("/pos/terminal")}` };

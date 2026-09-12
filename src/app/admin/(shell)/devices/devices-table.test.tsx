@@ -62,7 +62,7 @@ describe("DevicesTable", () => {
           device({ id: "kds-1", type: "kds" }),
           device({ id: "printer-1", type: "printer" }),
           device({ id: "terminal-1", type: "terminal" }),
-          device({ id: "kiosk-1", type: "kiosk" }),
+          device({ id: "kiosk-1", type: "kiosk", outletId: "out-1" }),
           device({ id: "cds-1", type: "cds" }),
           device({ id: "gone-1", type: "pos", status: "revoked" }),
         ]}
@@ -74,9 +74,11 @@ describe("DevicesTable", () => {
     expect(screen.getByTestId("device-open-printer-1").textContent).toContain("Open printer");
     expect(screen.getByTestId("device-open-terminal-1").getAttribute("href")).toBe("/pos/login?device=terminal-1&tenant=tenant-1&next=%2Fpos%2Fterminal");
     expect(screen.getByTestId("device-open-terminal-1").textContent).toContain("Open terminal");
-    // Kiosk and customer display have no web surface yet.
+    expect(screen.getByTestId("device-open-kiosk-1").getAttribute("href")).toBe("/qr/kiosk/out-1?device=kiosk-1");
+    expect(screen.getByTestId("device-open-kiosk-1").textContent).toContain("Open kiosk");
+    expect(screen.getByTestId("device-qr-kiosk-1")).toBeTruthy();
+    // The customer display has no web surface yet.
     expect(screen.queryByTestId("device-open-cds-1")).toBeNull();
-    expect(screen.queryByTestId("device-open-kiosk-1")).toBeNull();
     expect(screen.queryByTestId("device-open-gone-1")).toBeNull();
   });
 

@@ -574,3 +574,68 @@ This pass reconciled the guess against it:
   (2), plus `decideGuestRoute` coverage for flat menu/item routes and the anchored table
   entry regex. 738/738 passing repo-wide at the time of the original CAP-2 branch;
   rebase verification is tracked in the PR/build summary.
+
+## Kiosk - simulated kiosk screen and ordering from the kiosk (issue #214)
+
+- **Intent:** a tab enrolled as a `kiosk` device orders through the same
+  guest screens as a table, with no table, no name/phone/PIN, and pays at the
+  counter by token number. Backend: restiq-backend#138 (`POST
+  /guest/v1/kiosk/sessions`, token-numbered `source: 'kiosk'` orders).
+- **Entry:** `continueTargetFor` (`device/device-state.ts`) routes a kiosk
+  to `kioskAttractPath(outletId, deviceId)` = `/qr/kiosk/[outletId]?device=`;
+  the landing page's `deviceOpenHref` does the same (`LandingDevice` gained
+  `outletId`). `decideGuestRoute` treats `/qr/kiosk/:outletId` as public,
+  like the table entry point.
+- **Console link:** the admin devices table (`admin/(shell)/devices/devices-table.tsx`)
+  shows "Open kiosk" + a scan QR for an enrolled kiosk, linking the same
+  `/qr/kiosk/[outletId]?device=`. That fresh tab has no stored enrolment, so
+  `KioskFrame` treats the `/qr/kiosk/` path as a kiosk, and `KioskStart`
+  writes the device to the tab after the backend accepts the start.
+- **Attract screen:** `qr/kiosk/[outletId]/kiosk-start.tsx` - one
+  `kiosk-start` button ("Tap to start your order"). POSTs
+  `/qr/auth/kiosk { outletId, deviceId }` (device from `?device=`, falling
+  back to the tab's stored enrolment) and `router.push("/qr/menu")`. A 403
+  `kiosk_disabled` / 404 shows the backend's message in `kiosk-start-error`
+  and never navigates; an un-enrolled tab is told to enrol first.
+- **Auth routes:** `qr/auth/kiosk/route.ts` forwards to the backend and sets
+  the usual `guest_session` + `guest_display` cookies (`tableId: ""`,
+  `pin: ""`, `guestName: "Kiosk"`) so every later screen parses them
+  unchanged; `qr/auth/kiosk/end/route.ts` clears both (the server session
+  idles out - there is no guest-side close).
+- **Kiosk mode:** `qr/kiosk-session.ts` - `isKioskTab()` is simply "this
+  tab's stored device is a kiosk" (`device/device-state.ts`), the same
+  sessionStorage record enrolment already writes; `kioskHomePath()`,
+  `endKioskSession()` (POST end, then home). Used by:
+  - `qr/kiosk-chrome.tsx`, mounted in `qr/layout.tsx`: renders nothing on a
+    non-kiosk tab or on the attract screen; otherwise a slim "Self-service
+    kiosk · Start over" bar (`kiosk-start-over`) and a 90 s idle reset
+    (`IDLE_MS`; pointer/key/touch/scroll push it back; reduced to a
+    `useSyncExternalStore` read so SSR never sees sessionStorage). A kiosk
+    tab redirected to bare `/qr` (expired session) goes straight back to its
+    attract screen.
+  - `cart-screen.tsx`: heading "Your order" on a kiosk; the placed
+    confirmation shows the token as the headline (`cart-placed-token`,
+    "Pay at the counter…") with a `cart-kiosk-done` button instead of
+    Request bill. `PlacedOrderView` gained `tokenNumber`, nullable
+    `tableId`, `source: "qr" | "kiosk"`.
+  - `status-screen.tsx`: `status-order-token-<id>` line when the order has a
+    token; Request bill hidden for token orders and on a kiosk tab.
+    `GuestOrderStatusView` gained `tokenNumber`.
+- **Looks like a kiosk:** `KioskFrame` (`qr/kiosk-chrome.tsx`, wraps the whole
+  guest layout) draws the standing unit on a kiosk tab: white bezel with a
+  camera, a 9:16 portrait screen capped at `min(82vh, 56rem)`, a hardware
+  panel under it (receipt printer slot, card reader, barcode scanner -
+  decorative, `kiosk-hardware`), then the neck and floor plate. The screen
+  has `transform: translateZ(0)`, which makes it the containing block for
+  the guest screens' `position: fixed` bars (item detail's Add to Cart, the
+  cart pill, the checkout sheet), so they pin to the glass; an inner
+  scroller caps every `min-h-screen` to the glass height. The element tree
+  is identical on every tab - non-kiosk tabs get `display: contents` - so
+  hydration never remounts a page. The attract screen is a full-bleed
+  amber-to-red poster ("Hungry? Order here.") whose whole surface is the
+  one `kiosk-start` button, with a pulsing "Tap to start your order" pill.
+- **Tests:** `kiosk-start.test.tsx`, `auth/kiosk/route.test.ts` (start +
+  end), `kiosk-chrome.test.tsx` (idle reset with fake timers, start over,
+  bare-/qr bounce), updated device/landing/cart/status tests.
+- **Not built:** card payment at the kiosk (the order is settled at the POS
+  counter by token), customer display, per-outlet idle timeout.
