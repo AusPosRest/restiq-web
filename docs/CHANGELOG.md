@@ -25,6 +25,15 @@ with the payments epic.
   answer is a Simulator strip; only the final outcome reaches the server.
 
 ### Added
+- Device topology (#210, web half of restiq-backend#134 / #136): the owner
+  Devices page opens with a **Topology** map - each POS with the printer and
+  card terminal linked to it, devices shared by the whole outlet, and other
+  devices - each with an online / offline / never-connected dot that
+  refreshes every 30 s. A printer or card terminal's **Linked to** control
+  links it to one POS: that POS's receipts and card payments then go only
+  there. POS, printer and terminal tabs now send their own device id with
+  print jobs and card payments, poll only their own queue when linked, and
+  report a heartbeat every 30 s.
 - Staff **Reset PIN** (#204): staff with an active PIN get a Reset PIN
   button that issues a new PIN and shows it once in the PIN chip. An
   existing PIN can't be displayed - PINs are stored hashed - so resetting is

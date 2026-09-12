@@ -5,13 +5,9 @@
 // AdminDeviceView verified directly against restiq-backend's actual working
 // tree (feature/36-tenant-devices: src/admin/devices/*, src/ops/devices/
 // devices.service.ts's toDeviceView - not a summarized contract, same
-// discipline as CAP-4/CAP-5/CAP-10). Notably: the Device row carries
-// appVersion/lastContactAt columns (populated by CAP-6's heartbeat
-// ingestion), but toDeviceView - shared by both the ops and admin list
-// routes - doesn't map them into the response yet, so they're optional here
-// and the table falls back to "-"/"Never" rather than assuming they're
-// present; this is a real gap in the current response shape, not a
-// not-yet-built one, flagged in the PR.
+// discipline as CAP-4/CAP-5/CAP-10). appVersion/lastContactAt come from the
+// heartbeat snapshot (list items carry them since restiq-backend#136); they
+// stay optional so an older backend still renders "-"/"Never".
 import type { PrinterView, StationView } from "../floor-plan/floor-plan-state";
 
 export interface AdminDeviceView {
@@ -25,6 +21,19 @@ export interface AdminDeviceView {
   lastContactAt?: string | null;
   enrolledAt: string;
   revokedAt: string | null;
+  // Device topology (issue #210): the POS a printer/terminal is linked to.
+  pairedPosId?: string | null;
+}
+
+// --- Device topology (issue #210). Web tabs heartbeat every 30 s
+// (pos/device-heartbeat.tsx); three missed beats reads as offline.
+export const ONLINE_WINDOW_MS = 90_000;
+export type ConnectionState = "online" | "offline" | "never";
+
+/** Online / offline / never from the last heartbeat. Pure - takes `now` explicitly. */
+export function connectionState(lastContactAt: string | null | undefined, now: number): ConnectionState {
+  if (!lastContactAt) return "never";
+  return now - Date.parse(lastContactAt) < ONLINE_WINDOW_MS ? "online" : "offline";
 }
 
 export interface EnrolmentCodeResult {

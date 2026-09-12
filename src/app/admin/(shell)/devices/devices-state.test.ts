@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { formatCountdown, formatLastSeen, secondsRemaining, stationForPrinter } from "./devices-state";
+import { connectionState, formatCountdown, formatLastSeen, secondsRemaining, stationForPrinter } from "./devices-state";
 import type { PrinterView, StationView } from "../floor-plan/floor-plan-state";
 
 const printer: PrinterView = { id: "printer-1", name: "Billing Counter", renderMode: "text" };
@@ -14,6 +14,21 @@ function station(overrides: Partial<StationView> = {}): StationView {
     ...overrides,
   };
 }
+
+describe("connectionState", () => {
+  const now = Date.parse("2026-09-12T10:00:00.000Z");
+
+  it("is never for a device that has not sent a heartbeat", () => {
+    expect(connectionState(null, now)).toBe("never");
+    expect(connectionState(undefined, now)).toBe("never");
+  });
+
+  it("is online within 90 s of the last heartbeat and offline after", () => {
+    expect(connectionState("2026-09-12T09:59:00.000Z", now)).toBe("online");
+    expect(connectionState("2026-09-12T09:58:30.000Z", now)).toBe("offline");
+    expect(connectionState("2026-09-12T08:00:00.000Z", now)).toBe("offline");
+  });
+});
 
 describe("secondsRemaining", () => {
   it("floors at zero and never goes negative", () => {

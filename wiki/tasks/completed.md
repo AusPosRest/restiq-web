@@ -1295,3 +1295,11 @@ faked.
   `table-map.tsx` header and actions `flex-wrap`, labels `whitespace-nowrap`,
   "Signed in as" full-width below `sm`, page padding `p-4 sm:p-6`. Layout
   only; no test change.
+- **2026-09-12** - Device topology (issue #210, backend restiq-backend#134 /
+  #136). Owner Devices page gains `topology.tsx` (POS → linked printer /
+  card terminal, shared group, other devices, live status dots, "Linked to"
+  select via `setDevicePairing`) with a 30 s device refresh; POS tabs keep
+  their own device id per tab (`getTabDeviceId`), send it with print jobs
+  and card payments, poll with `?deviceId=`, and heartbeat every 30 s
+  (`pos/device-heartbeat.tsx`). Tests: `topology.test.tsx`,
+  `devices-state.test.ts` (`connectionState`), `terminal-binding.test.ts`.
