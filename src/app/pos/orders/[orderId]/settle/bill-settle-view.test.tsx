@@ -197,16 +197,20 @@ describe("BillSettleView - tenders", () => {
   });
 });
 
-describe("BillSettleView - print bill (issue #160)", () => {
-  it("shows a Print bill link next to Finalise while the bill is still open", async () => {
-    stubFetch();
+describe("BillSettleView - print bill (issue #160, direct to printer #208)", () => {
+  it("sends the open bill straight to the print spool from the Print bill button", async () => {
+    const fetchMock = stubFetch({
+      "POST bills/bill-1/print": () => jsonResponse({ id: "job-1", billId: "bill-1", payload: {}, createdAt: "2026-09-12T00:00:00.000Z", printedAt: null }, 201),
+    });
     render(<BillSettleView orderId={ORDER_ID} />);
 
     await screen.findByTestId("bill-summary");
-    const printBillLink = screen.getByTestId("print-bill-link");
-    expect(printBillLink.getAttribute("href")).toBe("/pos/bills/bill-1/invoice");
-    expect(printBillLink.getAttribute("target")).toBe("_blank");
-    expect(printBillLink.getAttribute("rel")).toBe("noopener");
+    await userEvent.click(screen.getByTestId("print-bill"));
+    await waitFor(() => expect(screen.getByTestId("print-bill").textContent).toBe("Sent to printer"));
+    const printCall = fetchMock.mock.calls.find(([input]) => String(input).includes("bills/bill-1/print"));
+    expect(printCall?.[1]?.method).toBe("POST");
+    // Still on the settle screen - no invoice page in between.
+    expect(screen.getByTestId("finalize-bill")).toBeTruthy();
   });
 });
 

@@ -1,5 +1,13 @@
 # Completed
 
+- **2026-09-12** - "Print bill" fires the print spool directly + thermal receipt on the
+  simulated printer (issue #208): shared `PrintBillButton` on settle, counter and the invoice
+  page (Sending → Sent to printer / Couldn't send, no page hop); `/pos/printer` renders each
+  job as an 80mm monospace receipt with a torn edge that feeds out of a paper slot
+  (`animate-paper-feed`, reduced-motion safe). Details in
+  [pos-cashier-waiter.md](../features/pos-cashier-waiter.md#print-bill-goes-straight-to-the-printer--thermal-receipt-issue-208).
+  4 test files touched, 26 passing; lint/typecheck clean.
+
 - **2026-09-09** - Agreements with versioning + owner digital signature (issue #192, web half
   of restiq-backend#133): `/ops/agreements` (publish through the reason dialog, expand a row
   to read a version), Tenant Detail **Agreements** tab (signed / pending badge + signature

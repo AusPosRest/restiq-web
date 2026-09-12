@@ -22,7 +22,8 @@
 import Link from "next/link";
 import { useEffect, useState } from "react";
 import { Button } from "@/components/ui/button";
-import { fetchInvoice, PosApiError, sendBillToPrinter, type InvoiceView } from "../../../api";
+import { fetchInvoice, PosApiError, type InvoiceView } from "../../../api";
+import { PrintBillButton } from "../../print-bill-button";
 import { LoadErrorPanel, Skeleton } from "../../../data-states";
 import { formatMinor } from "../../../(shell)/shift/shift-state";
 import { TENDER_METHOD_LABEL, type BillTenderMethod } from "../../../orders/[orderId]/settle/bill-state";
@@ -89,17 +90,6 @@ export function BillInvoiceView({ billId }: Readonly<{ billId: string }>) {
 }
 
 function InvoiceLoaded({ invoice, billId }: Readonly<{ invoice: InvoiceView; billId: string }>) {
-  // "idle" -> "sending" -> "sent" | "failed"; resets to idle so the button can be pressed again for a reprint.
-  const [sendState, setSendState] = useState<"idle" | "sending" | "sent" | "failed">("idle");
-
-  function sendToPrinter() {
-    setSendState("sending");
-    sendBillToPrinter(billId)
-      .then(() => setSendState("sent"))
-      .catch(() => setSendState("failed"))
-      .finally(() => setTimeout(() => setSendState("idle"), 2000));
-  }
-
   return (
     <div data-testid="bill-invoice-view" className="mx-auto flex max-w-2xl flex-1 flex-col gap-6 p-6 print:max-w-none print:gap-4 print:p-0">
       <div className="flex items-center justify-between gap-2 print:hidden">
@@ -107,9 +97,7 @@ function InvoiceLoaded({ invoice, billId }: Readonly<{ invoice: InvoiceView; bil
           ← Back to table map
         </Link>
         <div className="flex items-center gap-2">
-          <Button size="sm" variant="outline" data-testid="invoice-send-to-printer" disabled={sendState === "sending"} onClick={sendToPrinter}>
-            {sendState === "sent" ? "Sent to printer" : sendState === "failed" ? "Couldn't send" : "Send to printer"}
-          </Button>
+          <PrintBillButton billId={billId} label="Send to printer" testId="invoice-send-to-printer" />
           <Button size="sm" data-testid="invoice-print" onClick={() => window.print()}>
             Print
           </Button>
