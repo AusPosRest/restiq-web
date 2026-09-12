@@ -60,6 +60,9 @@ const CHECKOUT_ROUTE = "/qr/checkout";
 export function CartScreen({ myGuestId }: Readonly<{ myGuestId: string }>) {
   const poll = useCartPoll();
   const [placedOrder, setPlacedOrder] = useState<PlacedOrderView | null>(null);
+  // The cart's currency at the moment of placing - the emptied cart that
+  // polls afterwards no longer carries the tenant's (issue #220).
+  const [placedCurrency, setPlacedCurrency] = useState("INR");
   // Set when this guest's own "Place order" tap raced another guest's and
   // lost - the backend's real response for that race is 400 `empty_cart`
   // (the cart the loser tried to place had already been consumed by the
@@ -71,7 +74,7 @@ export function CartScreen({ myGuestId }: Readonly<{ myGuestId: string }>) {
   // state, but there's no reason to wait for the next tick.
   const [sessionEndedByPlacement, setSessionEndedByPlacement] = useState(false);
 
-  if (placedOrder) return <PlacedConfirmation order={placedOrder} currency={poll.data?.currency ?? "INR"} />;
+  if (placedOrder) return <PlacedConfirmation order={placedOrder} currency={placedCurrency} />;
   if (placedElsewhere) return <OrderPlacedElsewhere />;
   if (poll.sessionClosed || sessionEndedByPlacement) return <SessionEndedPanel />;
   if (poll.loading) return <LoadingSkeleton />;
@@ -85,7 +88,10 @@ export function CartScreen({ myGuestId }: Readonly<{ myGuestId: string }>) {
       myGuestId={myGuestId}
       stale={poll.stale}
       onUpdate={poll.applyUpdate}
-      onPlaced={setPlacedOrder}
+      onPlaced={(order) => {
+        setPlacedCurrency(poll.data?.currency ?? "INR");
+        setPlacedOrder(order);
+      }}
       onPlacedElsewhere={() => setPlacedElsewhere(true)}
       onSessionEnded={() => setSessionEndedByPlacement(true)}
     />
