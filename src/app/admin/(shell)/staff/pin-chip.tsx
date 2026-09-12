@@ -5,8 +5,9 @@
 // admin-local equivalent rather than a shared import.
 //
 // The raw PIN is returned exactly once by the API (restiq-backend#114): once
-// this chip is dismissed, an owner can only see it again by revoking and
-// re-issuing. This chip is the only place it's ever visible.
+// this chip is dismissed, it's gone (stored hashed) - an owner who needs one
+// uses Reset PIN (#204), which issues a new PIN. This chip is the only place
+// a PIN is ever visible.
 import { Check, Copy } from "lucide-react";
 import { useState } from "react";
 import { Button } from "@/components/ui/button";

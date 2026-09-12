@@ -1286,3 +1286,8 @@ faked.
   (`break-all`) instead of stretching the Enrol drawer's grid past the
   viewport; each enrolled Devices row with an "Open …" link gets a QR button
   and dialog encoding that link. Tests: `devices-table.test.tsx`.
+- **2026-09-12** - Staff Reset PIN (issue #204). Active-PIN rows get
+  `staff-reset-pin-<id>`, which calls the existing issue flow (backend
+  `issuePin` already supersedes an active PIN) and shows the new PIN once in
+  `pin-chip.tsx`. PINs stay argon2-hashed; no reveal of an existing PIN.
+  Tests: `staff-table.test.tsx`.

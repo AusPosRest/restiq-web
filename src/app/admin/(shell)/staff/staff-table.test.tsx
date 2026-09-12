@@ -64,8 +64,17 @@ describe("StaffTable", () => {
     expect(onRevokeRequested).toHaveBeenCalledWith("s1");
 
     expect(screen.queryByTestId("staff-revoke-pin-s2")).toBeNull();
+    expect(screen.queryByTestId("staff-reset-pin-s2")).toBeNull();
     await userEvent.click(screen.getByTestId("staff-issue-pin-s2"));
     expect(onIssuePin).toHaveBeenCalledWith("s2");
+  });
+
+  it("offers Reset PIN on an active PIN, which re-issues through the same issue callback", async () => {
+    const onIssuePin = vi.fn();
+    render(<StaffTable staff={STAFF} roles={ROLES} busyStaffId={null} issuedPin={null} onRoleSelected={noop} onIssuePin={onIssuePin} onRevokeRequested={noop} onDismissIssuedPin={noop} />);
+
+    await userEvent.click(screen.getByTestId("staff-reset-pin-s1"));
+    expect(onIssuePin).toHaveBeenCalledWith("s1");
   });
 
   it("disables the busy row's controls", () => {
