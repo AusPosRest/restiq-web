@@ -95,6 +95,13 @@ describe("KioskChrome", () => {
     expect(screenEl.contains(screen.getByTestId("kiosk-chrome"))).toBe(true);
   });
 
+  it("KioskFrame draws the kiosk on the attract screen even before the tab is enrolled", () => {
+    // A fresh tab opened from the console's "Open kiosk" link.
+    pathname = "/qr/kiosk/out-1";
+    render(<KioskFrame><p data-testid="page">tap to start</p></KioskFrame>);
+    expect(screen.getByTestId("kiosk-screen").contains(screen.getByTestId("page"))).toBe(true);
+  });
+
   it("KioskFrame leaves a normal guest tab untouched", () => {
     render(<KioskFrame><p data-testid="page">menu</p></KioskFrame>);
     expect(screen.getByTestId("page")).toBeTruthy();

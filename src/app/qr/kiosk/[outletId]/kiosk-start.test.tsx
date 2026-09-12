@@ -37,6 +37,8 @@ describe("KioskStart", () => {
     const [url, init] = fetchMock.mock.calls[0] as unknown as [string, RequestInit];
     expect(url).toBe("/qr/auth/kiosk");
     expect(JSON.parse(String(init.body))).toEqual({ outletId: "out-1", deviceId: "dev-1" });
+    // A tab opened from the console's "Open kiosk" link now remembers it is this kiosk.
+    expect(JSON.parse(sessionStorage.getItem("device:enrolled") ?? "null")).toMatchObject({ id: "dev-1", outletId: "out-1", type: "kiosk" });
   });
 
   it("falls back to the tab's enrolled device when the URL has none", async () => {

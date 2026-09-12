@@ -95,7 +95,11 @@ function pick(kiosk: boolean, classes: string): string {
 }
 
 export function KioskFrame({ children }: Readonly<{ children: React.ReactNode }>) {
-  const kiosk = useSyncExternalStore(subscribeNoop, isKioskTab, () => false);
+  // The attract screen is always a kiosk - a tab opened from the console's
+  // "Open kiosk" link has no enrolment yet (KioskStart stores it on start).
+  // usePathname also re-renders the frame on navigation, so it picks that up.
+  const onAttract = usePathname().startsWith("/qr/kiosk/");
+  const kiosk = useSyncExternalStore(subscribeNoop, isKioskTab, () => false) || onAttract;
   return (
     <div data-testid={kiosk ? "kiosk-device" : undefined} className={pick(kiosk, FRAME.floor)}>
       <div className={pick(kiosk, FRAME.unit)}>

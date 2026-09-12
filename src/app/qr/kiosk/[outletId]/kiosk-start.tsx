@@ -8,7 +8,7 @@
 import { UtensilsCrossed } from "lucide-react";
 import { useRouter, useSearchParams } from "next/navigation";
 import { useState } from "react";
-import { readStoredDevice } from "../../../device/device-state";
+import { readStoredDevice, writeStoredDevice } from "../../../device/device-state";
 
 const MENU_ROUTE = "/qr/menu";
 
@@ -45,6 +45,13 @@ export function KioskStart({ outletId }: Readonly<{ outletId: string }>) {
       const body = (await response.json().catch(() => ({}))) as { error?: { message?: string } };
       setState({ kind: "error", message: body.error?.message ?? "Couldn't start your order - please ask at the counter." });
       return;
+    }
+    // Opened from the console's "Open kiosk" link: the backend just confirmed
+    // this is an active kiosk at this outlet, so remember it for the tab -
+    // that is what keeps the menu/cart/status screens in kiosk mode.
+    const fromUrl = searchParams.get("device");
+    if (fromUrl && !readStoredDevice()) {
+      writeStoredDevice({ id: fromUrl, tenantId: "", outletId, label: "Kiosk", type: "kiosk", role: "terminal", status: "active", enrolledAt: "", revokedAt: null });
     }
     router.push(MENU_ROUTE);
   }

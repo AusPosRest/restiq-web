@@ -25,6 +25,10 @@ with the payments epic.
   answer is a Simulator strip; only the final outcome reaches the server.
 
 ### Added
+- Devices: enrolled kiosks get "Open kiosk" and a scan QR in the admin
+  devices table (#214). The link opens `/qr/kiosk/[outletId]?device=`; the
+  attract screen is always drawn as a kiosk, and a successful start stores
+  the kiosk in the tab so the menu, cart and status stay in kiosk mode.
 - Kiosk: simulated kiosk screen and ordering from the kiosk (#214, web half
   of restiq-backend#138). An enrolled kiosk tab's "Continue" (and the
   landing page) opens `/qr/kiosk/[outletId]`: "Tap to start your order"

@@ -586,6 +586,11 @@ This pass reconciled the guess against it:
   the landing page's `deviceOpenHref` does the same (`LandingDevice` gained
   `outletId`). `decideGuestRoute` treats `/qr/kiosk/:outletId` as public,
   like the table entry point.
+- **Console link:** the admin devices table (`admin/(shell)/devices/devices-table.tsx`)
+  shows "Open kiosk" + a scan QR for an enrolled kiosk, linking the same
+  `/qr/kiosk/[outletId]?device=`. That fresh tab has no stored enrolment, so
+  `KioskFrame` treats the `/qr/kiosk/` path as a kiosk, and `KioskStart`
+  writes the device to the tab after the backend accepts the start.
 - **Attract screen:** `qr/kiosk/[outletId]/kiosk-start.tsx` - one
   `kiosk-start` button ("Tap to start your order"). POSTs
   `/qr/auth/kiosk { outletId, deviceId }` (device from `?device=`, falling
