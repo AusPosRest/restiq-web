@@ -7,9 +7,11 @@
 import { MonitorSmartphone, Plus } from "lucide-react";
 import { useEffect, useState } from "react";
 import { Button } from "@/components/ui/button";
-import { fetchDevices, fetchFloorPlan } from "../../api";
+import { AdminApiError, fetchDevices, fetchFloorPlan, revokeDevice } from "../../api";
+import { ConfirmReasonDialog } from "../confirm-reason-dialog";
 import { LoadErrorPanel, Skeleton } from "../data-states";
 import { useOutlets } from "../outlet-context";
+import { useToast } from "../toast";
 import { CodeChip } from "./code-chip";
 import { DevicesTable } from "./devices-table";
 import { GenerateCodeDialog } from "./generate-code-dialog";
@@ -100,6 +102,32 @@ function DevicesEditor({ outletId, initial }: Readonly<{ outletId: string; initi
   const [stations, setStations] = useState<StationView[]>(initial.stations);
   const [activeCode, setActiveCode] = useState<EnrolmentCodeResult | null>(null);
   const [generateOpen, setGenerateOpen] = useState(false);
+  // Remove device (issue #215): confirm with a reason, then revoke - the row
+  // flips to Revoked in place and anything linked to it goes back to the outlet.
+  const [removeTarget, setRemoveTarget] = useState<AdminDeviceView | null>(null);
+  const [removeBusy, setRemoveBusy] = useState(false);
+  const toast = useToast();
+
+  async function handleConfirmRemove(reason: string) {
+    if (!removeTarget) return;
+    const target = removeTarget;
+    setRemoveBusy(true);
+    try {
+      const result = await revokeDevice(outletId, target.id, reason);
+      setDevices((current) =>
+        current.map((d) => {
+          if (d.id === result.id) return { ...d, status: "revoked", revokedAt: result.revokedAt, pairedPosId: null };
+          return d.pairedPosId === result.id ? { ...d, pairedPosId: null } : d;
+        }),
+      );
+      setRemoveTarget(null);
+      toast({ kind: "success", message: `${target.label} removed.` });
+    } catch (error) {
+      toast({ kind: "error", message: error instanceof AdminApiError ? error.message : "Couldn't remove this device." });
+    } finally {
+      setRemoveBusy(false);
+    }
+  }
 
   useEffect(() => {
     const id = setInterval(() => {
@@ -134,7 +162,7 @@ function DevicesEditor({ outletId, initial }: Readonly<{ outletId: string; initi
       />
 
       <div className="grid grid-cols-1 gap-6 2xl:grid-cols-[minmax(0,1fr)_320px]">
-        <DevicesTable devices={devices} />
+        <DevicesTable devices={devices} onRemove={setRemoveTarget} />
         {activeCode ? (
           <CodeChip key={activeCode.code} code={activeCode.code} expiresAt={activeCode.expiresAt} onRegenerate={() => setGenerateOpen(true)} />
         ) : (
@@ -150,6 +178,16 @@ function DevicesEditor({ outletId, initial }: Readonly<{ outletId: string; initi
         stations={stations}
         onPrinterUpdated={(saved) => setPrinters((current) => current.map((p) => (p.id === saved.id ? saved : p)))}
         onStationUpdated={(saved) => setStations((current) => current.map((s) => (s.id === saved.id ? saved : s)))}
+      />
+
+      <ConfirmReasonDialog
+        open={removeTarget !== null}
+        title={removeTarget ? `Remove ${removeTarget.label}?` : ""}
+        description="It won't be able to sign in, print or take payments any more, and stays listed as Revoked for the audit trail. Anything linked to it goes back to serving the whole outlet."
+        verb="Remove device"
+        busy={removeBusy}
+        onCancel={() => !removeBusy && setRemoveTarget(null)}
+        onConfirm={(reason) => void handleConfirmRemove(reason)}
       />
 
       <GenerateCodeDialog open={generateOpen} onClose={() => setGenerateOpen(false)} outletId={outletId} onGenerated={setActiveCode} />

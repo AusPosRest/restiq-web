@@ -93,6 +93,26 @@ describe("DevicesTable", () => {
     expect(QRCode.toDataURL).toHaveBeenCalledWith(url, expect.anything());
   });
 
+  it("offers Remove on every enrolled row - surface or not - never on a revoked one, and reports the device (issue #215)", () => {
+    const onRemove = vi.fn();
+    render(
+      <DevicesTable
+        devices={[device({ id: "pos-1", type: "pos" }), device({ id: "kiosk-1", type: "kiosk" }), device({ id: "gone-1", type: "pos", status: "revoked" })]}
+        onRemove={onRemove}
+      />,
+    );
+    expect(screen.getByTestId("device-remove-kiosk-1")).toBeTruthy();
+    expect(screen.queryByTestId("device-remove-gone-1")).toBeNull();
+
+    fireEvent.click(screen.getByTestId("device-remove-pos-1"));
+    expect(onRemove).toHaveBeenCalledWith(expect.objectContaining({ id: "pos-1" }));
+  });
+
+  it("shows no Remove buttons when the parent cannot revoke", () => {
+    render(<DevicesTable devices={[device({ id: "pos-1", type: "pos" })]} />);
+    expect(screen.queryByTestId("device-remove-pos-1")).toBeNull();
+  });
+
   it("shows an empty state with no devices", () => {
     render(<DevicesTable devices={[]} />);
     expect(screen.getByTestId("devices-empty")).toBeTruthy();
