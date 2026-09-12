@@ -25,6 +25,13 @@ with the payments epic.
   answer is a Simulator strip; only the final outcome reaches the server.
 
 ### Added
+- Menu: item photos and one-tap add (#218, web half of restiq-backend#142).
+  The guest menu shows each item's photo (letter tile when none) and a "+"
+  that adds an item with nothing to choose straight to the cart; items with
+  variants or a required choice open their detail. Kiosk tabs get a real
+  kiosk menu: a vertical category rail beside a grid of large photo tiles.
+  Owners upload a photo from the admin item drawer (resized in the browser
+  to a 480 px JPEG and stored inline), replace it, or remove it.
 - Devices: enrolled kiosks get "Open kiosk" and a scan QR in the admin
   devices table (#214). The link opens `/qr/kiosk/[outletId]?device=`; the
   attract screen is always drawn as a kiosk, and a successful start stores

@@ -2,22 +2,35 @@
 
 // Q3 Menu Browse (CAP-2). Category tabs + search over the real
 // `GET /guest/v1/menu` (GuestMenuView, restiq-backend PR #73) via the /qr
-// proxy - see menu-state.ts's header for the exact contract and the known
-// schema-gap placeholders (no photo/Hindi name/veg marker, so none are
-// rendered). WCAG 2.1 AA floor: labeled search input, `role="tablist"` for
-// categories, `aria-live` on the item list so a screen reader hears search/
-// tab changes, unavailable items carry a text label (never color-only).
-import { useEffect, useState } from "react";
+// proxy - see menu-state.ts's header for the exact contract. Issue #218:
+// items show their photo (letter tile when there is none), and a "+" adds an
+// item with nothing to choose straight to the cart; one with variants or a
+// required choice opens its detail instead. A kiosk tab gets the kiosk
+// layout - a vertical category rail beside a grid of large photo tiles.
+// WCAG 2.1 AA floor: labeled search input, `role="tablist"` for categories,
+// `aria-live` on the item list, unavailable items carry a text label (never
+// color-only), and the "+" is a separate, named button (never nested).
+import { Plus } from "lucide-react";
+import { useEffect, useState, useSyncExternalStore } from "react";
 import { useRouter } from "next/navigation";
 import { CartPill } from "../cart-pill";
+import { isKioskTab } from "../kiosk-session";
 import { SessionEndedView } from "../session-ended-view";
-import { displayPriceInfo, formatPriceMinor, initialLetterTile, nonEmptyCategories, visibleItems, type GuestMenuView, type MenuItemView } from "./menu-state";
+import { canQuickAdd, displayPriceInfo, formatPriceMinor, initialLetterTile, nonEmptyCategories, visibleItems, type GuestMenuView, type MenuItemView } from "./menu-state";
 
 interface ApiErrorBody {
   error?: { code?: string; message?: string };
 }
 
 type LoadState = { kind: "loading" } | { kind: "error"; message: string } | { kind: "session-ended" } | { kind: "loaded"; menu: GuestMenuView };
+type Notice = { kind: "added" | "error"; text: string };
+
+const MENU_HREF = "/qr/menu";
+const NOTICE_MS = 2500;
+
+function subscribeNoop(): () => void {
+  return () => undefined;
+}
 
 /** No setState of its own - the caller (effect or retry click) decides what to do with the result, so neither call site fires setState synchronously from an effect body. */
 async function loadMenu(): Promise<LoadState> {
@@ -38,9 +51,14 @@ async function loadMenu(): Promise<LoadState> {
 
 export function MenuView() {
   const router = useRouter();
+  const kiosk = useSyncExternalStore(subscribeNoop, isKioskTab, () => false);
   const [state, setState] = useState<LoadState>({ kind: "loading" });
   const [activeCategoryId, setActiveCategoryId] = useState<string | null>(null);
   const [query, setQuery] = useState("");
+  const [addingId, setAddingId] = useState<string | null>(null);
+  const [notice, setNotice] = useState<Notice | null>(null);
+  // Bumped after a quick add: remounting the pill makes it re-read the cart now instead of on its next poll.
+  const [cartKey, setCartKey] = useState(0);
 
   useEffect(() => {
     let active = true;
@@ -57,12 +75,54 @@ export function MenuView() {
     };
   }, []);
 
+  useEffect(() => {
+    if (!notice) return;
+    const id = setTimeout(() => setNotice(null), NOTICE_MS);
+    return () => clearTimeout(id);
+  }, [notice]);
+
   async function retry() {
     const next = await loadMenu();
     setState(next);
     if (next.kind === "loaded") {
       setActiveCategoryId((prev) => prev ?? nonEmptyCategories(next.menu.categories)[0]?.id ?? null);
     }
+  }
+
+  async function quickAdd(item: MenuItemView) {
+    if (!canQuickAdd(item)) {
+      router.push(`${MENU_HREF}/${item.id}`);
+      return;
+    }
+    setAddingId(item.id);
+    setNotice(null);
+    let response: Response;
+    try {
+      response = await fetch("/qr/api/cart/lines", {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({ itemId: item.id, quantity: 1, modifierIds: [] }),
+      });
+    } catch {
+      setAddingId(null);
+      setNotice({ kind: "error", text: "Couldn't reach the restaurant - please try again" });
+      return;
+    }
+    setAddingId(null);
+    if (response.status === 410) {
+      setState({ kind: "session-ended" });
+      return;
+    }
+    if (!response.ok) {
+      const body = (await response.json().catch(() => ({}))) as ApiErrorBody;
+      setNotice({
+        kind: "error",
+        text: body.error?.code === "item_unavailable" ? `${item.name} just became unavailable` : (body.error?.message ?? "Couldn't add that - please try again"),
+      });
+      return;
+    }
+    setNotice({ kind: "added", text: `Added ${item.name}` });
+    setCartKey((key) => key + 1);
   }
 
   if (state.kind === "session-ended") return <SessionEndedView />;
@@ -102,11 +162,40 @@ export function MenuView() {
 
   const categories = nonEmptyCategories(state.menu.categories);
   const items = visibleItems(state.menu.categories, activeCategoryId, query);
-  const menuHref = "/qr/menu";
+  const showTabs = query.trim() === "" && categories.length > 0;
+
+  const tabs = showTabs && (
+    <div
+      role="tablist"
+      aria-label="Menu categories"
+      aria-orientation={kiosk ? "vertical" : "horizontal"}
+      className={kiosk ? "flex w-28 shrink-0 flex-col gap-2 border-r border-border bg-card/60 p-2" : "mt-3 flex gap-2 overflow-x-auto"}
+    >
+      {categories.map((category) => {
+        const selected = activeCategoryId === category.id;
+        return (
+          <button
+            key={category.id}
+            type="button"
+            role="tab"
+            aria-selected={selected}
+            data-testid={`qr-menu-tab-${category.id}`}
+            onClick={() => setActiveCategoryId(category.id)}
+            className={`${kiosk ? "rounded-xl px-2 py-5 text-center text-sm" : "shrink-0 rounded-full px-4 py-2 text-sm"} font-semibold transition-colors focus-visible:outline focus-visible:outline-2 focus-visible:outline-ring ${
+              selected ? "bg-primary text-primary-foreground" : "bg-card text-foreground hover:bg-accent"
+            }`}
+          >
+            {category.name}
+          </button>
+        );
+      })}
+    </div>
+  );
 
   return (
-    <main data-testid="qr-menu" className="flex min-h-screen flex-1 flex-col pb-24">
+    <main data-testid="qr-menu" data-layout={kiosk ? "kiosk" : "list"} className="flex min-h-screen flex-1 flex-col pb-24">
       <div className="sticky top-0 z-20 bg-background/95 px-4 pb-3 pt-6 backdrop-blur">
+        {kiosk && <h1 className="mb-3 font-headline text-2xl font-bold text-foreground">What would you like today?</h1>}
         <label htmlFor="qr-menu-search" className="sr-only">
           Search dishes
         </label>
@@ -118,97 +207,117 @@ export function MenuView() {
           placeholder="Search dishes"
           className="w-full rounded-xl border border-border bg-card px-4 py-3 text-base text-foreground outline-none placeholder:text-muted-foreground focus-visible:ring-2 focus-visible:ring-ring"
         />
-
-        {query.trim() === "" && categories.length > 0 && (
-          <div role="tablist" aria-label="Menu categories" className="mt-3 flex gap-2 overflow-x-auto">
-            {categories.map((category) => (
-              <button
-                key={category.id}
-                type="button"
-                role="tab"
-                aria-selected={activeCategoryId === category.id}
-                data-testid={`qr-menu-tab-${category.id}`}
-                onClick={() => setActiveCategoryId(category.id)}
-                className={`shrink-0 rounded-full px-4 py-2 text-sm font-semibold transition-colors ${
-                  activeCategoryId === category.id ? "bg-primary text-primary-foreground" : "bg-card text-foreground hover:bg-accent"
-                }`}
-              >
-                {category.name}
-              </button>
-            ))}
-          </div>
-        )}
+        {!kiosk && tabs}
       </div>
 
-      <div aria-live="polite" className="flex flex-col gap-3 px-4 pt-4">
-        {items.length === 0 ? (
-          <p data-testid="qr-menu-empty" className="mt-8 text-center text-sm text-muted-foreground">
-            {query.trim() !== "" ? "No dishes match your search" : "Nothing here yet"}
-          </p>
-        ) : (
-          items.map((item) => (
-            <MenuItemCard
-              key={item.id}
-              item={item}
-              onOpen={() => router.push(`${menuHref}/${item.id}`)}
-            />
-          ))
-        )}
+      <div className={kiosk ? "flex flex-1" : "contents"}>
+        {kiosk && tabs}
+        <div aria-live="polite" className={kiosk ? "grid flex-1 grid-cols-2 content-start gap-3 p-3" : "flex flex-col gap-3 px-4 pt-4"}>
+          {items.length === 0 ? (
+            <p data-testid="qr-menu-empty" className="col-span-2 mt-8 text-center text-sm text-muted-foreground">
+              {query.trim() !== "" ? "No dishes match your search" : "Nothing here yet"}
+            </p>
+          ) : (
+            items.map((item) => (
+              <MenuItemCard
+                key={item.id}
+                item={item}
+                kiosk={kiosk}
+                adding={addingId === item.id}
+                onOpen={() => router.push(`${MENU_HREF}/${item.id}`)}
+                onAdd={() => void quickAdd(item)}
+              />
+            ))
+          )}
+        </div>
       </div>
 
-      <CartPill />
+      {notice && (
+        <p
+          role={notice.kind === "error" ? "alert" : "status"}
+          data-testid="qr-menu-notice"
+          className={`fixed inset-x-4 bottom-20 z-30 rounded-xl px-4 py-2.5 text-center text-sm font-semibold shadow-lg ${
+            notice.kind === "error" ? "bg-card text-error-soft ring-1 ring-border" : "bg-foreground text-background"
+          }`}
+        >
+          {notice.text}
+        </p>
+      )}
+
+      <CartPill key={cartKey} />
     </main>
   );
 }
 
-function MenuItemCard({ item, onOpen }: Readonly<{ item: MenuItemView; onOpen: () => void }>) {
+function MenuItemCard({
+  item,
+  kiosk,
+  adding,
+  onOpen,
+  onAdd,
+}: Readonly<{ item: MenuItemView; kiosk: boolean; adding: boolean; onOpen: () => void; onAdd: () => void }>) {
   const price = displayPriceInfo(item);
   const isUnavailable = !item.available;
 
   return (
-    <div
-      data-testid={`qr-menu-item-${item.id}`}
-      role={isUnavailable ? undefined : "button"}
-      tabIndex={isUnavailable ? undefined : 0}
-      aria-disabled={isUnavailable || undefined}
-      onClick={isUnavailable ? undefined : onOpen}
-      onKeyDown={
-        isUnavailable
-          ? undefined
-          : (event) => {
-              if (event.key === "Enter" || event.key === " ") {
-                event.preventDefault();
-                onOpen();
-              }
-            }
-      }
-      className={`flex items-center gap-4 rounded-xl border border-border bg-card p-4 text-left ${
-        isUnavailable ? "opacity-50 grayscale" : "cursor-pointer focus-visible:outline focus-visible:outline-2 focus-visible:outline-ring hover:bg-accent"
-      }`}
-    >
-      <div aria-hidden="true" className="flex size-16 shrink-0 items-center justify-center rounded-lg bg-muted text-xl font-semibold text-muted-foreground">
-        {initialLetterTile(item.name)}
-      </div>
-      <div className="min-w-0 flex-1">
-        <p className="truncate font-headline text-base font-semibold text-foreground">{item.name}</p>
-        {item.allergens.length > 0 && (
-          <p className="mt-0.5 truncate text-xs text-muted-foreground">Contains: {item.allergens.map((allergen) => allergen.name).join(", ")}</p>
-        )}
-        <p className="mt-1 text-sm font-semibold tabular-nums">
-          {isUnavailable ? (
-            <span data-testid={`qr-menu-item-unavailable-${item.id}`} className="text-muted-foreground">
-              Unavailable today
-            </span>
-          ) : price ? (
-            <span className="text-foreground">
-              {item.variants.length > 0 ? "From " : ""}
-              {formatPriceMinor(price.priceMinor, price.currency)}
-            </span>
+    <div className={`relative overflow-hidden border border-border bg-card ${kiosk ? "rounded-2xl" : "rounded-xl"} ${isUnavailable ? "opacity-50 grayscale" : ""}`}>
+      <button
+        type="button"
+        data-testid={`qr-menu-item-${item.id}`}
+        disabled={isUnavailable}
+        onClick={onOpen}
+        className={`flex w-full text-left focus-visible:outline focus-visible:outline-2 focus-visible:outline-ring disabled:cursor-default ${
+          kiosk ? "flex-col" : "items-center gap-4 p-3 pr-16"
+        } ${isUnavailable ? "" : "hover:bg-accent"}`}
+      >
+        <span
+          aria-hidden="true"
+          className={`flex shrink-0 items-center justify-center overflow-hidden bg-muted text-xl font-semibold text-muted-foreground ${
+            kiosk ? "aspect-[4/3] w-full" : "size-20 rounded-lg"
+          }`}
+        >
+          {item.photoUrl ? (
+            // eslint-disable-next-line @next/next/no-img-element -- owner-supplied https or data: URLs, not something next/image's optimizer can handle
+            <img data-testid={`qr-menu-item-photo-${item.id}`} src={item.photoUrl} alt="" loading="lazy" className="size-full object-cover" />
           ) : (
-            <span className="text-muted-foreground">Price unavailable</span>
+            initialLetterTile(item.name)
           )}
-        </p>
-      </div>
+        </span>
+        <span className={`block min-w-0 flex-1 ${kiosk ? "w-full p-3 pr-16" : ""}`}>
+          <span className={`block font-headline font-semibold text-foreground ${kiosk ? "line-clamp-2 text-lg leading-tight" : "truncate text-base"}`}>{item.name}</span>
+          {item.allergens.length > 0 && (
+            <span className="mt-0.5 block truncate text-xs text-muted-foreground">Contains: {item.allergens.map((allergen) => allergen.name).join(", ")}</span>
+          )}
+          <span className={`mt-1 block font-semibold tabular-nums ${kiosk ? "text-base" : "text-sm"}`}>
+            {isUnavailable ? (
+              <span data-testid={`qr-menu-item-unavailable-${item.id}`} className="text-muted-foreground">
+                Unavailable today
+              </span>
+            ) : price ? (
+              <span className="text-foreground">
+                {item.variants.length > 0 ? "From " : ""}
+                {formatPriceMinor(price.priceMinor, price.currency)}
+              </span>
+            ) : (
+              <span className="text-muted-foreground">Price unavailable</span>
+            )}
+          </span>
+        </span>
+      </button>
+      {!isUnavailable && price && (
+        <button
+          type="button"
+          data-testid={`qr-menu-add-${item.id}`}
+          aria-label={canQuickAdd(item) ? `Add ${item.name} to cart` : `Choose options for ${item.name}`}
+          disabled={adding}
+          onClick={onAdd}
+          className={`absolute flex items-center justify-center rounded-full bg-primary text-primary-foreground shadow-lg transition-transform active:scale-90 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring disabled:opacity-60 ${
+            kiosk ? "bottom-3 right-3 size-12" : "right-3 top-1/2 size-11 -translate-y-1/2"
+          }`}
+        >
+          <Plus className={kiosk ? "size-6" : "size-5"} strokeWidth={2.75} aria-hidden="true" />
+        </button>
+      )}
     </div>
   );
 }

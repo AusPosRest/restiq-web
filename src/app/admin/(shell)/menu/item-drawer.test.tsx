@@ -81,6 +81,30 @@ describe("ItemDrawer open/close and field editing", () => {
   beforeEach(() => vi.unstubAllGlobals());
   afterEach(cleanup);
 
+  it("uploads a photo resized in the browser, and removes it (issue #218)", async () => {
+    vi.stubGlobal("createImageBitmap", vi.fn().mockResolvedValue({ width: 960, height: 640, close: vi.fn() }));
+    vi.spyOn(HTMLCanvasElement.prototype, "getContext").mockReturnValue({ drawImage: vi.fn() } as unknown as CanvasRenderingContext2D);
+    const toDataUrl = vi.spyOn(HTMLCanvasElement.prototype, "toDataURL").mockReturnValue("data:image/jpeg;base64,AAAA");
+    const patches: unknown[] = [];
+    stubFetch({
+      onPost: (url, body) => {
+        if (!url.endsWith("/menu/items/item-1")) return undefined;
+        patches.push(body);
+        return jsonResponse(item({ photoUrl: (body as { photoUrl: string | null }).photoUrl }));
+      },
+    });
+    renderDrawer();
+
+    await userEvent.upload(screen.getByTestId("item-photo-input"), new File(["x"], "dosa.png", { type: "image/png" }));
+    expect((await screen.findByTestId("item-photo-preview")).getAttribute("src")).toBe("data:image/jpeg;base64,AAAA");
+    expect(toDataUrl).toHaveBeenCalledWith("image/jpeg", 0.8);
+
+    await userEvent.click(screen.getByTestId("item-photo-remove"));
+    await waitFor(() => expect(screen.queryByTestId("item-photo-preview")).toBeNull());
+    expect(patches).toEqual([{ photoUrl: "data:image/jpeg;base64,AAAA" }, { photoUrl: null }]);
+    vi.restoreAllMocks();
+  });
+
   it("does not render when closed", () => {
     stubFetch();
     render(
