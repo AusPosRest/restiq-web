@@ -38,6 +38,30 @@ export function saveTerminalBinding(binding: TerminalBinding): void {
   }
 }
 
+// Device topology (issue #210): which enrolled device *this tab* is. The
+// binding above lives in localStorage, shared by every tab in the browser, so
+// a printer tab signing in would re-point a POS tab at the printer. The tab's
+// own id lives in sessionStorage and falls back to the shared binding.
+const TAB_KEY = "pos:tab-device";
+
+export function getTabDeviceId(): string | null {
+  try {
+    const own = window.sessionStorage.getItem(TAB_KEY);
+    if (own) return own;
+  } catch {
+    // sessionStorage unavailable - fall back to the shared binding.
+  }
+  return getTerminalBinding()?.deviceId ?? null;
+}
+
+export function saveTabDeviceId(deviceId: string): void {
+  try {
+    window.sessionStorage.setItem(TAB_KEY, deviceId);
+  } catch {
+    // Best-effort - the tab falls back to the shared binding.
+  }
+}
+
 export function clearTerminalBinding(): void {
   try {
     window.localStorage.removeItem(KEY);

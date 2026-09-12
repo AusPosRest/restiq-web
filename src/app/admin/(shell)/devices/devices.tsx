@@ -14,6 +14,7 @@ import { CodeChip } from "./code-chip";
 import { DevicesTable } from "./devices-table";
 import { GenerateCodeDialog } from "./generate-code-dialog";
 import { PrinterConfigPanel } from "./printer-config-panel";
+import { Topology } from "./topology";
 import type { AdminDeviceView, EnrolmentCodeResult } from "./devices-state";
 import type { PrinterView, StationView } from "../floor-plan/floor-plan-state";
 
@@ -89,11 +90,29 @@ function OutletDevices({ outletId }: Readonly<{ outletId: string }>) {
   return <DevicesEditor outletId={outletId} initial={data} />;
 }
 
+// The topology's online dots follow the devices' 30 s heartbeat (issue #210).
+const DEVICES_REFRESH_MS = 30_000;
+
 function DevicesEditor({ outletId, initial }: Readonly<{ outletId: string; initial: DevicesData }>) {
+  const [devices, setDevices] = useState<AdminDeviceView[]>(initial.devices);
+  const [now, setNow] = useState(() => Date.now());
   const [printers, setPrinters] = useState<PrinterView[]>(initial.printers);
   const [stations, setStations] = useState<StationView[]>(initial.stations);
   const [activeCode, setActiveCode] = useState<EnrolmentCodeResult | null>(null);
   const [generateOpen, setGenerateOpen] = useState(false);
+
+  useEffect(() => {
+    const id = setInterval(() => {
+      // A failed refresh keeps the last known list - the next tick retries.
+      fetchDevices(outletId)
+        .then((next) => {
+          setDevices(next);
+          setNow(Date.now());
+        })
+        .catch(() => undefined);
+    }, DEVICES_REFRESH_MS);
+    return () => clearInterval(id);
+  }, [outletId]);
 
   return (
     <div className="flex flex-1 flex-col gap-6">
@@ -107,8 +126,15 @@ function DevicesEditor({ outletId, initial }: Readonly<{ outletId: string; initi
         </Button>
       </div>
 
+      <Topology
+        outletId={outletId}
+        devices={devices}
+        now={now}
+        onLinked={(deviceId, posDeviceId) => setDevices((current) => current.map((d) => (d.id === deviceId ? { ...d, pairedPosId: posDeviceId } : d)))}
+      />
+
       <div className="grid grid-cols-1 gap-6 2xl:grid-cols-[minmax(0,1fr)_320px]">
-        <DevicesTable devices={initial.devices} />
+        <DevicesTable devices={devices} />
         {activeCode ? (
           <CodeChip key={activeCode.code} code={activeCode.code} expiresAt={activeCode.expiresAt} onRegenerate={() => setGenerateOpen(true)} />
         ) : (

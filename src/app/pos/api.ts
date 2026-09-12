@@ -436,12 +436,35 @@ export interface PrintJobView {
   printedAt: string | null;
 }
 
+// --- Device topology (issue #210 / restiq-backend#134). Each call names this
+// tab's own enrolled device: a POS's print jobs and card payments go to the
+// printer/terminal linked to it, and a linked printer/terminal polls only its
+// own queue. No device (or a malformed one) = the outlet-wide queue, as before.
+import { getTabDeviceId } from "./terminal-binding";
+
+const UUID_SHAPE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+
+/** This tab's enrolled device id, or null when it has none the backend would accept. */
+export function tabDeviceId(): string | null {
+  const id = getTabDeviceId();
+  return id && UUID_SHAPE.test(id) ? id : null;
+}
+
+function deviceQuery(): string {
+  const id = tabDeviceId();
+  return id ? `?deviceId=${encodeURIComponent(id)}` : "";
+}
+
+export function sendDeviceHeartbeat(deviceId: string): Promise<null> {
+  return posApi<null>(`devices/${encodeURIComponent(deviceId)}/heartbeat`, { method: "POST" });
+}
+
 export function sendBillToPrinter(billId: string): Promise<PrintJobView> {
-  return posApi<PrintJobView>(`bills/${billId}/print`, { method: "POST" });
+  return posApi<PrintJobView>(`bills/${billId}/print`, { method: "POST", body: JSON.stringify({ deviceId: tabDeviceId() ?? undefined }) });
 }
 
 export function listPendingPrintJobs(outletId: string): Promise<PrintJobView[]> {
-  return posApi<PrintJobView[]>(`outlets/${encodeURIComponent(outletId)}/print-jobs`);
+  return posApi<PrintJobView[]>(`outlets/${encodeURIComponent(outletId)}/print-jobs${deviceQuery()}`);
 }
 
 export function markPrintJobPrinted(jobId: string): Promise<PrintJobView> {
@@ -472,7 +495,10 @@ export interface CreatePaymentIntentInput {
 }
 
 export function createPaymentIntent(billId: string, input: CreatePaymentIntentInput): Promise<PaymentIntentView> {
-  return posApi<PaymentIntentView>(`bills/${encodeURIComponent(billId)}/intents`, { method: "POST", body: JSON.stringify(input) });
+  return posApi<PaymentIntentView>(`bills/${encodeURIComponent(billId)}/intents`, {
+    method: "POST",
+    body: JSON.stringify({ ...input, deviceId: tabDeviceId() ?? undefined }),
+  });
 }
 
 export function getPaymentIntent(intentId: string): Promise<PaymentIntentView> {
@@ -484,7 +510,7 @@ export function cancelPaymentIntent(intentId: string): Promise<PaymentIntentView
 }
 
 export function listPendingPaymentIntents(outletId: string): Promise<PaymentIntentView[]> {
-  return posApi<PaymentIntentView[]>(`outlets/${encodeURIComponent(outletId)}/payment-intents`);
+  return posApi<PaymentIntentView[]>(`outlets/${encodeURIComponent(outletId)}/payment-intents${deviceQuery()}`);
 }
 
 export function simulatePaymentIntent(intentId: string, outcome: "success" | "failure"): Promise<PaymentIntentView> {

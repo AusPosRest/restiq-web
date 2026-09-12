@@ -1,10 +1,28 @@
 import { afterEach, describe, expect, it } from "vitest";
-import { clearTerminalBinding, getTerminalBinding, saveTerminalBinding } from "./terminal-binding";
+import { clearTerminalBinding, getTabDeviceId, getTerminalBinding, saveTabDeviceId, saveTerminalBinding } from "./terminal-binding";
 
 const KEY = "pos:terminal-binding";
 
 afterEach(() => {
   window.localStorage.clear();
+  window.sessionStorage.clear();
+});
+
+describe("tab device id", () => {
+  it("is null with neither a tab id nor a shared binding", () => {
+    expect(getTabDeviceId()).toBeNull();
+  });
+
+  it("falls back to the shared binding's device", () => {
+    saveTerminalBinding({ tenantId: "t1", deviceId: "shared-device" });
+    expect(getTabDeviceId()).toBe("shared-device");
+  });
+
+  it("prefers this tab's own device over the shared binding another tab overwrote", () => {
+    saveTabDeviceId("pos-device");
+    saveTerminalBinding({ tenantId: "t1", deviceId: "printer-device" });
+    expect(getTabDeviceId()).toBe("pos-device");
+  });
 });
 
 describe("terminal-binding", () => {

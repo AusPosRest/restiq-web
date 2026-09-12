@@ -459,9 +459,9 @@ export function createPrinter(outletId: string, input: { name: string; renderMod
 // summarized contract, same discipline as CAP-4/CAP-5/CAP-10). Per AD-12,
 // AdminDevicesService is a thin tenant-forced wrapper around the same
 // DevicesService Platform Console's device fleet uses - GET returns the same
-// {devices, nextCursor, total} shape ops's fleet view does (devices-state.ts
-// documents the appVersion/lastContactAt gap in that shared response
-// mapping); POST enrolment-codes takes only {deviceType} since tenantId and
+// {devices, nextCursor, total} shape ops's fleet view does (list items carry
+// lastContactAt/appVersion since restiq-backend#136, and pairedPosId since
+// #134); POST enrolment-codes takes only {deviceType} since tenantId and
 // outletId come from the owner's session and the URL, never the body.
 // updatePrinter reuses CAP-5's floor-plan module (PATCH .../floor-plan/
 // printers/:printerId, {renderMode}) - printer render-mode isn't part of
@@ -475,6 +475,16 @@ export function generateEnrolmentCode(outletId: string, deviceType: DeviceType):
   return adminApi<EnrolmentCodeResult>(`outlets/${outletId}/devices/enrolment-codes`, {
     method: "POST",
     body: JSON.stringify({ deviceType }),
+  });
+}
+
+// Device topology (issue #210 / restiq-backend#134): link a printer or card
+// terminal to one POS, or back to the whole outlet with null. 409
+// pos_already_linked when that POS already has one of that type.
+export function setDevicePairing(outletId: string, deviceId: string, posDeviceId: string | null): Promise<{ id: string; pairedPosId: string | null }> {
+  return adminApi<{ id: string; pairedPosId: string | null }>(`outlets/${outletId}/devices/${deviceId}/pairing`, {
+    method: "PATCH",
+    body: JSON.stringify({ posDeviceId }),
   });
 }
 

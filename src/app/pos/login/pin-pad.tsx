@@ -20,7 +20,7 @@
 import { Delete } from "lucide-react";
 import { useEffect, useRef, useState } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
-import { clearTerminalBinding, getTerminalBinding, saveTerminalBinding, type TerminalBinding } from "../terminal-binding";
+import { clearTerminalBinding, getTerminalBinding, saveTabDeviceId, saveTerminalBinding, type TerminalBinding } from "../terminal-binding";
 import {
   appendDigit,
   backspacePin,
@@ -138,7 +138,10 @@ export function PinPad({ nextPath }: { nextPath: string }) {
       : getTerminalBinding();
 
   useEffect(() => {
-    if (queryTenantId && queryDeviceId) saveTerminalBinding({ tenantId: queryTenantId, deviceId: queryDeviceId });
+    if (!queryTenantId || !queryDeviceId) return;
+    saveTerminalBinding({ tenantId: queryTenantId, deviceId: queryDeviceId });
+    // This tab's own identity for print/terminal routing and the heartbeat (issue #210).
+    saveTabDeviceId(queryDeviceId);
   }, [queryTenantId, queryDeviceId]);
 
   function rebind() {

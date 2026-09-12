@@ -524,6 +524,21 @@ story. Backend counterpart: `restiq-backend/wiki/features/tenant-admin.md`.
     reachable address (LAN IP / tunnel), not `localhost`. Enrolled rows with
     an "Open …" link also get a QR button (#202, `device-qr-<id>` →
     `device-qr-dialog`) encoding that same link for scan-to-open.
+  - **Topology** (`topology.tsx`, #210 / restiq-backend#134, #136): above
+    the table, one card per active POS with its linked printer and card
+    terminal hanging off it (or "uses the outlet's shared …"), a "Shared
+    with the whole outlet" group for unlinked printers/terminals, and
+    "Other devices" (KDS/CDS/kiosk). Each device has a status dot from
+    `devices-state.ts#connectionState` (online < 90 s since the last
+    heartbeat, else offline, or never). Printer/terminal chips carry a
+    "Linked to" `<select>` (`topology-link-select-<id>`) that calls
+    `setDevicePairing` (`PATCH .../devices/:id/pairing`); a refusal (409
+    one-per-POS) toasts the server's message. `devices.tsx` re-fetches the
+    device list every 30 s. The POS side: `terminal-binding.ts#getTabDeviceId`
+    (sessionStorage per tab, set by the PIN pad from `?device=`), `pos/api.ts`
+    sends `deviceId` with print/intent calls and `?deviceId=` on the printer/
+    terminal polls, and `pos/device-heartbeat.tsx` (in the POS layout) posts
+    `devices/:id/heartbeat` every 30 s.
   - **Printer config** (`printer-config-panel.tsx`): one row per printer with
     a render-mode `<select>` (auto-saves via `PATCH .../floor-plan/printers/
     :printerId`) and a fallback-printer `<select>`. Fallback is a per-

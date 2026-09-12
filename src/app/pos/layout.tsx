@@ -1,5 +1,6 @@
 import type { Metadata } from "next";
 import { Hanken_Grotesk, Inter, Public_Sans } from "next/font/google";
+import { DeviceHeartbeat } from "./device-heartbeat";
 
 const hankenGrotesk = Hanken_Grotesk({
   variable: "--font-hanken-grotesk",
@@ -38,6 +39,7 @@ export default function PosLayout({
     <div
       className={`${hankenGrotesk.variable} ${inter.variable} ${publicSans.variable} pos-theme flex min-h-screen flex-1 flex-col bg-background text-foreground antialiased`}
     >
+      <DeviceHeartbeat />
       {children}
     </div>
   );
