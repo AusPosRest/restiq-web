@@ -3,8 +3,10 @@
 // Read-only device list for the current outlet (name/type/role/app version/
 // last seen/status) - enrolment and revocation stay Platform Console's job;
 // this screen only surfaces what's already enrolled plus generates codes.
-import { ExternalLink, MonitorSmartphone, Radio } from "lucide-react";
+import { Dialog } from "radix-ui";
+import { ExternalLink, MonitorSmartphone, QrCode, Radio } from "lucide-react";
 import { useState } from "react";
+import { QR_SIZE_PX, useQrDataUrl } from "../floor-plan/table-qr-dialog";
 import { formatLastSeen, type AdminDeviceView } from "./devices-state";
 
 // Where an enrolled device's surface lives, so an owner can click straight
@@ -43,6 +45,7 @@ export function DevicesTable({ devices }: Readonly<{ devices: readonly AdminDevi
   // for Date.now() - "last seen" doesn't need to live-tick like the
   // enrolment countdown does.
   const [now] = useState(() => Date.now());
+  const [qrFor, setQrFor] = useState<AdminDeviceView | null>(null);
 
   if (devices.length === 0) {
     return (
@@ -101,16 +104,27 @@ export function DevicesTable({ devices }: Readonly<{ devices: readonly AdminDevi
               </td>
               <td className="px-4 text-right">
                 {device.status === "active" && SURFACE_LINKS[device.type] ? (
-                  <a
-                    href={SURFACE_LINKS[device.type].href(device)}
-                    target="_blank"
-                    rel="noopener"
-                    data-testid={`device-open-${device.id}`}
-                    className="inline-flex items-center gap-1 whitespace-nowrap text-xs font-semibold text-primary hover:underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
-                  >
-                    {SURFACE_LINKS[device.type].label}
-                    <ExternalLink className="size-3" aria-hidden="true" />
-                  </a>
+                  <div className="inline-flex items-center gap-3">
+                    <button
+                      type="button"
+                      aria-label={`Show QR for ${device.label}`}
+                      data-testid={`device-qr-${device.id}`}
+                      onClick={() => setQrFor(device)}
+                      className="rounded-md p-1 text-muted-foreground hover:bg-accent hover:text-foreground focus:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+                    >
+                      <QrCode className="size-4" aria-hidden="true" />
+                    </button>
+                    <a
+                      href={SURFACE_LINKS[device.type].href(device)}
+                      target="_blank"
+                      rel="noopener"
+                      data-testid={`device-open-${device.id}`}
+                      className="inline-flex items-center gap-1 whitespace-nowrap text-xs font-semibold text-primary hover:underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+                    >
+                      {SURFACE_LINKS[device.type].label}
+                      <ExternalLink className="size-3" aria-hidden="true" />
+                    </a>
+                  </div>
                 ) : (
                   <span className="text-xs text-muted-foreground">-</span>
                 )}
@@ -119,6 +133,58 @@ export function DevicesTable({ devices }: Readonly<{ devices: readonly AdminDevi
           ))}
         </tbody>
       </table>
+      {qrFor && <DeviceQrDialog key={qrFor.id} device={qrFor} onClose={() => setQrFor(null)} />}
     </div>
+  );
+}
+
+/** Scan-to-open for an already-enrolled device (issue #202): a QR of the same link as the row's "Open …". */
+function DeviceQrDialog({ device, onClose }: Readonly<{ device: AdminDeviceView; onClose: () => void }>) {
+  const url = `${window.location.origin}${SURFACE_LINKS[device.type].href(device)}`;
+  const qrDataUrl = useQrDataUrl(url);
+
+  return (
+    <Dialog.Root open onOpenChange={(next) => !next && onClose()}>
+      <Dialog.Portal>
+        <Dialog.Overlay className="fixed inset-0 z-40 bg-black/60" />
+        <Dialog.Content
+          data-testid="device-qr-dialog"
+          aria-describedby={undefined}
+          className="admin-theme fixed left-1/2 top-1/2 z-50 w-[calc(100%-2rem)] max-w-sm -translate-x-1/2 -translate-y-1/2 rounded-lg border border-border/60 bg-popover p-6 text-foreground shadow-xl"
+        >
+          <div className="flex items-center justify-between">
+            <Dialog.Title className="font-headline text-lg font-semibold">{device.label}</Dialog.Title>
+            <Dialog.Close
+              aria-label="Close"
+              data-testid="device-qr-dialog-close"
+              className="rounded-md p-1 text-muted-foreground hover:bg-accent hover:text-foreground focus:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+            >
+              ✕
+            </Dialog.Close>
+          </div>
+          <div className="mt-4 flex flex-col items-center gap-2 text-center">
+            {qrDataUrl ? (
+              // eslint-disable-next-line @next/next/no-img-element -- a data: URL, not something next/image's optimizer can (or needs to) handle
+              <img
+                data-testid="device-qr-dialog-image"
+                src={qrDataUrl}
+                alt={`QR to open ${device.label}`}
+                width={QR_SIZE_PX}
+                height={QR_SIZE_PX}
+                className="rounded-md bg-white p-2"
+              />
+            ) : (
+              <div style={{ width: QR_SIZE_PX, height: QR_SIZE_PX }} className="flex items-center justify-center text-xs text-muted-foreground">
+                Generating…
+              </div>
+            )}
+            <p className="text-xs text-muted-foreground">Scan with the device&apos;s camera to open its screen</p>
+            <code data-testid="device-qr-dialog-url" className="max-w-full break-all rounded bg-muted px-2 py-1 text-xs">
+              {url}
+            </code>
+          </div>
+        </Dialog.Content>
+      </Dialog.Portal>
+    </Dialog.Root>
   );
 }

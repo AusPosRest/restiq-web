@@ -26,6 +26,10 @@ with the payments epic.
   PIN pad bound to their own tenant (`?device=&tenant=`, as in #150). The QR
   carries the console's own origin, so open the console on an address the
   device can reach (LAN IP or tunnel), not `localhost`.
+- Scan QR for enrolled devices (#202): each Devices row with an **Open …**
+  link gains a QR button that shows that link as a QR, so a phone or tablet
+  scans straight into the device's screen. Also fixed: the enrol URL no
+  longer stretches the Enrol drawer past the screen edge (it wraps).
 - Agreements with versioning and owner digital signature (#192, web half of
   restiq-backend#133): `/ops/agreements` publishes versions through the
   reason dialog, Tenant Detail gains an **Agreements** tab (signed / pending

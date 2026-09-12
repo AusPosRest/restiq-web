@@ -1,7 +1,11 @@
-import { cleanup, render, screen } from "@testing-library/react";
+import { cleanup, fireEvent, render, screen } from "@testing-library/react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { DevicesTable } from "./devices-table";
 import type { AdminDeviceView } from "./devices-state";
+
+vi.mock("qrcode", () => ({
+  default: { toDataURL: vi.fn(() => Promise.resolve("data:image/png;base64,FAKE")) },
+}));
 
 function device(overrides: Partial<AdminDeviceView> = {}): AdminDeviceView {
   return {
@@ -74,6 +78,19 @@ describe("DevicesTable", () => {
     expect(screen.queryByTestId("device-open-cds-1")).toBeNull();
     expect(screen.queryByTestId("device-open-kiosk-1")).toBeNull();
     expect(screen.queryByTestId("device-open-gone-1")).toBeNull();
+  });
+
+  it("shows a scan QR of the device's open link, only for devices with a surface", async () => {
+    vi.useRealTimers();
+    render(<DevicesTable devices={[device({ id: "printer-1", type: "printer" }), device({ id: "cds-1", type: "cds" })]} />);
+    expect(screen.queryByTestId("device-qr-cds-1")).toBeNull();
+
+    fireEvent.click(screen.getByTestId("device-qr-printer-1"));
+    expect((await screen.findByTestId("device-qr-dialog-image")).getAttribute("src")).toBe("data:image/png;base64,FAKE");
+    const url = `${window.location.origin}/pos/login?device=printer-1&tenant=tenant-1&next=%2Fpos%2Fprinter`;
+    expect(screen.getByTestId("device-qr-dialog-url").textContent).toBe(url);
+    const { default: QRCode } = await import("qrcode");
+    expect(QRCode.toDataURL).toHaveBeenCalledWith(url, expect.anything());
   });
 
   it("shows an empty state with no devices", () => {

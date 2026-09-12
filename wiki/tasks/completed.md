@@ -1282,3 +1282,7 @@ faked.
   PIN pad (`?device=&tenant=`, #150). Tests: `code-chip.test.tsx`,
   `device-screen.test.tsx`, `device-state.test.ts`. See
   [wiki/features/tenant-admin.md](../features/tenant-admin.md) (CAP-6).
+- **2026-09-12** - Device QR follow-up (issue #202). Enrol URL wraps
+  (`break-all`) instead of stretching the Enrol drawer's grid past the
+  viewport; each enrolled Devices row with an "Open …" link gets a QR button
+  and dialog encoding that link. Tests: `devices-table.test.tsx`.
