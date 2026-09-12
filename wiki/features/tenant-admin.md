@@ -572,7 +572,11 @@ story. Backend counterpart: `restiq-backend/wiki/features/tenant-admin.md`.
   - **Staff table** (`staff-table.tsx`): name/email, a per-row role
     `<select>` populated only from the tenant's actual fetched roles (a
     closed set by construction - no free-text option can ever exist), and a
-    POS PIN status badge with an "Issue PIN"/"Revoke access" action.
+    POS PIN status badge with an "Issue PIN"/"Revoke access" action. An
+    active PIN also gets "Reset PIN" (#204, `staff-reset-pin-<id>`): PINs are
+    argon2-hashed, so an existing one is never shown - reset re-issues
+    through the same issue flow (the backend supersedes the old PIN) and the
+    new one appears once in the PIN chip.
     Selecting a new role doesn't apply it directly - it requests a
     confirmation from `staff.tsx` (role change is one of SPEC's named
     security-relevant, audit-reason actions; EXPERIENCE.md lists it

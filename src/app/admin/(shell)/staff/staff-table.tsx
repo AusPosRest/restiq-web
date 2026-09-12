@@ -108,15 +108,21 @@ export function StaffTable({
                   </td>
                   <td className="px-4">
                     {member.pinStatus === "active" ? (
-                      <Button
-                        variant="destructive"
-                        size="sm"
-                        data-testid={`staff-revoke-pin-${member.id}`}
-                        disabled={busy}
-                        onClick={() => onRevokeRequested(member.id)}
-                      >
-                        Revoke access
-                      </Button>
+                      <div className="flex items-center gap-2">
+                        {/* PINs are stored hashed, so an existing one can't be shown - Reset issues a new one, shown once (#204). */}
+                        <Button variant="secondary" size="sm" data-testid={`staff-reset-pin-${member.id}`} disabled={busy} onClick={() => onIssuePin(member.id)}>
+                          <KeyRound aria-hidden="true" /> Reset PIN
+                        </Button>
+                        <Button
+                          variant="destructive"
+                          size="sm"
+                          data-testid={`staff-revoke-pin-${member.id}`}
+                          disabled={busy}
+                          onClick={() => onRevokeRequested(member.id)}
+                        >
+                          Revoke access
+                        </Button>
+                      </div>
                     ) : (
                       <Button variant="secondary" size="sm" data-testid={`staff-issue-pin-${member.id}`} disabled={busy} onClick={() => onIssuePin(member.id)}>
                         <KeyRound aria-hidden="true" /> Issue PIN

@@ -20,6 +20,10 @@ with the payments epic.
   answer is a Simulator strip; only the final outcome reaches the server.
 
 ### Added
+- Staff **Reset PIN** (#204): staff with an active PIN get a Reset PIN
+  button that issues a new PIN and shows it once in the PIN chip. An
+  existing PIN can't be displayed - PINs are stored hashed - so resetting is
+  how an owner gets a PIN they can see. The old PIN stops working at once.
 - Scan-to-enrol QR (#200): the owner **Enrol device** code chip shows a QR
   of `/device?code=XXX-XXX`; scanning it opens enrolment with the code
   prefilled. After enrolling, POS / printer / terminal devices continue to a
