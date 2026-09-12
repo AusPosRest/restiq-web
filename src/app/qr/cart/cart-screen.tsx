@@ -224,7 +224,7 @@ function CartLoaded({
           </p>
         ) : null}
         <div className="flex items-baseline justify-between">
-          <span className="text-sm font-medium text-muted-foreground">Table total</span>
+          <span className="text-sm font-medium text-muted-foreground">{isKioskTab() ? "Total" : "Table total"}</span>
           <span data-testid="cart-total" className="font-headline text-2xl font-bold tabular-nums text-foreground">
             {formatMinor(cart.totalMinor, cart.currency)}
           </span>
