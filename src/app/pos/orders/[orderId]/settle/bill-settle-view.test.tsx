@@ -199,7 +199,9 @@ describe("BillSettleView - tenders", () => {
 
 describe("BillSettleView - print bill (issue #160, direct to printer #208)", () => {
   it("sends the open bill straight to the print spool from the Print bill button", async () => {
-    const fetchMock = stubFetch();
+    const fetchMock = stubFetch({
+      "POST bills/bill-1/print": () => jsonResponse({ id: "job-1", billId: "bill-1", payload: {}, createdAt: "2026-09-12T00:00:00.000Z", printedAt: null }, 201),
+    });
     render(<BillSettleView orderId={ORDER_ID} />);
 
     await screen.findByTestId("bill-summary");
