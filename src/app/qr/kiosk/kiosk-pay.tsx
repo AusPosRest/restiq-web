@@ -9,7 +9,7 @@
 // KioskFrame in ../kiosk-chrome.tsx). A decline never calls the API: the
 // backend's simulated failure writes nothing anyway.
 import { Check, CreditCard, Nfc, Printer } from "lucide-react";
-import { useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { createPortal } from "react-dom";
 import { GuestApiError } from "../api-client";
 import { formatMinor } from "../cart/cart-state";
@@ -167,8 +167,15 @@ function Row({ label, value, bold, testId }: Readonly<{ label: string; value: st
 // the token number big enough to read across the counter.
 function KioskReceipt({ invoice, tokenNumber }: Readonly<{ invoice: GuestInvoiceView; tokenNumber: number }>) {
   const money = (amountMinor: number) => formatMinor(amountMinor, invoice.currency);
+  const ref = useRef<HTMLElement>(null);
+  // The slot sits below the kiosk screen, usually under the fold - bring the paper into view as it feeds.
+  useEffect(() => {
+    const smooth = !window.matchMedia?.("(prefers-reduced-motion: reduce)").matches;
+    ref.current?.scrollIntoView?.({ behavior: smooth ? "smooth" : "auto", block: "nearest" });
+  }, []);
   return (
     <article
+      ref={ref}
       data-testid="kiosk-receipt"
       aria-label="Receipt"
       className="w-[260px] animate-[kiosk-receipt-feed_2.4s_steps(24,end)_both] bg-white px-4 pb-6 pt-4 font-mono text-[11px] leading-5 text-black shadow-lg motion-reduce:animate-none"
