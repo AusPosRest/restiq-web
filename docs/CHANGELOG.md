@@ -25,6 +25,14 @@ with the payments epic.
   answer is a Simulator strip; only the final outcome reaches the server.
 
 ### Added
+- Kiosk: simulated kiosk screen and ordering from the kiosk (#214, web half
+  of restiq-backend#138). An enrolled kiosk tab's "Continue" (and the
+  landing page) opens `/qr/kiosk/[outletId]`: "Tap to start your order"
+  starts a device-bound, table-less guest session and lands on the
+  existing menu / cart flow. Placing shows the token number with "Pay at
+  the counter"; the status page shows it too and hides Request bill. A
+  "Start over" bar and a 90 s idle timeout end the session and return to
+  the attract screen.
 - Device topology (#210, web half of restiq-backend#134 / #136): the owner
   Devices page opens with a **Topology** map - each POS with the printer and
   card terminal linked to it, devices shared by the whole outlet, and other

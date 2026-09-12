@@ -19,8 +19,10 @@
 // STATUS_ROUTE below).
 import { Minus, Plus, Trash2 } from "lucide-react";
 import Link from "next/link";
+import { useRouter } from "next/navigation";
 import { useState } from "react";
 import { GuestApiError } from "../api-client";
+import { endKioskSession, isKioskTab } from "../kiosk-session";
 import {
   fetchCart,
   placeOrder,
@@ -180,7 +182,7 @@ function CartLoaded({
 
   return (
     <main data-testid="cart-screen" className="flex min-h-screen flex-1 flex-col px-6 pb-40 pt-8">
-      <h1 className="font-headline text-2xl font-semibold text-foreground">Your table&apos;s order</h1>
+      <h1 className="font-headline text-2xl font-semibold text-foreground">{isKioskTab() ? "Your order" : "Your table's order"}</h1>
 
       {stale ? (
         <p data-testid="cart-stale-note" className="mt-2 text-xs text-muted-foreground">
@@ -398,9 +400,19 @@ function EmptyState() {
 // commitment".
 function PlacedConfirmation({ order }: Readonly<{ order: PlacedOrderView }>) {
   const groups = groupPlacedOrderLinesByGuest(order);
+  // A kiosk order (issue #214) has no table - the token number is what the
+  // counter calls out, so it is the headline; the bill is paid there, not here.
+  const kiosk = order.tokenNumber != null;
   return (
     <main data-testid="cart-placed" className="flex min-h-screen flex-1 flex-col items-center px-6 pb-12 pt-16 text-center">
       <h1 className="font-headline text-2xl font-semibold text-foreground">Sent to the kitchen</h1>
+      {kiosk && (
+        <div data-testid="cart-placed-token" className="mt-6 rounded-2xl border border-border bg-card px-10 py-6">
+          <p className="font-label text-xs font-semibold uppercase tracking-[0.3em] text-muted-foreground">Your number</p>
+          <p className="mt-1 font-headline text-6xl font-bold tabular-nums text-primary">{order.tokenNumber}</p>
+          <p className="mt-2 text-sm text-muted-foreground">Pay at the counter and collect your order when it&apos;s called.</p>
+        </div>
+      )}
       <p data-testid="cart-placed-order-id" className="mt-2 text-sm text-muted-foreground">
         Order #{order.orderId.slice(-6).toUpperCase()}
       </p>
@@ -427,10 +439,25 @@ function PlacedConfirmation({ order }: Readonly<{ order: PlacedOrderView }>) {
       </div>
 
       <div className="mt-8 flex gap-3">
-        <RequestBillLink orderId={order.orderId} />
+        {kiosk ? <KioskDoneButton /> : <RequestBillLink orderId={order.orderId} />}
         <TrackOrderLink />
       </div>
     </main>
+  );
+}
+
+// Ends this kiosk session and returns to the attract screen for the next guest.
+function KioskDoneButton() {
+  const router = useRouter();
+  return (
+    <button
+      type="button"
+      data-testid="cart-kiosk-done"
+      onClick={() => void endKioskSession().then((home) => router.replace(home))}
+      className="rounded-lg bg-primary px-4 py-2.5 text-sm font-semibold text-primary-foreground focus-visible:outline focus-visible:outline-2 focus-visible:outline-ring"
+    >
+      Done
+    </button>
   );
 }
 

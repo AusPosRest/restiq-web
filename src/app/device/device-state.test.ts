@@ -93,7 +93,7 @@ describe("sessionStorage-backed helpers", () => {
 });
 
 describe("continueTargetFor", () => {
-  const device = (type: string) => ({ id: "d1", tenantId: "t1", type });
+  const device = (type: string, outletId: string | null = "o1") => ({ id: "d1", tenantId: "t1", type, outletId });
 
   it("routes pos to the POS login bound to this device's tenant", () => {
     expect(continueTargetFor(device("pos"))).toEqual({ kind: "redirect", path: "/pos/login?device=d1&tenant=t1" });
@@ -111,8 +111,13 @@ describe("continueTargetFor", () => {
     expect(continueTargetFor(device("terminal"))).toEqual({ kind: "redirect", path: "/pos/login?device=d1&tenant=t1&next=%2Fpos%2Fterminal" });
   });
 
-  it("has no web surface for kiosk or cds", () => {
-    expect(continueTargetFor(device("kiosk"))).toEqual({ kind: "unsupported" });
+  it("sends a kiosk to its outlet's attract screen, carrying the device id (issue #214)", () => {
+    expect(continueTargetFor(device("kiosk"))).toEqual({ kind: "redirect", path: "/qr/kiosk/o1?device=d1" });
+    // An outlet-less kiosk row has nowhere to go.
+    expect(continueTargetFor(device("kiosk", null))).toEqual({ kind: "unsupported" });
+  });
+
+  it("has no web surface for cds", () => {
     expect(continueTargetFor(device("cds"))).toEqual({ kind: "unsupported" });
   });
 });

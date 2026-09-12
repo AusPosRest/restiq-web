@@ -6,6 +6,7 @@ function order(overrides: Partial<GuestOrderStatusView>): GuestOrderStatusView {
   return {
     orderId: "order-1",
     tableId: "table-1",
+    tokenNumber: null,
     step: "placed",
     steps: [
       { step: "placed", reachedAt: "2026-08-29T10:00:00.000Z" },
