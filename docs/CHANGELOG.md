@@ -6,6 +6,11 @@ with the payments epic.
 
 ## [Unreleased]
 
+### Fixed
+- POS table map header on a phone (#206): the actions wrap onto their own
+  row, button labels stay on one line, and Refresh is no longer pushed
+  off-screen.
+
 ### Changed
 - The simulated card terminal is drawn as the physical device (#198): body,
   brand bar with a status LED, inset screen, and reader hardware along the

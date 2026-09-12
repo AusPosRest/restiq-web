@@ -1291,3 +1291,7 @@ faked.
   `issuePin` already supersedes an active PIN) and shows the new PIN once in
   `pin-chip.tsx`. PINs stay argon2-hashed; no reveal of an existing PIN.
   Tests: `staff-table.test.tsx`.
+- **2026-09-12** - POS table map mobile header (issue #206).
+  `table-map.tsx` header and actions `flex-wrap`, labels `whitespace-nowrap`,
+  "Signed in as" full-width below `sm`, page padding `p-4 sm:p-6`. Layout
+  only; no test change.
