@@ -169,7 +169,7 @@ export function MenuView() {
       role="tablist"
       aria-label="Menu categories"
       aria-orientation={kiosk ? "vertical" : "horizontal"}
-      className={kiosk ? "flex w-28 shrink-0 flex-col gap-2 border-r border-border bg-card/60 p-2" : "mt-3 flex gap-2 overflow-x-auto"}
+      className={kiosk ? "flex w-24 shrink-0 flex-col gap-2 border-r border-border bg-card/60 p-2" : "mt-3 flex gap-2 overflow-x-auto"}
     >
       {categories.map((category) => {
         const selected = activeCategoryId === category.id;
@@ -181,7 +181,7 @@ export function MenuView() {
             aria-selected={selected}
             data-testid={`qr-menu-tab-${category.id}`}
             onClick={() => setActiveCategoryId(category.id)}
-            className={`${kiosk ? "rounded-xl px-2 py-5 text-center text-sm" : "shrink-0 rounded-full px-4 py-2 text-sm"} font-semibold transition-colors focus-visible:outline focus-visible:outline-2 focus-visible:outline-ring ${
+            className={`${kiosk ? "rounded-xl px-1 py-5 text-center text-sm leading-tight" : "shrink-0 rounded-full px-4 py-2 text-sm"} font-semibold transition-colors focus-visible:outline focus-visible:outline-2 focus-visible:outline-ring ${
               selected ? "bg-primary text-primary-foreground" : "bg-card text-foreground hover:bg-accent"
             }`}
           >
@@ -212,9 +212,9 @@ export function MenuView() {
 
       <div className={kiosk ? "flex flex-1" : "contents"}>
         {kiosk && tabs}
-        <div aria-live="polite" className={kiosk ? "grid flex-1 grid-cols-2 content-start gap-3 p-3" : "flex flex-col gap-3 px-4 pt-4"}>
+        <div aria-live="polite" className={kiosk ? "grid min-w-0 flex-1 grid-cols-[repeat(auto-fill,minmax(8.5rem,1fr))] content-start gap-3 p-3" : "flex flex-col gap-3 px-4 pt-4"}>
           {items.length === 0 ? (
-            <p data-testid="qr-menu-empty" className="col-span-2 mt-8 text-center text-sm text-muted-foreground">
+            <p data-testid="qr-menu-empty" className="col-span-full mt-8 text-center text-sm text-muted-foreground">
               {query.trim() !== "" ? "No dishes match your search" : "Nothing here yet"}
             </p>
           ) : (
@@ -283,7 +283,7 @@ function MenuItemCard({
             initialLetterTile(item.name)
           )}
         </span>
-        <span className={`block min-w-0 flex-1 ${kiosk ? "w-full p-3 pr-16" : ""}`}>
+        <span className={`block min-w-0 flex-1 ${kiosk ? "w-full p-3" : ""}`}>
           <span className={`block font-headline font-semibold text-foreground ${kiosk ? "line-clamp-2 text-lg leading-tight" : "truncate text-base"}`}>{item.name}</span>
           {item.allergens.length > 0 && (
             <span className="mt-0.5 block truncate text-xs text-muted-foreground">Contains: {item.allergens.map((allergen) => allergen.name).join(", ")}</span>
@@ -312,7 +312,7 @@ function MenuItemCard({
           disabled={adding}
           onClick={onAdd}
           className={`absolute flex items-center justify-center rounded-full bg-primary text-primary-foreground shadow-lg transition-transform active:scale-90 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring disabled:opacity-60 ${
-            kiosk ? "bottom-3 right-3 size-12" : "right-3 top-1/2 size-11 -translate-y-1/2"
+            kiosk ? "right-2 top-2 size-12 ring-4 ring-card" : "right-3 top-1/2 size-11 -translate-y-1/2"
           }`}
         >
           <Plus className={kiosk ? "size-6" : "size-5"} strokeWidth={2.75} aria-hidden="true" />
