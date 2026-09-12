@@ -25,6 +25,9 @@ with the payments epic.
   answer is a Simulator strip; only the final outcome reaches the server.
 
 ### Added
+- Owner Devices: **Devices** / **Topology** tabs (#212) - the device table,
+  enrolment code and printer config on one tab, the topology map on the
+  other; switching is instant and keeps an active enrolment code.
 - Device topology (#210, web half of restiq-backend#134 / #136): the owner
   Devices page opens with a **Topology** map - each POS with the printer and
   card terminal linked to it, devices shared by the whole outlet, and other

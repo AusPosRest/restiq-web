@@ -153,6 +153,19 @@ story. Backend counterpart: `restiq-backend/wiki/features/tenant-admin.md`.
   Menu. `/admin/menu/import` (CAP-3, prior story) is untouched and still
   lives outside the shell at its original route.
 
+### Devices / Topology tabs (issue #212)
+
+`devices.tsx`'s `DevicesEditor` now shows a `role="tablist"` strip under the
+page header (`devices-tab-devices`, `devices-tab-topology`; same idiom as
+/ops's Tenant Detail tabs, local state only, no URL param). **Devices** holds
+the table, the enrolment-code chip / empty state and the printer config
+panel; **Topology** holds the map from issue #210. Every piece of state
+(device list, 30 s refresh, active code, dialog) lives in `DevicesEditor`
+above the tabs, so switching never refetches or drops an active code, and a
+link change made on Topology is already reflected in the table. "Enrol
+device" stays in the header for both. Default tab: Devices. Test:
+`devices.test.tsx` "switches between the Devices and Topology tabs".
+
 ## CAP-10 - Branding & capabilities
 
 - **Intent:** an owner sets receipt/UI branding tokens (colors, font, corner
