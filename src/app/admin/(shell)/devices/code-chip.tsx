@@ -91,7 +91,8 @@ export function CodeChip({
             </div>
           )}
           <p className="text-xs text-muted-foreground">Or scan this with the new device&apos;s camera to open enrolment</p>
-          <code data-testid="device-code-chip-url" className="max-w-full truncate rounded bg-muted px-2 py-1 text-xs">
+          {/* break-all, not truncate: a nowrap URL's min-content width stretched the drawer's grid past the viewport (#202). */}
+          <code data-testid="device-code-chip-url" className="max-w-full break-all rounded bg-muted px-2 py-1 text-xs">
             {enrolUrl}
           </code>
         </div>

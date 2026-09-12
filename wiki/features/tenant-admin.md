@@ -521,7 +521,9 @@ story. Backend counterpart: `restiq-backend/wiki/features/tenant-admin.md`.
     prefills the code from `?code=`, and its Continue sends POS / printer /
     terminal devices to the PIN pad bound with `?device=&tenant=`. The QR uses
     the console's origin, so a separate device needs the console opened on a
-    reachable address (LAN IP / tunnel), not `localhost`.
+    reachable address (LAN IP / tunnel), not `localhost`. Enrolled rows with
+    an "Open …" link also get a QR button (#202, `device-qr-<id>` →
+    `device-qr-dialog`) encoding that same link for scan-to-open.
   - **Printer config** (`printer-config-panel.tsx`): one row per printer with
     a render-mode `<select>` (auto-saves via `PATCH .../floor-plan/printers/
     :printerId`) and a fallback-printer `<select>`. Fallback is a per-
