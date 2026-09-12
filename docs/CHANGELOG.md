@@ -20,6 +20,12 @@ with the payments epic.
   answer is a Simulator strip; only the final outcome reaches the server.
 
 ### Added
+- Scan-to-enrol QR (#200): the owner **Enrol device** code chip shows a QR
+  of `/device?code=XXX-XXX`; scanning it opens enrolment with the code
+  prefilled. After enrolling, POS / printer / terminal devices continue to a
+  PIN pad bound to their own tenant (`?device=&tenant=`, as in #150). The QR
+  carries the console's own origin, so open the console on an address the
+  device can reach (LAN IP or tunnel), not `localhost`.
 - Agreements with versioning and owner digital signature (#192, web half of
   restiq-backend#133): `/ops/agreements` publishes versions through the
   reason dialog, Tenant Detail gains an **Agreements** tab (signed / pending

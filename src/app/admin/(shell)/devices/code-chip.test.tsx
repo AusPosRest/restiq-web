@@ -5,7 +5,22 @@ import { act, cleanup, render, screen } from "@testing-library/react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { CodeChip } from "./code-chip";
 
+vi.mock("qrcode", () => ({
+  default: { toDataURL: vi.fn(() => Promise.resolve("data:image/png;base64,FAKE")) },
+}));
+
 describe("CodeChip", () => {
+  it("shows a scan-to-enrol QR pointing at /device with the code", async () => {
+    vi.useRealTimers();
+    render(<CodeChip code="R7K-4PD" expiresAt={new Date(Date.now() + 60_000).toISOString()} onRegenerate={vi.fn()} />);
+
+    expect((await screen.findByTestId("device-code-chip-qr")).getAttribute("src")).toBe("data:image/png;base64,FAKE");
+    const url = `${window.location.origin}/device?code=R7K-4PD`;
+    expect(screen.getByTestId("device-code-chip-url").textContent).toBe(url);
+    const { default: QRCode } = await import("qrcode");
+    expect(QRCode.toDataURL).toHaveBeenCalledWith(url, expect.anything());
+  });
+
   beforeEach(() => vi.useFakeTimers());
   afterEach(() => {
     cleanup();
