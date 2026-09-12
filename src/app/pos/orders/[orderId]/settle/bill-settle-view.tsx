@@ -18,6 +18,7 @@
 import Link from "next/link";
 import { useEffect, useState } from "react";
 import { Button } from "@/components/ui/button";
+import { PrintBillButton } from "../../../bills/print-bill-button";
 import {
   fetchOrCreateBill,
   finalizeBill,
@@ -224,11 +225,7 @@ function BillSettleLoaded({
                 >
                   {finalizeBusy ? "Finalising…" : "Finalise"}
                 </Button>
-                <Button asChild size="lg" variant="outline" data-testid="print-bill-link">
-                  <Link href={`/pos/bills/${bill.id}/invoice`} target="_blank" rel="noopener">
-                    Print bill
-                  </Link>
-                </Button>
+                <PrintBillButton billId={bill.id} label="Print bill" testId="print-bill" size="lg" />
               </div>
             </footer>
           </div>

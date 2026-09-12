@@ -1270,6 +1270,38 @@ done now, this is what actually happened:
   `bill-invoice-view.test.tsx` cases - the open-bill Unpaid badge/omitted invoice
   number/hidden payments section, and a finalized-bill control confirming neither shows.
 
+### "Print bill" goes straight to the printer + thermal receipt (issue #208)
+
+- **Intent:** one tap. "Print bill" on settle and counter used to open the invoice page in a
+  new tab, where the cashier then clicked "Send to printer" or "Print" - two extra steps for
+  the common case. And the simulated printer showed the receipt as the same dark web card as
+  the invoice page, not as something a receipt printer would produce.
+- **Built:**
+  - `src/app/pos/bills/print-bill-button.tsx` - one `PrintBillButton` (`billId`, `label`,
+    `testId`, `size`) that posts `POST bills/:id/print` (`sendBillToPrinter`) and reports on
+    the button itself: Sending… → Sent to printer / Couldn't send → back to the label after
+    2s so a reprint is one more tap; disabled only while sending; `aria-live="polite"`. Used
+    three times: settle's and counter's open-bill footer (`data-testid="print-bill"`,
+    replacing the old `print-bill-link` `<Link>`; the page never navigates) and the invoice
+    page's "Send to printer" (`invoice-send-to-printer`, whose inline state machine moved
+    into the component). "Print invoice" after finalise still opens the invoice page for
+    browser printing - unchanged on purpose.
+  - `src/app/pos/printer/thermal-receipt.tsx` - `ThermalReceipt` renders the spooled
+    `InvoiceView` as an 80mm strip (`w-[302px]`, white paper, black `font-mono` 12px,
+    centred seller header, `- - -` rules, `<title> (unpaid)` for an open bill, `qty x unit`
+    under each item name, totals, payments, credit notes, notes/footer, a zig-zag torn bottom
+    edge via `clip-path`). `printedAt` (the job's `createdAt`) stamps an open bill that has
+    no `issuedAt`.
+  - `printer-screen.tsx` - a paper slot bar with the newest receipt emerging under it
+    (roll order flipped to newest-first, still capped at 10), each `li` animated with
+    `animate-paper-feed` (`globals.css`: `@keyframes paper-feed` reveals the strip top-down
+    with `clip-path: inset`, `steps(36)` so it advances line by line like a print head;
+    `motion-reduce:animate-none`). Poll/ack behaviour and every `printer-*` test id are
+    unchanged.
+- **Tests:** `print-bill-button.test.tsx` (POST + Sent + reset; Couldn't send + disabled
+  only while sending); settle and counter tests now click the button and assert the POST
+  with no navigation; printer tests unchanged and green against the thermal render.
+
 ### Simulated card terminal (issue #188 web / restiq-backend#130)
 
 - **Intent:** the payments sibling of the simulated printer below, and the
