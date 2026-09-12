@@ -1303,3 +1303,10 @@ faked.
   and card payments, poll with `?deviceId=`, and heartbeat every 30 s
   (`pos/device-heartbeat.tsx`). Tests: `topology.test.tsx`,
   `devices-state.test.ts` (`connectionState`), `terminal-binding.test.ts`.
+- **2026-09-12** - Owner Devices: Remove a device with confirm-and-reason
+  (issue #215). Per-row `device-remove-<id>` on enrolled devices →
+  `ConfirmReasonDialog` → `revokeDevice` (restiq-backend#140's owner-scoped
+  revoke); the row flips to Revoked in place, linked peripherals fall back
+  to shared, success/error toasts. Tests on the table and the screen flow.
+  See [wiki/features/tenant-admin.md](../features/tenant-admin.md)
+  (Remove a device).

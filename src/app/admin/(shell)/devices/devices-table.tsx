@@ -1,10 +1,11 @@
 "use client";
 
-// Read-only device list for the current outlet (name/type/role/app version/
-// last seen/status) - enrolment and revocation stay Platform Console's job;
-// this screen only surfaces what's already enrolled plus generates codes.
+// Device list for the current outlet (name/type/role/app version/last
+// seen/status). Enrolment happens through the code chip; removal (issue
+// #215) is a per-row Remove that the parent confirms with a reason and
+// revokes - the row then stays listed as Revoked for the audit trail.
 import { Dialog } from "radix-ui";
-import { ExternalLink, MonitorSmartphone, QrCode, Radio } from "lucide-react";
+import { ExternalLink, MonitorSmartphone, QrCode, Radio, Trash2 } from "lucide-react";
 import { useState } from "react";
 import { QR_SIZE_PX, useQrDataUrl } from "../floor-plan/table-qr-dialog";
 import { formatLastSeen, type AdminDeviceView } from "./devices-state";
@@ -40,7 +41,13 @@ const STATUS_STYLES: Record<string, string> = {
   revoked: "border-status-error/50 bg-status-error/10 text-status-error",
 };
 
-export function DevicesTable({ devices }: Readonly<{ devices: readonly AdminDeviceView[] }>) {
+export interface DevicesTableProps {
+  devices: readonly AdminDeviceView[];
+  /** Present when the parent can revoke: every enrolled row gets a Remove button. */
+  onRemove?: (device: AdminDeviceView) => void;
+}
+
+export function DevicesTable({ devices, onRemove }: Readonly<DevicesTableProps>) {
   // Read once at mount, same lazy-initializer escape hatch code-chip.tsx uses
   // for Date.now() - "last seen" doesn't need to live-tick like the
   // enrolment countdown does.
@@ -103,27 +110,43 @@ export function DevicesTable({ devices }: Readonly<{ devices: readonly AdminDevi
                 </span>
               </td>
               <td className="px-4 text-right">
-                {device.status === "active" && SURFACE_LINKS[device.type] ? (
+                {device.status === "active" ? (
                   <div className="inline-flex items-center gap-3">
-                    <button
-                      type="button"
-                      aria-label={`Show QR for ${device.label}`}
-                      data-testid={`device-qr-${device.id}`}
-                      onClick={() => setQrFor(device)}
-                      className="rounded-md p-1 text-muted-foreground hover:bg-accent hover:text-foreground focus:outline-none focus-visible:ring-2 focus-visible:ring-ring"
-                    >
-                      <QrCode className="size-4" aria-hidden="true" />
-                    </button>
-                    <a
-                      href={SURFACE_LINKS[device.type].href(device)}
-                      target="_blank"
-                      rel="noopener"
-                      data-testid={`device-open-${device.id}`}
-                      className="inline-flex items-center gap-1 whitespace-nowrap text-xs font-semibold text-primary hover:underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
-                    >
-                      {SURFACE_LINKS[device.type].label}
-                      <ExternalLink className="size-3" aria-hidden="true" />
-                    </a>
+                    {SURFACE_LINKS[device.type] && (
+                      <>
+                        <button
+                          type="button"
+                          aria-label={`Show QR for ${device.label}`}
+                          data-testid={`device-qr-${device.id}`}
+                          onClick={() => setQrFor(device)}
+                          className="rounded-md p-1 text-muted-foreground hover:bg-accent hover:text-foreground focus:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+                        >
+                          <QrCode className="size-4" aria-hidden="true" />
+                        </button>
+                        <a
+                          href={SURFACE_LINKS[device.type].href(device)}
+                          target="_blank"
+                          rel="noopener"
+                          data-testid={`device-open-${device.id}`}
+                          className="inline-flex items-center gap-1 whitespace-nowrap text-xs font-semibold text-primary hover:underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+                        >
+                          {SURFACE_LINKS[device.type].label}
+                          <ExternalLink className="size-3" aria-hidden="true" />
+                        </a>
+                      </>
+                    )}
+                    {onRemove && (
+                      <button
+                        type="button"
+                        data-testid={`device-remove-${device.id}`}
+                        aria-label={`Remove ${device.label}`}
+                        onClick={() => onRemove(device)}
+                        className="inline-flex items-center gap-1 whitespace-nowrap rounded-md px-1 text-xs font-semibold text-muted-foreground hover:text-status-error focus:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+                      >
+                        <Trash2 className="size-3.5" aria-hidden="true" />
+                        Remove
+                      </button>
+                    )}
                   </div>
                 ) : (
                   <span className="text-xs text-muted-foreground">-</span>
