@@ -586,6 +586,15 @@ This pass reconciled the guess against it:
   the landing page's `deviceOpenHref` does the same (`LandingDevice` gained
   `outletId`). `decideGuestRoute` treats `/qr/kiosk/:outletId` as public,
   like the table entry point.
+- **Kiosk pay + receipt (issue #220):** `qr/kiosk/kiosk-pay.tsx` on the
+  kiosk placed screen. Offer, then `createOrFetchBill`, then tap
+  (demo Approve / Decline - a decline never calls the API), then
+  `payAll({ simulatedOutcome: "success" })`, then `fetchInvoice` and Paid. The
+  backend records a kiosk session's tender as `card_terminal`
+  (restiq-backend#144); the pay settles the session, and the invoice is still
+  readable after that. "Print receipt" portals a thermal `KioskReceipt` into
+  `#kiosk-receipt-tray` under the kiosk hardware (KioskFrame), revealed by the
+  `kiosk-receipt-feed` keyframes (globals.css); reprints re-key it.
 - **Kiosk menu + photos (issue #218):** `qr/menu/menu-view.tsx` renders a
   vertical category rail and a 2-column photo grid on a kiosk tab
   (`data-layout="kiosk"`), the list elsewhere. Each item shows `photoUrl`
