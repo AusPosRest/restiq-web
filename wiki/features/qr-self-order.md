@@ -616,6 +616,19 @@ This pass reconciled the guess against it:
   - `status-screen.tsx`: `status-order-token-<id>` line when the order has a
     token; Request bill hidden for token orders and on a kiosk tab.
     `GuestOrderStatusView` gained `tokenNumber`.
+- **Looks like a kiosk:** `KioskFrame` (`qr/kiosk-chrome.tsx`, wraps the whole
+  guest layout) draws the standing unit on a kiosk tab: white bezel with a
+  camera, a 9:16 portrait screen capped at `min(82vh, 56rem)`, a hardware
+  panel under it (receipt printer slot, card reader, barcode scanner -
+  decorative, `kiosk-hardware`), then the neck and floor plate. The screen
+  has `transform: translateZ(0)`, which makes it the containing block for
+  the guest screens' `position: fixed` bars (item detail's Add to Cart, the
+  cart pill, the checkout sheet), so they pin to the glass; an inner
+  scroller caps every `min-h-screen` to the glass height. The element tree
+  is identical on every tab - non-kiosk tabs get `display: contents` - so
+  hydration never remounts a page. The attract screen is a full-bleed
+  amber-to-red poster ("Hungry? Order here.") whose whole surface is the
+  one `kiosk-start` button, with a pulsing "Tap to start your order" pill.
 - **Tests:** `kiosk-start.test.tsx`, `auth/kiosk/route.test.ts` (start +
   end), `kiosk-chrome.test.tsx` (idle reset with fake timers, start over,
   bare-/qr bounce), updated device/landing/cart/status tests.

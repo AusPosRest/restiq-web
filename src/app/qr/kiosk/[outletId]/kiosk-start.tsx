@@ -5,6 +5,7 @@
 // lands on the existing /qr/menu. Kiosk mode off (403 kiosk_disabled) or a
 // device that is not an active kiosk here (404) shows the backend's own
 // message and a retry - never the menu.
+import { UtensilsCrossed } from "lucide-react";
 import { useRouter, useSearchParams } from "next/navigation";
 import { useState } from "react";
 import { readStoredDevice } from "../../../device/device-state";
@@ -48,22 +49,37 @@ export function KioskStart({ outletId }: Readonly<{ outletId: string }>) {
     router.push(MENU_ROUTE);
   }
 
+  // The attract loop a real kiosk idles on: a full-bleed poster where the whole
+  // screen is the start button (one accessible button, named for its action).
+  const starting = state.kind === "starting";
   return (
-    <main data-testid="kiosk-attract" className="flex min-h-screen flex-1 flex-col items-center justify-center px-6 py-12 text-center">
-      <p className="font-label text-xs font-semibold uppercase tracking-[0.3em] text-muted-foreground">Self-service kiosk</p>
-      <h1 className="mt-4 font-headline text-4xl font-semibold text-foreground">Order here</h1>
-      <p className="mt-3 max-w-sm text-base text-muted-foreground">Browse the menu, build your order and pay at the counter when your number is called.</p>
+    <main data-testid="kiosk-attract" className="relative flex min-h-screen flex-1 flex-col">
       <button
         type="button"
         data-testid="kiosk-start"
-        disabled={state.kind === "starting"}
+        aria-label={starting ? "Starting your order" : "Tap to start your order"}
+        disabled={starting}
         onClick={() => void start()}
-        className="mt-10 w-full max-w-sm rounded-2xl bg-primary px-8 py-6 text-2xl font-semibold text-primary-foreground shadow-lg transition-transform active:scale-[0.98] disabled:opacity-60 focus-visible:outline focus-visible:outline-2 focus-visible:outline-ring"
+        className="relative flex flex-1 flex-col items-center justify-between overflow-hidden bg-gradient-to-br from-amber-400 via-orange-500 to-red-600 px-8 pb-14 pt-14 text-center text-white disabled:cursor-wait focus-visible:outline-none focus-visible:ring-4 focus-visible:ring-inset focus-visible:ring-white"
       >
-        {state.kind === "starting" ? "Starting…" : "Tap to start your order"}
+        <span aria-hidden="true" className="absolute -right-24 top-20 size-72 rounded-full bg-white/10" />
+        <span aria-hidden="true" className="absolute -left-20 bottom-36 size-56 rounded-full bg-black/10" />
+        <span className="relative font-label text-xs font-semibold uppercase tracking-[0.35em] text-white/85">Self-service kiosk</span>
+        <span className="relative flex flex-col items-center gap-6">
+          <UtensilsCrossed aria-hidden="true" className="size-20 drop-shadow-lg" />
+          <span className="font-headline text-6xl font-black leading-[0.95] tracking-tight drop-shadow-md">
+            Hungry?
+            <br />
+            Order here.
+          </span>
+          <span className="max-w-xs text-base text-white/90">Build your order on screen, then pay at the counter when your number is called.</span>
+        </span>
+        <span className="relative rounded-full bg-white px-8 py-4 text-xl font-bold text-orange-600 shadow-xl motion-safe:animate-pulse">
+          {starting ? "Starting…" : "Tap to start your order"}
+        </span>
       </button>
       {state.kind === "error" && (
-        <p role="alert" data-testid="kiosk-start-error" className="mt-6 max-w-sm text-sm text-status-error">
+        <p role="alert" data-testid="kiosk-start-error" className="absolute inset-x-6 bottom-4 rounded-lg bg-black/75 p-3 text-center text-sm text-white">
           {state.message}
         </p>
       )}

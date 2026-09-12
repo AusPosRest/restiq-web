@@ -2,7 +2,7 @@
 // the session after IDLE_MS of no activity, and "Start over" does it at once.
 import { act, cleanup, render, screen } from "@testing-library/react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
-import { IDLE_MS, KioskChrome } from "./kiosk-chrome";
+import { IDLE_MS, KioskChrome, KioskFrame } from "./kiosk-chrome";
 
 const replace = vi.fn();
 let pathname = "/qr/menu";
@@ -81,5 +81,24 @@ describe("KioskChrome", () => {
     render(<KioskChrome />);
     await act(async () => undefined);
     expect(replace).toHaveBeenCalledWith(HOME);
+  });
+
+  it("KioskFrame draws the kiosk body, screen and hardware around the page on a kiosk tab", async () => {
+    sessionStorage.setItem("device:enrolled", JSON.stringify(KIOSK));
+    render(<KioskFrame><p data-testid="page">menu</p></KioskFrame>);
+    await act(async () => undefined);
+    const screenEl = screen.getByTestId("kiosk-screen");
+    expect(screen.getByTestId("kiosk-device")).toBeTruthy();
+    expect(screen.getByTestId("kiosk-hardware")).toBeTruthy();
+    // The page renders inside the screen, under the kiosk bar.
+    expect(screenEl.contains(screen.getByTestId("page"))).toBe(true);
+    expect(screenEl.contains(screen.getByTestId("kiosk-chrome"))).toBe(true);
+  });
+
+  it("KioskFrame leaves a normal guest tab untouched", () => {
+    render(<KioskFrame><p data-testid="page">menu</p></KioskFrame>);
+    expect(screen.getByTestId("page")).toBeTruthy();
+    expect(screen.queryByTestId("kiosk-device")).toBeNull();
+    expect(screen.queryByTestId("kiosk-hardware")).toBeNull();
   });
 });

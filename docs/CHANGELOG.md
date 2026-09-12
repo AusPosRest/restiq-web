@@ -32,7 +32,9 @@ with the payments epic.
   existing menu / cart flow. Placing shows the token number with "Pay at
   the counter"; the status page shows it too and hides Request bill. A
   "Start over" bar and a 90 s idle timeout end the session and return to
-  the attract screen.
+  the attract screen. On a kiosk tab every screen is drawn inside a standing
+  kiosk (bezel, portrait screen, printer / card / scanner panel, pedestal),
+  and the attract screen is a full-screen tap-to-start poster.
 - Device topology (#210, web half of restiq-backend#134 / #136): the owner
   Devices page opens with a **Topology** map - each POS with the printer and
   card terminal linked to it, devices shared by the whole outlet, and other
