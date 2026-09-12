@@ -25,6 +25,13 @@ with the payments epic.
   answer is a Simulator strip; only the final outcome reaches the server.
 
 ### Added
+- Kiosk: pay here by card, then print the receipt (#220, web half of
+  restiq-backend#144). The kiosk's "Sent to the kitchen" screen offers "Pay
+  here by card" next to paying at the counter: it raises the order's bill,
+  asks for a card tap on the kiosk's reader (the bank's answer is a demo
+  Approve/Decline control), pays it through the guest pay-all as a
+  `card_terminal` tender, and then "Print receipt" feeds a thermal receipt
+  (with the token number) out of the kiosk's RECEIPT slot.
 - Menu: item photos and one-tap add (#218, web half of restiq-backend#142).
   The guest menu shows each item's photo (letter tile when none) and a "+"
   that adds an item with nothing to choose straight to the cart; items with

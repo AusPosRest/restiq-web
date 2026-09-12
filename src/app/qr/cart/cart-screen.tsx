@@ -22,6 +22,7 @@ import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useState } from "react";
 import { GuestApiError } from "../api-client";
+import { KioskPay } from "../kiosk/kiosk-pay";
 import { endKioskSession, isKioskTab } from "../kiosk-session";
 import {
   fetchCart,
@@ -59,6 +60,9 @@ const CHECKOUT_ROUTE = "/qr/checkout";
 export function CartScreen({ myGuestId }: Readonly<{ myGuestId: string }>) {
   const poll = useCartPoll();
   const [placedOrder, setPlacedOrder] = useState<PlacedOrderView | null>(null);
+  // The cart's currency at the moment of placing - the emptied cart that
+  // polls afterwards no longer carries the tenant's (issue #220).
+  const [placedCurrency, setPlacedCurrency] = useState("INR");
   // Set when this guest's own "Place order" tap raced another guest's and
   // lost - the backend's real response for that race is 400 `empty_cart`
   // (the cart the loser tried to place had already been consumed by the
@@ -70,7 +74,7 @@ export function CartScreen({ myGuestId }: Readonly<{ myGuestId: string }>) {
   // state, but there's no reason to wait for the next tick.
   const [sessionEndedByPlacement, setSessionEndedByPlacement] = useState(false);
 
-  if (placedOrder) return <PlacedConfirmation order={placedOrder} />;
+  if (placedOrder) return <PlacedConfirmation order={placedOrder} currency={placedCurrency} />;
   if (placedElsewhere) return <OrderPlacedElsewhere />;
   if (poll.sessionClosed || sessionEndedByPlacement) return <SessionEndedPanel />;
   if (poll.loading) return <LoadingSkeleton />;
@@ -84,7 +88,10 @@ export function CartScreen({ myGuestId }: Readonly<{ myGuestId: string }>) {
       myGuestId={myGuestId}
       stale={poll.stale}
       onUpdate={poll.applyUpdate}
-      onPlaced={setPlacedOrder}
+      onPlaced={(order) => {
+        setPlacedCurrency(poll.data?.currency ?? "INR");
+        setPlacedOrder(order);
+      }}
       onPlacedElsewhere={() => setPlacedElsewhere(true)}
       onSessionEnded={() => setSessionEndedByPlacement(true)}
     />
@@ -398,10 +405,11 @@ function EmptyState() {
 // per-guest line summary straight from the response body PlacedOrderView
 // carries, per EXPERIENCE.md's "Place order is the surface's biggest
 // commitment".
-function PlacedConfirmation({ order }: Readonly<{ order: PlacedOrderView }>) {
+function PlacedConfirmation({ order, currency }: Readonly<{ order: PlacedOrderView; currency: string }>) {
   const groups = groupPlacedOrderLinesByGuest(order);
   // A kiosk order (issue #214) has no table - the token number is what the
-  // counter calls out, so it is the headline; the bill is paid there, not here.
+  // counter calls out, so it is the headline. It is paid here by card
+  // (KioskPay, issue #220) or at the counter.
   const kiosk = order.tokenNumber != null;
   return (
     <main data-testid="cart-placed" className="flex min-h-screen flex-1 flex-col items-center px-6 pb-12 pt-16 text-center">
@@ -410,12 +418,13 @@ function PlacedConfirmation({ order }: Readonly<{ order: PlacedOrderView }>) {
         <div data-testid="cart-placed-token" className="mt-6 rounded-2xl border border-border bg-card px-10 py-6">
           <p className="font-label text-xs font-semibold uppercase tracking-[0.3em] text-muted-foreground">Your number</p>
           <p className="mt-1 font-headline text-6xl font-bold tabular-nums text-primary">{order.tokenNumber}</p>
-          <p className="mt-2 text-sm text-muted-foreground">Pay at the counter and collect your order when it&apos;s called.</p>
+          <p className="mt-2 text-sm text-muted-foreground">Collect your order when your number is called.</p>
         </div>
       )}
       <p data-testid="cart-placed-order-id" className="mt-2 text-sm text-muted-foreground">
         Order #{order.orderId.slice(-6).toUpperCase()}
       </p>
+      {order.tokenNumber != null && <KioskPay orderId={order.orderId} tokenNumber={order.tokenNumber} currency={currency} />}
 
       <div className="mt-8 flex w-full max-w-sm flex-col gap-4 text-left">
         {groups.map((group) => (
