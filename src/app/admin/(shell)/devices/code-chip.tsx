@@ -8,6 +8,7 @@
 import { Check, Copy, RotateCw, Timer } from "lucide-react";
 import { useEffect, useState } from "react";
 import { Button } from "@/components/ui/button";
+import { QR_SIZE_PX, useQrDataUrl } from "../floor-plan/table-qr-dialog";
 import { secondsRemaining, formatCountdown } from "./devices-state";
 
 export function CodeChip({
@@ -18,6 +19,11 @@ export function CodeChip({
 }: Readonly<{ code: string; expiresAt: string; onRegenerate: () => void; regenerating?: boolean }>) {
   const [remaining, setRemaining] = useState(() => secondsRemaining(expiresAt, Date.now()));
   const [copied, setCopied] = useState(false);
+  // Scan-to-enrol (issue #200): the phone/tablet opens /device with the code
+  // prefilled. Uses this console's own origin, so a device on another machine
+  // needs the console opened on an address it can reach (LAN IP / tunnel).
+  const enrolUrl = `${window.location.origin}/device?code=${encodeURIComponent(code)}`;
+  const qrDataUrl = useQrDataUrl(enrolUrl);
 
   // expiresAt only ever changes via a fresh code (the caller keys CodeChip by
   // code), so the mount-time useState initializer already has the right
@@ -66,6 +72,30 @@ export function CodeChip({
           </span>
         )}
       </p>
+
+      {!expired && (
+        <div className="mt-4 flex flex-col items-center gap-2">
+          {qrDataUrl ? (
+            // eslint-disable-next-line @next/next/no-img-element -- a data: URL, not something next/image's optimizer can (or needs to) handle
+            <img
+              data-testid="device-code-chip-qr"
+              src={qrDataUrl}
+              alt={`Scan to enrol a device with code ${code}`}
+              width={QR_SIZE_PX}
+              height={QR_SIZE_PX}
+              className="rounded-md bg-white p-2"
+            />
+          ) : (
+            <div style={{ width: QR_SIZE_PX, height: QR_SIZE_PX }} className="flex items-center justify-center text-xs text-muted-foreground">
+              Generating…
+            </div>
+          )}
+          <p className="text-xs text-muted-foreground">Or scan this with the new device&apos;s camera to open enrolment</p>
+          <code data-testid="device-code-chip-url" className="max-w-full truncate rounded bg-muted px-2 py-1 text-xs">
+            {enrolUrl}
+          </code>
+        </div>
+      )}
 
       {expired && (
         <Button

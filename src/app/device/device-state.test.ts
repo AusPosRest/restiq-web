@@ -93,25 +93,27 @@ describe("sessionStorage-backed helpers", () => {
 });
 
 describe("continueTargetFor", () => {
-  it("routes pos to the POS login", () => {
-    expect(continueTargetFor("pos")).toEqual({ kind: "redirect", path: "/pos/login" });
+  const device = (type: string) => ({ id: "d1", tenantId: "t1", type });
+
+  it("routes pos to the POS login bound to this device's tenant", () => {
+    expect(continueTargetFor(device("pos"))).toEqual({ kind: "redirect", path: "/pos/login?device=d1&tenant=t1" });
   });
 
   it("routes kds to the KDS entry", () => {
-    expect(continueTargetFor("kds")).toEqual({ kind: "redirect", path: "/kds" });
+    expect(continueTargetFor(device("kds"))).toEqual({ kind: "redirect", path: "/kds" });
   });
 
-  it("sends a printer to the simulated receipt printer under the POS realm", () => {
-    expect(continueTargetFor("printer")).toEqual({ kind: "redirect", path: "/pos/printer" });
+  it("sends a printer through the bound POS login to the simulated receipt printer", () => {
+    expect(continueTargetFor(device("printer"))).toEqual({ kind: "redirect", path: "/pos/login?device=d1&tenant=t1&next=%2Fpos%2Fprinter" });
   });
 
-  it("sends a terminal to the simulated card terminal under the POS realm", () => {
-    expect(continueTargetFor("terminal")).toEqual({ kind: "redirect", path: "/pos/terminal" });
+  it("sends a terminal through the bound POS login to the simulated card terminal", () => {
+    expect(continueTargetFor(device("terminal"))).toEqual({ kind: "redirect", path: "/pos/login?device=d1&tenant=t1&next=%2Fpos%2Fterminal" });
   });
 
   it("has no web surface for kiosk or cds", () => {
-    expect(continueTargetFor("kiosk")).toEqual({ kind: "unsupported" });
-    expect(continueTargetFor("cds")).toEqual({ kind: "unsupported" });
+    expect(continueTargetFor(device("kiosk"))).toEqual({ kind: "unsupported" });
+    expect(continueTargetFor(device("cds"))).toEqual({ kind: "unsupported" });
   });
 });
 

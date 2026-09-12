@@ -103,12 +103,20 @@ export function clearStoredDevice(): void {
 
 export type ContinueTarget = { kind: "redirect"; path: string } | { kind: "unsupported" };
 
-/** Where "Continue" sends this device type - pos/kds/printer/terminal have a web surface today (kiosk/cds do not exist yet). The simulated printer (issue #172) and card terminal (issue #188) live under /pos so they share the POS staff session. */
-export function continueTargetFor(type: string): ContinueTarget {
-  if (type === "pos") return { kind: "redirect", path: "/pos/login" };
-  if (type === "kds") return { kind: "redirect", path: "/kds" };
-  if (type === "printer") return { kind: "redirect", path: "/pos/printer" };
-  if (type === "terminal") return { kind: "redirect", path: "/pos/terminal" };
+/**
+ * Where "Continue" sends this device - pos/kds/printer/terminal have a web
+ * surface today (kiosk/cds do not exist yet). The POS-realm screens (the
+ * simulated printer #172 and card terminal #188 included) go through the PIN
+ * pad with `?device=&tenant=` so it binds to this device's tenant (#150) -
+ * the same links admin/(shell)/devices/devices-table.tsx builds (not imported
+ * across route trees, AD-4).
+ */
+export function continueTargetFor(device: Pick<DeviceView, "id" | "tenantId" | "type">): ContinueTarget {
+  const login = `/pos/login?device=${encodeURIComponent(device.id)}&tenant=${encodeURIComponent(device.tenantId)}`;
+  if (device.type === "pos") return { kind: "redirect", path: login };
+  if (device.type === "kds") return { kind: "redirect", path: "/kds" };
+  if (device.type === "printer") return { kind: "redirect", path: `${login}&next=${encodeURIComponent("/pos/printer")}` };
+  if (device.type === "terminal") return { kind: "redirect", path: `${login}&next=${encodeURIComponent("/pos/terminal")}` };
   return { kind: "unsupported" };
 }
 

@@ -79,9 +79,12 @@ export function DeviceScreen() {
     // Deferred, not called synchronously in the effect body
     // (react-hooks/set-state-in-effect) - same convention live-clock.tsx
     // documents, one tick is imperceptible here.
+    // A scanned enrolment QR (admin Devices code chip, issue #200) lands here
+    // as /device?code=XXX-XXX - prefill it so the operator only taps Enrol.
     const timeout = setTimeout(() => {
       const stored = readStoredDevice();
-      setState(stored ? { step: "enrolled", device: stored } : INITIAL_ENROL_STATE);
+      const scanned = formatCodeInput(new URLSearchParams(window.location.search).get("code") ?? "");
+      setState(stored ? { step: "enrolled", device: stored } : { step: "enrol", code: scanned, label: "", error: null });
     }, 0);
     return () => clearTimeout(timeout);
   }, []);
@@ -106,7 +109,7 @@ export function DeviceScreen() {
   }
 
   function handleContinue(device: DeviceView) {
-    const target = continueTargetFor(device.type);
+    const target = continueTargetFor(device);
     if (target.kind === "redirect") router.push(target.path);
   }
 
@@ -214,7 +217,7 @@ function DeviceCard({
   onContinue: (device: DeviceView) => void;
   onUnenrol: () => void;
 }>) {
-  const target = continueTargetFor(device.type);
+  const target = continueTargetFor(device);
 
   return (
     <div data-testid="device-card">

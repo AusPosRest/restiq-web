@@ -515,7 +515,13 @@ story. Backend counterpart: `restiq-backend/wiki/features/tenant-admin.md`.
     picker (the outlet is already fixed by the shell, unlike the fleet-wide
     ops version's tenant/outlet pickers); the generated code also populates
     a persistent "Active enrolment code" card on the page itself, not just
-    inside the dialog.
+    inside the dialog. While the code is live the chip also shows a
+    scan-to-enrol QR (#200, `device-code-chip-qr`, reusing floor-plan's
+    `useQrDataUrl`) of `<console origin>/device?code=XXX-XXX`; `/device`
+    prefills the code from `?code=`, and its Continue sends POS / printer /
+    terminal devices to the PIN pad bound with `?device=&tenant=`. The QR uses
+    the console's origin, so a separate device needs the console opened on a
+    reachable address (LAN IP / tunnel), not `localhost`.
   - **Printer config** (`printer-config-panel.tsx`): one row per printer with
     a render-mode `<select>` (auto-saves via `PATCH .../floor-plan/printers/
     :printerId`) and a fallback-printer `<select>`. Fallback is a per-

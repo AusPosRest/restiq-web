@@ -1275,3 +1275,10 @@ faked.
   one flow each on settle and counter, device-type cases. See
   [wiki/features/pos-cashier-waiter.md](../features/pos-cashier-waiter.md)
   (Simulated card terminal) and [wiki/features/payments.md](../features/payments.md).
+- **2026-09-12** - Scan-to-enrol QR (issue #200). The owner Devices code
+  chip shows a QR of `/device?code=XXX-XXX` while the code is live;
+  `/device` prefills the code from `?code=`; `continueTargetFor` now takes
+  the device and routes POS / printer / terminal through the tenant-bound
+  PIN pad (`?device=&tenant=`, #150). Tests: `code-chip.test.tsx`,
+  `device-screen.test.tsx`, `device-state.test.ts`. See
+  [wiki/features/tenant-admin.md](../features/tenant-admin.md) (CAP-6).

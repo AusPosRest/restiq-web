@@ -43,6 +43,18 @@ describe("DeviceScreen", () => {
     expect(screen.getByTestId("device-enrol-submit")).toHaveProperty("disabled", true);
   });
 
+  it("prefills the code from a scanned enrolment QR (?code=)", async () => {
+    window.history.replaceState(null, "", "/device?code=abc234");
+    try {
+      render(<DeviceScreen />);
+      await screen.findByTestId("device-enrol-form");
+      expect((screen.getByTestId("device-code-input") as HTMLInputElement).value).toBe("ABC-234");
+      expect(screen.getByTestId("device-enrol-submit")).toHaveProperty("disabled", false);
+    } finally {
+      window.history.replaceState(null, "", "/");
+    }
+  });
+
   it("enrols on the happy path, persists the device, and shows the card", async () => {
     const fetchMock = vi.fn().mockResolvedValue(jsonResponse(201, { device: POS_DEVICE }));
     vi.stubGlobal("fetch", fetchMock);
@@ -129,7 +141,7 @@ describe("DeviceScreen", () => {
     render(<DeviceScreen />);
 
     await userEvent.click(await screen.findByTestId("device-continue"));
-    expect(push).toHaveBeenCalledWith("/pos/login");
+    expect(push).toHaveBeenCalledWith("/pos/login?device=d1&tenant=t1");
   });
 
   it("routes Continue by device type - kds to /kds", async () => {
