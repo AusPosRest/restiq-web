@@ -116,27 +116,28 @@ function TableMapLoaded({
   }
 
   return (
-    <div data-testid="table-map" className="flex flex-1 flex-col gap-6 p-6">
-      <header className="flex items-center justify-between">
-        <div>
-          <p className="font-headline text-xl font-bold text-primary">RESTIQ POS</p>
+    <div data-testid="table-map" className="flex flex-1 flex-col gap-6 p-4 sm:p-6">
+      {/* Wraps on a phone (#206): the actions drop to their own row instead of squeezing the title and pushing Refresh off-screen. */}
+      <header className="flex flex-wrap items-center justify-between gap-x-4 gap-y-3">
+        <div className="shrink-0">
+          <p className="font-headline whitespace-nowrap text-xl font-bold text-primary">RESTIQ POS</p>
           <p className="font-label text-xs font-semibold uppercase tracking-wider text-muted-foreground">Table Map</p>
         </div>
-        <div className="flex items-center gap-4">
-          <p data-testid="current-staff" className="font-label text-sm text-muted-foreground">
+        <div className="flex flex-wrap items-center gap-2 sm:gap-4">
+          <p data-testid="current-staff" className="font-label w-full text-sm text-muted-foreground sm:w-auto">
             Signed in as <span className="font-semibold text-foreground">{currentStaffName}</span>
           </p>
           <Link
             href="/pos/open-orders"
             data-testid="table-map-open-orders-link"
-            className="rounded-md border border-border px-3 py-1.5 text-xs font-semibold uppercase tracking-wider text-muted-foreground hover:bg-accent hover:text-accent-foreground"
+            className="whitespace-nowrap rounded-md border border-border px-3 py-1.5 text-xs font-semibold uppercase tracking-wider text-muted-foreground hover:bg-accent hover:text-accent-foreground"
           >
             Open orders
           </Link>
           <Link
             href="/pos/counter"
             data-testid="table-map-counter-link"
-            className="rounded-md border border-border px-3 py-1.5 text-xs font-semibold uppercase tracking-wider text-muted-foreground hover:bg-accent hover:text-accent-foreground"
+            className="whitespace-nowrap rounded-md border border-border px-3 py-1.5 text-xs font-semibold uppercase tracking-wider text-muted-foreground hover:bg-accent hover:text-accent-foreground"
           >
             Switch to Counter Mode
           </Link>
@@ -144,7 +145,7 @@ function TableMapLoaded({
             type="button"
             data-testid="table-map-refresh"
             onClick={onReload}
-            className="rounded-md border border-border px-3 py-1.5 text-xs font-semibold uppercase tracking-wider text-muted-foreground hover:bg-accent hover:text-accent-foreground"
+            className="whitespace-nowrap rounded-md border border-border px-3 py-1.5 text-xs font-semibold uppercase tracking-wider text-muted-foreground hover:bg-accent hover:text-accent-foreground"
           >
             Refresh
           </button>
