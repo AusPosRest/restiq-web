@@ -7,6 +7,9 @@
   restiq-backend#146): `external` tender with a required reference in `tender-keypad.tsx`;
   `print-bill-button.tsx` replaces the new-tab invoice link on settle and counter and posts
   `bills/:id/print`. Tests in `bill-settle-view.test.tsx` / `counter-view.test.tsx`.
+- **2026-09-15** - Responsive consoles and POS (issues #228, #229). Shared `src/components/mobile-nav.tsx` drawer for the admin and ops shells, which now hide the sidebar below md. POS order-taking, counter, settle and refund stack their side panels below lg/md; `BillSummary` takes a `layoutClassName`. Public screens (landing, device, the three logins, QR welcome) were already clean at 375 px.
+- **2026-09-15** - KDS responsive (issue #232): expo `Waiting on` panel stacks under the rail
+  below md (`expo-screen.tsx`, `waiting-on-panel.tsx`); `kds-header.tsx` tab row wraps.
 
 - **2026-09-15** - Installable PWA for Android and iOS (issue #222): `app/manifest.ts`,
   generated `icon` (192/512, maskable) and `apple-icon` (180), `appleWebApp` + theme-colour

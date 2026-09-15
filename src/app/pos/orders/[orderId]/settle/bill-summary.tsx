@@ -42,6 +42,8 @@ export interface BillSummaryProps {
   onIncrement?: (line: OrderLineView) => void;
   onDecrement?: (line: OrderLineView) => void;
   onRemove?: (line: OrderLineView) => void;
+  /** Width/border per breakpoint (issue #229): full-width and stacked on small screens, a w-80 side column from the caller's breakpoint up. Defaults to md (settle, refund); the counter passes lg. */
+  layoutClassName?: string;
 }
 
 export function BillSummary({
@@ -55,6 +57,7 @@ export function BillSummary({
   onIncrement,
   onDecrement,
   onRemove,
+  layoutClassName = "w-full border-b md:w-80 md:border-b-0 md:border-r",
 }: Readonly<BillSummaryProps>) {
   const editable = Boolean(onIncrement && onDecrement && onRemove);
   const discountMinor = bill.discountMinor ?? pendingDiscount?.amountMinor ?? 0;
@@ -62,7 +65,7 @@ export function BillSummary({
   const totalMinor = billTotalMinor(bill, pendingDiscount?.amountMinor ?? 0);
 
   return (
-    <section data-testid="bill-summary" className="flex w-80 shrink-0 flex-col border-r border-border/60 bg-card">
+    <section data-testid="bill-summary" className={`flex shrink-0 flex-col border-border/60 bg-card ${layoutClassName}`}>
       <header className="border-b border-border/60 px-4 py-3">
         <p className="font-headline text-sm font-semibold text-foreground">
           Bill {bill.billNumber !== null ? `· #${bill.billNumber} ` : ""}· {originLabel}

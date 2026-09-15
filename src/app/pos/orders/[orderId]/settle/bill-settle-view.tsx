@@ -147,14 +147,15 @@ function BillSettleLoaded({
 
   return (
     <div data-testid="bill-settle-view" className="flex flex-1 flex-col">
-      <header className="flex items-center gap-4 border-b border-border/60 px-6 py-3">
+      <header className="flex items-center gap-4 border-b border-border/60 px-4 py-3 sm:px-6">
         <Link href={`/pos/orders/${orderId}`} data-testid="back-to-order" className="text-sm text-primary underline-offset-4 hover:underline">
           ← Back to order
         </Link>
         <p className="font-headline text-lg font-bold text-primary">RESTIQ POS</p>
       </header>
 
-      <div className="flex flex-1 overflow-hidden">
+      {/* Below md (issue #229) the bill stacks above the keypad and the column scrolls. */}
+      <div className="flex min-h-0 flex-1 flex-col overflow-y-auto md:flex-row md:overflow-hidden">
         <BillSummary
           bill={bill}
           lines={order.lines}

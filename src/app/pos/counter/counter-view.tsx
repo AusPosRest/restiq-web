@@ -285,7 +285,7 @@ function CounterLoaded({
 
   return (
     <div data-testid="counter-view" className="flex h-dvh flex-col overflow-hidden">
-      <header className="flex items-center gap-4 border-b border-border/60 px-6 py-3">
+      <header className="flex flex-wrap items-center gap-x-4 gap-y-2 border-b border-border/60 px-4 py-3 sm:px-6">
         <div>
           <p className="font-headline text-lg font-bold text-primary">RESTIQ POS</p>
           <p className="font-label text-xs font-semibold uppercase tracking-wider text-muted-foreground">QSR Counter</p>
@@ -323,10 +323,15 @@ function CounterLoaded({
         </div>
       )}
 
-      <div className="flex flex-1 overflow-hidden">
+      {/* Below lg (issue #229): categories scroll sideways and menu, bill and
+          tender column stack, the whole column scrolling; four columns from lg up. */}
+      <div className="flex min-h-0 flex-1 flex-col overflow-y-auto lg:flex-row lg:overflow-hidden">
         {!readOnly && (
           <>
-            <nav data-testid="category-tabs" className="flex w-36 shrink-0 flex-col gap-1 overflow-y-auto border-r border-border/60 p-3">
+            <nav
+              data-testid="category-tabs"
+              className="flex shrink-0 gap-1 overflow-x-auto border-b border-border/60 p-3 lg:w-36 lg:flex-col lg:overflow-y-auto lg:border-b-0 lg:border-r"
+            >
               {sortedCategories.map((category) => (
                 <button
                   key={category.id}
@@ -337,7 +342,7 @@ function CounterLoaded({
                     setSelectedCategoryId(category.id);
                     setQuery("");
                   }}
-                  className={`rounded-md px-3 py-2 text-left text-sm font-semibold transition-colors ${
+                  className={`shrink-0 whitespace-nowrap rounded-md px-3 py-2 text-left text-sm font-semibold transition-colors lg:whitespace-normal ${
                     category.id === effectiveCategoryId ? "bg-primary text-primary-foreground" : "text-muted-foreground hover:bg-accent hover:text-foreground"
                   }`}
                 >
@@ -346,7 +351,7 @@ function CounterLoaded({
               ))}
             </nav>
 
-            <main className="min-w-0 flex-1 overflow-y-auto p-4">
+            <main className="p-4 lg:min-w-0 lg:flex-1 lg:overflow-y-auto">
               <h2 className="mb-3 font-headline text-base font-semibold text-foreground">
                 {query.trim() ? "Search results" : activeCategory?.name} <span className="font-normal text-muted-foreground">· {visibleItems.length} items</span>
               </h2>
@@ -370,6 +375,7 @@ function CounterLoaded({
           lines={order.lines}
           currency={menu.currency}
           originLabel={orderOriginLabel(order)}
+          layoutClassName="w-full border-b lg:w-80 lg:border-b-0 lg:border-r"
           busyLineId={busyLineId}
           onIncrement={readOnly ? undefined : handleIncrement}
           onDecrement={readOnly ? undefined : handleDecrement}
@@ -377,7 +383,7 @@ function CounterLoaded({
         />
 
         {readOnly ? (
-          <section data-testid="counter-settled-panel" className="flex w-80 shrink-0 flex-col items-center justify-center gap-3 p-6 text-center">
+          <section data-testid="counter-settled-panel" className="flex w-full shrink-0 flex-col items-center justify-center gap-3 p-6 text-center lg:w-80">
             <p className="font-headline text-xl font-semibold text-status-available">Order settled</p>
             <p className="text-sm text-muted-foreground">
               {bill.tenders.length} tender{bill.tenders.length === 1 ? "" : "s"} captured · no further changes are possible.
@@ -392,8 +398,8 @@ function CounterLoaded({
             </div>
           </section>
         ) : (
-          <div className="flex w-80 shrink-0 flex-col">
-            <div className="flex min-h-0 flex-1 flex-col overflow-y-auto">
+          <div className="flex w-full shrink-0 flex-col lg:w-80">
+            <div className="flex flex-col lg:min-h-0 lg:flex-1 lg:overflow-y-auto">
               {terminal.intent ? (
                 <TerminalIntentPanel intent={terminal.intent} currency={menu.currency} busy={terminal.busy} onCancel={terminal.cancel} onDismiss={terminal.dismiss} />
               ) : (

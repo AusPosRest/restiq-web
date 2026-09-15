@@ -161,6 +161,8 @@ export function InvoiceReceipt({ invoice }: Readonly<{ invoice: InvoiceView }>) 
         <p className="text-muted-foreground">{invoice.seller.email}</p>
       </section>
 
+      {/* Scrolls sideways on a narrow phone rather than widening the page (issue #229). */}
+      <div className="overflow-x-auto">
       <table data-testid="invoice-lines" className="w-full text-left text-sm">
         <thead className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">
           <tr>
@@ -181,6 +183,7 @@ export function InvoiceReceipt({ invoice }: Readonly<{ invoice: InvoiceView }>) 
           ))}
         </tbody>
       </table>
+      </div>
 
       <dl data-testid="invoice-totals" className="flex flex-col gap-1.5 border-t border-border/60 pt-3 text-sm">
         <TotalRow label="Subtotal" value={formatMinor(invoice.subtotalMinor, invoice.currency)} testId="invoice-subtotal" />

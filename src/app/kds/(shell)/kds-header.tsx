@@ -64,7 +64,7 @@ export function KdsHeader({ activeMode, stationName }: Readonly<{ activeMode: Kd
           )}
         </div>
 
-        <nav className="flex items-center gap-2">
+        <nav className="flex flex-wrap items-center gap-2">
           {NAV.map((item) => (
             <Link
               key={item.mode}
