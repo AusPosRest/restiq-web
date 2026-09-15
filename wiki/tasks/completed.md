@@ -2,7 +2,7 @@
 
 - **2026-09-16** - POS payment history (issue #253). `/pos/payments`
   (`src/app/pos/(shell)/payments/payments-screen.tsx`, cookie-scoped outlet like status/), shift-bar
-  "Payments" link, `PaymentHistoryView` types in `pos/api.ts`, AUD symbol in `shift-state.ts`.
+  "Payments" link, `PaymentHistoryView` types in `pos/api.ts`.
   Vitest for the screen and the bar link. Backend restiq-backend#158 / PR #159.
 
 - **2026-09-15** - Fix: POS text overflow (issue #240). `tender-keypad.tsx`'s method grid is
