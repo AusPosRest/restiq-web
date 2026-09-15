@@ -33,7 +33,9 @@ const CONFIDENCE_CLASS: Record<ReturnType<typeof confidenceLevel>, string> = {
 
 type Phase = "dropzone" | "uploading" | "review" | "committing" | "success";
 
-export function MenuImport() {
+// onCommitted: set when opened as the Menu page's dialog (issue #239), which
+// closes and reloads instead of showing the onboarding success screen.
+export function MenuImport({ onCommitted }: Readonly<{ onCommitted?: (itemCount: number) => void }>) {
   const [phase, setPhase] = useState<Phase>("dropzone");
   const [uploadError, setUploadError] = useState<string | null>(null);
   const [importId, setImportId] = useState<string | null>(null);
@@ -106,6 +108,10 @@ export function MenuImport() {
     setPhase("committing");
     try {
       const result = await commitMenuImport(importId);
+      if (onCommitted) {
+        onCommitted(result.items.length);
+        return;
+      }
       setCommitResult(result);
       setPhase("success");
     } catch (error) {

@@ -1,5 +1,11 @@
 # Completed
 
+- **2026-09-16** - Fix: Menu Import as a dialog (issue #239). `menu-management.tsx` opens
+  `MenuImport` in a radix `Dialog` from the header and empty-state buttons. `MenuImport` takes
+  `onCommitted(itemCount)`, which the Menu page uses to close the dialog, refetch items and
+  categories, and show a toast. The standalone `/admin/menu/import` (onboarding checklist link) is
+  unchanged. 4 new component tests.
+
 - **2026-09-15** - Fix: POS text overflow (issue #240). `tender-keypad.tsx`'s method grid is
   `repeat(auto-fit,minmax(6.5rem,1fr))` (two per row in the counter's w-80 column); `bill-summary.tsx`
   lines get `pr-3` column padding and a no-wrap amount so long names wrap.

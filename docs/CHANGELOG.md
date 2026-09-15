@@ -7,6 +7,11 @@ with the payments epic.
 ## [Unreleased]
 
 ### Fixed
+- Owner Menu **Import** (#239) opens as a dialog over the menu instead of a
+  separate full-page screen. You can download the sample, upload, review and
+  commit without leaving the page. After you commit, the dialog closes, the
+  list reloads with the new items, and a toast confirms how many were added.
+  `/admin/menu/import` stays for the setup checklist.
 - POS text overflow (#240):
   - **Payment method buttons** (settle and counter) now fit as many as the column holds - two per row in the counter's narrow tender column - so "Card terminal" / "External" no longer spill past their buttons.
   - **Bill panel lines** get column padding and keep the amount on one line, so a long item name ("Soup of the Day") wraps instead of running into its price.
