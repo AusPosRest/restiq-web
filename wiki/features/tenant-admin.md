@@ -300,11 +300,19 @@ story. Backend counterpart: `restiq-backend/wiki/features/tenant-admin.md`.
     SVG (rects/circles with a text label needed no path drawing). A floor
     tab strip switches which floor's tables render. Each table shape is
     draggable (pointer events) and keyboard-operable (arrow keys nudge by
-    `GRID_SNAP_PX`, both funnel through the same
-    `floor-plan-state.ts#computeDragPosition` so mouse and keyboard users get
-    identical snap/clamp behaviour). Dragging shows a live client-side
+    `GRID_SNAP_PX`). Dragging shows a live client-side
     overlap tint (`findOverlap`, bounding-box intersection) purely as visual
     feedback - the backend remains the actual source of truth on save.
+    **Infinite per floor (#237):** a native scroll viewport (`h-[70vh]`)
+    over a dotted surface sized by `canvasExtent` to 480px past the farthest
+    table, so dragging outward always has more room; it grows right/down
+    only (backend `@Min(0)`), and `computeDragPosition` clamps at 0 only.
+    Pan = scroll/trackpad/touch or mouse-drag on empty space; dragging a
+    table against the edge scrolls along. Zoom 25-200% via
+    `floor-plan-zoom-out/reset/in/fit` or Ctrl/⌘ + wheel (pinch), anchored
+    at the cursor; pointer maths runs in canvas units so drags track at any
+    zoom. Zoom and scroll are remembered per floor for the session. New
+    tables still auto-place in 640-wide rows.
   - **List** (`floor-plan-list-view.tsx`): the EXPERIENCE.md-required
     non-pointer fallback - a plain table, one row per table grouped by
     floor, with editable X/Y/capacity number fields (commit on blur/Enter,

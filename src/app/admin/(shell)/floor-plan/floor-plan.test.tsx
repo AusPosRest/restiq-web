@@ -190,6 +190,24 @@ describe("FloorPlan", () => {
     await waitFor(() => expect(shape.dataset.x).toBe("40"));
   });
 
+  it("zooms the canvas in and out from its zoom controls, within limits", async () => {
+    stubFetch();
+    renderFloorPlan();
+    await screen.findByTestId("table-shape-t1");
+    const reset = screen.getByTestId("floor-plan-zoom-reset");
+    expect(reset.textContent).toBe("100%");
+
+    await userEvent.click(screen.getByTestId("floor-plan-zoom-in"));
+    expect(reset.textContent).toBe("125%");
+
+    for (let i = 0; i < 10; i += 1) fireEvent.click(screen.getByTestId("floor-plan-zoom-out"));
+    expect(reset.textContent).toBe("25%");
+    expect(screen.getByTestId("floor-plan-zoom-out")).toHaveProperty("disabled", true);
+
+    await userEvent.click(reset);
+    expect(reset.textContent).toBe("100%");
+  });
+
   describe("zero floors", () => {
     it("shows the empty state instead of a bare canvas/list, and lets the owner add the first floor from it", async () => {
       const fetchMock = stubFetch({ floors: [] });

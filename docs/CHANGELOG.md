@@ -26,6 +26,11 @@ with the payments epic.
   off-screen.
 
 ### Changed
+- The owner Floor Plan canvas is infinite per floor (#237). It fills the
+  page width and grows past the farthest table, so tables can be dragged
+  anywhere right or down (the canvas scrolls along at the edge). Pan by
+  dragging empty space or scrolling; zoom with −, %, + and Fit, or
+  Ctrl/⌘ + scroll. Each floor keeps its own pan and zoom.
 - The simulated card terminal is drawn as the physical device (#198): body,
   brand bar with a status LED, inset screen, and reader hardware along the
   bottom edge. It opens on a UPI / Cards / Wallets / EMI method screen; only
