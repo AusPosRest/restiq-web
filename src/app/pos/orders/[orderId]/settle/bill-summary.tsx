@@ -79,9 +79,9 @@ export function BillSummary({
         <table className="w-full text-left text-sm">
           <thead className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">
             <tr>
-              <th className="pb-2">Qty</th>
-              <th className="pb-2">Item</th>
-              <th className="pb-2 text-right">Amount</th>
+              <th className="pb-2 pr-3">Qty</th>
+              <th className="pb-2 pr-3">Item</th>
+              <th className="whitespace-nowrap pb-2 text-right">Amount</th>
               {editable && <th className="pb-2" aria-hidden="true" />}
             </tr>
           </thead>
@@ -90,7 +90,7 @@ export function BillSummary({
               const isBusy = busyLineId === line.id;
               return (
                 <tr key={line.id} data-testid={`bill-line-${line.id}`} className="align-top">
-                  <td className="py-1.5 tabular-nums">
+                  <td className="py-1.5 pr-3 tabular-nums">
                     {editable ? (
                       <div className="flex items-center gap-1">
                         <button
@@ -121,8 +121,9 @@ export function BillSummary({
                       line.quantity
                     )}
                   </td>
-                  <td className="py-1.5">
-                    <p className="font-medium text-foreground">
+                  {/* Padding + wrap (issue #240): a long name used to run straight into its amount. */}
+                  <td className="py-1.5 pr-3">
+                    <p className="font-medium break-words text-foreground">
                       {line.itemName}
                       {line.variantName && <span className="text-muted-foreground"> · {line.variantName}</span>}
                     </p>
@@ -130,9 +131,9 @@ export function BillSummary({
                       <p className="text-xs text-muted-foreground">{line.modifiers.map((modifier) => modifier.name).join(", ")}</p>
                     )}
                   </td>
-                  <td className="py-1.5 text-right tabular-nums">{formatMinor(line.lineTotalMinor, currency)}</td>
+                  <td className="whitespace-nowrap py-1.5 text-right tabular-nums">{formatMinor(line.lineTotalMinor, currency)}</td>
                   {editable && (
-                    <td className="py-1.5 text-right">
+                    <td className="py-1.5 pl-2 text-right">
                       <button
                         type="button"
                         data-testid={`bill-line-remove-${line.id}`}
