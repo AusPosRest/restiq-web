@@ -5,7 +5,7 @@
 // menu-state.ts#formatPriceMinor even though the shape is the same idea -
 // this is the pos realm's own small copy, not a stray duplicate.
 
-const CURRENCY_SYMBOLS: Record<string, string> = { INR: "₹" };
+const CURRENCY_SYMBOLS: Record<string, string> = { INR: "₹", AUD: "$" };
 
 /** Cash amounts render with paise, unlike menu prices - an over/short of a few paise still matters. */
 export function formatMinor(amountMinor: number, currency = "INR"): string {

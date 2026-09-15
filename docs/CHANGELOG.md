@@ -6,6 +6,9 @@ with the payments epic.
 
 ## [Unreleased]
 
+### Added
+- POS payment history (#253, backend restiq-backend#158): a **Payments** link in the POS top bar opens `/pos/payments`, listing every payment taken at the outlet today (outlet-local day) newest first - time, bill number with table or token, method, amount, reference, who took it - with per-method totals on top and a Refresh button.
+
 ### Fixed
 - POS text overflow (#240):
   - **Payment method buttons** (settle and counter) now fit as many as the column holds - two per row in the counter's narrow tender column - so "Card terminal" / "External" no longer spill past their buttons.

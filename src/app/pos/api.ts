@@ -287,6 +287,44 @@ export function getAttendanceToday(outletId: string): Promise<AttendanceView> {
   return posApi<AttendanceView>(`outlets/${encodeURIComponent(outletId)}/attendance`);
 }
 
+// --- Payment history (issue #253 web / #158 backend): every tender taken at
+// the outlet today (the outlet's local calendar day, same rule as
+// attendance), newest first, with per-method totals. Tenders only - refunds
+// are a separate ledger and are not in this list.
+export type PaymentHistoryMethod = "cash" | "upi_manual" | "upi_intent" | "upi_qr" | "card_online" | "card_terminal" | "external";
+
+export interface PaymentHistoryEntry {
+  id: string;
+  billId: string;
+  billNumber: number | null;
+  orderId: string;
+  tableLabel: string | null;
+  tokenNumber: number | null;
+  method: PaymentHistoryMethod;
+  amountMinor: number;
+  reference: string | null;
+  takenBy: { staffId: string; name: string } | null;
+  createdAt: string;
+}
+
+export interface PaymentMethodTotal {
+  method: PaymentHistoryMethod;
+  count: number;
+  amountMinor: number;
+}
+
+export interface PaymentHistoryView {
+  outletId: string;
+  /** YYYY-MM-DD in the outlet's timezone. */
+  date: string;
+  asOf: string;
+  currency: string;
+  totalMinor: number;
+  count: number;
+  byMethod: PaymentMethodTotal[];
+  payments: PaymentHistoryEntry[];
+}
+
 // --- CAP-7 Bill & Settle (story 8, issue #53 web / #59 backend). See
 // orders/[orderId]/settle/bill-state.ts's file header for the full
 // reconciliation reasoning (restiq-web#98) against the real, merged
