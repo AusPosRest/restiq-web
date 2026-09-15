@@ -14,6 +14,10 @@ with the payments epic.
   - **POS order and counter screens:** below `lg` the categories become a horizontally scrolling row, and the menu, bill and tender column stack full width in one scrolling column.
   - **POS settle and refund:** the bill stacks above the keypad or refund panel below `md`.
   - **POS shell:** padding shrinks on small screens.
+- KDS on phones and tablets (#232): below `md` the expo screen's
+  Waiting-on panel stacks under the expo rail instead of squeezing it to
+  ~90 px, and the header's station / expo / all-day / bumped tabs wrap.
+  Station and bumped ticket lanes already scrolled sideways.
 - POS table map header on a phone (#206): the actions wrap onto their own
   row, button labels stay on one line, and Refresh is no longer pushed
   off-screen.
