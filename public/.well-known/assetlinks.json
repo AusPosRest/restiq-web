@@ -1,0 +1,12 @@
+[
+  {
+    "relation": ["delegate_permission/common.handle_all_urls"],
+    "target": {
+      "namespace": "android_app",
+      "package_name": "com.restiq.app",
+      "sha256_cert_fingerprints": [
+        "24:0E:E9:3B:C7:19:A0:83:61:6F:A4:87:A0:6F:B7:72:79:42:2B:1B:84:84:98:47:D3:2C:7B:51:19:4B:30:68"
+      ]
+    }
+  }
+]

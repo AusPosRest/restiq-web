@@ -6,6 +6,9 @@ with the payments epic.
 
 ## [Unreleased]
 
+### Added
+- `/.well-known/assetlinks.json` (#260): Digital Asset Links for the Android app (`com.restiq.app`, repo restiq-android), so Chrome runs the Trusted Web Activity full-screen. Lists the debug signing fingerprint; add the release / Play App Signing fingerprint when that key exists.
+
 ### Fixed
 - POS text overflow (#240):
   - **Payment method buttons** (settle and counter) now fit as many as the column holds - two per row in the counter's narrow tender column - so "Card terminal" / "External" no longer spill past their buttons.
