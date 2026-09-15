@@ -5,7 +5,7 @@
 // (EXPERIENCE.md: "item editor as a drawer, not a full-page navigation").
 // Currency defaults to INR (same convention as CAP-3's menu import) - the
 // backend's menu endpoints carry no tenant-currency field to read instead.
-import { Plus, Search, Soup, Upload } from "lucide-react";
+import { LibraryBig, Plus, Search, Soup, Upload } from "lucide-react";
 import Link from "next/link";
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { Button } from "@/components/ui/button";
@@ -13,6 +13,7 @@ import { fetchAllergens, fetchCategories, fetchCombos, fetchItems, fetchModifier
 import { LoadErrorPanel, Skeleton } from "../data-states";
 import { useOutlets } from "../outlet-context";
 import { CategorySidebar } from "./category-sidebar";
+import { DirectoryDialog } from "./directory-dialog";
 import { ItemDrawer } from "./item-drawer";
 import { AllergenView, ALL_CATEGORY, CategoryView, ComboView, ItemView, ModifierGroupView, visibleItems } from "./menu-state";
 import { MenuTable } from "./menu-table";
@@ -75,6 +76,7 @@ export function MenuManagement() {
   const [category, setCategory] = useState<string>(ALL_CATEGORY);
   const [search, setSearch] = useState("");
   const [drawerItem, setDrawerItem] = useState<ItemView | null | "closed">("closed");
+  const [directoryOpen, setDirectoryOpen] = useState(false);
 
   const effectiveItems = useMemo(() => items ?? data?.items ?? [], [items, data]);
   const effectiveCategories = categories ?? data?.categories ?? [];
@@ -94,6 +96,15 @@ export function MenuManagement() {
     },
     [effectiveItems],
   );
+
+  // An import lands new categories and items server-side, so drop the local
+  // overrides and refetch rather than reconstruct ItemViews client-side.
+  function handleImported() {
+    setDirectoryOpen(false);
+    setItems(null);
+    setCategories(null);
+    retry();
+  }
 
   function handleAvailabilityChanged(itemId: string, available: boolean) {
     setItems((current) => (current ?? effectiveItems).map((item) => (item.id === itemId ? { ...item, available } : item)));
@@ -123,7 +134,10 @@ export function MenuManagement() {
             {outlets.length > 0 ? `, synced to ${outlets.length} outlet${outlets.length === 1 ? "" : "s"}` : ""}
           </p>
         </div>
-        <div className="flex gap-2">
+        <div className="flex flex-wrap gap-2">
+          <Button variant="secondary" data-testid="menu-browse-directory" onClick={() => setDirectoryOpen(true)}>
+            <LibraryBig aria-hidden="true" /> Browse directory
+          </Button>
           <Button asChild variant="secondary" data-testid="menu-import-link">
             <Link href="/admin/menu/import">
               <Upload aria-hidden="true" /> Import
@@ -160,12 +174,22 @@ export function MenuManagement() {
 
         <div className="flex-1 overflow-x-auto rounded-lg border border-border/40 bg-card">
           {filtered.length === 0 ? (
-            <EmptyState filtered={filteredOrSearched} onClearFilters={() => { setCategory(ALL_CATEGORY); setSearch(""); }} onAddItem={() => setDrawerItem(null)} />
+            <EmptyState
+              filtered={filteredOrSearched}
+              onClearFilters={() => {
+                setCategory(ALL_CATEGORY);
+                setSearch("");
+              }}
+              onAddItem={() => setDrawerItem(null)}
+              onBrowseDirectory={() => setDirectoryOpen(true)}
+            />
           ) : (
             <MenuTable items={filtered} currency={CURRENCY} onSelect={setDrawerItem} onAvailabilityChanged={handleAvailabilityChanged} />
           )}
         </div>
       </div>
+
+      <DirectoryDialog open={directoryOpen} onClose={() => setDirectoryOpen(false)} onImported={handleImported} />
 
       <ItemDrawer
         open={drawerItem !== "closed"}
@@ -192,7 +216,12 @@ export function MenuManagement() {
   );
 }
 
-function EmptyState({ filtered, onClearFilters, onAddItem }: Readonly<{ filtered: boolean; onClearFilters: () => void; onAddItem: () => void }>) {
+function EmptyState({
+  filtered,
+  onClearFilters,
+  onAddItem,
+  onBrowseDirectory,
+}: Readonly<{ filtered: boolean; onClearFilters: () => void; onAddItem: () => void; onBrowseDirectory: () => void }>) {
   return (
     <div className="flex flex-col items-center gap-3 px-8 py-16 text-center">
       <Soup className="size-8 text-muted-foreground" aria-hidden="true" />
@@ -206,8 +235,11 @@ function EmptyState({ filtered, onClearFilters, onAddItem }: Readonly<{ filtered
       ) : (
         <div data-testid="menu-empty">
           <p className="font-headline text-lg font-medium">Your menu is empty</p>
-          <p className="mt-1 text-sm text-muted-foreground">Import a menu or add your first item to get started.</p>
-          <div className="mt-3 flex justify-center gap-2">
+          <p className="mt-1 text-sm text-muted-foreground">Pick items from the product directory, import a menu, or add your first item.</p>
+          <div className="mt-3 flex flex-wrap justify-center gap-2">
+            <Button variant="secondary" size="sm" data-testid="menu-empty-directory" onClick={onBrowseDirectory}>
+              Browse directory
+            </Button>
             <Button asChild variant="secondary" size="sm" data-testid="menu-empty-import">
               <Link href="/admin/menu/import">Import menu</Link>
             </Button>

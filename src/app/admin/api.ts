@@ -653,3 +653,32 @@ export interface OwnerAgreementView {
 export function signAgreement(versionId: string, signerName: string): Promise<{ signature: AgreementSignatureView }> {
   return adminApi(`agreement/${versionId}/sign`, { method: "POST", body: JSON.stringify({ signerName, accepted: true }) });
 }
+
+// --- Product directory (issue #245): the platform catalog, scoped by the
+// backend to this tenant's currency. Import copies the chosen products into
+// the tenant's own menu (same result shape as a menu-import commit).
+
+export interface DirectoryProduct {
+  id: string;
+  name: string;
+  shortName: string;
+  nameHindi: string | null;
+  vegMarker: "veg" | "non_veg" | null;
+  photoUrl: string | null;
+  category: string;
+  suggestedPriceMinor: number;
+  currency: string;
+  tags: string[];
+}
+
+export function directoryPath(q: string, tag: string): string {
+  const params = new URLSearchParams();
+  if (q.trim()) params.set("q", q.trim());
+  if (tag) params.set("tag", tag);
+  const search = params.toString();
+  return `menu/directory${search ? `?${search}` : ""}`;
+}
+
+export function importDirectoryProducts(productIds: string[]): Promise<MenuImportCommitResult> {
+  return adminApi<MenuImportCommitResult>("menu/directory/import", { method: "POST", body: JSON.stringify({ productIds }) });
+}

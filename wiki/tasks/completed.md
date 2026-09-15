@@ -1,5 +1,12 @@
 # Completed
 
+- **2026-09-16** - Product directory (issue #245). Ops `/ops/catalog`
+  (`src/app/ops/(shell)/catalog/`: list, tag chips, market filter, add/edit dialog, delete via
+  `ConfirmReasonDialog`) and owner `Browse directory` on the Menu page
+  (`src/app/admin/(shell)/menu/directory-dialog.tsx`: search, tag chips, tick-and-import; the
+  menu drops its local overrides and refetches after an import). Vitest for both. Backend
+  restiq-backend#153 / PR #154.
+
 - **2026-09-15** - Fix: POS text overflow (issue #240). `tender-keypad.tsx`'s method grid is
   `repeat(auto-fit,minmax(6.5rem,1fr))` (two per row in the counter's w-80 column); `bill-summary.tsx`
   lines get `pr-3` column padding and a no-wrap amount so long names wrap.

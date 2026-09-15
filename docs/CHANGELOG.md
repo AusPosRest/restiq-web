@@ -6,6 +6,11 @@ with the payments epic.
 
 ## [Unreleased]
 
+### Added
+- Product directory (#245, backend restiq-backend#153):
+  - **Ops console ▸ Catalog** (`/ops/catalog`): operators curate a platform-wide list of products (name, short name, Hindi name, veg marker, photo URL, category, suggested price, market, tags) with search, tag chips and a market filter. Deletes go through the reason dialog and land in the control-plane audit trail.
+  - **Owner console ▸ Menu ▸ Browse directory**: a dialog that searches the directory (scoped to the tenant's market), filters by tag, and imports the ticked products as copies into the tenant's own menu. Imported items are ordinary menu items from then on; nothing links back to the directory.
+
 ### Fixed
 - POS text overflow (#240):
   - **Payment method buttons** (settle and counter) now fit as many as the column holds - two per row in the counter's narrow tender column - so "Card terminal" / "External" no longer spill past their buttons.
