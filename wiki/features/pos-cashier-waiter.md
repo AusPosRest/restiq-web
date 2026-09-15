@@ -1549,3 +1549,25 @@ exactly this gap:
   other story in this doc - verified by reading restiq-backend's real, merged
   `src/pos/bills/{bill-core.ts,bills.service.ts,bills.controller.ts}` and
   `src/guest/bills/{bills.service.ts,bills.controller.ts}` directly.
+
+## Payments - today's payment history (issue #253)
+
+- **Intent:** a cashier checks what has been taken at the outlet today
+  without leaving the POS - useful before a shift close or when a guest asks
+  about a payment.
+- **Built:** "Payments" link in the shift bar (`pos-shift-bar-payments-link`)
+  → `/pos/payments` (`src/app/pos/(shell)/payments/`). The page reads the
+  outlet id from the `pos_staff` cookie like `status/page.tsx` and loads
+  `outlets/:outletId/payments` through `usePosLoad`. Per-method total cards
+  (`pos-payments-total-<method>`), a summary line (count · total · outlet-local
+  date), a Refresh button, and a table newest-first: time, bill (`#n · T3` or
+  `#n · Token 14`), method, amount, reference, taken by. Empty state when
+  nothing has been taken yet. Five-state pattern; skeleton/error pieces come
+  from `../status/data-states`, money from `../shift/shift-state#formatMinor`.
+- **API:** `GET pos/v1/outlets/:outletId/payments` (`PaymentHistoryView` in
+  `pos/api.ts`). "Today" is decided by the backend in the outlet's timezone;
+  the screen never computes dates.
+- **Tests:** `payments-screen.test.tsx` (totals + rows as served, empty
+  state, retry) and the link assertion in `shift-bar.test.tsx`.
+- **Not built (by design):** refunds in the list, a date picker, per-cashier
+  filter, drill-down into a bill.
