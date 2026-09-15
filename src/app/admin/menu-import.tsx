@@ -22,7 +22,7 @@ import {
   reviewedCount,
 } from "./menu-import-state";
 
-const UPLOAD_ERROR = "That file type isn't supported. Upload a CSV, XLSX spreadsheet, a photo (JPG/PNG) or a PDF of your menu.";
+const UPLOAD_ERROR = "Upload your menu as a CSV or XLSX spreadsheet. Photos and PDFs can't be read yet - download the sample spreadsheet below to get started.";
 const GENERIC_FAILURE = "Something went wrong. Check your connection and try again.";
 
 const CONFIDENCE_CLASS: Record<ReturnType<typeof confidenceLevel>, string> = {
@@ -33,7 +33,10 @@ const CONFIDENCE_CLASS: Record<ReturnType<typeof confidenceLevel>, string> = {
 
 type Phase = "dropzone" | "uploading" | "review" | "committing" | "success";
 
-export function MenuImport() {
+// onCommitted: set when opened as the Menu page's dialog (issue #239), which
+// closes and reloads instead of showing the success screen. fromSetup: opened
+// from the go-live checklist, so success goes back there; otherwise to the menu.
+export function MenuImport({ onCommitted, fromSetup = false }: Readonly<{ onCommitted?: (itemCount: number) => void; fromSetup?: boolean }>) {
   const [phase, setPhase] = useState<Phase>("dropzone");
   const [uploadError, setUploadError] = useState<string | null>(null);
   const [importId, setImportId] = useState<string | null>(null);
@@ -106,6 +109,10 @@ export function MenuImport() {
     setPhase("committing");
     try {
       const result = await commitMenuImport(importId);
+      if (onCommitted) {
+        onCommitted(result.items.length);
+        return;
+      }
       setCommitResult(result);
       setPhase("success");
     } catch (error) {
@@ -123,8 +130,8 @@ export function MenuImport() {
         <PartyPopper className="size-8 text-status-active" aria-hidden="true" />
         <h2 className="font-headline text-xl font-semibold">Your menu is in!</h2>
         <p className="text-sm text-muted-foreground">{commitResult?.items.length ?? items.length} items were added to your menu.</p>
-        <Button asChild data-testid="menu-import-success-onboarding-link" className="mt-4">
-          <Link href="/admin/onboarding">Back to setup</Link>
+        <Button asChild data-testid={fromSetup ? "menu-import-success-onboarding-link" : "menu-import-success-menu-link"} className="mt-4">
+          {fromSetup ? <Link href="/admin/onboarding">Back to setup</Link> : <Link href="/admin/menu">Go to your menu</Link>}
         </Button>
       </div>
     );
@@ -135,7 +142,7 @@ export function MenuImport() {
       <div className="space-y-4">
         <div>
           <h1 className="font-headline text-xl font-semibold">Import your menu</h1>
-          <p className="text-sm text-muted-foreground">Upload a spreadsheet, photo or PDF and we&apos;ll draft your menu for you to check.</p>
+          <p className="text-sm text-muted-foreground">Upload a spreadsheet and we&apos;ll draft your menu for you to check.</p>
         </div>
         <div
           data-testid="menu-import-dropzone"
@@ -161,7 +168,7 @@ export function MenuImport() {
         >
           <UploadCloud className="size-8 text-muted-foreground" aria-hidden="true" />
           <p className="text-sm font-medium">{phase === "uploading" ? "Reading your menu..." : "Drag a file here, or click to browse"}</p>
-          <p className="text-xs text-muted-foreground">CSV, XLSX, photo (JPG/PNG) or PDF</p>
+          <p className="text-xs text-muted-foreground">CSV or XLSX spreadsheet (photos and PDFs can&apos;t be read yet)</p>
         </div>
         <p className="mt-3 text-center text-xs text-muted-foreground">
           New to this?{" "}

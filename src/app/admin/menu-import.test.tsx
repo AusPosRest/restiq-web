@@ -36,8 +36,8 @@ function csvFile(name = "menu.csv"): File {
   return new File(["name,price\nPaneer,320"], name, { type: "text/csv" });
 }
 
-async function uploadAndReachReview() {
-  render(<MenuImport />);
+async function uploadAndReachReview(props: { fromSetup?: boolean } = {}) {
+  render(<MenuImport {...props} />);
   const input = screen.getByTestId("menu-import-file-input");
   await userEvent.upload(input, csvFile());
   return screen.findByTestId("menu-import-table");
@@ -193,7 +193,27 @@ describe("MenuImport review", () => {
     await waitFor(() => expect((screen.getByTestId("menu-import-row-1-name") as HTMLInputElement).value).toBe("Paneer Tikka"));
   });
 
-  it("commits with the import id and shows the celebratory success state linking back to the checklist", async () => {
+  it("ends on the menu, not setup, when not opened from the setup checklist (issue #239)", async () => {
+    vi.stubGlobal(
+      "fetch",
+      vi
+        .fn()
+        .mockResolvedValueOnce(jsonResponse(DRAFT, 201))
+        .mockResolvedValueOnce(jsonResponse({ importId: "imp-1", committedAt: "2026-09-16T00:00:00.000Z", categories: [], items: [{ id: "i1" }] }, 201)),
+    );
+    await uploadAndReachReview();
+
+    await userEvent.click(screen.getByTestId("menu-import-row-1-reviewed"));
+    await userEvent.click(screen.getByTestId("menu-import-row-2-reviewed"));
+    await userEvent.click(screen.getByTestId("menu-import-row-3-reviewed"));
+    await userEvent.click(screen.getByTestId("menu-import-commit"));
+
+    const success = await screen.findByTestId("menu-import-success");
+    expect(within(success).getByTestId("menu-import-success-menu-link")).toHaveProperty("href", expect.stringContaining("/admin/menu"));
+    expect(within(success).queryByTestId("menu-import-success-onboarding-link")).toBeNull();
+  });
+
+  it("commits with the import id and, when opened from the setup checklist, links back to it", async () => {
     const fetchMock = vi
       .fn()
       .mockResolvedValueOnce(jsonResponse(DRAFT, 201))
@@ -209,7 +229,7 @@ describe("MenuImport review", () => {
         ),
       );
     vi.stubGlobal("fetch", fetchMock);
-    await uploadAndReachReview();
+    await uploadAndReachReview({ fromSetup: true });
 
     await userEvent.click(screen.getByTestId("menu-import-row-1-reviewed"));
     await userEvent.click(screen.getByTestId("menu-import-row-2-reviewed"));
@@ -223,6 +243,28 @@ describe("MenuImport review", () => {
 
     const link = within(screen.getByTestId("menu-import-success")).getByTestId("menu-import-success-onboarding-link");
     expect(link).toHaveProperty("href", expect.stringContaining("/admin/onboarding"));
+  });
+
+  it("hands the committed item count to onCommitted instead of the onboarding success screen (issue #239)", async () => {
+    vi.stubGlobal(
+      "fetch",
+      vi
+        .fn()
+        .mockResolvedValueOnce(jsonResponse(DRAFT, 201))
+        .mockResolvedValueOnce(jsonResponse({ importId: "imp-1", committedAt: "2026-09-16T00:00:00.000Z", categories: [], items: [{ id: "i1" }, { id: "i2" }] }, 201)),
+    );
+    const onCommitted = vi.fn();
+    render(<MenuImport onCommitted={onCommitted} />);
+    await userEvent.upload(screen.getByTestId("menu-import-file-input"), csvFile());
+    await screen.findByTestId("menu-import-table");
+
+    await userEvent.click(screen.getByTestId("menu-import-row-1-reviewed"));
+    await userEvent.click(screen.getByTestId("menu-import-row-2-reviewed"));
+    await userEvent.click(screen.getByTestId("menu-import-row-3-reviewed"));
+    await userEvent.click(screen.getByTestId("menu-import-commit"));
+
+    await waitFor(() => expect(onCommitted).toHaveBeenCalledWith(2));
+    expect(screen.queryByTestId("menu-import-success")).toBeNull();
   });
 
   it("shows a commit error and stays in review if commit fails", async () => {

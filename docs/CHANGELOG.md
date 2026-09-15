@@ -7,6 +7,18 @@ with the payments epic.
 ## [Unreleased]
 
 ### Fixed
+- Menu import no longer invents items from photos and PDFs (#246). The
+  backend has no photo/PDF reader yet and used to return the same 3 sample
+  items for every file. The dropzone now takes CSV or XLSX only and says
+  why, and the backend refuses photos and PDFs with a clear message.
+- Owner Menu **Import** (#239) opens as a dialog over the menu instead of a
+  separate full-page screen. You can download the sample, upload, review and
+  commit without leaving the page. After you commit, the dialog closes, the
+  list reloads with the new items, and a toast confirms how many were added.
+  `/admin/menu/import` stays for the setup checklist. Its success screen now
+  says **Back to setup** only when you came from the checklist; otherwise it
+  says **Go to your menu**, so an owner whose setup is done is no longer sent
+  back to setup.
 - POS text overflow (#240):
   - **Payment method buttons** (settle and counter) now fit as many as the column holds - two per row in the counter's narrow tender column - so "Card terminal" / "External" no longer spill past their buttons.
   - **Bill panel lines** get column padding and keep the amount on one line, so a long item name ("Soup of the Day") wraps instead of running into its price.
