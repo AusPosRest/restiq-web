@@ -1292,3 +1292,23 @@ mocked-fetch component tests (`reports.test.tsx`,
   (`agreement-empty`) when nothing has been published.
 - **Not built:** a pending-agreement banner elsewhere in the shell, gating
   go-live on a signature, PDF download.
+
+## Menu ▸ Browse directory - import from the product directory (issue #245)
+
+- **Intent:** an owner picks ready-made products from the platform directory
+  instead of typing every item, then edits the copies freely.
+- **Built:** a "Browse directory" button beside Import on `/admin/menu` (and
+  in the empty state) opens `src/app/admin/(shell)/menu/directory-dialog.tsx`:
+  search (`useDeferredValue`, no debounce library), tag chips from
+  `GET menu/directory/tags`, a checkbox list with photo/initial, name,
+  category, veg marker, tags and suggested price, and an "Import N items"
+  button. The backend scopes the list to the tenant's currency, so an Indian
+  tenant never sees AUD products. On success the menu drops its local
+  item/category overrides and refetches, so new categories appear in the
+  sidebar; a name collision inside a category surfaces the backend's 409
+  message as an error toast and keeps the dialog open.
+- **API:** `GET admin/v1/menu/directory?q=&tag=`, `GET .../tags`,
+  `POST .../import { productIds[] }` (`api.ts`: `directoryPath`,
+  `importDirectoryProducts`).
+- **Tests:** `directory-dialog.test.tsx` (search + tag filter, ticking,
+  import payload and count callback; 409 keeps the dialog open).
