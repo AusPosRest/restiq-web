@@ -1,5 +1,7 @@
 # Completed
 
+- **2026-09-15** - Responsive consoles and POS (issues #228, #229). Shared `src/components/mobile-nav.tsx` drawer for the admin and ops shells, which now hide the sidebar below md. POS order-taking, counter, settle and refund stack their side panels below lg/md; `BillSummary` takes a `layoutClassName`. Public screens (landing, device, the three logins, QR welcome) were already clean at 375 px.
+
 - **2026-09-15** - Installable PWA for Android and iOS (issue #222): `app/manifest.ts`,
   generated `icon` (192/512, maskable) and `apple-icon` (180), `appleWebApp` + theme-colour
   metadata, and `install-banner.tsx` (Install button on Android/Chrome, Add to Home Screen

@@ -24,7 +24,7 @@ export default async function PosShellLayout({
   return (
     <div className="flex min-h-screen flex-1 flex-col">
       <ShiftBar initial={display} />
-      <main className="flex flex-1 flex-col p-8">{children}</main>
+      <main className="flex flex-1 flex-col p-4 sm:p-6 lg:p-8">{children}</main>
     </div>
   );
 }

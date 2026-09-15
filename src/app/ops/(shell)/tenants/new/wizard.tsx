@@ -267,9 +267,9 @@ export function OnboardingWizard() {
   const active = STEPS[step - 1];
 
   return (
-    <div className="mx-auto flex w-full max-w-5xl gap-10">
-      {/* Step indicator - backward-clickable only (EXPERIENCE.md wizard pattern). */}
-      <nav aria-label="Onboarding progress" className="w-56 shrink-0 pt-2">
+    <div className="mx-auto flex w-full max-w-5xl flex-col gap-6 md:flex-row md:gap-10">
+      {/* Step indicator - backward-clickable only (EXPERIENCE.md wizard pattern). Stacks above the form below md (issue #228). */}
+      <nav aria-label="Onboarding progress" className="w-full shrink-0 pt-2 md:w-56">
         <p className="font-label text-xs font-semibold uppercase tracking-wider text-muted-foreground">
           Onboarding progress
         </p>
