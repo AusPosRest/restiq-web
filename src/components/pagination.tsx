@@ -4,7 +4,7 @@
 // (lives beside ui/button so admin, ops and pos may all import it). Hidden
 // entirely when everything fits on one page.
 import { ChevronLeft, ChevronRight } from "lucide-react";
-import { useEffect, useState } from "react";
+import { useState } from "react";
 import { Button } from "@/components/ui/button";
 import { Page, PAGE_SIZE, paginate } from "@/lib/pagination";
 
@@ -20,10 +20,14 @@ export interface Pager<T> extends Page<T> {
  */
 export function usePagination<T>(all: readonly T[], resetKey: unknown = null, pageSize = PAGE_SIZE): Pager<T> {
   const [page, setPage] = useState(1);
-  // ponytail: reset-on-key-change via effect; one render with the stale page is invisible because paginate clamps.
-  useEffect(() => {
+  // React's "adjust state while rendering" pattern (no effect, no extra
+  // commit): remember the key the current page belongs to and jump back to
+  // page 1 the moment a different list arrives.
+  const [pageKey, setPageKey] = useState(resetKey);
+  if (resetKey !== pageKey) {
+    setPageKey(resetKey);
     setPage(1);
-  }, [resetKey]);
+  }
   return { ...paginate(all, page, pageSize), setPage };
 }
 
