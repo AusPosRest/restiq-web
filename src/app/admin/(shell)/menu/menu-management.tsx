@@ -162,7 +162,7 @@ export function MenuManagement() {
           {filtered.length === 0 ? (
             <EmptyState filtered={filteredOrSearched} onClearFilters={() => { setCategory(ALL_CATEGORY); setSearch(""); }} onAddItem={() => setDrawerItem(null)} />
           ) : (
-            <MenuTable items={filtered} currency={CURRENCY} onSelect={setDrawerItem} onAvailabilityChanged={handleAvailabilityChanged} />
+            <MenuTable items={filtered} currency={CURRENCY} filterKey={`${category}|${search}`} onSelect={setDrawerItem} onAvailabilityChanged={handleAvailabilityChanged} />
           )}
         </div>
       </div>

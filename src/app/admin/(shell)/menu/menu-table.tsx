@@ -7,6 +7,7 @@
 // fetching every variant's price for every list row.
 import { GripVertical } from "lucide-react";
 import { useEffect, useState } from "react";
+import { PaginationControls, usePagination } from "@/components/pagination";
 import { fetchCurrentPrice } from "../../api";
 import { EightySixToggle } from "./eighty-six-toggle";
 import { formatPriceMinor, ItemView } from "./menu-state";
@@ -14,10 +15,20 @@ import { formatPriceMinor, ItemView } from "./menu-state";
 export function MenuTable({
   items,
   currency,
+  filterKey,
   onSelect,
   onAvailabilityChanged,
-}: Readonly<{ items: ItemView[]; currency: string; onSelect: (item: ItemView) => void; onAvailabilityChanged: (itemId: string, available: boolean) => void }>) {
+}: Readonly<{
+  items: ItemView[];
+  currency: string;
+  /** Changes whenever the category/search filter changes, so the pager returns to page 1 (issue #255). */
+  filterKey?: string;
+  onSelect: (item: ItemView) => void;
+  onAvailabilityChanged: (itemId: string, available: boolean) => void;
+}>) {
+  const pager = usePagination(items, filterKey);
   return (
+    <>
     <table data-testid="menu-table" className="w-full text-sm">
       <thead className="text-left text-xs font-semibold uppercase tracking-wider text-muted-foreground">
         <tr className="h-12 border-b border-border/40">
@@ -30,11 +41,13 @@ export function MenuTable({
         </tr>
       </thead>
       <tbody>
-        {items.map((item) => (
+        {pager.items.map((item) => (
           <MenuTableRow key={item.id} item={item} currency={currency} onSelect={onSelect} onAvailabilityChanged={onAvailabilityChanged} />
         ))}
       </tbody>
     </table>
+    <PaginationControls pager={pager} testId="menu-pagination" />
+    </>
   );
 }
 

@@ -8,6 +8,7 @@
 // shared across every row (mirrors menu-table.tsx's price-change-dialog use).
 import { KeyRound, Users } from "lucide-react";
 import { Fragment } from "react";
+import { PaginationControls, usePagination } from "@/components/pagination";
 import { Button } from "@/components/ui/button";
 import { StaffPinChip } from "./pin-chip";
 import { staffFullName, type PinStatus, type RoleView, type StaffView } from "./staff-state";
@@ -49,6 +50,7 @@ export function StaffTable({
   onRevokeRequested,
   onDismissIssuedPin,
 }: Readonly<StaffTableProps>) {
+  const pager = usePagination(staff);
   if (staff.length === 0) {
     return (
       <div data-testid="staff-empty" className="flex flex-col items-center gap-2 rounded-lg border border-dashed border-border/60 bg-card/50 px-8 py-16 text-center">
@@ -72,7 +74,7 @@ export function StaffTable({
           </tr>
         </thead>
         <tbody>
-          {staff.map((member) => {
+          {pager.items.map((member) => {
             const busy = busyStaffId === member.id;
             return (
               <Fragment key={member.id}>
@@ -142,6 +144,7 @@ export function StaffTable({
           })}
         </tbody>
       </table>
+      <PaginationControls pager={pager} testId="staff-pagination" />
     </div>
   );
 }

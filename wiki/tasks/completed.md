@@ -1,5 +1,10 @@
 # Completed
 
+- **2026-09-16** - List pagination (issue #255). `src/lib/pagination.ts#paginate` (pure, 20/page,
+  clamped) + `src/components/pagination.tsx` (`usePagination(list, resetKey)` and
+  `PaginationControls`), applied to owner Menu / Staff / Devices and ops Sync Health /
+  Subscriptions. Tests: `pagination.test.ts(x)` and a 25-item case in `menu-management.test.tsx`.
+
 - **2026-09-15** - Fix: POS text overflow (issue #240). `tender-keypad.tsx`'s method grid is
   `repeat(auto-fit,minmax(6.5rem,1fr))` (two per row in the counter's w-80 column); `bill-summary.tsx`
   lines get `pr-3` column padding and a no-wrap amount so long names wrap.

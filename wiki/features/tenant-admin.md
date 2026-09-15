@@ -1292,3 +1292,14 @@ mocked-fetch component tests (`reports.test.tsx`,
   (`agreement-empty`) when nothing has been published.
 - **Not built:** a pending-agreement banner elsewhere in the shell, gating
   go-live on a signature, PDF download.
+
+## List pagination (issue #255)
+
+- Client-side, 20 rows per page: `src/lib/pagination.ts#paginate` (pure,
+  clamps the page, reports `from–to of total`) and
+  `src/components/pagination.tsx` (`usePagination(list, resetKey)` +
+  `PaginationControls`). The controls render only when there is more than one
+  page; a change of `resetKey` (the Menu passes `category|search`) returns
+  to page 1. Applied to the Menu items table (`menu-pagination`), Staff
+  (`staff-pagination`) and Devices (`devices-pagination`). Lists that already
+  page through a backend cursor (Reports ▸ Payments) keep their Load more.

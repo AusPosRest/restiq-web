@@ -130,4 +130,21 @@ describe("MenuManagement list", () => {
     await userEvent.click(screen.getByTestId("menu-add-item"));
     expect(within(screen.getByTestId("item-drawer")).getByText("Add Item")).toBeTruthy();
   });
+
+  it("pages the item table 20 at a time and returns to page 1 when the search changes (issue #255)", async () => {
+    const many = Array.from({ length: 25 }, (_, i) => item({ id: `m${i + 1}`, name: `Dish ${String(i + 1).padStart(2, "0")}`, categoryId: "mains" }));
+    stubFetch({ items: many });
+    renderMenu();
+    expect(await screen.findByTestId("menu-item-row-m1")).toBeTruthy();
+    expect(screen.queryByTestId("menu-item-row-m21")).toBeNull();
+    expect(screen.getByTestId("menu-pagination-range").textContent).toBe("1–20 of 25");
+
+    await userEvent.click(screen.getByTestId("menu-pagination-next"));
+    expect(screen.getByTestId("menu-item-row-m21")).toBeTruthy();
+    expect(screen.queryByTestId("menu-item-row-m1")).toBeNull();
+
+    await userEvent.type(screen.getByTestId("menu-search"), "Dish 0");
+    expect(await screen.findByTestId("menu-item-row-m1")).toBeTruthy();
+    expect(screen.queryByTestId("menu-pagination")).toBeNull();
+  });
 });
