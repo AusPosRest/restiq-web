@@ -1,5 +1,10 @@
 # Completed
 
+- **2026-09-15** - External payment + direct Print bill (issue #224, web half of
+  restiq-backend#146): `external` tender with a required reference in `tender-keypad.tsx`;
+  `print-bill-button.tsx` replaces the new-tab invoice link on settle and counter and posts
+  `bills/:id/print`. Tests in `bill-settle-view.test.tsx` / `counter-view.test.tsx`.
+
 - **2026-09-15** - Installable PWA for Android and iOS (issue #222): `app/manifest.ts`,
   generated `icon` (192/512, maskable) and `apple-icon` (180), `appleWebApp` + theme-colour
   metadata, and `install-banner.tsx` (Install button on Android/Chrome, Add to Home Screen

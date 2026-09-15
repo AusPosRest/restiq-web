@@ -7,6 +7,11 @@ with the payments epic.
 ## [Unreleased]
 
 ### Fixed
+- **Print bill** on settle and counter (#224) sends the bill straight to the
+  POS's printer (linked, else the outlet's shared one) and says "Sent to
+  printer" / "Couldn't print". It used to open the invoice page in a new tab,
+  which in an installed app lands in the browser, signed out, so nothing
+  printed. The invoice page keeps its own Send to printer / Print buttons.
 - POS table map header on a phone (#206): the actions wrap onto their own
   row, button labels stay on one line, and Refresh is no longer pushed
   off-screen.
@@ -25,6 +30,11 @@ with the payments epic.
   answer is a Simulator strip; only the final outcome reaches the server.
 
 ### Added
+- **External** payment method on settle and counter (#224, web half of
+  restiq-backend#146): money taken outside RESTIQ (standalone EFTPOS,
+  delivery app, bank transfer) is added with its **Reference / bill no.**,
+  required before the tender can be added. The reference shows on the
+  tender list and on the invoice's payments.
 - Installable app on Android and iOS (#222): a web app manifest (standalone,
   dark theme colour, 192 / 512 / maskable icons) and an apple-touch-icon,
   both drawn by `next/og` so the repo holds no PNGs. A bottom banner offers

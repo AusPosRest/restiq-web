@@ -221,7 +221,8 @@ export function InvoiceReceipt({ invoice }: Readonly<{ invoice: InvoiceView }>) 
             {invoice.tenders.map((tender, index) => (
               <li key={index} data-testid={`invoice-tender-${index}`} className="flex items-center justify-between">
                 <span>
-                  {tenderMethodLabel(tender.method)} · {formatIssuedAt(tender.createdAt)}
+                  {tenderMethodLabel(tender.method)}
+                  {tender.reference ? ` #${tender.reference}` : ""} · {formatIssuedAt(tender.createdAt)}
                 </span>
                 <span className="tabular-nums">{formatMinor(tender.amountMinor, invoice.currency)}</span>
               </li>

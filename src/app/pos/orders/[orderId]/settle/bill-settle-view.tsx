@@ -28,6 +28,7 @@ import {
   type PostableTenderMethod,
 } from "../../../api";
 import { LoadErrorPanel, Skeleton } from "../../../data-states";
+import { PrintBillButton } from "../../../print-bill-button";
 import { usePosLoad } from "../../../use-pos-load";
 import { orderOriginLabel, toOrderView, type PosMenuView, type RawOrder } from "../order-taking-state";
 import { BillSummary } from "./bill-summary";
@@ -122,8 +123,8 @@ function BillSettleLoaded({
   const remainingMinor = remainingToTenderMinor(totalMinor, bill, pendingTenders);
   const intents = terminal.intent ? [terminal.intent] : [];
 
-  function handleAddTender(method: PostableTenderMethod, amountMinor: number) {
-    setPendingTenders((current) => [...current, { method, amountMinor }]);
+  function handleAddTender(method: PostableTenderMethod, amountMinor: number, reference?: string) {
+    setPendingTenders((current) => [...current, { method, amountMinor, ...(reference ? { reference } : {}) }]);
   }
 
   function handleRemoveTender(index: number) {
@@ -224,11 +225,7 @@ function BillSettleLoaded({
                 >
                   {finalizeBusy ? "Finalising…" : "Finalise"}
                 </Button>
-                <Button asChild size="lg" variant="outline" data-testid="print-bill-link">
-                  <Link href={`/pos/bills/${bill.id}/invoice`} target="_blank" rel="noopener">
-                    Print bill
-                  </Link>
-                </Button>
+                <PrintBillButton billId={bill.id} />
               </div>
             </footer>
           </div>
