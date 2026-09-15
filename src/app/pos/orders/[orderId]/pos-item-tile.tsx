@@ -17,8 +17,12 @@ export function PosItemTile({ item, currency, onTap }: Readonly<{ item: PosMenuI
       data-testid={`item-tile-${item.id}`}
       disabled={!item.available}
       onClick={onTap}
-      className="flex min-h-24 flex-col justify-between gap-2 rounded-lg border border-border bg-card p-3 text-left transition-colors hover:border-primary/60 hover:bg-accent disabled:cursor-not-allowed disabled:opacity-40 disabled:hover:border-border disabled:hover:bg-card"
+      className="flex min-h-24 flex-col justify-between gap-2 overflow-hidden rounded-lg border border-border bg-card p-3 text-left transition-colors hover:border-primary/60 hover:bg-accent disabled:cursor-not-allowed disabled:opacity-40 disabled:hover:border-border disabled:hover:bg-card"
     >
+      {item.photoUrl && (
+        // eslint-disable-next-line @next/next/no-img-element -- owner-supplied https or data: URLs, not something next/image's optimizer can handle
+        <img data-testid={`item-tile-photo-${item.id}`} src={item.photoUrl} alt="" loading="lazy" className="-mx-3 -mt-3 aspect-[4/3] w-[calc(100%+1.5rem)] max-w-none object-cover" />
+      )}
       <span className="font-headline text-sm font-semibold text-foreground">{item.name}</span>
       <span className="flex items-center justify-between">
         <span className="tabular-nums text-sm font-semibold text-primary">

@@ -80,6 +80,14 @@ function MenuTableRow({
       </td>
       <td className="px-3">
         <div className="flex items-center gap-2">
+          {item.photoUrl ? (
+            // eslint-disable-next-line @next/next/no-img-element -- owner-supplied https or data: URLs, not something next/image's optimizer can handle
+            <img data-testid={`menu-item-row-${item.id}-photo`} src={item.photoUrl} alt="" loading="lazy" className="size-9 shrink-0 rounded-md object-cover" />
+          ) : (
+            <span aria-hidden="true" className="flex size-9 shrink-0 items-center justify-center rounded-md bg-muted text-xs font-semibold text-muted-foreground">
+              {item.name.charAt(0).toUpperCase()}
+            </span>
+          )}
           <p className="font-medium">{item.name}</p>
           {!item.available && (
             <span data-testid={`menu-item-row-${item.id}-86-badge`} className="rounded-full bg-status-error/15 px-2 py-0.5 text-xs text-status-error">
