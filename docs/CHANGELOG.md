@@ -9,6 +9,8 @@ with the payments epic.
 ### Fixed
 - Phones and tablets (#228, #229):
   - **Owner console and Platform Console:** below `md` the sidebar hides and a ☰ button in the top bar opens the same nav, plus sign-out, as a drawer. Page padding shrinks on small screens, and the new-tenant wizard's step list stacks above the form.
+  - **Owner Menu page:** the category list stacks above the item table below `md`, the search box goes full width on phones, and the title row wraps.
+  - **POS invoice:** the item table scrolls sideways on a narrow phone instead of widening the page.
   - **POS order and counter screens:** below `lg` the categories become a horizontally scrolling row, and the menu, bill and tender column stack full width in one scrolling column.
   - **POS settle and refund:** the bill stacks above the keypad or refund panel below `md`.
   - **POS shell:** padding shrinks on small screens.

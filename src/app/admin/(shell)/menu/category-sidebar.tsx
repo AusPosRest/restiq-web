@@ -41,7 +41,7 @@ export function CategorySidebar({
   }
 
   return (
-    <nav aria-label="Menu categories" className="w-56 shrink-0" data-testid="menu-category-sidebar">
+    <nav aria-label="Menu categories" className="w-full shrink-0 md:w-56" data-testid="menu-category-sidebar">
       <ul className="space-y-1">
         <CategoryRow label="All items" count={totalItems} active={selected === ALL_CATEGORY} onSelect={() => onSelect(ALL_CATEGORY)} testId="menu-category-all" />
         {categories.map((category) => (
