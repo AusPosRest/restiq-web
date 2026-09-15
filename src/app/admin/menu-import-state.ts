@@ -54,8 +54,8 @@ export const CONFIDENCE_LABEL: Record<ConfidenceLevel, string> = {
   low: "Low confidence",
 };
 
-/** Extensions the backend's resolveSourceType accepts - anything else 400s. */
-const ACCEPTED_EXTENSIONS = [".csv", ".xlsx", ".jpg", ".jpeg", ".png", ".pdf"];
+/** Extensions the backend can actually read. Photos and PDFs aren't read yet (issue #246), so they're refused here. */
+const ACCEPTED_EXTENSIONS = [".csv", ".xlsx"];
 
 export const MENU_IMPORT_ACCEPT = ACCEPTED_EXTENSIONS.join(",");
 

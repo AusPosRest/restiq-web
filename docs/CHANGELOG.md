@@ -7,6 +7,10 @@ with the payments epic.
 ## [Unreleased]
 
 ### Fixed
+- Menu import no longer invents items from photos and PDFs (#246). The
+  backend has no photo/PDF reader yet and used to return the same 3 sample
+  items for every file. The dropzone now takes CSV or XLSX only and says
+  why, and the backend refuses photos and PDFs with a clear message.
 - Owner Menu **Import** (#239) opens as a dialog over the menu instead of a
   separate full-page screen. You can download the sample, upload, review and
   commit without leaving the page. After you commit, the dialog closes, the

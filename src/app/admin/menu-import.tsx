@@ -22,7 +22,7 @@ import {
   reviewedCount,
 } from "./menu-import-state";
 
-const UPLOAD_ERROR = "That file type isn't supported. Upload a CSV, XLSX spreadsheet, a photo (JPG/PNG) or a PDF of your menu.";
+const UPLOAD_ERROR = "Upload your menu as a CSV or XLSX spreadsheet. Photos and PDFs can't be read yet - download the sample spreadsheet below to get started.";
 const GENERIC_FAILURE = "Something went wrong. Check your connection and try again.";
 
 const CONFIDENCE_CLASS: Record<ReturnType<typeof confidenceLevel>, string> = {
@@ -142,7 +142,7 @@ export function MenuImport({ onCommitted, fromSetup = false }: Readonly<{ onComm
       <div className="space-y-4">
         <div>
           <h1 className="font-headline text-xl font-semibold">Import your menu</h1>
-          <p className="text-sm text-muted-foreground">Upload a spreadsheet, photo or PDF and we&apos;ll draft your menu for you to check.</p>
+          <p className="text-sm text-muted-foreground">Upload a spreadsheet and we&apos;ll draft your menu for you to check.</p>
         </div>
         <div
           data-testid="menu-import-dropzone"
@@ -168,7 +168,7 @@ export function MenuImport({ onCommitted, fromSetup = false }: Readonly<{ onComm
         >
           <UploadCloud className="size-8 text-muted-foreground" aria-hidden="true" />
           <p className="text-sm font-medium">{phase === "uploading" ? "Reading your menu..." : "Drag a file here, or click to browse"}</p>
-          <p className="text-xs text-muted-foreground">CSV, XLSX, photo (JPG/PNG) or PDF</p>
+          <p className="text-xs text-muted-foreground">CSV or XLSX spreadsheet (photos and PDFs can&apos;t be read yet)</p>
         </div>
         <p className="mt-3 text-center text-xs text-muted-foreground">
           New to this?{" "}
