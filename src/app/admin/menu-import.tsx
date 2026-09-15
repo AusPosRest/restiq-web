@@ -5,15 +5,18 @@
 // draft, per-field edits PATCH that same draft, and commit is the one write
 // that turns it into real menu items (and, server-side, completes the
 // go-live checklist's menu_import step).
-import { PartyPopper, UploadCloud } from "lucide-react";
+import { PartyPopper, Trash2, UploadCloud } from "lucide-react";
 import Link from "next/link";
 import { useRef, useState } from "react";
 import { Button } from "@/components/ui/button";
-import { commitMenuImport, MenuImportCommitResult, updateMenuImportItem, uploadMenuImport } from "./api";
+import { AdminApiError, commitMenuImport, MenuImportCommitResult, removeMenuImportItem, updateMenuImportItem, uploadMenuImport } from "./api";
 import {
   canCommit,
   CONFIDENCE_LABEL,
   confidenceLevel,
+  DUPLICATE_LABEL,
+  DuplicateReason,
+  duplicateReasons,
   isAcceptedMenuFile,
   majorStringToPriceMinor,
   MENU_IMPORT_ACCEPT,
@@ -43,6 +46,7 @@ export function MenuImport({ onCommitted, fromSetup = false }: Readonly<{ onComm
   const [items, setItems] = useState<MenuImportItem[]>([]);
   const [reviewed, setReviewed] = useState<Set<string>>(new Set());
   const [commitError, setCommitError] = useState<string | null>(null);
+  const [duplicates, setDuplicates] = useState<Map<string, DuplicateReason>>(new Map());
   const [commitResult, setCommitResult] = useState<MenuImportCommitResult | null>(null);
   const [toast, setToast] = useState<string | null>(null);
   const [dragOver, setDragOver] = useState(false);
@@ -65,6 +69,7 @@ export function MenuImport({ onCommitted, fromSetup = false }: Readonly<{ onComm
       setImportId(draft.importId);
       setItems(draft.items);
       setReviewed(new Set());
+      setDuplicates(new Map());
       setPhase("review");
     } catch (error) {
       setUploadError(error instanceof Error ? error.message : GENERIC_FAILURE);
@@ -90,7 +95,28 @@ export function MenuImport({ onCommitted, fromSetup = false }: Readonly<{ onComm
 
   // Optimistic per EXPERIENCE.md's routine-edit pattern: apply locally first,
   // then reconcile with the backend's fresh draft, rolling back on failure.
+  function clearDuplicate(itemId: string) {
+    setDuplicates((current) => {
+      const next = new Map(current);
+      next.delete(itemId);
+      return next;
+    });
+  }
+
+  async function handleRemove(itemId: string) {
+    if (!importId) return;
+    try {
+      const draft = await removeMenuImportItem(importId, itemId);
+      setItems(draft.items);
+      clearDuplicate(itemId);
+    } catch {
+      flashToast("That row couldn't be removed. Try again.");
+    }
+  }
+
   async function handleFieldEdit(itemId: string, field: "name" | "shortName" | "category" | "priceMinor", value: string | number) {
+    // Renaming or re-categorising is how the owner fixes a clash, so drop its flag.
+    if (field === "name" || field === "category") clearDuplicate(itemId);
     const previousItems = items;
     setItems((current) => current.map((item) => (item.id === itemId ? { ...item, [field]: value } : item)));
     if (!importId) return;
@@ -117,6 +143,7 @@ export function MenuImport({ onCommitted, fromSetup = false }: Readonly<{ onComm
       setPhase("success");
     } catch (error) {
       setCommitError(error instanceof Error ? error.message : GENERIC_FAILURE);
+      if (error instanceof AdminApiError && error.code === "duplicate_items") setDuplicates(duplicateReasons(error.details));
       setPhase("review");
     }
   }
@@ -246,13 +273,17 @@ export function MenuImport({ onCommitted, fromSetup = false }: Readonly<{ onComm
               <th className="px-4 py-3">Category</th>
               <th className="px-4 py-3">Price</th>
               <th className="px-4 py-3">Confidence</th>
+              <th className="px-2 py-3">
+                <span className="sr-only">Remove</span>
+              </th>
             </tr>
           </thead>
           <tbody>
             {items.map((item) => {
               const overall = confidenceLevel(item.confidence.overall);
+              const duplicate = duplicates.get(item.id);
               return (
-                <tr key={item.id} data-testid={`menu-import-row-${item.id}`} className="border-t border-border align-top">
+                <tr key={item.id} data-testid={`menu-import-row-${item.id}`} className={`border-t border-border align-top ${duplicate ? "bg-status-error/10" : ""}`}>
                   <td className="px-4 py-3">
                     <input
                       type="checkbox"
@@ -270,6 +301,11 @@ export function MenuImport({ onCommitted, fromSetup = false }: Readonly<{ onComm
                       confidence={item.confidence.name}
                       onCommit={(value) => void handleFieldEdit(item.id, "name", value)}
                     />
+                    {duplicate && (
+                      <p data-testid={`menu-import-row-${item.id}-duplicate`} className="mt-1 text-xs font-medium text-status-error">
+                        {DUPLICATE_LABEL[duplicate]}
+                      </p>
+                    )}
                   </td>
                   <td className="px-4 py-3">
                     <EditableCell
@@ -315,6 +351,18 @@ export function MenuImport({ onCommitted, fromSetup = false }: Readonly<{ onComm
                     >
                       {CONFIDENCE_LABEL[overall]}
                     </span>
+                  </td>
+                  <td className="px-2 py-3">
+                    <button
+                      type="button"
+                      data-testid={`menu-import-row-${item.id}-remove`}
+                      aria-label={`Remove ${item.name || "this item"} from this import`}
+                      disabled={phase === "committing"}
+                      onClick={() => void handleRemove(item.id)}
+                      className="rounded-md p-1.5 text-muted-foreground hover:bg-accent hover:text-status-error focus:outline-none focus-visible:ring-2 focus-visible:ring-ring disabled:opacity-50"
+                    >
+                      <Trash2 className="size-4" aria-hidden="true" />
+                    </button>
                   </td>
                 </tr>
               );

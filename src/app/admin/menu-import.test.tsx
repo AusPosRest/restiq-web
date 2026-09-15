@@ -286,4 +286,39 @@ describe("MenuImport review", () => {
     );
     expect(screen.getByTestId("menu-import-table")).toBeTruthy();
   });
+
+  it("flags rows already on the menu and lets the owner remove them from the import (issue #247)", async () => {
+    const fetchMock = vi
+      .fn()
+      .mockResolvedValueOnce(jsonResponse(DRAFT, 201))
+      .mockResolvedValueOnce(
+        jsonResponse(
+          {
+            error: {
+              code: "duplicate_items",
+              message: "Already on your menu: Chicken Seekh Kebab (Starters). Rename or remove that row, then commit again.",
+              duplicates: [{ id: "2", name: "Chicken Seekh Kebab", category: "Starters", reason: "on_menu" }],
+            },
+          },
+          409,
+        ),
+      )
+      .mockResolvedValueOnce(jsonResponse({ ...DRAFT, items: DRAFT.items.filter((item) => item.id !== "2") }));
+    vi.stubGlobal("fetch", fetchMock);
+    await uploadAndReachReview();
+
+    for (const id of ["1", "2", "3"]) await userEvent.click(screen.getByTestId(`menu-import-row-${id}-reviewed`));
+    await userEvent.click(screen.getByTestId("menu-import-commit"));
+
+    expect((await screen.findByTestId("menu-import-commit-error")).textContent).toContain("Chicken Seekh Kebab (Starters)");
+    expect(screen.getByTestId("menu-import-row-2-duplicate").textContent).toBe("Already on your menu");
+    expect(screen.queryByTestId("menu-import-row-1-duplicate")).toBeNull();
+
+    await userEvent.click(screen.getByTestId("menu-import-row-2-remove"));
+    await waitFor(() => expect(screen.queryByTestId("menu-import-row-2")).toBeNull());
+    const [patchUrl, patchInit] = fetchMock.mock.calls.at(-1) as [string, RequestInit];
+    expect(patchUrl).toBe("/admin/api/menu-import/imp-1");
+    expect(JSON.parse(patchInit.body as string)).toEqual({ items: [], removeIds: ["2"] });
+    expect((screen.getByTestId("menu-import-commit") as HTMLButtonElement).disabled).toBe(false);
+  });
 });

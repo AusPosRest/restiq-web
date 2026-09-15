@@ -7,6 +7,12 @@ with the payments epic.
 ## [Unreleased]
 
 ### Fixed
+- Menu import commit names the items that clash (#247). It used to fail
+  with "duplicate item names within a category" even when the clash was
+  with an item already on the menu, and never said which one. Now the
+  error lists them ("Already on your menu: Paneer Tikka (Starters)"), the
+  rows are highlighted, and each review row has a Remove button so you
+  can drop them and commit the rest.
 - Menu import no longer invents items from photos and PDFs (#246). The
   backend has no photo/PDF reader yet and used to return the same 3 sample
   items for every file. The dropzone now takes CSV or XLSX only and says

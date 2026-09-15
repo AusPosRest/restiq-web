@@ -79,6 +79,25 @@ export function reviewedCount(reviewed: ReadonlySet<string>, items: readonly Men
   return items.filter((item) => reviewed.has(item.id)).length;
 }
 
+export type DuplicateReason = "on_menu" | "repeated";
+
+export const DUPLICATE_LABEL: Record<DuplicateReason, string> = {
+  on_menu: "Already on your menu",
+  repeated: "In this import more than once",
+};
+
+/** Reads a 409 duplicate_items error's `duplicates` list (issue #247) - untrusted JSON, so each entry is checked. */
+export function duplicateReasons(details: unknown): Map<string, DuplicateReason> {
+  const list = (details as { duplicates?: unknown } | null | undefined)?.duplicates;
+  const reasons = new Map<string, DuplicateReason>();
+  if (!Array.isArray(list)) return reasons;
+  for (const entry of list) {
+    const { id, reason } = (entry ?? {}) as { id?: unknown; reason?: unknown };
+    if (typeof id === "string" && (reason === "on_menu" || reason === "repeated")) reasons.set(id, reason);
+  }
+  return reasons;
+}
+
 /** Commit stays locked until every drafted item has been looked at - "at least reviewed". */
 export function canCommit(reviewed: ReadonlySet<string>, items: readonly MenuImportItem[]): boolean {
   return items.length > 0 && items.every((item) => reviewed.has(item.id));
