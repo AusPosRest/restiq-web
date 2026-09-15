@@ -12,6 +12,9 @@ with the payments epic.
   printer" / "Couldn't print". It used to open the invoice page in a new tab,
   which in an installed app lands in the browser, signed out, so nothing
   printed. The invoice page keeps its own Send to printer / Print buttons.
+- POS text overflow (#240):
+  - **Payment method buttons** (settle and counter) now fit as many as the column holds - two per row in the counter's narrow tender column - so "Card terminal" / "External" no longer spill past their buttons.
+  - **Bill panel lines** get column padding and keep the amount on one line, so a long item name ("Soup of the Day") wraps instead of running into its price.
 - Phones and tablets (#228, #229):
   - **Owner console and Platform Console:** below `md` the sidebar hides and a ☰ button in the top bar opens the same nav, plus sign-out, as a drawer. Page padding shrinks on small screens, and the new-tenant wizard's step list stacks above the form.
   - **Owner Menu page:** the category list stacks above the item table below `md`, the search box goes full width on phones, and the title row wraps.
