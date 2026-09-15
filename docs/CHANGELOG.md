@@ -7,6 +7,14 @@ with the payments epic.
 ## [Unreleased]
 
 ### Fixed
+- **Print bill** on settle and counter (#224) sends the bill straight to the
+  POS's printer (linked, else the outlet's shared one) and says "Sent to
+  printer" / "Couldn't print". It used to open the invoice page in a new tab,
+  which in an installed app lands in the browser, signed out, so nothing
+  printed. The invoice page keeps its own Send to printer / Print buttons.
+- POS text overflow (#240):
+  - **Payment method buttons** (settle and counter) now fit as many as the column holds - two per row in the counter's narrow tender column - so "Card terminal" / "External" no longer spill past their buttons.
+  - **Bill panel lines** get column padding and keep the amount on one line, so a long item name ("Soup of the Day") wraps instead of running into its price.
 - Phones and tablets (#228, #229):
   - **Owner console and Platform Console:** below `md` the sidebar hides and a ☰ button in the top bar opens the same nav, plus sign-out, as a drawer. Page padding shrinks on small screens, and the new-tenant wizard's step list stacks above the form.
   - **Owner Menu page:** the category list stacks above the item table below `md`, the search box goes full width on phones, and the title row wraps.
@@ -36,6 +44,11 @@ with the payments epic.
   answer is a Simulator strip; only the final outcome reaches the server.
 
 ### Added
+- **External** payment method on settle and counter (#224, web half of
+  restiq-backend#146): money taken outside RESTIQ (standalone EFTPOS,
+  delivery app, bank transfer) is added with its **Reference / bill no.**,
+  required before the tender can be added. The reference shows on the
+  tender list and on the invoice's payments.
 - Installable app on Android and iOS (#222): a web app manifest (standalone,
   dark theme colour, 192 / 512 / maskable icons) and an apple-touch-icon,
   both drawn by `next/og` so the repo holds no PNGs. A bottom banner offers

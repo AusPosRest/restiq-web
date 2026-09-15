@@ -47,6 +47,7 @@ import {
   type PendingTender,
 } from "../api";
 import { LoadErrorPanel, Skeleton } from "../data-states";
+import { PrintBillButton } from "../print-bill-button";
 import { usePosLoad } from "../use-pos-load";
 import { ModifierSheet, type ModifierSheetConfirmValue } from "../orders/[orderId]/modifier-sheet";
 import { PosItemTile } from "../orders/[orderId]/pos-item-tile";
@@ -254,8 +255,8 @@ function CounterLoaded({
       .finally(() => setBusyLineId(null));
   }
 
-  function handleAddTender(method: PostableTenderMethod, amountMinor: number) {
-    setPendingTenders((current) => [...current, { method, amountMinor }]);
+  function handleAddTender(method: PostableTenderMethod, amountMinor: number, reference?: string) {
+    setPendingTenders((current) => [...current, { method, amountMinor, ...(reference ? { reference } : {}) }]);
   }
 
   function handleRemoveTender(index: number) {
@@ -435,11 +436,7 @@ function CounterLoaded({
                 >
                   {finalizeBusy ? "Charging…" : "Charge"}
                 </Button>
-                <Button asChild size="lg" variant="outline" data-testid="print-bill-link">
-                  <Link href={`/pos/bills/${bill.id}/invoice`} target="_blank" rel="noopener">
-                    Print bill
-                  </Link>
-                </Button>
+                <PrintBillButton billId={bill.id} />
               </div>
             </footer>
           </div>

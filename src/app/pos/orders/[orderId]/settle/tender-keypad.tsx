@@ -39,14 +39,17 @@ export interface TenderKeypadProps {
   tenders: PendingTender[];
   /** Server-written electronic tenders already on the bill (isElectronicMethod) - shown as captured, never removable. */
   capturedTenders?: BillTenderView[];
-  onAddTender: (method: PostableTenderMethod, amountMinor: number) => void;
+  /** `reference` is set only for an external tender (issue #224). */
+  onAddTender: (method: PostableTenderMethod, amountMinor: number, reference?: string) => void;
   onRemoveTender: (index: number) => void;
   /** Present when the outlet can send an amount to the card terminal. */
   onSendToTerminal?: (amountMinor: number) => void;
   terminalBusy?: boolean;
 }
 
-const METHODS: PostableTenderMethod[] = ["cash", "upi_manual"];
+// External (issue #224): paid outside RESTIQ - a standalone EFTPOS machine, a
+// delivery app, a bank transfer - recorded with that system's reference.
+const METHODS: PostableTenderMethod[] = ["cash", "upi_manual", "external"];
 
 export function TenderKeypad({
   currency,
@@ -60,16 +63,20 @@ export function TenderKeypad({
 }: Readonly<TenderKeypadProps>) {
   const [method, setMethod] = useState<KeypadMethod>("cash");
   const [digits, setDigits] = useState("");
+  const [reference, setReference] = useState("");
   const amountMinor = digitsToMinor(digits);
   const isTerminal = method === "card_terminal";
-  const canAdd = amountMinor > 0 && (!isTerminal || (amountMinor <= remainingMinor && !terminalBusy));
+  const isExternal = method === "external";
+  const referenceReady = !isExternal || reference.trim() !== "";
+  const canAdd = amountMinor > 0 && referenceReady && (!isTerminal || (amountMinor <= remainingMinor && !terminalBusy));
   const methods: KeypadMethod[] = onSendToTerminal ? [...METHODS, "card_terminal"] : METHODS;
 
   function submit(minor: number) {
-    if (minor <= 0) return;
+    if (minor <= 0 || !referenceReady) return;
     if (isTerminal) onSendToTerminal?.(minor);
-    else onAddTender(method, minor);
+    else onAddTender(method, minor, isExternal ? reference.trim() : undefined);
     setDigits("");
+    setReference("");
   }
 
   return (
@@ -101,7 +108,10 @@ export function TenderKeypad({
               data-testid={`tender-captured-${index}`}
               className="flex items-center justify-between rounded-lg bg-muted px-3 py-2 text-sm"
             >
-              <span className="text-status-available">{TENDER_METHOD_LABEL[tender.method]}</span>
+              <span className="text-status-available">
+                {TENDER_METHOD_LABEL[tender.method]}
+                {tender.reference && <span className="text-muted-foreground"> #{tender.reference}</span>}
+              </span>
               <span className="flex items-center gap-2">
                 <span className="tabular-nums font-semibold text-foreground">{formatMinor(tender.amountMinor, currency)}</span>
                 <button
@@ -121,7 +131,9 @@ export function TenderKeypad({
 
       <div>
         <p className="font-label mb-1.5 text-xs font-semibold uppercase tracking-wider text-muted-foreground">Payment method</p>
-        <div data-testid="tender-method-group" className={`grid gap-2 ${methods.length === 3 ? "grid-cols-3" : "grid-cols-2"}`}>
+        {/* Fits as many >=6.5rem buttons as the column holds (issue #240) - two in the
+            counter's narrow tender column, one row on the wide settle screen. */}
+        <div data-testid="tender-method-group" className="grid grid-cols-[repeat(auto-fit,minmax(6.5rem,1fr))] gap-2">
           {methods.map((option) => (
             <button
               key={option}
@@ -129,7 +141,7 @@ export function TenderKeypad({
               data-testid={`tender-method-${option}`}
               aria-pressed={method === option}
               onClick={() => setMethod(option)}
-              className={`rounded-lg border px-4 py-3 text-sm font-semibold transition-colors ${
+              className={`rounded-lg border px-3 py-3 text-sm leading-tight font-semibold transition-colors ${
                 method === option ? "border-primary bg-primary text-primary-foreground" : "border-border text-foreground hover:bg-accent"
               }`}
             >
@@ -138,6 +150,20 @@ export function TenderKeypad({
           ))}
         </div>
       </div>
+
+      {isExternal && (
+        <label className="flex flex-col gap-1.5">
+          <span className="font-label text-xs font-semibold uppercase tracking-wider text-muted-foreground">Reference / bill no.</span>
+          <input
+            data-testid="tender-external-reference"
+            value={reference}
+            maxLength={64}
+            placeholder="e.g. EFTPOS receipt 004512"
+            onChange={(event) => setReference(event.target.value)}
+            className="rounded-lg border border-border bg-transparent px-3 py-2.5 text-sm text-foreground outline-none focus-visible:ring-2 focus-visible:ring-ring"
+          />
+        </label>
+      )}
 
       <div className="flex min-h-fit flex-1 flex-col items-center justify-center gap-2">
         <AmountKeypad
@@ -153,7 +179,7 @@ export function TenderKeypad({
           variant="outline"
           size="sm"
           data-testid="tender-fill-remaining"
-          disabled={remainingMinor <= 0 || (isTerminal && terminalBusy)}
+          disabled={remainingMinor <= 0 || !referenceReady || (isTerminal && terminalBusy)}
           onClick={() => submit(remainingMinor)}
         >
           {isTerminal ? "Send exact remaining" : "Exact remaining"} · {formatMinor(remainingMinor, currency)}
