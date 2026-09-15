@@ -204,7 +204,7 @@ export interface ReplayResult {
   status: ReplayStatus;
 }
 
-// --- Agreements (issue #192; contract reconciled against restiq-backend#133's
+// --- Agreements (issues #192, #238; contract reconciled against restiq-backend#150's
 // src/ops/agreements/agreements.dtos.ts).
 
 export interface AgreementVersionSummary {
@@ -227,11 +227,15 @@ export interface AgreementSignatureView {
   title: string;
   signerName: string;
   signerEmail: string;
+  /** Null on typed-name signatures from before DocuSign. */
+  signerTitle: string | null;
   signedAt: string;
   evidenceSha256: string;
+  /** The sealed, signed PDF can be downloaded from /ops/api/tenants/{id}/agreements/{versionId}/pdf. */
+  hasPdf: boolean;
 }
 
-export type TenantAgreementStatus = "signed" | "pending" | "no_agreement";
+export type TenantAgreementStatus = "signed" | "awaiting_countersign" | "pending" | "no_agreement";
 
 export interface TenantAgreementsView {
   current: Omit<AgreementVersionSummary, "signatureCount"> | null;

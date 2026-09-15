@@ -17,8 +17,10 @@ function view(overrides: Partial<TenantAgreementsView> = {}): TenantAgreementsVi
         title: "Platform Services Agreement",
         signerName: "Asha Rao",
         signerEmail: "asha@bombaybistro.example",
+        signerTitle: "Director",
         signedAt: "2026-08-02T09:30:00.000Z",
         evidenceSha256: "abcdef0123456789abcdef0123456789abcdef0123456789abcdef0123456789",
+        hasPdf: true,
       },
     ],
     ...overrides,
@@ -54,6 +56,16 @@ describe("AgreementsTab", () => {
     expect(row.textContent).toContain("Asha Rao");
     expect(row.textContent).toContain("asha@bombaybistro.example");
     expect(row.textContent).toContain("abcdef012345…");
+    expect(row.textContent).toContain("Asha Rao, Director");
+    expect(screen.getByTestId("agreement-pdf-1").getAttribute("href")).toBe(`/ops/api/tenants/${TENANT_ID}/agreements/v1/pdf`);
+  });
+
+  it("shows awaiting countersign, and no PDF link for a typed-name signature", async () => {
+    const base = view();
+    renderTab({ ...base, status: "awaiting_countersign", signatures: base.signatures.map((s) => ({ ...s, hasPdf: false })) });
+    await screen.findByTestId("agreements-tab");
+    expect(screen.getByTestId("agreement-status").textContent).toBe("awaiting countersign");
+    expect(screen.queryByTestId("agreement-pdf-1")).toBeNull();
   });
 
   it("shows signed, and the no-agreement case with an empty signature list", async () => {

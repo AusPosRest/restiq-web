@@ -7,12 +7,14 @@
 // immutable once published, so there is no edit or delete here by design.
 import { ChevronDown, ChevronRight } from "lucide-react";
 import { useState } from "react";
+import { AgreementDocument } from "@/components/agreement-document";
 import { Button } from "@/components/ui/button";
 import { AgreementVersionSummary, AgreementVersionView, opsApi, OpsApiError } from "../api";
 import { ConfirmReasonDialog } from "../confirm-reason-dialog";
 import { LoadErrorPanel, Skeleton } from "../data-states";
 import { useToast } from "../toast";
 import { useOpsLoad } from "../use-ops-load";
+import { STANDARD_AGREEMENT } from "./standard-agreement";
 
 const FIELD_CLASSES =
   "w-full rounded-lg border border-border bg-input px-3 py-2 text-sm text-foreground placeholder:text-muted-foreground/60 focus:outline-none focus-visible:ring-2 focus-visible:ring-ring";
@@ -67,7 +69,21 @@ export function AgreementsIndex() {
           if (canPublish) setConfirming(true);
         }}
       >
-        <h2 className="font-headline text-lg font-semibold">Publish version {nextVersion}</h2>
+        <div className="flex flex-wrap items-center justify-between gap-3">
+          <h2 className="font-headline text-lg font-semibold">Publish version {nextVersion}</h2>
+          <Button
+            type="button"
+            variant="outline"
+            data-testid="agreement-load-template"
+            onClick={() => {
+              if ((title || body) && !window.confirm("Replace the title and text in this form with the standard agreement?")) return;
+              setTitle(STANDARD_AGREEMENT.title);
+              setBody(STANDARD_AGREEMENT.body);
+            }}
+          >
+            Load standard agreement
+          </Button>
+        </div>
         <div className="mt-4 grid gap-4">
           <div>
             <label htmlFor="agreement-title" className="font-label mb-1.5 block text-xs font-semibold uppercase tracking-wider text-muted-foreground">
@@ -92,10 +108,16 @@ export function AgreementsIndex() {
               data-testid="agreement-body"
               value={body}
               rows={12}
-              placeholder="Paste the full agreement text. Owners see it exactly as entered."
+              placeholder="Paste the full agreement text, or load the standard agreement above."
+              aria-describedby="agreement-body-help"
               onChange={(event) => setBody(event.target.value)}
               className={`${FIELD_CLASSES} font-mono`}
             />
+            <p id="agreement-body-help" className="mt-1.5 text-xs text-muted-foreground">
+              Start a line with # for a clause heading and leave a blank line between paragraphs. {"{{customer.legalName}}"}, {"{{customer.address}}"},{" "}
+              {"{{customer.country}}"} and {"{{customer.taxId}}"} are filled in for each business when its owner signs in DocuSign. Fill every [bracketed] value before
+              publishing.
+            </p>
           </div>
         </div>
         <div className="mt-4 flex justify-end">
@@ -203,8 +225,8 @@ function VersionBody({ id }: Readonly<{ id: string }>) {
   if (loading) return <Skeleton className="h-24 w-full" />;
   if (failed || !data) return <LoadErrorPanel message="The agreement text could not be loaded." onRetry={retry} testId="agreement-body-error" />;
   return (
-    <pre data-testid="agreement-body-text" className="max-h-96 overflow-auto whitespace-pre-wrap rounded-lg border border-border/40 bg-background p-4 font-sans text-sm">
-      {data.version.body}
-    </pre>
+    <div className="max-h-96 overflow-auto rounded-lg border border-border/40 bg-background p-4">
+      <AgreementDocument body={data.version.body} testId="agreement-body-text" />
+    </div>
   );
 }

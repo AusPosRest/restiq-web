@@ -74,30 +74,45 @@ owner console's tax registration editor - see
 [Tenant Admin's Tax Registration section](tenant-admin.md#settings--tax-registration-issue-140)
 for the `gstRatePercent` GET/PUT field this reads from.
 
-### Agreements (issue #192, restiq-backend#133)
+### Agreements (issues #192, #238; restiq-backend#133, #150)
 
 `/ops/agreements` (`src/app/ops/(shell)/agreements/agreements-index.tsx`,
 nav item `ops-nav-agreements`): the platform's agreement versions newest
 first (version, title, publisher, published-at, signature count; the newest
 row carries a "current" marker), each row expanding (`agreement-expand-N`)
-to lazily load `GET ops/v1/agreements/:id` and show the full text. Above the
-table, a publish form (`agreement-title`, `agreement-body`,
-`agreement-publish` - disabled until both are non-blank) whose submit opens
-`ConfirmReasonDialog`; the reason travels in the `POST ops/v1/agreements`
-body with title and text and lands in the control-plane audit trail. On
-success the form clears, the list refetches, and a toast names the new
-version; on failure the dialog and form stay so the operator can read the
-backend's message. There is deliberately no edit or delete - a published
-version is immutable and stays signable-history forever.
+to lazily load `GET ops/v1/agreements/:id` and show the text formatted by
+`src/components/agreement-document.tsx`. Above the table, a publish form
+(`agreement-title`, `agreement-body`, `agreement-publish` - disabled until
+both are non-blank) whose submit opens `ConfirmReasonDialog`; the reason
+travels in the `POST ops/v1/agreements` body with title and text and lands
+in the control-plane audit trail. **Load standard agreement**
+(`agreement-load-template`) fills the form with `STANDARD_AGREEMENT`
+(`agreements/standard-agreement.ts`): the Restiq Platform Services
+Agreement - 12 numbered clauses plus Schedule A (Australia: Privacy Act
+1988, GST Act, ACL, Electronic Transactions Act) and Schedule B (India: DPDP
+Act 2023, CGST Act, IT Act s10A, arbitration) - with `{{customer.*}}` fields
+the backend fills per business and [bracketed] Restiq entity details ops
+completes before publishing. It asks before replacing text already in the
+form. It is a drafting template, not legal advice: have it reviewed by a
+lawyer in each country before the first publish. Help text under the body
+explains the markup and the fields. On success the form clears, the list
+refetches, and a toast names the new version; on failure the dialog and
+form stay so the operator can read the backend's message. There is
+deliberately no edit or delete - a published version is immutable and stays
+signable-history forever.
 
 O5 Tenant Detail gains an eighth tab, **Agreements**
 (`tenants/[id]/agreements-tab.tsx`, `tenant-tab-agreements`), reading
-`GET ops/v1/tenants/:id/agreements`: a `StatusBadge` for
-`signed` / `pending` / `no_agreement` against the current version
-(`agreement-status`, `agreement-current`) and a read-only signature table
-(`agreement-signature-N`: version, signer name + email, signed-at, and the
-first 12 characters of the SHA-256 evidence hash with the full hash in the
-`title`). Only the owner can sign, from their own console.
+`GET ops/v1/tenants/:id/agreements`: a `StatusBadge` for `signed` /
+`awaiting_countersign` / `pending` / `no_agreement` against the current
+version (`agreement-status`, `agreement-current`) and a read-only signature
+table (`agreement-signature-N`: version, signer name, title and email,
+signed-at, the first 12 characters of the SHA-256 evidence hash with the
+full hash in the `title`, and **Download** (`agreement-pdf-N`,
+`/ops/api/tenants/:id/agreements/:versionId/pdf`) when a sealed PDF exists).
+The ops proxy passes non-JSON responses through as bytes, like the admin
+proxy. Only the owner signs for their business, from their own console;
+Restiq's countersignature happens in DocuSign by email.
 
 ## Integration points for later stories
 

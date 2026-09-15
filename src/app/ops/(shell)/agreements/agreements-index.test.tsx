@@ -7,6 +7,7 @@ import { afterEach, describe, expect, it, vi } from "vitest";
 import type { AgreementVersionSummary } from "../api";
 import { ToastProvider } from "../toast";
 import { AgreementsIndex } from "./agreements-index";
+import { STANDARD_AGREEMENT } from "./standard-agreement";
 
 const V1: AgreementVersionSummary = {
   id: "0192aaaa-0000-7000-8000-000000000001",
@@ -105,6 +106,20 @@ describe("AgreementsIndex", () => {
     await screen.findByTestId("agreement-row-2");
     expect(screen.getByTestId("toast-success").textContent).toContain("Agreement v2 published.");
     expect((screen.getByTestId("agreement-title") as HTMLInputElement).value).toBe("");
+  });
+
+  it("loads the standard agreement, with customer fields and both country schedules, into an empty form", async () => {
+    stubFetch([]);
+    renderIndex();
+    await screen.findByTestId("agreements-empty");
+
+    await userEvent.click(screen.getByTestId("agreement-load-template"));
+    expect((screen.getByTestId("agreement-title") as HTMLInputElement).value).toBe(STANDARD_AGREEMENT.title);
+    expect((screen.getByTestId("agreement-body") as HTMLTextAreaElement).value).toBe(STANDARD_AGREEMENT.body);
+    expect((screen.getByTestId("agreement-publish") as HTMLButtonElement).disabled).toBe(false);
+    for (const part of ["{{customer.legalName}}", "{{customer.taxId}}", "# Schedule A - Australia", "# Schedule B - India", "Privacy Act 1988", "Digital Personal Data Protection Act, 2023"]) {
+      expect(STANDARD_AGREEMENT.body).toContain(part);
+    }
   });
 
   it("keeps the form and shows the backend's message when publishing fails", async () => {

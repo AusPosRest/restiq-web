@@ -58,11 +58,12 @@ export function AgreementsTab({ tenantId }: Readonly<{ tenantId: string }>) {
                 <th className={TH_CLASSES}>Signed by</th>
                 <th className={TH_CLASSES}>Signed</th>
                 <th className={TH_CLASSES}>Evidence</th>
+                <th className={TH_CLASSES}>Signed PDF</th>
               </tr>
             </thead>
             <tbody>
               {data.signatures.map((signature) => (
-                <SignatureRow key={signature.agreementVersionId} signature={signature} />
+                <SignatureRow key={signature.agreementVersionId} tenantId={tenantId} signature={signature} />
               ))}
             </tbody>
           </table>
@@ -72,7 +73,7 @@ export function AgreementsTab({ tenantId }: Readonly<{ tenantId: string }>) {
   );
 }
 
-function SignatureRow({ signature }: Readonly<{ signature: AgreementSignatureView }>) {
+function SignatureRow({ tenantId, signature }: Readonly<{ tenantId: string; signature: AgreementSignatureView }>) {
   return (
     <tr className="h-12 border-b border-border/20" data-testid={`agreement-signature-${signature.version}`}>
       <td className="px-4">
@@ -81,11 +82,28 @@ function SignatureRow({ signature }: Readonly<{ signature: AgreementSignatureVie
       </td>
       <td className="px-4">
         {signature.signerName}
+        {signature.signerTitle ? `, ${signature.signerTitle}` : ""}
         <span className="ml-2 text-muted-foreground">{signature.signerEmail}</span>
       </td>
       <td className="px-4 text-muted-foreground">{formatDateTime(signature.signedAt)}</td>
       <td className="px-4 font-mono text-xs text-muted-foreground" title={signature.evidenceSha256}>
         {signature.evidenceSha256.slice(0, 12)}…
+      </td>
+      <td className="px-4">
+        {signature.hasPdf ? (
+          <a
+            href={`/ops/api/tenants/${tenantId}/agreements/${signature.agreementVersionId}/pdf`}
+            download
+            data-testid={`agreement-pdf-${signature.version}`}
+            className="rounded-md font-semibold text-primary underline-offset-4 hover:underline focus:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+          >
+            Download<span className="sr-only"> signed PDF of v{signature.version}</span>
+          </a>
+        ) : (
+          <span className="text-muted-foreground" title="Typed-name signature from before DocuSign">
+            -
+          </span>
+        )}
       </td>
     </tr>
   );

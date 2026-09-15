@@ -38,6 +38,19 @@ async function forward(request: NextRequest, params: Promise<{ path: string[] }>
   }
 
   if (upstream.status === 204) return new NextResponse(null, { status: 204 });
+
+  // Signed agreement PDFs (#238) are raw bytes, not a JSON envelope: pass any
+  // non-JSON response through untouched with its content-type and
+  // content-disposition, same as the admin proxy does for CSV exports.
+  const contentType = upstream.headers.get("content-type") ?? "";
+  if (!contentType.includes("application/json")) {
+    const bytes = await upstream.arrayBuffer();
+    const passthrough: Record<string, string> = { "content-type": contentType || "application/octet-stream" };
+    const disposition = upstream.headers.get("content-disposition");
+    if (disposition) passthrough["content-disposition"] = disposition;
+    return new NextResponse(bytes, { status: upstream.status, headers: passthrough });
+  }
+
   const body: unknown = await upstream.json().catch(() => null);
   return NextResponse.json(body ?? { error: { code: "error", message: "Unexpected API response" } }, { status: upstream.status });
 }

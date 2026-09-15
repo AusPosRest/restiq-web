@@ -631,8 +631,8 @@ export function updateTaxRegistration(patch: TaxRegistrationPatch): Promise<TaxR
   return adminApi<TaxRegistrationView>("tax-registration", { method: "PUT", body: JSON.stringify(patch) });
 }
 
-// --- Agreement (issue #192; contract reconciled against restiq-backend#133's
-// src/ops/agreements/agreements.dtos.ts OwnerAgreementView / SignAgreementDto).
+// --- Agreement (issues #192, #238; contract reconciled against restiq-backend#150's
+// src/ops/agreements/agreements.dtos.ts OwnerAgreementView / StartSigningDto).
 
 export interface AgreementSignatureView {
   agreementVersionId: string;
@@ -640,16 +640,30 @@ export interface AgreementSignatureView {
   title: string;
   signerName: string;
   signerEmail: string;
+  /** Null on typed-name signatures from before DocuSign. */
+  signerTitle: string | null;
   signedAt: string;
   evidenceSha256: string;
+  /** The sealed, signed PDF can be downloaded from /admin/api/agreement/{versionId}/pdf. */
+  hasPdf: boolean;
+}
+
+/** A DocuSign signing in progress on the current version. */
+export interface OwnerSigningView {
+  status: "awaiting_owner" | "awaiting_countersign";
+  signerName: string;
+  signerTitle: string;
+  ownerSignedAt: string | null;
 }
 
 export interface OwnerAgreementView {
   current: { id: string; version: number; title: string; body: string; publishedAt: string } | null;
   signature: AgreementSignatureView | null;
+  signing: OwnerSigningView | null;
   history: AgreementSignatureView[];
 }
 
-export function signAgreement(versionId: string, signerName: string): Promise<{ signature: AgreementSignatureView }> {
-  return adminApi(`agreement/${versionId}/sign`, { method: "POST", body: JSON.stringify({ signerName, accepted: true }) });
+/** Opens (or resumes) the owner's DocuSign signing session; the URL is one-time and short-lived. */
+export function startAgreementSigning(versionId: string, signer: { signerName: string; signerTitle: string }): Promise<{ url: string }> {
+  return adminApi(`agreement/${versionId}/signing`, { method: "POST", body: JSON.stringify(signer) });
 }

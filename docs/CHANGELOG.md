@@ -6,6 +6,13 @@ with the payments epic.
 
 ## [Unreleased]
 
+### Changed
+- Platform agreement (#238, restiq-backend#150):
+  - **Standard wording:** ops can load a standard Restiq Platform Services Agreement (12 clauses plus Australia and India country schedules) into the publish form. Each business's legal name, address, country and ABN/GSTIN are filled in when its owner signs. It is a drafting template: have it reviewed by a lawyer and fill in the [bracketed] Restiq entity details before publishing.
+  - **Owners sign through DocuSign** instead of typing their name: they give their full name and title, sign in DocuSign, and Restiq countersigns by email.
+  - **Signed PDF:** once both have signed, the owner and ops can download the sealed PDF, which includes DocuSign's Certificate of Completion.
+  - The agreement text shows as a formatted document (headings and paragraphs) instead of raw text.
+
 ### Fixed
 - Phones and tablets (#228, #229):
   - **Owner console and Platform Console:** below `md` the sidebar hides and a ☰ button in the top bar opens the same nav, plus sign-out, as a drawer. Page padding shrinks on small screens, and the new-tenant wizard's step list stacks above the form.
