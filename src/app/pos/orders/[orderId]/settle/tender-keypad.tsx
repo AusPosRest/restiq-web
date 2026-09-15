@@ -121,7 +121,9 @@ export function TenderKeypad({
 
       <div>
         <p className="font-label mb-1.5 text-xs font-semibold uppercase tracking-wider text-muted-foreground">Payment method</p>
-        <div data-testid="tender-method-group" className={`grid gap-2 ${methods.length === 3 ? "grid-cols-3" : "grid-cols-2"}`}>
+        {/* Fits as many >=6.5rem buttons as the column holds (issue #240) - two in the
+            counter's narrow tender column, one row on the wide settle screen. */}
+        <div data-testid="tender-method-group" className="grid grid-cols-[repeat(auto-fit,minmax(6.5rem,1fr))] gap-2">
           {methods.map((option) => (
             <button
               key={option}
@@ -129,7 +131,7 @@ export function TenderKeypad({
               data-testid={`tender-method-${option}`}
               aria-pressed={method === option}
               onClick={() => setMethod(option)}
-              className={`rounded-lg border px-4 py-3 text-sm font-semibold transition-colors ${
+              className={`rounded-lg border px-3 py-3 text-sm leading-tight font-semibold transition-colors ${
                 method === option ? "border-primary bg-primary text-primary-foreground" : "border-border text-foreground hover:bg-accent"
               }`}
             >
