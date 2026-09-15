@@ -2,7 +2,7 @@
 
 // POSItemTile (DESIGN.md: "grid tile: item name, price, veg/non-veg dot" -
 // the veg/non-veg dot is omitted, see order-taking-state.ts's file header
-// for why). An unavailable (86'd) item is shown, not hidden, but disabled -
+// for why). An unavailable ("Sold out") item is shown, not hidden, but disabled -
 // same "state is always visible, never a silent gap" pattern as table-map's
 // TableTile.
 import { formatPriceMinor, resolveUnitPriceMinor, type PosMenuItemView } from "./order-taking-state";
@@ -27,7 +27,7 @@ export function PosItemTile({ item, currency, onTap }: Readonly<{ item: PosMenuI
         </span>
         {!item.available && (
           <span data-testid={`item-tile-unavailable-${item.id}`} className="font-label text-[10px] font-semibold uppercase tracking-wider text-status-alert">
-            86&apos;d
+            Sold out
           </span>
         )}
       </span>

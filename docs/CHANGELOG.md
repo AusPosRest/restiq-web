@@ -7,6 +7,10 @@ with the payments epic.
 ## [Unreleased]
 
 ### Fixed
+- Menu list availability (#234): the "86'd" column (kitchen slang for out of
+  stock) is now **Available**. The switch is on while the item is on sale and
+  off when sold out; it used to read the other way round. The row badge and the
+  POS item tile say "Sold out" instead of "86'd".
 - POS table map header on a phone (#206): the actions wrap onto their own
   row, button labels stay on one line, and Refresh is no longer pushed
   off-screen.
