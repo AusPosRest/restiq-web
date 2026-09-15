@@ -488,6 +488,20 @@ export function setDevicePairing(outletId: string, deviceId: string, posDeviceId
   });
 }
 
+// Owner-side removal (issue #215 / restiq-backend#140): POST
+// .../devices/:deviceId/revoke { reason } -> { id, status: "revoked",
+// revokedAt }. Revoke, never delete - the row stays listed as Revoked for
+// the audit trail. 409 conflict when it is already revoked.
+export interface DeviceRevokeResult {
+  id: string;
+  status: "revoked";
+  revokedAt: string;
+}
+
+export function revokeDevice(outletId: string, deviceId: string, reason: string): Promise<DeviceRevokeResult> {
+  return adminApi<DeviceRevokeResult>(`outlets/${outletId}/devices/${deviceId}/revoke`, { method: "POST", body: JSON.stringify({ reason }) });
+}
+
 // --- CAP-7 Staff & roles. Reconciled against the real restiq-backend#38/#39
 // DTOs (GET /admin/v1/staff returns { staff: [...] }, not a bare array;
 // CreateStaffDto/UpdateStaffDto take a single `name`, not firstName/lastName;

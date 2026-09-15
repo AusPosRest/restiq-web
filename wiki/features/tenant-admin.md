@@ -574,6 +574,28 @@ story. Backend counterpart: `restiq-backend/wiki/features/tenant-admin.md`.
   Errors are the real backend codes with honest per-code copy
   (`code_invalid`/`code_expired`/`code_already_used`).
 
+### Remove a device (issue #215 web / restiq-backend#140)
+
+- **Intent:** an owner can retire a mis-enrolled or replaced device from the
+  Devices table themselves instead of asking the Platform Console.
+- **What's built:** every enrolled row of `devices-table.tsx` gets a
+  `device-remove-<id>` button (kiosk / CDS rows too, which have no Open
+  link); `devices.tsx` confirms it through the shared
+  `ConfirmReasonDialog` ("Remove <label>?", verb "Remove device", reason
+  mandatory) and calls `revokeDevice` (`POST
+  admin/v1/outlets/:outletId/devices/:deviceId/revoke { reason }`). On
+  success the row flips to **Revoked** in place (status badge, Open / QR /
+  Remove actions gone), any peripheral linked to it loses its link (the
+  topology re-draws it as shared), and a success toast names the device; a
+  failure keeps the dialog open with an error toast.
+- **Key decisions:** revoke, never delete - the row stays listed as Revoked
+  so the enrolment history is visible, matching the ops realm's revoke
+  (restiq-backend's `device.revoked` audit row with the owner as actor).
+  Hard delete and un-revoke are deliberately out of scope.
+- **Tests:** `devices-table.test.tsx` (Remove on enrolled rows only,
+  reports the device), `devices.test.tsx` (full flow: Remove → reason →
+  POST revoke → row shows Revoked).
+
 ## CAP-7 - Staff & roles
 
 - **Intent:** an owner manages users, assigns outlet-scoped roles from the
