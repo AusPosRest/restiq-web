@@ -7,6 +7,10 @@ with the payments epic.
 ## [Unreleased]
 
 ### Fixed
+- Menu items can be deleted (#248). The item drawer has a **Delete**
+  button with a confirmation step. The item disappears from the Menu list,
+  POS, QR and kiosk; past bills keep it (the backend archives the row), and
+  its name can be reused for a new item.
 - Menu import commit names the items that clash (#247). It used to fail
   with "duplicate item names within a category" even when the clash was
   with an item already on the menu, and never said which one. Now the

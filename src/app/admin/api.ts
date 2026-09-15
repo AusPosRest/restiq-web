@@ -195,6 +195,11 @@ export function setItemAvailability(itemId: string, available: boolean): Promise
   return adminApi<ItemView>(`menu/items/${itemId}/availability`, { method: "PATCH", body: JSON.stringify({ available }) });
 }
 
+// Issue #248: the backend archives rather than deletes, so past bills keep the item.
+export function deleteMenuItem(itemId: string): Promise<null> {
+  return adminApi<null>(`menu/items/${itemId}`, { method: "DELETE" });
+}
+
 export function addVariant(itemId: string, name: string): Promise<ItemView> {
   return adminApi<ItemView>(`menu/items/${itemId}/variants`, { method: "POST", body: JSON.stringify({ name }) });
 }

@@ -200,6 +200,12 @@ export function MenuManagement() {
           upsertItem(saved);
           setDrawerItem("closed");
         }}
+        onDeleted={(deleted) => {
+          setItems((current) => (current ?? effectiveItems).filter((i) => i.id !== deleted.id));
+          setCategories(effectiveCategories.map((c) => (c.id === deleted.categoryId ? { ...c, itemCount: Math.max(0, c.itemCount - 1) } : c)));
+          setDrawerItem("closed");
+          pushToast({ kind: "success", message: `${deleted.name} was deleted from your menu.` });
+        }}
         onModifierGroupCreated={(group) => setModifierGroups([...effectiveModifierGroups, group])}
         onAllergenCreated={(allergen) => setAllergens([...effectiveAllergens, allergen])}
         onComboCreated={(combo) => setCombos([...effectiveCombos, combo])}
