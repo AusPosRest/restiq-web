@@ -98,6 +98,8 @@ export interface PosMenuItemView {
   categoryId: string;
   name: string;
   shortName: string;
+  /** Issue #230: null when there is none or the outlet turned Menu Photos off; optional for an older backend. */
+  photoUrl?: string | null;
   available: boolean;
   /** Base price in minor units when the item has no variants; null when priced per-variant (see `variants`). */
   priceMinor: number | null;
