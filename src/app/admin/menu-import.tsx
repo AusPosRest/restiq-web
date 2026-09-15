@@ -33,7 +33,10 @@ const CONFIDENCE_CLASS: Record<ReturnType<typeof confidenceLevel>, string> = {
 
 type Phase = "dropzone" | "uploading" | "review" | "committing" | "success";
 
-export function MenuImport() {
+// onCommitted: set when opened as the Menu page's dialog (issue #239), which
+// closes and reloads instead of showing the success screen. fromSetup: opened
+// from the go-live checklist, so success goes back there; otherwise to the menu.
+export function MenuImport({ onCommitted, fromSetup = false }: Readonly<{ onCommitted?: (itemCount: number) => void; fromSetup?: boolean }>) {
   const [phase, setPhase] = useState<Phase>("dropzone");
   const [uploadError, setUploadError] = useState<string | null>(null);
   const [importId, setImportId] = useState<string | null>(null);
@@ -106,6 +109,10 @@ export function MenuImport() {
     setPhase("committing");
     try {
       const result = await commitMenuImport(importId);
+      if (onCommitted) {
+        onCommitted(result.items.length);
+        return;
+      }
       setCommitResult(result);
       setPhase("success");
     } catch (error) {
@@ -123,8 +130,8 @@ export function MenuImport() {
         <PartyPopper className="size-8 text-status-active" aria-hidden="true" />
         <h2 className="font-headline text-xl font-semibold">Your menu is in!</h2>
         <p className="text-sm text-muted-foreground">{commitResult?.items.length ?? items.length} items were added to your menu.</p>
-        <Button asChild data-testid="menu-import-success-onboarding-link" className="mt-4">
-          <Link href="/admin/onboarding">Back to setup</Link>
+        <Button asChild data-testid={fromSetup ? "menu-import-success-onboarding-link" : "menu-import-success-menu-link"} className="mt-4">
+          {fromSetup ? <Link href="/admin/onboarding">Back to setup</Link> : <Link href="/admin/menu">Go to your menu</Link>}
         </Button>
       </div>
     );

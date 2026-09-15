@@ -102,6 +102,12 @@ story. Backend counterpart: `restiq-backend/wiki/features/tenant-admin.md`.
   same call, so the checklist reflects it on return - no separate write from
   here). A draft with zero extracted items shows an empty state with a
   restart action rather than a bare table.
+- **From the Menu page (issue #239):** the header's **Import** button and the
+  empty state's **Import menu** open the same `MenuImport` in a dialog over
+  `/admin/menu` instead of navigating away. With `onCommitted(itemCount)` set,
+  commit skips the onboarding success screen. The Menu page then closes the
+  dialog, refetches items and categories (an import can create categories),
+  and shows a success toast.
 - **Multipart uploads through the proxy:** `src/app/admin/api/[...path]/route.ts`
   previously forced every non-GET request to `application/json` and read the
   body as text, which would have silently corrupted a binary file upload. It
