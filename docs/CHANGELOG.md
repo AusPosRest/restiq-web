@@ -17,6 +17,9 @@ with the payments epic.
   off-screen.
 
 ### Changed
+- The settle screen's **Bill finalised** panel no longer shows Back to table
+  map, Refund… or Print invoice (#226); it's just the confirmation. Refund
+  has no other entry point until one is added.
 - The simulated card terminal is drawn as the physical device (#198): body,
   brand bar with a status LED, inset screen, and reader hardware along the
   bottom edge. It opens on a UPI / Cards / Wallets / EMI method screen; only

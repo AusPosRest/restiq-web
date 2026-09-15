@@ -1,5 +1,8 @@
 # Completed
 
+- **2026-09-15** - Settle screen: removed Back to table map / Refund… / Print invoice from the
+  Bill finalised panel (issue #226, owner request). Refund lost its only entry point.
+
 - **2026-09-15** - External payment + direct Print bill (issue #224, web half of
   restiq-backend#146): `external` tender with a required reference in `tender-keypad.tsx`;
   `print-bill-button.tsx` replaces the new-tab invoice link on settle and counter and posts

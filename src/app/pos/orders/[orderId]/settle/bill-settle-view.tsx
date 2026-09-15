@@ -170,23 +170,9 @@ function BillSettleLoaded({
             <p className="text-sm text-muted-foreground">
               {bill.tenders.length} tender{bill.tenders.length === 1 ? "" : "s"} captured · no further changes are possible.
             </p>
-            <div className="mt-2 flex gap-2">
-              <Button asChild size="sm" variant="outline" data-testid="bill-finalised-back">
-                <Link href="/pos/table-map">Back to table map</Link>
-              </Button>
-              {/* CAP-9 entry point (story 10): the only way into P10 Refund &
-                  Adjustments is from here, once a bill is finalised and thus
-                  eligible for refund - see refund-view.tsx's file header.
-                  `billId` rides along in the query string because the real
-                  refund endpoint targets the Bill, not the Order, and this
-                  screen is the one place that already has it in hand. */}
-              <Button asChild size="sm" variant="outline" data-testid="bill-finalised-refund">
-                <Link href={`/pos/orders/${orderId}/refund?billId=${bill.id}`}>Refund…</Link>
-              </Button>
-              <Button asChild size="sm" variant="outline" data-testid="print-invoice-link">
-                <Link href={`/pos/bills/${bill.id}/invoice`}>Print invoice</Link>
-              </Button>
-            </div>
+            {/* issue #226: no actions here - Back to table map, Refund… and
+                Print invoice were removed at the owner's request. Refund
+                (/pos/orders/:id/refund?billId=) has no other entry point now. */}
           </section>
         ) : (
           <div className="flex flex-1 flex-col">
