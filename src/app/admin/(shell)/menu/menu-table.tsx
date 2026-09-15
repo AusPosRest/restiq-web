@@ -1,6 +1,6 @@
 "use client";
 
-// T4/T4a Menu Management item list: 86 toggle per row, dine-in/delivery price
+// T4/T4a Menu Management item list: Available switch per row, dine-in/delivery price
 // columns. Price is fetched per item (GET .../price?channel=X - the only
 // price read the real backend exposes, see menu-state.ts's file header) once
 // the row mounts; an item with variants shows "Varies by variant" instead of
@@ -26,7 +26,7 @@ export function MenuTable({
           <th className="px-3 text-right">Dine-in</th>
           <th className="px-3 text-right">Delivery</th>
           <th className="px-3">Variants</th>
-          <th className="px-3 text-center">86&apos;d</th>
+          <th className="px-3 text-center">Available</th>
         </tr>
       </thead>
       <tbody>
@@ -83,7 +83,7 @@ function MenuTableRow({
           <p className="font-medium">{item.name}</p>
           {!item.available && (
             <span data-testid={`menu-item-row-${item.id}-86-badge`} className="rounded-full bg-status-error/15 px-2 py-0.5 text-xs text-status-error">
-              86&apos;d
+              Sold out
             </span>
           )}
         </div>

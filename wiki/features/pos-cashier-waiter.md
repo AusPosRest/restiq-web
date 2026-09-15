@@ -204,7 +204,7 @@ actually built here, story by story. Backend counterpart:
     quantity, specialInstructions}` back to the caller, which is all the caller needs to
     build the API's `AddOrderLineInput`.
   - **P3 order-taking screen** (`order-taking-view.tsx`) - a category-tab rail (left) +
-    item grid (`pos-item-tile.tsx`, `POSItemTile`: name, resolved price, "86'd" label for
+    item grid (`pos-item-tile.tsx`, `POSItemTile`: name, resolved price, "Sold out" label for
     an unavailable item shown-disabled rather than hidden) + a running `OrderPanel`
     (right rail: line items, per-line qty +/-/remove, running total, "Added by {staff}" on
     every line). A search bar searches every category at once (ignoring the active tab)

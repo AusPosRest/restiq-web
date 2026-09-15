@@ -114,7 +114,8 @@ story. Backend counterpart: `restiq-backend/wiki/features/tenant-admin.md`.
 
 - **Intent:** an owner manages categories, items, variants, modifier groups
   (min/max rules), combos, allergen/dietary tags, per-outlet availability and
-  per-channel/scheduled prices, and item availability (86), from one screen
+  per-channel/scheduled prices, and item availability (the "Available" switch,
+  on = on sale, off = sold out; #234 replaced the "86'd" slang), from one screen
   that keeps list context (item editor as a drawer, not a page nav); a price
   edit creates a new version rather than rewriting the old one.
 - **Built:** `/admin/menu` (`src/app/admin/(shell)/menu/`) - the first screen
