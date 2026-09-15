@@ -25,6 +25,13 @@ with the payments epic.
   answer is a Simulator strip; only the final outcome reaches the server.
 
 ### Added
+- Installable app on Android and iOS (#222): a web app manifest (standalone,
+  dark theme colour, 192 / 512 / maskable icons) and an apple-touch-icon,
+  both drawn by `next/og` so the repo holds no PNGs. A bottom banner offers
+  **Install** on Android / Chrome (the browser's own install dialog) and the
+  **Share → Add to Home Screen** steps on iPhone / iPad; it hides inside the
+  installed app, on guest `/qr` pages, and once dismissed. No service worker:
+  installing doesn't need one and POS data must never be served stale.
 - Device topology (#210, web half of restiq-backend#134 / #136): the owner
   Devices page opens with a **Topology** map - each POS with the printer and
   card terminal linked to it, devices shared by the whole outlet, and other

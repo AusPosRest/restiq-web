@@ -1,5 +1,11 @@
 # Completed
 
+- **2026-09-15** - Installable PWA for Android and iOS (issue #222): `app/manifest.ts`,
+  generated `icon` (192/512, maskable) and `apple-icon` (180), `appleWebApp` + theme-colour
+  metadata, and `install-banner.tsx` (Install button on Android/Chrome, Add to Home Screen
+  steps on iOS; hidden when installed, dismissed, or on `/qr`). No service worker.
+  4 new unit tests (`install-state.test.ts`).
+
 - **2026-09-09** - Agreements with versioning + owner digital signature (issue #192, web half
   of restiq-backend#133): `/ops/agreements` (publish through the reason dialog, expand a row
   to read a version), Tenant Detail **Agreements** tab (signed / pending badge + signature
