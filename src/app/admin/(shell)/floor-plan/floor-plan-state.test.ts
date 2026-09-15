@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
 import {
   canvasExtent,
+  nearestFreeSpot,
   computeDragPosition,
   computeNextTablePosition,
   findOverlap,
@@ -45,6 +46,35 @@ describe("computeDragPosition", () => {
   it("is a no-op when the pointer hasn't moved", () => {
     const origin = { pointerX: 50, pointerY: 50, tableX: 88, tableY: 32 };
     expect(computeDragPosition(origin, 50, 50)).toEqual({ x: 88, y: 32 });
+  });
+});
+
+describe("nearestFreeSpot (issue #258)", () => {
+  const t1 = { id: "t1", x: 100, y: 100, width: 80, height: 80 };
+  const dropped = (x: number, y: number) => ({ id: "moving", x, y, width: 40, height: 40 });
+
+  it("keeps a clear drop exactly where it is", () => {
+    expect(nearestFreeSpot(dropped(300, 100), [t1])).toEqual({ x: 300, y: 100 });
+  });
+
+  it("settles an overlapping drop beside the table it landed on, on the nearest side", () => {
+    // t1's right edge is 180; one grid step past it, on the grid, is 192.
+    expect(nearestFreeSpot(dropped(160, 120), [t1])).toEqual({ x: 192, y: 120 });
+  });
+
+  it("never settles at a negative position", () => {
+    const corner = { id: "corner", x: 0, y: 0, width: 80, height: 80 };
+    expect(nearestFreeSpot(dropped(0, 0), [corner])).toEqual({ x: 88, y: 0 });
+  });
+
+  it("skips a spot beside the table that a third table already fills", () => {
+    const t3 = { id: "t3", x: 192, y: 100, width: 80, height: 80 };
+    const spot = nearestFreeSpot(dropped(160, 120), [t1, t3]);
+    expect(spot).toEqual({ x: 160, y: 48 });
+  });
+
+  it("ignores the moving table's own old position", () => {
+    expect(nearestFreeSpot(dropped(20, 20), [{ ...dropped(0, 0) }])).toEqual({ x: 20, y: 20 });
   });
 });
 

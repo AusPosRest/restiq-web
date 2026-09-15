@@ -1,5 +1,10 @@
 # Completed
 
+- **2026-09-16** - Fix: floor-plan overlap on drop (issue #258). `nearestFreeSpot` in
+  `floor-plan-state.ts` keeps a clear drop, else picks the nearest free spot beside an overlapped
+  table (one grid step clear, x/y >= 0), else below every table. The canvas's `commit()` runs every
+  drag and arrow-key move through it, so no overlap reaches the backend's 409.
+
 - **2026-09-16** - Infinite floor-plan canvas (issue #237). `floor-plan-canvas.tsx` is a native scroll
   viewport over a surface sized by `canvasExtent` (farthest table + 480 px), zoom 25-200% as a CSS scale
   with pointer maths in canvas units, mouse-drag pan on empty space, edge-scroll while dragging a table,

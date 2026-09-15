@@ -124,6 +124,29 @@ export function findOverlap(candidate: TableRect, others: readonly TableRect[]):
   return others.find((other) => other.id !== candidate.id && rectsOverlap(candidate, other))?.id ?? null;
 }
 
+/**
+ * Where a dropped table settles (issue #258): where it was dropped if that's
+ * clear, else the nearest free spot beside a table it would overlap (one grid
+ * step away, never at negative x/y), else below every table. The backend
+ * rejects overlaps, so the canvas never saves one.
+ */
+export function nearestFreeSpot(candidate: TableRect, others: readonly TableRect[], gap: number = GRID_SNAP_PX): { x: number; y: number } {
+  const blockers = others.filter((other) => other.id !== candidate.id);
+  const isFree = (x: number, y: number) => x >= 0 && y >= 0 && findOverlap({ ...candidate, x, y }, blockers) === null;
+  if (isFree(candidate.x, candidate.y)) return { x: candidate.x, y: candidate.y };
+  const up = (value: number) => Math.ceil(value / gap) * gap;
+  const down = (value: number) => Math.floor(value / gap) * gap;
+  const spots = blockers.flatMap((b) => [
+    { x: up(b.x + b.width + gap), y: candidate.y },
+    { x: down(b.x - candidate.width - gap), y: candidate.y },
+    { x: candidate.x, y: down(b.y - candidate.height - gap) },
+    { x: candidate.x, y: up(b.y + b.height + gap) },
+  ]);
+  const distance = (spot: { x: number; y: number }) => Math.hypot(spot.x - candidate.x, spot.y - candidate.y);
+  const best = spots.filter((spot) => isFree(spot.x, spot.y)).sort((a, b) => distance(a) - distance(b))[0];
+  return best ?? { x: candidate.x, y: up(Math.max(0, ...blockers.map((b) => b.y + b.height)) + gap) };
+}
+
 /** The canvas area a floor needs: out to its farthest table's right/bottom edge, plus `room` beyond it. */
 export function canvasExtent(tables: readonly TableRect[], room: number): CanvasBounds {
   return tables.reduce(

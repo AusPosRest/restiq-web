@@ -21,7 +21,7 @@
 // the selected floor's tables.
 import { Maximize2, QrCode, ZoomIn, ZoomOut } from "lucide-react";
 import { useEffect, useLayoutEffect, useRef, useState } from "react";
-import { canvasExtent, computeDragPosition, findOverlap, GRID_SNAP_PX, type DiningTableView, type DragOrigin } from "./floor-plan-state";
+import { canvasExtent, computeDragPosition, findOverlap, GRID_SNAP_PX, nearestFreeSpot, type DiningTableView, type DragOrigin } from "./floor-plan-state";
 
 const MIN_ZOOM = 0.25;
 const MAX_ZOOM = 2;
@@ -153,7 +153,10 @@ export function FloorPlanCanvas({ tables, selectedFloorId, onTableMoved, onQrReq
     return livePositions[table.id] ?? { x: table.x, y: table.y };
   }
 
-  function commit(table: DiningTableView, next: Point) {
+  // Issue #258: a drop (or arrow-key nudge) onto another table isn't saved as
+  // an overlap and snapped back - it settles in the nearest free spot beside it.
+  function commit(table: DiningTableView, dropped: Point) {
+    const next = nearestFreeSpot({ id: table.id, ...dropped, width: table.width, height: table.height }, floorTables);
     setLivePositions((current) => {
       if (!(table.id in current)) return current;
       const rest = { ...current };

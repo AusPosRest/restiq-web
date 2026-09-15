@@ -7,6 +7,10 @@ with the payments epic.
 ## [Unreleased]
 
 ### Fixed
+- Floor plan: dropping a table on another no longer snaps it back with
+  stacked "overlaps another table" toasts (#258). It stays red while it
+  overlaps, and on release it settles in the nearest free spot beside the
+  table it landed on. Arrow-key nudges behave the same way.
 - POS text overflow (#240):
   - **Payment method buttons** (settle and counter) now fit as many as the column holds - two per row in the counter's narrow tender column - so "Card terminal" / "External" no longer spill past their buttons.
   - **Bill panel lines** get column padding and keep the amount on one line, so a long item name ("Soup of the Day") wraps instead of running into its price.

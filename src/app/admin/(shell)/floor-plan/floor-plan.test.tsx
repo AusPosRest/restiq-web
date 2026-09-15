@@ -177,6 +177,26 @@ describe("FloorPlan", () => {
     );
   });
 
+  it("settles a table nudged onto its neighbour beside it instead of saving an overlap (issue #258)", async () => {
+    const t2 = { id: "t2", floorId: "floor-1", label: "T2", x: 80, y: 40, width: 40, height: 40, shape: "square", seatCapacity: 4 };
+    const fetchMock = stubFetch({ floors: [{ ...DEFAULT_FLOORS[0], tables: [...DEFAULT_FLOORS[0].tables, t2] }] });
+    renderFloorPlan();
+    const shape = await screen.findByTestId("table-shape-t1");
+
+    // T1 (40..80) shares an edge with T2 (80..120); one step right would overlap it,
+    // so it settles one grid step clear on T2's nearest free side.
+    shape.focus();
+    await userEvent.keyboard("{ArrowRight}");
+
+    await waitFor(() =>
+      expect(fetchMock).toHaveBeenCalledWith(
+        expect.stringContaining("/floor-plan/tables/t1"),
+        expect.objectContaining({ method: "PATCH", body: JSON.stringify({ x: 32, y: 40 }) }),
+      ),
+    );
+    expect(screen.queryByTestId("toast-error")).toBeNull();
+  });
+
   it("snaps a moved table back and toasts an error when the backend rejects it as an overlap", async () => {
     stubFetch({ patchStatus: 409 });
     renderFloorPlan();
