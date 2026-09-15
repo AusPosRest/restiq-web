@@ -23,7 +23,7 @@ export function WaitingOnPanel({
   nowMs: number;
 }>) {
   return (
-    <aside data-testid="kds-waiting-on-panel" className="flex w-72 shrink-0 flex-col border-l border-border/40 bg-card">
+    <aside data-testid="kds-waiting-on-panel" className="flex w-full shrink-0 flex-col border-t border-border/40 bg-card md:w-72 md:border-l md:border-t-0">
       <p className="flex items-center gap-1.5 border-b border-border/40 px-3 py-2 text-xs font-bold tracking-wide text-muted-foreground uppercase">
         <Clock className="size-3.5" aria-hidden="true" />
         Waiting on
