@@ -1,5 +1,6 @@
 import { describe, expect, it } from "vitest";
 import {
+  canvasExtent,
   computeDragPosition,
   computeNextTablePosition,
   findOverlap,
@@ -24,31 +25,40 @@ describe("snapToGrid", () => {
 });
 
 describe("computeDragPosition", () => {
-  const canvas = { width: 400, height: 300 };
-  const size = { width: 40, height: 40 };
-
   it("translates the table by the pointer's movement, snapped to the grid", () => {
     const origin = { pointerX: 100, pointerY: 100, tableX: 40, tableY: 40 };
-    const result = computeDragPosition(origin, 121, 137, size, canvas);
+    const result = computeDragPosition(origin, 121, 137);
     // rawX = 40 + (121-100) = 61 -> snaps to 64; rawY = 40 + (137-100) = 77 -> snaps to 80
     expect(result).toEqual({ x: 64, y: 80 });
   });
 
   it("clamps to the canvas's left/top edge", () => {
     const origin = { pointerX: 100, pointerY: 100, tableX: 10, tableY: 10 };
-    const result = computeDragPosition(origin, 0, 0, size, canvas);
-    expect(result).toEqual({ x: 0, y: 0 });
+    expect(computeDragPosition(origin, 0, 0)).toEqual({ x: 0, y: 0 });
   });
 
-  it("clamps to the canvas's right/bottom edge, accounting for table size", () => {
+  it("has no right/bottom edge - the canvas is infinite that way", () => {
     const origin = { pointerX: 0, pointerY: 0, tableX: 0, tableY: 0 };
-    const result = computeDragPosition(origin, 10000, 10000, size, canvas);
-    expect(result).toEqual({ x: canvas.width - size.width, y: canvas.height - size.height });
+    expect(computeDragPosition(origin, 10000, 10000)).toEqual({ x: 10000, y: 10000 });
   });
 
   it("is a no-op when the pointer hasn't moved", () => {
     const origin = { pointerX: 50, pointerY: 50, tableX: 88, tableY: 32 };
-    expect(computeDragPosition(origin, 50, 50, size, canvas)).toEqual({ x: 88, y: 32 });
+    expect(computeDragPosition(origin, 50, 50)).toEqual({ x: 88, y: 32 });
+  });
+});
+
+describe("canvasExtent", () => {
+  it("is just the room on an empty floor", () => {
+    expect(canvasExtent([], 100)).toEqual({ width: 100, height: 100 });
+  });
+
+  it("reaches the farthest table's right and bottom edges, plus the room", () => {
+    const tables = [
+      { id: "a", x: 900, y: 0, width: 60, height: 40 },
+      { id: "b", x: 0, y: 1200, width: 40, height: 80 },
+    ];
+    expect(canvasExtent(tables, 100)).toEqual({ width: 1060, height: 1380 });
   });
 });
 

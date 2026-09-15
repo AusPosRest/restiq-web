@@ -1,5 +1,11 @@
 # Completed
 
+- **2026-09-16** - Infinite floor-plan canvas (issue #237). `floor-plan-canvas.tsx` is a native scroll
+  viewport over a surface sized by `canvasExtent` (farthest table + 480 px), zoom 25-200% as a CSS scale
+  with pointer maths in canvas units, mouse-drag pan on empty space, edge-scroll while dragging a table,
+  and per-floor pan/zoom. `computeDragPosition` only floors at 0 (backend `@Min(0)`). Picked up from the
+  uncommitted work in the `restiq-web-floorcanvas` worktree.
+
 - **2026-09-15** - Fix: POS text overflow (issue #240). `tender-keypad.tsx`'s method grid is
   `repeat(auto-fit,minmax(6.5rem,1fr))` (two per row in the counter's w-80 column); `bill-summary.tsx`
   lines get `pr-3` column padding and a no-wrap amount so long names wrap.
