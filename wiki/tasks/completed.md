@@ -1,5 +1,8 @@
 # Completed
 
+- **2026-09-15** - KDS responsive (issue #232): expo `Waiting on` panel stacks under the rail
+  below md (`expo-screen.tsx`, `waiting-on-panel.tsx`); `kds-header.tsx` tab row wraps.
+
 - **2026-09-15** - Installable PWA for Android and iOS (issue #222): `app/manifest.ts`,
   generated `icon` (192/512, maskable) and `apple-icon` (180), `appleWebApp` + theme-colour
   metadata, and `install-banner.tsx` (Install button on Android/Chrome, Add to Home Screen

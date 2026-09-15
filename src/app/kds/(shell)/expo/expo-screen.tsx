@@ -94,8 +94,9 @@ export function ExpoScreen() {
       )}
 
       {!loading && ordered && ordered.length > 0 && (
-        <div className="flex flex-1 overflow-hidden">
-          <div data-testid="kds-expo-rail" className="flex flex-1 items-start gap-4 overflow-x-auto p-4">
+        // Below md (issue #232) the Waiting-on panel stacks under the rail and the column scrolls.
+        <div className="flex min-h-0 flex-1 flex-col overflow-y-auto md:flex-row md:overflow-hidden">
+          <div data-testid="kds-expo-rail" className="flex shrink-0 items-start gap-4 overflow-x-auto p-4 md:flex-1 md:shrink">
             {ordered.map((order) => (
               <ExpoOrderRow key={order.orderId} order={order} ageingThresholdMinutesFor={ageingThresholdMinutesFor} nowMs={nowMs} />
             ))}
