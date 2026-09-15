@@ -6,6 +6,7 @@
 // hosts (EXPERIENCE.md: no duplicate designs).
 import { CreditCard } from "lucide-react";
 import { useRouter } from "next/navigation";
+import { PaginationControls, usePagination } from "@/components/pagination";
 import { TenantListResult } from "../api";
 import { LoadErrorPanel, Skeleton } from "../data-states";
 import { StatusBadge } from "../status-badge";
@@ -14,6 +15,8 @@ import { useOpsLoad } from "../use-ops-load";
 export function SubscriptionsIndex() {
   const router = useRouter();
   const { loading, failed, data, retry } = useOpsLoad<TenantListResult>("tenants?limit=100&sort=name&order=asc");
+
+  const pager = usePagination(data?.tenants ?? []);
 
   function open(tenantId: string) {
     router.push(`/ops/tenants/${tenantId}?tab=subscription`);
@@ -51,7 +54,7 @@ export function SubscriptionsIndex() {
                   </tr>
                 ))}
               {!loading &&
-                data?.tenants.map((tenant) => (
+                pager.items.map((tenant) => (
                   <tr
                     key={tenant.id}
                     data-testid={`subscriptions-index-row-${tenant.id}`}
@@ -73,6 +76,7 @@ export function SubscriptionsIndex() {
             </tbody>
           </table>
         )}
+        {!loading && <PaginationControls pager={pager} testId="subscriptions-pagination" />}
 
         {!loading && data && data.tenants.length === 0 && (
           <div className="flex flex-col items-center gap-3 px-8 py-16 text-center" data-testid="subscriptions-index-empty">

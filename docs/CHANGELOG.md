@@ -6,6 +6,9 @@ with the payments epic.
 
 ## [Unreleased]
 
+### Added
+- Pagination on long lists (#255): the owner Menu, Staff and Devices tables and the ops Sync Health and Subscriptions tables now show 20 rows per page with a "1–20 of 32" range and Prev / Next. The pager is hidden when everything fits on one page; changing a search or filter returns to page 1. Lists that already page through the backend cursor (ops Tenants / Devices / DLQ, owner Reports ▸ Payments) are unchanged.
+
 ### Fixed
 - POS text overflow (#240):
   - **Payment method buttons** (settle and counter) now fit as many as the column holds - two per row in the counter's narrow tender column - so "Card terminal" / "External" no longer spill past their buttons.
