@@ -114,7 +114,7 @@ export function MenuManagement() {
 
   return (
     <div className="flex flex-1 flex-col">
-      <div className="flex items-start justify-between gap-4">
+      <div className="flex flex-wrap items-start justify-between gap-4">
         <div>
           <h1 className="font-headline text-2xl font-semibold">Menu</h1>
           <p className="mt-1 text-sm text-muted-foreground" data-testid="menu-summary">
@@ -135,7 +135,7 @@ export function MenuManagement() {
         </div>
       </div>
 
-      <div className="relative mt-4 w-72">
+      <div className="relative mt-4 w-full sm:w-72">
         <Search className="absolute left-2.5 top-1/2 size-4 -translate-y-1/2 text-muted-foreground" aria-hidden="true" />
         <input
           type="search"
@@ -148,7 +148,8 @@ export function MenuManagement() {
         />
       </div>
 
-      <div className="mt-4 flex flex-1 gap-6">
+      {/* Categories stack above the item table below md (issue #228). */}
+      <div className="mt-4 flex flex-1 flex-col gap-4 md:flex-row md:gap-6">
         <CategorySidebar
           categories={effectiveCategories}
           totalItems={effectiveItems.length}

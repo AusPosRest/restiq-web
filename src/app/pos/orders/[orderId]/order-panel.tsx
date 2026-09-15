@@ -59,7 +59,7 @@ export function OrderPanel({
   const sendButtonLabel = status === "closed" ? "Closed" : status === "sent" ? "Sent to kitchen" : sendingToKitchen ? "Sending…" : "Send to kitchen";
 
   return (
-    <aside data-testid="order-panel" className="flex w-80 shrink-0 flex-col border-l border-border/60 bg-card">
+    <aside data-testid="order-panel" className="flex w-full shrink-0 flex-col border-t border-border/60 bg-card lg:w-80 lg:border-l lg:border-t-0">
       <header className="flex items-start justify-between gap-2 border-b border-border/60 px-4 py-3">
         <div>
           <p className="font-headline text-sm font-semibold text-foreground">Order #{orderId.slice(-6).toUpperCase()}</p>

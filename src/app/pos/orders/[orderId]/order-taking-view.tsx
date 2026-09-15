@@ -164,7 +164,7 @@ function OrderTakingLoaded({
 
   return (
     <div data-testid="order-taking-view" className="flex flex-1 flex-col">
-      <header className="flex items-center gap-4 border-b border-border/60 px-6 py-3">
+      <header className="flex flex-wrap items-center gap-x-4 gap-y-2 border-b border-border/60 px-4 py-3 sm:px-6">
         <div>
           <p className="font-headline text-lg font-bold text-primary">RESTIQ POS</p>
           <p className="font-label text-xs font-semibold uppercase tracking-wider text-muted-foreground">{orderOriginLabel(order)}</p>
@@ -197,8 +197,13 @@ function OrderTakingLoaded({
         </div>
       )}
 
-      <div className="flex flex-1 overflow-hidden">
-        <nav data-testid="category-tabs" className="flex w-36 shrink-0 flex-col gap-1 overflow-y-auto border-r border-border/60 p-3">
+      {/* Below lg (issue #229): categories become a scrolling row and the menu and
+          order panel stack, the whole column scrolling; three columns from lg up. */}
+      <div className="flex min-h-0 flex-1 flex-col overflow-y-auto lg:flex-row lg:overflow-hidden">
+        <nav
+          data-testid="category-tabs"
+          className="flex shrink-0 gap-1 overflow-x-auto border-b border-border/60 p-3 lg:w-36 lg:flex-col lg:overflow-y-auto lg:border-b-0 lg:border-r"
+        >
           {sortedCategories.map((category) => (
             <button
               key={category.id}
@@ -209,7 +214,7 @@ function OrderTakingLoaded({
                 setSelectedCategoryId(category.id);
                 setQuery("");
               }}
-              className={`rounded-md px-3 py-2 text-left text-sm font-semibold transition-colors ${
+              className={`shrink-0 whitespace-nowrap rounded-md px-3 py-2 text-left text-sm font-semibold transition-colors lg:whitespace-normal ${
                 category.id === effectiveCategoryId ? "bg-primary text-primary-foreground" : "text-muted-foreground hover:bg-accent hover:text-foreground"
               }`}
             >
@@ -218,7 +223,7 @@ function OrderTakingLoaded({
           ))}
         </nav>
 
-        <main className="flex-1 overflow-y-auto p-4">
+        <main className="p-4 lg:min-w-0 lg:flex-1 lg:overflow-y-auto">
           <h2 className="mb-3 font-headline text-base font-semibold text-foreground">
             {query.trim() ? "Search results" : activeCategory?.name} <span className="font-normal text-muted-foreground">· {visibleItems.length} items</span>
           </h2>

@@ -74,7 +74,7 @@ export function RefundConfigPanel({ billId, lines, currency, onRefunded }: Reado
   }
 
   return (
-    <section data-testid="refund-config-panel" className="flex w-96 shrink-0 flex-col gap-4 overflow-y-auto p-4">
+    <section data-testid="refund-config-panel" className="flex w-full shrink-0 flex-col gap-4 p-4 md:w-96 md:overflow-y-auto">
       <div>
         <h2 className="font-headline text-lg font-semibold text-foreground">Refund configuration</h2>
         <p className="text-sm text-muted-foreground">Select items from the left to build the refund.</p>

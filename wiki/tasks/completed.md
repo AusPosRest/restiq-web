@@ -1,5 +1,6 @@
 # Completed
 
+- **2026-09-15** - Responsive consoles and POS (issues #228, #229). Shared `src/components/mobile-nav.tsx` drawer for the admin and ops shells, which now hide the sidebar below md. POS order-taking, counter, settle and refund stack their side panels below lg/md; `BillSummary` takes a `layoutClassName`. Public screens (landing, device, the three logins, QR welcome) were already clean at 375 px.
 - **2026-09-15** - KDS responsive (issue #232): expo `Waiting on` panel stacks under the rail
   below md (`expo-screen.tsx`, `waiting-on-panel.tsx`); `kds-header.tsx` tab row wraps.
 
