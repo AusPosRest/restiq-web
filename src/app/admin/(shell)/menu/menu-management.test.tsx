@@ -30,9 +30,11 @@ const CATEGORIES = [
   { id: "mains", name: "Mains", sortOrder: 1, itemCount: 1 },
 ];
 
-function stubFetch(overrides: { items?: unknown; fail?: boolean } = {}) {
+function stubFetch(overrides: { items?: unknown; fail?: boolean; route?: (url: string) => Response | undefined } = {}) {
   const fetchMock = vi.fn((input: RequestInfo | URL) => {
     const url = String(input);
+    const routed = overrides.route?.(url);
+    if (routed) return Promise.resolve(routed);
     if (overrides.fail) return Promise.resolve(jsonResponse({ error: { code: "error", message: "nope" } }, 500));
     if (url.includes("/admin/api/outlets")) return Promise.resolve(jsonResponse([]));
     if (url.includes("/admin/api/menu/items") && url.includes("price?")) {
@@ -116,6 +118,81 @@ describe("MenuManagement list", () => {
     expect(await screen.findByTestId("menu-empty")).toBeTruthy();
     expect(screen.getByTestId("menu-empty-import")).toBeTruthy();
     expect(screen.getByTestId("menu-empty-add")).toBeTruthy();
+
+    await userEvent.click(screen.getByTestId("menu-empty-import"));
+    expect(screen.getByTestId("menu-import-dialog")).toBeTruthy();
+  });
+
+  it("opens Import as a dialog over the menu instead of navigating away (issue #239)", async () => {
+    stubFetch();
+    renderMenu();
+    await screen.findByTestId("menu-table");
+
+    await userEvent.click(screen.getByTestId("menu-import-link"));
+    const dialog = screen.getByTestId("menu-import-dialog");
+    expect(within(dialog).getByTestId("menu-import-dropzone")).toBeTruthy();
+    expect(within(dialog).getByTestId("menu-import-template-link")).toBeTruthy();
+
+    await userEvent.click(screen.getByTestId("menu-import-dialog-close"));
+    expect(screen.queryByTestId("menu-import-dialog")).toBeNull();
+    expect(screen.getByTestId("menu-table")).toBeTruthy();
+  });
+
+  it("closes the dialog, reloads the list and confirms once an import commits (issue #239)", async () => {
+    let committed = false;
+    stubFetch({
+      route: (url) => {
+        if (url.includes("/admin/api/menu-import/upload")) {
+          return jsonResponse(
+            {
+              importId: "imp-1",
+              status: "draft",
+              sourceType: "csv",
+              fileName: "menu.csv",
+              items: [
+                {
+                  id: "d1",
+                  name: "Veg Samosa",
+                  shortName: "Samosa",
+                  category: "Tandoor",
+                  priceMinor: 4000,
+                  currency: "INR",
+                  confidence: { name: 1, shortName: 1, category: 1, price: 1, overall: 1 },
+                },
+              ],
+            },
+            201,
+          );
+        }
+        if (url.includes("/admin/api/menu-import/imp-1/commit")) {
+          committed = true;
+          return jsonResponse(
+            {
+              importId: "imp-1",
+              committedAt: "2026-09-16T00:00:00.000Z",
+              categories: [{ id: "tandoor", name: "Tandoor" }],
+              items: [{ id: "3", name: "Veg Samosa", shortName: "Samosa", categoryId: "tandoor", price: { id: "p3", priceMinor: 4000, currency: "INR" } }],
+            },
+            201,
+          );
+        }
+        if (committed && url.includes("/admin/api/menu/items") && !url.includes("price")) {
+          return jsonResponse([...ITEMS, item({ id: "3", name: "Veg Samosa", shortName: "Samosa", categoryId: "tandoor" })]);
+        }
+        return undefined;
+      },
+    });
+    renderMenu();
+    await screen.findByTestId("menu-table");
+
+    await userEvent.click(screen.getByTestId("menu-import-link"));
+    await userEvent.upload(screen.getByTestId("menu-import-file-input"), new File(["name,price\nSamosa,40"], "menu.csv", { type: "text/csv" }));
+    await userEvent.click(await screen.findByTestId("menu-import-row-d1-reviewed"));
+    await userEvent.click(screen.getByTestId("menu-import-commit"));
+
+    expect(await screen.findByTestId("menu-item-row-3")).toBeTruthy();
+    expect(screen.queryByTestId("menu-import-dialog")).toBeNull();
+    expect(screen.getByTestId("toast-success").textContent).toContain("1 item added to your menu");
   });
 
   it("opens the item drawer when a row is clicked, and Add Item opens it in create mode", async () => {
