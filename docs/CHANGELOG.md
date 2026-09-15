@@ -7,6 +7,10 @@ with the payments epic.
 ## [Unreleased]
 
 ### Fixed
+- KDS on phones and tablets (#232): below `md` the expo screen's
+  Waiting-on panel stacks under the expo rail instead of squeezing it to
+  ~90 px, and the header's station / expo / all-day / bumped tabs wrap.
+  Station and bumped ticket lanes already scrolled sideways.
 - POS table map header on a phone (#206): the actions wrap onto their own
   row, button labels stay on one line, and Refresh is no longer pushed
   off-screen.
