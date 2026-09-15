@@ -25,6 +25,8 @@ export class AdminApiError extends Error {
     message: string,
     readonly status: number,
     readonly code?: string,
+    /** The whole error envelope, for errors that carry detail next to code/message (e.g. duplicate_items' `duplicates`). */
+    readonly details?: Record<string, unknown>,
   ) {
     super(message);
   }
@@ -42,8 +44,8 @@ export async function adminApi<T>(path: string, init?: RequestInit): Promise<T> 
   }
   const body: unknown = res.status === 204 ? null : await res.json().catch(() => null);
   if (!res.ok) {
-    const error = (body as { error?: { code?: string; message?: string } } | null)?.error;
-    throw new AdminApiError(error?.message ?? "The request failed", res.status, error?.code);
+    const error = (body as { error?: { code?: string; message?: string } & Record<string, unknown> } | null)?.error;
+    throw new AdminApiError(error?.message ?? "The request failed", res.status, error?.code, error);
   }
   return body as T;
 }
@@ -115,6 +117,14 @@ export function updateMenuImportItem(
   });
 }
 
+// Drops a draft row before commit, e.g. one already on the menu (issue #247).
+export function removeMenuImportItem(importId: string, itemId: string): Promise<MenuImportDraft> {
+  return adminApi<MenuImportDraft>(`menu-import/${importId}`, {
+    method: "PATCH",
+    body: JSON.stringify({ items: [], removeIds: [itemId] }),
+  });
+}
+
 export interface MenuImportCommitResult {
   importId: string;
   committedAt: string;
@@ -183,6 +193,11 @@ export function updateMenuItem(itemId: string, input: UpdateItemInput): Promise<
 
 export function setItemAvailability(itemId: string, available: boolean): Promise<ItemView> {
   return adminApi<ItemView>(`menu/items/${itemId}/availability`, { method: "PATCH", body: JSON.stringify({ available }) });
+}
+
+// Issue #248: the backend archives rather than deletes, so past bills keep the item.
+export function deleteMenuItem(itemId: string): Promise<null> {
+  return adminApi<null>(`menu/items/${itemId}`, { method: "DELETE" });
 }
 
 export function addVariant(itemId: string, name: string): Promise<ItemView> {

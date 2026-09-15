@@ -54,8 +54,8 @@ export const CONFIDENCE_LABEL: Record<ConfidenceLevel, string> = {
   low: "Low confidence",
 };
 
-/** Extensions the backend's resolveSourceType accepts - anything else 400s. */
-const ACCEPTED_EXTENSIONS = [".csv", ".xlsx", ".jpg", ".jpeg", ".png", ".pdf"];
+/** Extensions the backend can actually read. Photos and PDFs aren't read yet (issue #246), so they're refused here. */
+const ACCEPTED_EXTENSIONS = [".csv", ".xlsx"];
 
 export const MENU_IMPORT_ACCEPT = ACCEPTED_EXTENSIONS.join(",");
 
@@ -77,6 +77,25 @@ export function majorStringToPriceMinor(value: string): number | null {
 
 export function reviewedCount(reviewed: ReadonlySet<string>, items: readonly MenuImportItem[]): number {
   return items.filter((item) => reviewed.has(item.id)).length;
+}
+
+export type DuplicateReason = "on_menu" | "repeated";
+
+export const DUPLICATE_LABEL: Record<DuplicateReason, string> = {
+  on_menu: "Already on your menu",
+  repeated: "In this import more than once",
+};
+
+/** Reads a 409 duplicate_items error's `duplicates` list (issue #247) - untrusted JSON, so each entry is checked. */
+export function duplicateReasons(details: unknown): Map<string, DuplicateReason> {
+  const list = (details as { duplicates?: unknown } | null | undefined)?.duplicates;
+  const reasons = new Map<string, DuplicateReason>();
+  if (!Array.isArray(list)) return reasons;
+  for (const entry of list) {
+    const { id, reason } = (entry ?? {}) as { id?: unknown; reason?: unknown };
+    if (typeof id === "string" && (reason === "on_menu" || reason === "repeated")) reasons.set(id, reason);
+  }
+  return reasons;
 }
 
 /** Commit stays locked until every drafted item has been looked at - "at least reviewed". */

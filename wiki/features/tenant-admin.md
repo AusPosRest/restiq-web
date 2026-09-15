@@ -102,6 +102,25 @@ story. Backend counterpart: `restiq-backend/wiki/features/tenant-admin.md`.
   same call, so the checklist reflects it on return - no separate write from
   here). A draft with zero extracted items shows an empty state with a
   restart action rather than a bare table.
+- **From the Menu page (issue #239):** the header's **Import** button and the
+  empty state's **Import menu** open the same `MenuImport` in a dialog over
+  `/admin/menu` instead of navigating away. With `onCommitted(itemCount)` set,
+  commit skips the onboarding success screen. The Menu page then closes the
+  dialog, refetches items and categories (an import can create categories),
+  and shows a success toast.
+- **Photos and PDFs (issue #246):** the backend has no vision/OCR reader, and
+  used to answer every image or PDF with the same 3 sample items. It now
+  refuses them (422 `extraction_unavailable`), and `isAcceptedMenuFile` only
+  takes `.csv` / `.xlsx`, with copy pointing at the sample spreadsheet.
+- **Clashes on commit (issue #247):** commit checks the draft against live
+  menu items and against itself first, and answers 409 `duplicate_items` with
+  a message naming each item plus a `duplicates` list (id, name, category,
+  reason). The table flags those rows, and every row has a Remove button
+  (`PATCH ... { items: [], removeIds: [id] }`).
+- **Deleting items (issue #248, CAP-4):** the item drawer's Delete (with a
+  confirm step) calls `DELETE /admin/api/menu/items/:id`. The backend archives
+  (`menu_items.archived_at`), so past bills keep the item; menu, POS, QR and
+  kiosk reads skip archived items, and the name can be reused.
 - **Multipart uploads through the proxy:** `src/app/admin/api/[...path]/route.ts`
   previously forced every non-GET request to `application/json` and read the
   body as text, which would have silently corrupted a binary file upload. It

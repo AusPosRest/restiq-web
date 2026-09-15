@@ -77,6 +77,41 @@ function renderDrawer(props: Partial<React.ComponentProps<typeof ItemDrawer>> = 
   return { onClose, onSaved };
 }
 
+describe("ItemDrawer delete (issue #248)", () => {
+  beforeEach(() => vi.unstubAllGlobals());
+  afterEach(cleanup);
+
+  it("asks for confirmation, then deletes through DELETE and hands the item back", async () => {
+    const fetchMock = stubFetch({ onPost: (url) => (url.endsWith("/admin/api/menu/items/item-1") ? new Response(null, { status: 204 }) : undefined) });
+    const onDeleted = vi.fn();
+    renderDrawer({ onDeleted });
+
+    await userEvent.click(screen.getByTestId("item-delete"));
+    expect(screen.getByTestId("item-delete-confirm").textContent).toContain("Paneer Tikka");
+    await userEvent.click(screen.getByTestId("item-delete-confirm-button"));
+
+    await waitFor(() => expect(onDeleted).toHaveBeenCalledWith(expect.objectContaining({ id: "item-1" })));
+    const call = fetchMock.mock.calls.find(([, init]) => init?.method === "DELETE");
+    expect(String(call?.[0])).toBe("/admin/api/menu/items/item-1");
+  });
+
+  it("cancelling the confirmation deletes nothing", async () => {
+    const fetchMock = stubFetch();
+    renderDrawer({ onDeleted: vi.fn() });
+
+    await userEvent.click(screen.getByTestId("item-delete"));
+    await userEvent.click(screen.getByTestId("item-delete-cancel"));
+    expect(screen.queryByTestId("item-delete-confirm")).toBeNull();
+    expect(fetchMock.mock.calls.some(([, init]) => init?.method === "DELETE")).toBe(false);
+  });
+
+  it("does not offer Delete while creating a new item", () => {
+    stubFetch();
+    renderDrawer({ item: null });
+    expect(screen.queryByTestId("item-delete")).toBeNull();
+  });
+});
+
 describe("ItemDrawer open/close and field editing", () => {
   beforeEach(() => vi.unstubAllGlobals());
   afterEach(cleanup);
