@@ -6,6 +6,9 @@ with the payments epic.
 
 ## [Unreleased]
 
+### Changed
+- **Home page is now a marketing landing page** (#262): what RESTIQ is, the five surfaces (tablet POS, kitchen display, QR ordering, kiosk, owner console), offline-first operation, payments, the four go-live steps and an FAQ, with calls to action into the live demo. The demo portal that used to be the home page (sign-in doors, demo logins, live devices) moved unchanged to **/demo** and is linked from the nav, hero, final call to action and footer. The install-app banner no longer shows on the marketing page.
+
 ### Fixed
 - POS text overflow (#240):
   - **Payment method buttons** (settle and counter) now fit as many as the column holds - two per row in the counter's narrow tender column - so "Card terminal" / "External" no longer spill past their buttons.

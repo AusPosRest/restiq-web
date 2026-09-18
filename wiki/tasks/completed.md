@@ -1,5 +1,6 @@
 # Completed
 
+- **2026-09-18** - Marketing landing page (issue #262): new static `src/app/page.tsx` (fonts in `landing-fonts.ts` so tests can mock next/font), demo portal moved to `src/app/demo/` with its test, install banner skips `/`. Tests in `page.test.tsx`, `demo/page.test.tsx`, `install-state.test.ts`.
 - **2026-09-15** - Fix: POS text overflow (issue #240). `tender-keypad.tsx`'s method grid is
   `repeat(auto-fit,minmax(6.5rem,1fr))` (two per row in the counter's w-80 column); `bill-summary.tsx`
   lines get `pr-3` column padding and a no-wrap amount so long names wrap.

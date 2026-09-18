@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vitest";
 import { installMode, isIos, type InstallEnv } from "./install-state";
 
-const base: InstallEnv = { standalone: false, ios: false, promptReady: false, dismissed: false, path: "/" };
+const base: InstallEnv = { standalone: false, ios: false, promptReady: false, dismissed: false, path: "/pos/login" };
 
 describe("installMode", () => {
   it("offers the browser prompt on Android/Chrome once it's ready", () => {
@@ -17,6 +17,7 @@ describe("installMode", () => {
     expect(installMode({ ...base, promptReady: true, standalone: true })).toBeNull();
     expect(installMode({ ...base, ios: true, dismissed: true })).toBeNull();
     expect(installMode({ ...base, ios: true, path: "/qr/kiosk/out-1" })).toBeNull();
+    expect(installMode({ ...base, ios: true, path: "/" })).toBeNull(); // public marketing page (issue #262)
   });
 });
 
