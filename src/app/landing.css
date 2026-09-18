@@ -1,5 +1,7 @@
 /* Motion for the marketing page (#262). All of it is off with reduced motion. */
 
+@keyframes lp-progress { from { transform: scaleX(0); } to { transform: scaleX(1); } }
+@keyframes lp-swap { from { opacity: 0; transform: translateY(12px) scale(0.985); } to { opacity: 1; transform: none; } }
 @keyframes lp-rise { from { opacity: 0; transform: translateY(22px); } to { opacity: 1; transform: none; } }
 @keyframes lp-word { from { opacity: 0; transform: translateY(0.4em); filter: blur(6px); } to { opacity: 1; transform: none; filter: none; } }
 @keyframes lp-slide { from { opacity: 0; transform: translateX(-40px) rotate(-4deg); } to { opacity: 1; } }
@@ -19,6 +21,8 @@
   75%, 95% { border-color: #3b82f6; background: #eff6ff; color: #1d4ed8; }
 }
 
+.lp-progress { animation: lp-progress 7s linear both; }
+.lp-swap { animation: lp-swap 0.5s cubic-bezier(0.2, 0.7, 0.2, 1) both; }
 .lp-word { display: inline-block; animation: lp-word 0.7s cubic-bezier(0.2, 0.7, 0.2, 1) both; animation-delay: calc(var(--i) * 60ms + 100ms); }
 .lp-fade { animation: lp-rise 0.8s cubic-bezier(0.2, 0.7, 0.2, 1) both; animation-delay: var(--d, 0ms); }
 .lp-ticket { animation: lp-slide 0.6s cubic-bezier(0.2, 0.7, 0.2, 1) both; }
@@ -41,7 +45,7 @@
 .lp-reveal[data-state="in"] .lp-bar-x { transform-origin: left; animation: lp-fill 1.4s cubic-bezier(0.2, 0.7, 0.2, 1) both; animation-delay: 200ms; }
 
 @media (prefers-reduced-motion: reduce) {
-  .lp-word, .lp-fade, .lp-ticket, .lp-line, .lp-float, .lp-float-late, .lp-marquee, .lp-glow, .lp-ring, .lp-age, .lp-table,
+  .lp-progress, .lp-swap, .lp-word, .lp-fade, .lp-ticket, .lp-line, .lp-float, .lp-float-late, .lp-marquee, .lp-glow, .lp-ring, .lp-age, .lp-table,
   .lp-reveal .lp-stagger, .lp-reveal .lp-printed, .lp-reveal .lp-bar, .lp-reveal .lp-bar-x { animation: none !important; }
   .lp-reveal { transition: none; }
 }

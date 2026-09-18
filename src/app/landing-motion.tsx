@@ -2,6 +2,7 @@
 // Animated pieces of the marketing page (#262). Everything renders complete on
 // the server; motion only starts in the browser, and never with reduced motion.
 import { useEffect, useRef, useState } from "react";
+import { KioskMock, KitchenMock, OwnerMock, PosMock, QrMock } from "./landing-mockups";
 
 const M = "font-[family-name:var(--font-mono)]";
 
@@ -231,6 +232,119 @@ export function UpiPay() {
         <div className="text-[10px] tracking-[0.16em] text-stone-500">SCAN TO PAY · UPI</div>
         <div className="font-semibold text-[#17140f]">BILL A1-0418 · ₹1,550</div>
         <div className={paid ? "text-emerald-700" : "text-stone-500"}>{paid ? "PAID · confirmed by provider" : "Waiting for UPI…"}</div>
+      </div>
+    </div>
+  );
+}
+
+const TOUR = [
+  {
+    key: "pos",
+    tab: "Tablet POS",
+    title: "Take orders at the table or the counter",
+    text: "A live table map shows who's seated, who's ordered and who's waiting on the bill. Order by seat, split any way, and settle without walking to the till.",
+    points: ["Seat-level ordering and split bills", "Counter mode with tokens", "Manager PIN approvals for voids and discounts"],
+    Mock: PosMock,
+    dark: false,
+  },
+  {
+    key: "kitchen",
+    tab: "Kitchen display",
+    title: "Tickets that tell the kitchen what's late",
+    text: "Every item goes to its station and ages blue, yellow, then red. Expo sees what each table is still waiting on, so food leaves the pass together.",
+    points: ["Per-station routing", "Bump, recall and all-day counts", "Expo view of what's missing"],
+    Mock: KitchenMock,
+    dark: true,
+  },
+  {
+    key: "qr",
+    tab: "QR ordering",
+    title: "Guests order together from their phones",
+    text: "Scan the table QR, browse a photo menu and add to one shared cart. Every line reaches the kitchen with the guest's name on it.",
+    points: ["No app to install", "One cart for the whole table", "Request the bill from the phone"],
+    Mock: QrMock,
+    dark: false,
+  },
+  {
+    key: "kiosk",
+    tab: "Self-order kiosk",
+    title: "A kiosk that takes the queue",
+    text: "Big photo tiles, one-tap add and card payment at the kiosk. Guests walk away with a token receipt while the order is already on the kitchen screen.",
+    points: ["Photo menu with categories", "Pay by card on the kiosk", "Token receipt printed on the spot"],
+    Mock: KioskMock,
+    dark: false,
+  },
+  {
+    key: "owner",
+    tab: "Owner console",
+    title: "Run every outlet from a browser",
+    text: "Menu, floor plan, devices, staff PINs and reports for all your outlets in one place - with a go-live checklist for the first day.",
+    points: ["Menu import from a spreadsheet", "Devices join by scanning a QR", "Sales and reports across outlets"],
+    Mock: OwnerMock,
+    dark: false,
+  },
+] as const;
+
+// Tabs across the five surfaces; advances on its own until someone picks one.
+export function ProductTour() {
+  const [active, setActive] = useState(0);
+  const [auto, setAuto] = useState(true);
+  useEffect(() => {
+    if (!auto || reducedMotion()) return;
+    const id = window.setTimeout(() => setActive((a) => (a + 1) % TOUR.length), 7000);
+    return () => window.clearTimeout(id);
+  }, [active, auto]);
+  const item = TOUR[active];
+  return (
+    <div>
+      <div role="tablist" aria-label="RESTIQ surfaces" className="-mx-4 flex gap-2 overflow-x-auto px-4 pb-1 sm:mx-0 sm:flex-wrap sm:px-0">
+        {TOUR.map((t, i) => (
+          <button
+            key={t.key}
+            type="button"
+            role="tab"
+            id={`tour-tab-${t.key}`}
+            aria-selected={i === active}
+            aria-controls="tour-panel"
+            data-testid={`landing-tour-${t.key}`}
+            onClick={() => {
+              setActive(i);
+              setAuto(false);
+            }}
+            className={`relative shrink-0 overflow-hidden rounded-full border px-4 py-2 text-sm font-semibold transition focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--amber)] focus-visible:ring-offset-2 ${
+              i === active ? "border-[var(--ink)] bg-[var(--ink)] text-white" : "border-[var(--line)] bg-white text-[var(--ink-soft)] hover:border-[var(--ink)] hover:text-[var(--ink)]"
+            }`}
+          >
+            {t.tab}
+            {i === active && auto && <span key={active} className="lp-progress absolute inset-x-0 bottom-0 h-0.5 origin-left bg-[var(--amber)]" />}
+          </button>
+        ))}
+      </div>
+      <div id="tour-panel" role="tabpanel" aria-labelledby={`tour-tab-${item.key}`} className="mt-8 grid items-stretch gap-8 lg:grid-cols-[1fr_1.7fr]">
+        <div key={item.key} className="lp-swap flex flex-col justify-center">
+          <h3 className="font-[family-name:var(--font-display)] text-3xl leading-tight font-extrabold tracking-[-0.02em] [font-stretch:118%] text-balance">{item.title}</h3>
+          <p className="mt-4 text-[17px] leading-relaxed text-[var(--ink-soft)]">{item.text}</p>
+          <ul className="mt-6 space-y-2.5">
+            {item.points.map((p) => (
+              <li key={p} className="flex gap-3 text-[15px]">
+                <span aria-hidden="true" className="mt-0.5 grid size-5 shrink-0 place-items-center rounded-full bg-amber-100 text-[11px] text-[var(--amber-ink)]">
+                  ✓
+                </span>
+                {p}
+              </li>
+            ))}
+          </ul>
+        </div>
+        <div
+          className={`relative min-h-[380px] overflow-hidden rounded-[28px] border sm:min-h-[440px] ${
+            item.dark ? "border-transparent bg-[var(--night)]" : "border-[var(--line)] bg-[radial-gradient(circle_at_30%_20%,#fff7e6,transparent_60%),linear-gradient(#f1efeb,#e9e6e1)]"
+          }`}
+        >
+          <div aria-hidden="true" className="absolute inset-0 bg-[radial-gradient(#00000012_1px,transparent_1px)] bg-[size:18px_18px]" />
+          <div key={item.key} className="lp-swap relative h-full">
+            <item.Mock />
+          </div>
+        </div>
       </div>
     </div>
   );

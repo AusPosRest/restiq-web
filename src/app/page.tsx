@@ -4,7 +4,8 @@
 import type { Metadata } from "next";
 import Link from "next/link";
 import { body, display, mono } from "./landing-fonts";
-import { HeroScene, Reveal, UpiPay } from "./landing-motion";
+import { DrawerMock, FloorMini, PinMini, QrMini, SheetMini, TerminalMock } from "./landing-mockups";
+import { HeroScene, ProductTour, Reveal, UpiPay } from "./landing-motion";
 import "./landing.css";
 
 export const metadata: Metadata = {
@@ -186,107 +187,19 @@ function SectionHead({ eyebrow, title, intro, dark = false }: Readonly<{ eyebrow
   );
 }
 
-function Card({ label, title, text, className = "", children }: Readonly<{ label: string; title: string; text: string; className?: string; children: React.ReactNode }>) {
-  return (
-    <Reveal
-      as="li"
-      className={`group flex flex-col overflow-hidden rounded-3xl border border-[var(--line)] bg-white transition-[box-shadow,translate] duration-300 hover:-translate-y-1 hover:shadow-[0_24px_50px_-24px_rgba(23,20,15,0.35)] ${className}`}
-    >
-      <div className="p-7 pb-5">
-        <p className={`${M} text-[11px] uppercase tracking-[0.14em] text-[var(--amber-ink)]`}>{label}</p>
-        <h3 className={`${D} mt-2 text-2xl leading-tight font-bold`}>{title}</h3>
-        <p className="mt-2.5 text-[15px] leading-relaxed text-[var(--ink-soft)]">{text}</p>
-      </div>
-      <div aria-hidden="true" className="mt-auto border-t border-[var(--line)] bg-[#f4f3f0] px-7 py-6">
-        {children}
-      </div>
-    </Reveal>
-  );
-}
-
 function Product() {
   return (
-    <section id="product" className="mx-auto max-w-6xl scroll-mt-20 px-4 py-24 sm:px-6 lg:py-32">
-      <SectionHead
-        eyebrow="The platform"
-        title="Every station in the restaurant. One system."
-        intro="Front of house, the kitchen, your guests' phones and the back office all work from the same live orders - no double entry, no lost tickets."
-      />
-      <ul className="mt-14 grid gap-5 md:grid-cols-2 lg:grid-cols-6">
-        <Card
-          label="Tablet POS"
-          title="Take orders at the table or the counter"
-          text="Table map, seat-level ordering, split bills and manager PIN approvals. Counter mode rings up, settles and issues a token in one screen."
-          className="lg:col-span-3"
-        >
-          <div className="grid grid-cols-3 gap-2.5">
-            {["T1", "T2", "T3", "T4", "T5", "T6"].map((t, i) => (
-              <div key={t} style={{ "--i": i } as React.CSSProperties} className={`${M} lp-table flex h-16 items-center justify-center rounded-xl border-2 border-stone-200 bg-white text-sm font-semibold text-stone-400`}>
-                {t}
-              </div>
-            ))}
-          </div>
-          <div className={`${M} mt-3 flex flex-wrap gap-x-4 gap-y-1 text-[10px] uppercase tracking-[0.12em] text-stone-500`}>
-            <span><i className="mr-1 inline-block size-2 rounded-full bg-emerald-500" />Seated</span>
-            <span><i className="mr-1 inline-block size-2 rounded-full bg-[var(--amber)]" />Ordered</span>
-            <span><i className="mr-1 inline-block size-2 rounded-full bg-blue-500" />Bill</span>
-          </div>
-        </Card>
-        <Card
-          label="Kitchen display"
-          title="Tickets that tell the kitchen what's late"
-          text="Every item routes to its station and ages blue, then yellow, then red. Bump, recall, and an expo view of what each order is still waiting on."
-          className="lg:col-span-3"
-        >
-          <div className="flex gap-2.5">
-            {[0, 1, 2].map((i) => (
-              <div key={i} className="flex-1 rounded-md bg-white shadow-sm">
-                <div style={{ "--i": i } as React.CSSProperties} className="lp-age h-2 rounded-t-md" />
-                <div className="space-y-1.5 p-3">
-                  <div className="h-1.5 w-3/4 rounded bg-stone-300" />
-                  <div className="h-1.5 w-1/2 rounded bg-stone-200" />
-                  <div className="h-1.5 w-2/3 rounded bg-stone-200" />
-                  {i !== 1 && <div className="h-1.5 w-1/3 rounded bg-stone-200" />}
-                </div>
-              </div>
-            ))}
-          </div>
-        </Card>
-        <Card label="QR ordering" title="Guests order together" text="Scan the table QR, add from your own phone, and every line reaches the kitchen with the guest's name on it." className="lg:col-span-2">
-          <div className="space-y-2">
-            {[
-              ["R", "Rahul", "Chicken biryani"],
-              ["A", "Anna", "Paneer tikka"],
-              ["S", "Sam", "Mango lassi"],
-            ].map(([who, name, item], i) => (
-              <div key={item} style={{ "--i": i } as React.CSSProperties} className="lp-stagger flex items-center gap-2.5 rounded-xl bg-white px-3 py-2.5 text-sm shadow-sm">
-                <span className="grid size-6 place-items-center rounded-full bg-[var(--ink)] text-[11px] font-bold text-white">{who}</span>
-                <span className="flex-1">{item}</span>
-                <span className="text-xs text-stone-400">{name}</span>
-              </div>
-            ))}
-          </div>
-        </Card>
-        <Card label="Self-order kiosk" title="A kiosk that takes the queue" text="Photo menu, one-tap add, pay by card at the kiosk and walk away with a token receipt." className="lg:col-span-2">
-          <div className="rounded-2xl bg-gradient-to-br from-amber-400 via-orange-500 to-red-500 p-5 text-white">
-            <p className={`${M} text-[9px] tracking-[0.2em] opacity-80`}>SELF-SERVICE KIOSK</p>
-            <p className={`${D} mt-1 text-2xl leading-tight font-extrabold`}>Hungry? Order here.</p>
-            <div className="lp-ring mt-4 inline-block rounded-full bg-white px-4 py-1.5 text-xs font-bold text-orange-700">Tap to start</div>
-          </div>
-        </Card>
-        <Card label="Owner console" title="Run every outlet from a browser" text="Menu, floor plan, devices, staff PINs and reports across all your outlets." className="lg:col-span-2">
-          <div className="flex h-24 items-end gap-2">
-            {[40, 62, 48, 75, 58, 92, 68].map((h, i) => (
-              <div key={i} style={{ height: `${h}%`, "--i": i } as React.CSSProperties} className={`lp-bar flex-1 rounded-t-md ${i === 5 ? "bg-[var(--amber)]" : "bg-stone-300"}`} />
-            ))}
-          </div>
-          <div className={`${M} mt-2 flex justify-between text-[10px] text-stone-500`}>
-            {["M", "T", "W", "T", "F", "S", "S"].map((d, i) => (
-              <span key={i} className="flex-1 text-center">{d}</span>
-            ))}
-          </div>
-        </Card>
-      </ul>
+    <section id="product" className="scroll-mt-16 bg-[var(--paper)]">
+      <div className="mx-auto max-w-6xl px-4 py-24 sm:px-6 lg:py-32">
+        <SectionHead
+          eyebrow="The platform"
+          title="Every station in the restaurant. One system."
+          intro="Front of house, the kitchen, your guests' phones and the back office all work from the same live orders - no double entry, no lost tickets."
+        />
+        <Reveal className="mt-12">
+          <ProductTour />
+        </Reveal>
+      </div>
     </section>
   );
 }
@@ -358,57 +271,67 @@ function Offline() {
 
 function Payments() {
   const rails = [
-    { label: "India", title: "UPI, confirmed", text: "A dynamic UPI QR on the bill, marked paid only when the payment provider confirms it." },
-    { label: "Cards", title: "Terminals, integrated or not", text: "Send the amount to an integrated terminal, or record a standalone terminal's payment with its reference number." },
-    { label: "Cash & splits", title: "A drawer that balances", text: "Split by seat or amount, blind counts at shift close, and over/short recorded - never edited afterwards." },
+    { label: "India", title: "UPI, confirmed", text: "A dynamic UPI QR on the bill, marked paid only when the payment provider confirms it.", art: <UpiPay /> },
+    { label: "Cards", title: "Terminals, integrated or not", text: "Send the amount to an integrated terminal, or record a standalone terminal's payment with its reference number.", art: <TerminalMock /> },
+    { label: "Cash & splits", title: "A drawer that balances", text: "Split by seat or amount, blind counts at shift close, and over/short recorded - never edited afterwards.", art: <DrawerMock /> },
   ];
   return (
-    <section id="payments" className="mx-auto max-w-6xl scroll-mt-20 px-4 py-24 sm:px-6 lg:py-32">
-      <div className="grid items-end gap-10 lg:grid-cols-[1.2fr_1fr]">
+    <section id="payments" className="scroll-mt-16 bg-[var(--paper)]">
+      <div className="mx-auto max-w-6xl px-4 py-24 sm:px-6 lg:py-32">
         <SectionHead
           eyebrow="Payments"
           title="Money you can trust at close."
           intro="Every electronic payment stays provisional until the provider says it's real - so the bills, the drawer and the bank all agree at the end of the night."
         />
-        <Reveal>
-          <UpiPay />
-        </Reveal>
+        <ul className="mt-14 grid gap-5 md:grid-cols-3">
+          {rails.map((rail) => (
+            <Reveal
+              as="li"
+              key={rail.title}
+              className="group flex flex-col overflow-hidden rounded-[28px] border border-[var(--line)] bg-white transition-[box-shadow,translate] duration-300 hover:-translate-y-1 hover:shadow-[0_30px_60px_-30px_rgba(23,20,15,0.45)]"
+            >
+              <div className="grid h-56 place-items-center bg-[radial-gradient(circle_at_50%_30%,#fff7e6,transparent_65%),linear-gradient(#f1efeb,#e9e6e1)] px-6">
+                <div className="w-full transition-transform duration-500 group-hover:scale-[1.04]">{rail.art}</div>
+              </div>
+              <div className="p-7">
+                <p className={`${M} text-[11px] uppercase tracking-[0.14em] text-[var(--amber-ink)]`}>{rail.label}</p>
+                <h3 className={`${D} mt-2 text-2xl font-bold`}>{rail.title}</h3>
+                <p className="mt-2.5 text-[15px] leading-relaxed text-[var(--ink-soft)]">{rail.text}</p>
+              </div>
+            </Reveal>
+          ))}
+        </ul>
+        <p className={`${M} mt-8 text-center text-[12px] text-[var(--ink-soft)]`}>GST tax invoices for India and Australia · GSTIN, ABN and FSSAI on every receipt</p>
       </div>
-      <ul className="mt-12 grid gap-5 md:grid-cols-3">
-        {rails.map((rail) => (
-          <Reveal as="li" key={rail.title} className="rounded-3xl border border-[var(--line)] bg-white p-7 transition-[box-shadow,translate] duration-300 hover:-translate-y-1 hover:shadow-[0_24px_50px_-24px_rgba(23,20,15,0.35)]">
-            <p className={`${M} text-[11px] uppercase tracking-[0.14em] text-[var(--amber-ink)]`}>{rail.label}</p>
-            <h3 className={`${D} mt-2 text-2xl font-bold`}>{rail.title}</h3>
-            <p className="mt-2.5 text-[15px] leading-relaxed text-[var(--ink-soft)]">{rail.text}</p>
-          </Reveal>
-        ))}
-      </ul>
-      <p className={`${M} mt-6 text-[12px] text-[var(--ink-soft)]`}>GST tax invoices for India and Australia · GSTIN, ABN and FSSAI on every receipt</p>
     </section>
   );
 }
 
 function Setup() {
   const steps = [
-    { title: "Import your menu", text: "Fill in the spreadsheet template or add items by hand - variants, modifiers and photos included." },
-    { title: "Draw your floor", text: "Drag tables onto each floor and set up your kitchen stations." },
-    { title: "Scan in your devices", text: "Every tablet, printer, kitchen screen and kiosk joins by scanning a QR code." },
-    { title: "Hand out PINs", text: "Staff sign in with a 4-digit PIN. You're open." },
+    { title: "Import your menu", text: "Fill in the spreadsheet template or add items by hand - variants, modifiers and photos included.", art: <SheetMini /> },
+    { title: "Draw your floor", text: "Drag tables onto each floor and set up your kitchen stations.", art: <FloorMini /> },
+    { title: "Scan in your devices", text: "Every tablet, printer, kitchen screen and kiosk joins by scanning a QR code.", art: <QrMini /> },
+    { title: "Hand out PINs", text: "Staff sign in with a 4-digit PIN. You're open.", art: <PinMini /> },
   ];
   return (
-    <section id="setup" className="border-y border-[var(--line)] bg-white">
-      <div className="mx-auto max-w-6xl px-4 py-24 sm:px-6 lg:py-32">
-        <SectionHead eyebrow="Going live" title="Open on RESTIQ in an afternoon." intro="The owner console walks you through a go-live checklist. Four steps and your first order is on the kitchen screen." />
+    <section id="setup" className="relative overflow-hidden bg-[var(--night)] text-stone-100">
+      <div aria-hidden="true" className="lp-glow pointer-events-none absolute -left-40 bottom-0 h-[420px] w-[640px] rounded-full bg-[radial-gradient(closest-side,rgba(245,158,11,0.2),transparent)] blur-2xl" />
+      <div className="relative mx-auto max-w-6xl px-4 py-24 sm:px-6 lg:py-32">
+        <SectionHead dark eyebrow="Going live" title="Open on RESTIQ in an afternoon." intro="The owner console walks you through a go-live checklist. Four steps and your first order is on the kitchen screen." />
         <Reveal className="relative mt-14">
-          <div aria-hidden="true" className="absolute left-0 right-0 top-[15px] hidden h-0.5 bg-[var(--line)] lg:block">
+          <div aria-hidden="true" className="absolute left-0 right-0 top-[15px] hidden h-0.5 bg-white/10 lg:block">
             <div className="lp-bar-x h-full bg-[var(--amber)]" />
           </div>
-          <ol className="grid gap-10 sm:grid-cols-2 lg:grid-cols-4">
+          <ol className="grid gap-5 sm:grid-cols-2 lg:grid-cols-4">
             {steps.map((step, i) => (
-              <li key={step.title} style={{ "--i": i } as React.CSSProperties} className="lp-stagger relative">
-                <span className={`${M} relative grid size-8 place-items-center rounded-full bg-[var(--ink)] text-[12px] font-semibold text-[var(--amber)]`}>{i + 1}</span>
-                <h3 className={`${D} mt-5 text-xl font-bold`}>{step.title}</h3>
-                <p className="mt-2 text-[15px] leading-relaxed text-[var(--ink-soft)]">{step.text}</p>
+              <li key={step.title} style={{ "--i": i } as React.CSSProperties} className="lp-stagger relative flex flex-col">
+                <span className={`${M} relative grid size-8 place-items-center rounded-full bg-[var(--amber)] text-[12px] font-bold text-[var(--ink)]`}>{i + 1}</span>
+                <div className="mt-5 flex-1 rounded-2xl border border-white/10 bg-white/[0.04] p-4 transition hover:border-white/25 hover:bg-white/[0.07]">
+                  <div className="rounded-xl bg-[#f1efeb] p-2">{step.art}</div>
+                  <h3 className={`${D} mt-4 text-xl font-bold`}>{step.title}</h3>
+                  <p className="mt-2 text-[15px] leading-relaxed text-stone-400">{step.text}</p>
+                </div>
               </li>
             ))}
           </ol>
@@ -443,16 +366,21 @@ const FAQS = [
 
 function Faq() {
   return (
-    <section id="faq" className="mx-auto max-w-3xl scroll-mt-20 px-4 py-24 sm:px-6">
+    <section id="faq" className="mx-auto grid max-w-6xl scroll-mt-16 gap-12 px-4 py-24 sm:px-6 lg:grid-cols-[1fr_1.6fr] lg:py-32">
       <Reveal>
-        <h2 className={`${D} text-[2.1rem] font-extrabold sm:text-5xl`}>Questions, answered.</h2>
+        <p className={`${M} text-[11px] uppercase tracking-[0.16em] text-[var(--amber-ink)]`}>FAQ</p>
+        <h2 className={`${D} mt-3 text-[2.1rem] leading-[1.05] font-extrabold sm:text-5xl`}>Questions, answered.</h2>
+        <p className="mt-5 text-lg leading-relaxed text-[var(--ink-soft)]">Still wondering? The live demo has every screen signed in and ready to click.</p>
+        <Link href="/demo" data-testid="landing-faq-demo" className={`mt-6 inline-flex rounded-full border border-[var(--ink)] px-5 py-2.5 text-sm font-semibold transition hover:bg-[var(--ink)] hover:text-white ${FOCUS}`}>
+          Open the demo &rarr;
+        </Link>
       </Reveal>
-      <div className="mt-10 divide-y divide-[var(--line)] border-y border-[var(--line)]">
+      <div className="space-y-3">
         {FAQS.map((item, i) => (
-          <details key={item.q} className="group py-5">
+          <details key={item.q} className="group rounded-2xl border border-[var(--line)] bg-white px-6 py-5 transition open:shadow-[0_20px_40px_-28px_rgba(23,20,15,0.4)]">
             <summary data-testid={`landing-faq-${i}`} className={`flex cursor-pointer list-none items-center justify-between gap-4 rounded text-lg font-semibold ${FOCUS}`}>
               {item.q}
-              <span className="grid size-8 shrink-0 place-items-center rounded-full border border-[var(--line)] text-xl leading-none text-[var(--amber-ink)] transition-transform duration-300 group-open:rotate-45 group-hover:border-[var(--ink)]" aria-hidden="true">
+              <span className="grid size-8 shrink-0 place-items-center rounded-full bg-[var(--paper)] text-xl leading-none text-[var(--amber-ink)] transition-transform duration-300 group-open:rotate-45 group-open:bg-[var(--amber)] group-open:text-[var(--ink)]" aria-hidden="true">
                 +
               </span>
             </summary>
@@ -508,21 +436,35 @@ const FOOTER_LINKS = [
 
 function SiteFooter() {
   return (
-    <footer className="border-t border-[var(--line)] bg-white">
-      <div className="mx-auto flex max-w-6xl flex-col gap-8 px-4 py-12 sm:px-6 md:flex-row md:items-start md:justify-between">
-        <div>
-          <Logo />
-          <p className="mt-3 max-w-xs text-sm text-[var(--ink-soft)]">Restaurant POS for India and Australia, built to keep running offline.</p>
+    <footer className="bg-[var(--night)] text-stone-300">
+      <div className="mx-auto flex max-w-6xl flex-col gap-10 px-4 py-16 sm:px-6 md:flex-row md:items-start md:justify-between">
+        <div className="max-w-xs">
+          <span className="text-white">
+            <Logo />
+          </span>
+          <p className="mt-4 text-sm leading-relaxed text-stone-400">Restaurant POS for India and Australia, built to keep running offline.</p>
+          <p className={`${M} mt-6 inline-flex items-center gap-2 rounded-full border border-white/10 px-3 py-1 text-[10px] uppercase tracking-[0.14em] text-stone-400`}>
+            <span className="size-1.5 rounded-full bg-emerald-400" aria-hidden="true" />
+            Pilots open · India &amp; Australia
+          </p>
         </div>
-        <nav aria-label="Sign in and demo" className="grid grid-cols-2 gap-x-10 gap-y-3 text-sm sm:grid-cols-3">
-          {FOOTER_LINKS.map((link) => (
-            <Link key={link.href} href={link.href} data-testid={link.testId} className={`rounded text-[var(--ink-soft)] hover:text-[var(--ink)] ${FOCUS}`}>
-              {link.label}
-            </Link>
-          ))}
+        <nav aria-label="Sign in and demo">
+          <p className={`${M} text-[11px] uppercase tracking-[0.16em] text-stone-500`}>Sign in &amp; demo</p>
+          <div className="mt-4 grid grid-cols-2 gap-x-12 gap-y-3 text-sm sm:grid-cols-3">
+            {FOOTER_LINKS.map((link) => (
+              <Link key={link.href} href={link.href} data-testid={link.testId} className={`rounded hover:text-white ${FOCUS}`}>
+                {link.label}
+              </Link>
+            ))}
+          </div>
         </nav>
       </div>
-      <p className={`${M} border-t border-[var(--line)] py-5 text-center text-[11px] text-[var(--ink-soft)]`}>© 2026 RESTIQ</p>
+      <div className="overflow-hidden border-t border-white/10">
+        <p aria-hidden="true" className={`${D} -mb-[0.22em] select-none text-center text-[22vw] leading-none font-extrabold text-white/[0.06] lg:text-[15rem]`}>
+          RESTIQ
+        </p>
+      </div>
+      <p className={`${M} border-t border-white/10 py-5 text-center text-[11px] text-stone-500`}>© 2026 RESTIQ</p>
     </footer>
   );
 }
