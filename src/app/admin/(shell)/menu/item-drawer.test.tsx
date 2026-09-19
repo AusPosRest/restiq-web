@@ -262,11 +262,10 @@ describe("ItemDrawer price - current vs pending distinction", () => {
   beforeEach(() => vi.unstubAllGlobals());
   afterEach(cleanup);
 
-  it("fetches and shows the current dine-in and delivery price", async () => {
+  it("fetches and shows one current price - no delivery price (#272)", async () => {
     stubFetch();
     renderDrawer();
-    await waitFor(() => expect(screen.getByTestId("item-base-price-current").textContent).toContain("₹180"));
-    expect(screen.getByTestId("item-base-price-current").textContent).toContain("₹200");
+    await waitFor(() => expect(screen.getByTestId("item-base-price-current").textContent).toBe("₹180"));
     expect(screen.queryByTestId("item-base-price-pending")).toBeNull();
   });
 
@@ -305,7 +304,7 @@ describe("ItemDrawer price - current vs pending distinction", () => {
     );
 
     const priceCalls = fetchMock.mock.calls.filter(([url]) => url === "/admin/api/menu/items/item-1/prices");
-    expect(priceCalls).toHaveLength(2); // one per channel (dine_in, delivery)
+    expect(priceCalls).toHaveLength(1); // dine-in only; RESTIQ has no delivery price (#272)
     const [, init] = priceCalls[0] as [string, RequestInit];
     const sentBody = JSON.parse(init.body as string);
     expect(sentBody).toMatchObject({ channel: "dine_in", effectiveAt: `${futureYmd}T00:00:00.000Z`, reason: "Menu refresh" });
