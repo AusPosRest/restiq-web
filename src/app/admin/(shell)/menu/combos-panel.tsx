@@ -3,10 +3,11 @@
 // Owner Combos tab (restiq-web#264): the list of combos and the combo editor
 // drawer. A combo is built from slots - "pick 1 main from these", "pick 2
 // breads", or one fixed item - and saved whole (restiq-backend#160).
-import { Layers, Plus, Trash2 } from "lucide-react";
+import { ImagePlus, Layers, Plus, Trash2 } from "lucide-react";
 import { Dialog } from "radix-ui";
 import { useState } from "react";
 import { Button } from "@/components/ui/button";
+import { PHOTO_MAX_CHARS, photoToDataUrl } from "@/lib/photo";
 import { archiveCombo, saveCombo } from "../../api";
 import { ComboDraft, describeSlots, draftFromCombo, emptySlot, SlotDraft, toSaveComboInput, validateComboDraft } from "./combo-editor-state";
 import { CategoryView, ComboView, formatPriceMinor, ItemView } from "./menu-state";
@@ -52,6 +53,14 @@ export function CombosPanel({
                 onClick={() => setEditing(combo)}
                 className="flex w-full flex-wrap items-center gap-x-4 gap-y-1 px-4 py-3 text-left hover:bg-muted/40 focus:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-ring"
               >
+                {combo.photoUrl ? (
+                  // eslint-disable-next-line @next/next/no-img-element -- inline data: photo, nothing for next/image to optimise
+                  <img src={combo.photoUrl} alt="" className="size-10 shrink-0 rounded-md object-cover" />
+                ) : (
+                  <span aria-hidden="true" className="grid size-10 shrink-0 place-items-center rounded-md bg-muted text-muted-foreground">
+                    <Layers className="size-4" />
+                  </span>
+                )}
                 <span className="min-w-0 flex-1">
                   <span className="block font-medium">{combo.name}</span>
                   <span className="block truncate text-xs text-muted-foreground">{describeSlots(combo)}</span>
@@ -123,6 +132,21 @@ function ComboEditor({
       : item.variants.map((v) => ({ value: optionValue(item.id, v.id), label: `${item.name} (${v.name})` })),
   );
   const labelFor = (itemId: string, variantId: string | null) => choices.find((c) => c.value === optionValue(itemId, variantId))?.label ?? "Removed item";
+
+  async function handlePhoto(file: File | undefined) {
+    if (!file) return;
+    setError(null);
+    try {
+      const photoUrl = await photoToDataUrl(file);
+      if (photoUrl.length > PHOTO_MAX_CHARS) {
+        setError("That photo is too large even after shrinking. Try a smaller one.");
+        return;
+      }
+      setDraft((d) => ({ ...d, photoUrl }));
+    } catch {
+      setError("That file couldn't be read as a photo. Try a JPEG or PNG.");
+    }
+  }
 
   const setSlot = (key: string, change: (slot: SlotDraft) => SlotDraft) => setDraft((d) => ({ ...d, slots: d.slots.map((s) => (s.key === key ? change(s) : s)) }));
 
@@ -226,6 +250,40 @@ function ComboEditor({
                   ))}
                 </select>
                 {shown.category && <p className="mt-1 text-xs text-status-error">{shown.category}</p>}
+              </div>
+            </div>
+
+            <div data-testid="combo-photo-section">
+              <p className={LABEL_CLASS}>Photo</p>
+              <div className="flex items-center gap-3">
+                <div className="grid size-20 shrink-0 place-items-center overflow-hidden rounded-lg border border-border/60 bg-muted text-muted-foreground">
+                  {draft.photoUrl ? (
+                    // eslint-disable-next-line @next/next/no-img-element -- inline data: photo, nothing for next/image to optimise
+                    <img data-testid="combo-photo-preview" src={draft.photoUrl} alt={`${draft.name || "Combo"} photo`} className="size-full object-cover" />
+                  ) : (
+                    <ImagePlus className="size-6" aria-hidden="true" />
+                  )}
+                </div>
+                <div className="flex flex-col items-start gap-1.5">
+                  <label className="cursor-pointer rounded-md border border-border px-3 py-1.5 text-sm font-medium hover:bg-muted focus-within:ring-2 focus-within:ring-ring">
+                    {draft.photoUrl ? "Replace photo" : "Upload photo"}
+                    <input
+                      type="file"
+                      accept="image/*"
+                      data-testid="combo-photo-input"
+                      className="sr-only"
+                      onChange={(e) => {
+                        void handlePhoto(e.target.files?.[0]);
+                        e.target.value = "";
+                      }}
+                    />
+                  </label>
+                  {draft.photoUrl && (
+                    <button type="button" data-testid="combo-photo-remove" onClick={() => setDraft((d) => ({ ...d, photoUrl: null }))} className="text-xs text-muted-foreground hover:text-status-error">
+                      Remove photo
+                    </button>
+                  )}
+                </div>
               </div>
             </div>
 

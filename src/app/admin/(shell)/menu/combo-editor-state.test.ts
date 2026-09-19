@@ -31,6 +31,12 @@ describe("combo editor state (restiq-web#264)", () => {
     expect(input.slots[1].options[0]).toEqual({ itemId: "i-o3", upchargeMinor: 3000 });
   });
 
+  it("keeps a photo on save and drops it when removed", () => {
+    const withPhoto = draftFromCombo({ ...thali, photoUrl: "data:image/jpeg;base64,AAAA" }, "");
+    expect(toSaveComboInput(withPhoto, "INR").photoUrl).toBe("data:image/jpeg;base64,AAAA");
+    expect(toSaveComboInput({ ...withPhoto, photoUrl: null }, "INR")).not.toHaveProperty("photoUrl");
+  });
+
   it("starts a new combo with one empty slot and flags every missing field", () => {
     const draft = draftFromCombo(null, "cat1");
     expect(draft.slots).toHaveLength(1);

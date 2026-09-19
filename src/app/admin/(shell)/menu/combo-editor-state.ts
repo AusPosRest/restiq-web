@@ -21,6 +21,8 @@ export interface ComboDraft {
   categoryId: string;
   price: string;
   available: boolean;
+  /** Inline data:image JPEG (or https URL); null when the combo has no photo. */
+  photoUrl: string | null;
   slots: SlotDraft[];
 }
 
@@ -36,12 +38,13 @@ export function emptySlot(): SlotDraft {
 }
 
 export function draftFromCombo(combo: ComboView | null, defaultCategoryId: string): ComboDraft {
-  if (!combo) return { name: "", categoryId: defaultCategoryId, price: "", available: true, slots: [emptySlot()] };
+  if (!combo) return { name: "", categoryId: defaultCategoryId, price: "", available: true, photoUrl: null, slots: [emptySlot()] };
   return {
     name: combo.name,
     categoryId: combo.categoryId ?? "",
     price: toMajor(combo.priceMinor),
     available: combo.available,
+    photoUrl: combo.photoUrl,
     slots: combo.slots.map((slot) => ({
       key: newSlotKey(),
       name: slot.name,
@@ -76,6 +79,7 @@ export function toSaveComboInput(draft: ComboDraft, currency: string): SaveCombo
     ...(draft.categoryId ? { categoryId: draft.categoryId } : {}),
     priceMinor: majorStringToPriceMinor(draft.price) ?? 0,
     currency,
+    ...(draft.photoUrl ? { photoUrl: draft.photoUrl } : {}),
     available: draft.available,
     slots: draft.slots.map((slot) => ({
       name: slot.name.trim(),

@@ -229,8 +229,16 @@ function ComboCard({ combo, savingsMinor, onOpen }: Readonly<{ combo: ComboMenuV
       onClick={onOpen}
       className="flex items-center gap-4 rounded-xl border border-primary/40 bg-card p-4 text-left hover:bg-accent focus-visible:outline focus-visible:outline-2 focus-visible:outline-ring disabled:opacity-50 disabled:grayscale"
     >
-      <div aria-hidden="true" className="flex size-16 shrink-0 items-center justify-center rounded-lg bg-primary/15 text-xs font-bold uppercase tracking-wider text-primary">
-        Combo
+      <div aria-hidden="true" className="relative flex size-16 shrink-0 items-center justify-center overflow-hidden rounded-lg bg-primary/15 text-xs font-bold uppercase tracking-wider text-primary">
+        {combo.photoUrl ? (
+          <>
+            {/* eslint-disable-next-line @next/next/no-img-element -- inline data: photo, nothing for next/image to optimise */}
+            <img src={combo.photoUrl} alt="" className="size-full object-cover" />
+            <span className="absolute inset-x-0 bottom-0 bg-primary py-0.5 text-center text-[9px] text-primary-foreground">Combo</span>
+          </>
+        ) : (
+          "Combo"
+        )}
       </div>
       <div className="min-w-0 flex-1">
         <p className="truncate font-headline text-base font-semibold text-foreground">{combo.name}</p>
