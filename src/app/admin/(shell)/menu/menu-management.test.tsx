@@ -118,6 +118,16 @@ describe("MenuManagement list", () => {
     expect(screen.getByTestId("menu-empty-add")).toBeTruthy();
   });
 
+  it("scrolls the item list within a capped height, not the whole page (issue #266)", async () => {
+    stubFetch();
+    renderMenu();
+    await screen.findByTestId("menu-table");
+
+    const scroll = screen.getByTestId("menu-list-scroll");
+    expect(scroll.className).toContain("overflow-auto");
+    expect(scroll.className).toMatch(/md:max-h-/);
+  });
+
   it("opens the item drawer when a row is clicked, and Add Item opens it in create mode", async () => {
     stubFetch();
     renderMenu();
