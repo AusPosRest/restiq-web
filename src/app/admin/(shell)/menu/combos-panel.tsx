@@ -200,7 +200,7 @@ function ComboEditor({
           </div>
 
           {/* Only the form scrolls; the title and Save stay put however many slots there are. */}
-          <div className="min-h-0 flex-1 space-y-5 overflow-y-auto px-6 py-5">
+          <div data-testid="combo-editor-body" className="scrollbar-visible min-h-0 flex-1 space-y-5 px-6 py-5">
             <div>
               <label htmlFor="combo-name" className={LABEL_CLASS}>
                 Name *
