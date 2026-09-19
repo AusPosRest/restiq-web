@@ -134,8 +134,12 @@ story. Backend counterpart: `restiq-backend/wiki/features/tenant-admin.md`.
   variants immediately (their own endpoints, not batched); Modifier Groups and
   Allergen tags as checkbox pickers against the tenant-wide catalogs (with an
   inline "create and attach" form for a new one) rather than per-item free
-  text; Combos as a read-only list of combos containing this item plus a
-  create form; a per-outlet availability override section. Modifier-group
+  text; a per-outlet availability override section. Combos moved out of the
+  drawer to their own **Combos** tab beside Items (restiq-web#264,
+  `combos-panel.tsx` + `combo-editor-state.ts`): a list (name, slot summary,
+  category, on sale / off, price) and an editor drawer for the name, price,
+  category, on sale, and slots (name, pick count, items with an optional
+  extra charge each). Saving replaces the whole combo; Delete archives it. Modifier-group
   min/max validation (`menu-state.ts#validateModifierGroup`) surfaces a
   specific message per failure (missing name, no options yet, negative
   minimum, maximum below 1, maximum below minimum, maximum above the option
@@ -888,9 +892,8 @@ endpoint) takes `{ renderMode }`.
     four; this build only implements what the backend can actually persist
     and drops the rest rather than faking client-only fields with nowhere to
     save.
-  - Combos have `GET`/`POST` only (`/admin/v1/menu/combos`) - no update or
-    delete, so the drawer can list combos containing an item and create a
-    new one, but can't edit or remove an existing combo from here.
+  - Combos: `GET`/`POST /admin/v1/menu/combos`, `PUT`/`DELETE .../:id`
+    (restiq-backend#160) - see the Combos tab above.
   - **86 is `available: boolean`** via `PATCH .../items/:id/availability`,
     not the `is86d` + `/86` path an earlier draft of this UI guessed.
   - **Per-outlet "override" is availability, not price** -

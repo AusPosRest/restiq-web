@@ -73,6 +73,8 @@
 // falling back to the raw `tableId` only if the field is somehow missing -
 // never the other way round.
 
+import type { ComboMenuView } from "@/lib/combo";
+
 export interface PosMenuVariantView {
   id: string;
   name: string;
@@ -114,6 +116,8 @@ export interface PosMenuCategoryView {
 export interface PosMenuView {
   categories: PosMenuCategoryView[];
   items: PosMenuItemView[];
+  /** restiq-backend#160: live combos with outlet availability. Optional so older fixtures and caches still type. */
+  combos?: ComboMenuView[];
   currency: string;
 }
 
@@ -132,8 +136,13 @@ export interface RawOrderLineModifier {
 export interface RawOrderLine {
   id: string;
   orderId: string;
-  itemId: string;
+  /** Null on a combo's parent line (restiq-backend#160). */
+  itemId: string | null;
   variantId: string | null;
+  comboId?: string | null;
+  comboName?: string | null;
+  /** Set on each item picked inside a combo - points at the combo's line. */
+  parentLineId?: string | null;
   quantity: number;
   unitPriceMinor: number;
   seatNumber: number | null;
@@ -168,8 +177,12 @@ export interface OrderLineModifierView {
 
 export interface OrderLineView {
   id: string;
+  /** Empty on a combo line - see comboId. */
   itemId: string;
   itemName: string;
+  /** restiq-web#264: a combo line. Its picks are folded in: components names them, lineTotalMinor includes their extra charges. Combos can only be removed, not stepped. */
+  comboId: string | null;
+  components: string[];
   variantId: string | null;
   variantName: string | null;
   quantity: number;
@@ -213,14 +226,45 @@ function resolveVariantName(menu: Pick<PosMenuView, "items"> | undefined, itemId
   return item?.variants.find((variant) => variant.id === variantId)?.name ?? variantId;
 }
 
-export function toOrderLineView(raw: RawOrderLine, menu?: Pick<PosMenuView, "items">): OrderLineView {
+const rawLineTotal = (raw: RawOrderLine) => raw.quantity * computeUnitTotalMinor(raw.unitPriceMinor, raw.modifiers);
+
+/** "2× Garlic naan (Less spicy)" - one pick inside a combo, per combo. */
+function componentLabel(child: RawOrderLine, parent: RawOrderLine, menu?: Pick<PosMenuView, "items">): string {
+  const perCombo = child.quantity / parent.quantity;
+  const itemId = child.itemId ?? "";
+  const extras = [resolveVariantName(menu, itemId, child.variantId), ...child.modifiers.map((m) => m.name)].filter(Boolean);
+  return `${perCombo > 1 ? `${perCombo}× ` : ""}${resolveItemName(menu, itemId)}${extras.length ? ` (${extras.join(", ")})` : ""}`;
+}
+
+export function toOrderLineView(raw: RawOrderLine, menu?: Pick<PosMenuView, "items">, children: readonly RawOrderLine[] = []): OrderLineView {
   const modifiers = raw.modifiers.map((modifier) => ({ modifierId: modifier.modifierId, name: modifier.name, priceMinor: modifier.priceMinor }));
+  if (raw.comboId) {
+    const lineTotalMinor = children.reduce((sum, child) => sum + rawLineTotal(child), rawLineTotal(raw));
+    return {
+      id: raw.id,
+      itemId: "",
+      itemName: raw.comboName ?? "Combo",
+      comboId: raw.comboId,
+      components: children.map((child) => componentLabel(child, raw, menu)),
+      variantId: null,
+      variantName: null,
+      quantity: raw.quantity,
+      unitPriceMinor: Math.round(lineTotalMinor / raw.quantity),
+      modifiers: [],
+      lineTotalMinor,
+      addedByStaffId: raw.addedByStaffId,
+      seatNumber: raw.seatNumber,
+    };
+  }
+  const itemId = raw.itemId ?? "";
   return {
     id: raw.id,
-    itemId: raw.itemId,
-    itemName: resolveItemName(menu, raw.itemId),
+    itemId,
+    itemName: resolveItemName(menu, itemId),
+    comboId: null,
+    components: [],
     variantId: raw.variantId,
-    variantName: resolveVariantName(menu, raw.itemId, raw.variantId),
+    variantName: resolveVariantName(menu, itemId, raw.variantId),
     quantity: raw.quantity,
     unitPriceMinor: raw.unitPriceMinor,
     modifiers,
@@ -232,7 +276,8 @@ export function toOrderLineView(raw: RawOrderLine, menu?: Pick<PosMenuView, "ite
 
 /** `menu` is optional so callers with no menu in scope (e.g. table-map's `startOrder`/`transferOrder`, which never render a line's item/variant name) still get a usable mapping - names simply fall back to raw ids in that case. */
 export function toOrderView(raw: RawOrder, menu?: Pick<PosMenuView, "items">): OrderView {
-  const lines = raw.lines.map((line) => toOrderLineView(line, menu));
+  // A combo's picks are shown inside the combo's own line.
+  const lines = raw.lines.filter((line) => !line.parentLineId).map((line) => toOrderLineView(line, menu, raw.lines.filter((child) => child.parentLineId === line.id)));
   return {
     id: raw.id,
     tableId: raw.tableId,

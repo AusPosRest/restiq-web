@@ -83,6 +83,7 @@ export type {
   PosModifierView,
   RawOrder,
 } from "./orders/[orderId]/order-taking-state";
+import type { ComboSelection } from "@/lib/combo";
 import type { AddOrderLineInput, OrderView, PosMenuView, RawOrder } from "./orders/[orderId]/order-taking-state";
 import { toOrderView } from "./orders/[orderId]/order-taking-state";
 
@@ -115,6 +116,15 @@ export function fetchMenu(): Promise<PosMenuView> {
 /** POST /pos/v1/orders/:id/lines - rejected server-side (not just client-validated) if a modifier group's min/max is violated (SPEC CAP-3 success criterion). Attribution (which staff member added it) is resolved server-side from the bearer token, never sent from the client. `menu` is optional - see this file's header. */
 export function addOrderLine(orderId: string, input: AddOrderLineInput, menu?: Pick<PosMenuView, "items">): Promise<OrderView> {
   return posApi<RawOrder>(`orders/${orderId}/lines`, { method: "POST", body: JSON.stringify(input) }).then((raw) => toOrderView(raw, menu));
+}
+
+/** restiq-backend#160: a combo with its picks, added as one priced line. */
+export function addComboLine(
+  orderId: string,
+  input: { comboId: string; quantity: number; selections: ComboSelection[] },
+  menu?: Pick<PosMenuView, "items">,
+): Promise<OrderView> {
+  return posApi<RawOrder>(`orders/${orderId}/combos`, { method: "POST", body: JSON.stringify(input) }).then((raw) => toOrderView(raw, menu));
 }
 
 export function updateOrderLineQuantity(orderId: string, lineId: string, quantity: number, menu?: Pick<PosMenuView, "items">): Promise<OrderView> {
@@ -374,6 +384,8 @@ export interface InvoiceLineView {
   quantity: number;
   unitPriceMinor: number;
   lineTotalMinor: number;
+  /** restiq-backend#160: a combo's picks ("2× Garlic naan"), printed under it. Empty or absent for a plain item. */
+  components?: string[];
 }
 
 export interface InvoiceTaxBreakdownView {

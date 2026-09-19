@@ -11,7 +11,6 @@ import { Button } from "@/components/ui/button";
 import {
   addVariant as apiAddVariant,
   createAllergen,
-  createCombo,
   createItemPrice,
   createMenuItem,
   createModifierGroup,
@@ -28,8 +27,6 @@ import { itemDraftFromView, ItemDraft, toggleId, validateItemDraft } from "./ite
 import {
   AllergenView,
   CategoryView,
-  ComboView,
-  combosForItem,
   CHANNEL_LABEL,
   formatEffectiveDate,
   formatPriceMinor,
@@ -57,11 +54,9 @@ interface PriceLine {
 export interface ItemDrawerProps {
   open: boolean;
   item: ItemView | null;
-  allItems: ItemView[];
   categories: CategoryView[];
   modifierGroupCatalog: ModifierGroupView[];
   allergenCatalog: AllergenView[];
-  comboCatalog: ComboView[];
   outlets: OutletView[];
   selectedOutletId: string | null;
   defaultCategoryId: string;
@@ -70,7 +65,6 @@ export interface ItemDrawerProps {
   onSaved: (item: ItemView) => void;
   onModifierGroupCreated: (group: ModifierGroupView) => void;
   onAllergenCreated: (allergen: AllergenView) => void;
-  onComboCreated: (combo: ComboView) => void;
 }
 
 export function ItemDrawer(props: Readonly<ItemDrawerProps>) {
@@ -79,11 +73,9 @@ export function ItemDrawer(props: Readonly<ItemDrawerProps>) {
 
 function DrawerBody({
   item,
-  allItems,
   categories,
   modifierGroupCatalog,
   allergenCatalog,
-  comboCatalog,
   outlets,
   selectedOutletId,
   defaultCategoryId,
@@ -92,7 +84,6 @@ function DrawerBody({
   onSaved,
   onModifierGroupCreated,
   onAllergenCreated,
-  onComboCreated,
 }: Readonly<ItemDrawerProps>) {
   const isCreate = item === null;
   const [draft, setDraft] = useState<ItemDraft>(() => itemDraftFromView(item, defaultCategoryId || categories[0]?.id || ""));
@@ -367,16 +358,6 @@ function DrawerBody({
               onToggle={(id) => void handleToggleAllergen(id)}
               onCreated={onAllergenCreated}
             />
-
-            {!isCreate && liveItem && (
-              <ComboSection
-                item={liveItem}
-                allItems={allItems}
-                currency={currency}
-                comboCatalog={comboCatalog}
-                onComboCreated={onComboCreated}
-              />
-            )}
 
             {!isCreate && liveItem && outlet && (
               <OutletAvailabilitySection itemId={liveItem.id} outlet={outlet} />
@@ -737,96 +718,6 @@ function AllergensSection({
         <button type="button" data-testid="item-add-allergen" onClick={() => setAdding(true)} className="mt-2 text-xs font-medium text-primary hover:underline">
           + New tag
         </button>
-      )}
-    </div>
-  );
-}
-
-function ComboSection({
-  item,
-  allItems,
-  currency,
-  comboCatalog,
-  onComboCreated,
-}: Readonly<{ item: ItemView; allItems: ItemView[]; currency: string; comboCatalog: ComboView[]; onComboCreated: (combo: ComboView) => void }>) {
-  const [adding, setAdding] = useState(false);
-  const [name, setName] = useState("");
-  const [price, setPrice] = useState("");
-  const [selectedItemIds, setSelectedItemIds] = useState<string[]>([item.id]);
-  const pickable = allItems.filter((candidate) => candidate.id !== item.id);
-  const combos = combosForItem(comboCatalog, item.id);
-
-  async function handleAdd() {
-    if (!name.trim() || selectedItemIds.length === 0) return;
-    const created = await createCombo({
-      name: name.trim(),
-      priceMinor: majorStringToPriceMinor(price) ?? 0,
-      currency,
-      components: selectedItemIds.map((itemId) => ({ itemId })),
-    });
-    onComboCreated(created);
-    setName("");
-    setPrice("");
-    setSelectedItemIds([item.id]);
-    setAdding(false);
-  }
-
-  return (
-    <div data-testid="item-combos-section">
-      <div className="flex items-center justify-between">
-        <p className={LABEL_CLASS}>Combos</p>
-        {!adding && (
-          <button type="button" data-testid="item-add-combo" onClick={() => setAdding(true)} className="text-sm font-medium text-primary hover:underline">
-            + Add combo
-          </button>
-        )}
-      </div>
-
-      <ul className="mt-2 space-y-2">
-        {combos.map((combo) => (
-          <li key={combo.id} data-testid={`item-combo-${combo.id}`} className="rounded-lg border border-border/60 px-3 py-2 text-sm">
-            {combo.name} - {formatPriceMinor(combo.priceMinor, combo.currency)} - {combo.components.length} item{combo.components.length === 1 ? "" : "s"}
-          </li>
-        ))}
-      </ul>
-
-      {adding && (
-        <div className="mt-2 space-y-2 rounded-lg border border-border/60 p-3">
-          <input data-testid="item-combo-name-input" value={name} placeholder="Combo name (e.g. Thali Combo)" onChange={(event) => setName(event.target.value)} className={FIELD_CLASS} />
-          <input
-            type="number"
-            step="0.01"
-            min="0"
-            data-testid="item-combo-price-input"
-            placeholder={`Combo price (${currency})`}
-            value={price}
-            onChange={(event) => setPrice(event.target.value)}
-            className={FIELD_CLASS}
-          />
-          <div className="max-h-32 space-y-1 overflow-y-auto">
-            {pickable.map((candidate) => (
-              <label key={candidate.id} className="flex items-center gap-1.5 text-sm">
-                <input
-                  type="checkbox"
-                  data-testid={`item-combo-pick-${candidate.id}`}
-                  checked={selectedItemIds.includes(candidate.id)}
-                  onChange={(event) =>
-                    setSelectedItemIds((current) => (event.target.checked ? [...current, candidate.id] : current.filter((id) => id !== candidate.id)))
-                  }
-                />
-                {candidate.name}
-              </label>
-            ))}
-          </div>
-          <div className="flex justify-end gap-2">
-            <Button type="button" variant="secondary" size="sm" data-testid="item-combo-cancel" onClick={() => setAdding(false)}>
-              Cancel
-            </Button>
-            <Button type="button" size="sm" data-testid="item-combo-confirm" disabled={!name.trim()} onClick={() => void handleAdd()}>
-              Add
-            </Button>
-          </div>
-        </div>
       )}
     </div>
   );

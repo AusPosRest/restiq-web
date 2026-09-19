@@ -175,7 +175,14 @@ export function InvoiceReceipt({ invoice }: Readonly<{ invoice: InvoiceView }>) 
         <tbody>
           {invoice.lines.map((line, index) => (
             <tr key={index} data-testid={`invoice-line-${index}`}>
-              <td className="py-1">{line.name}</td>
+              <td className="py-1">
+                {line.name}
+                {line.components && line.components.length > 0 && (
+                  <span data-testid={`invoice-line-components-${index}`} className="block pl-3 text-xs text-muted-foreground">
+                    {line.components.join(" · ")}
+                  </span>
+                )}
+              </td>
               <td className="py-1 text-right tabular-nums">{line.quantity}</td>
               <td className="py-1 text-right tabular-nums">{formatMinor(line.unitPriceMinor, invoice.currency)}</td>
               <td className="py-1 text-right tabular-nums">{formatMinor(line.lineTotalMinor, invoice.currency)}</td>

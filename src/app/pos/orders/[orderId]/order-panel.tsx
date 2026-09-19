@@ -86,6 +86,13 @@ export function OrderPanel({
                     {line.modifiers.length > 0 && (
                       <p className="text-xs text-muted-foreground">{line.modifiers.map((modifier) => modifier.name).join(", ")}</p>
                     )}
+                    {line.components.length > 0 && (
+                      <ul data-testid={`order-line-components-${line.id}`} className="mt-0.5 text-xs text-muted-foreground">
+                        {line.components.map((component, i) => (
+                          <li key={i}>{component}</li>
+                        ))}
+                      </ul>
+                    )}
                     <p data-testid={`order-line-added-by-${line.id}`} className="text-[11px] text-muted-foreground/80">
                       Added by {line.addedByStaffId === currentStaffId ? "You" : line.addedByStaffId}
                     </p>
@@ -93,29 +100,38 @@ export function OrderPanel({
                   <p className="tabular-nums text-sm font-semibold text-foreground">{formatPriceMinor(line.lineTotalMinor, currency)}</p>
                 </div>
                 <div className="flex items-center gap-2">
-                  <button
-                    type="button"
-                    data-testid={`order-line-decrement-${line.id}`}
-                    aria-label="Decrease quantity"
-                    disabled={isBusy}
-                    onClick={() => onDecrement(line)}
-                    className="flex size-7 items-center justify-center rounded-md border border-border text-foreground hover:bg-accent disabled:opacity-40"
-                  >
-                    <Minus className="size-3.5" aria-hidden="true" />
-                  </button>
-                  <span data-testid={`order-line-qty-${line.id}`} className="w-5 text-center text-sm font-semibold tabular-nums">
-                    {line.quantity}
-                  </span>
-                  <button
-                    type="button"
-                    data-testid={`order-line-increment-${line.id}`}
-                    aria-label="Increase quantity"
-                    disabled={isBusy}
-                    onClick={() => onIncrement(line)}
-                    className="flex size-7 items-center justify-center rounded-md border border-border text-foreground hover:bg-accent disabled:opacity-40"
-                  >
-                    <Plus className="size-3.5" aria-hidden="true" />
-                  </button>
+                  {/* A combo is changed by removing it and adding it again (restiq-backend#160). */}
+                  {line.comboId ? (
+                    <span data-testid={`order-line-qty-${line.id}`} className="text-sm font-semibold tabular-nums">
+                      {line.quantity}×
+                    </span>
+                  ) : (
+                    <>
+                      <button
+                        type="button"
+                        data-testid={`order-line-decrement-${line.id}`}
+                        aria-label="Decrease quantity"
+                        disabled={isBusy}
+                        onClick={() => onDecrement(line)}
+                        className="flex size-7 items-center justify-center rounded-md border border-border text-foreground hover:bg-accent disabled:opacity-40"
+                      >
+                        <Minus className="size-3.5" aria-hidden="true" />
+                      </button>
+                      <span data-testid={`order-line-qty-${line.id}`} className="w-5 text-center text-sm font-semibold tabular-nums">
+                        {line.quantity}
+                      </span>
+                      <button
+                        type="button"
+                        data-testid={`order-line-increment-${line.id}`}
+                        aria-label="Increase quantity"
+                        disabled={isBusy}
+                        onClick={() => onIncrement(line)}
+                        className="flex size-7 items-center justify-center rounded-md border border-border text-foreground hover:bg-accent disabled:opacity-40"
+                      >
+                        <Plus className="size-3.5" aria-hidden="true" />
+                      </button>
+                    </>
+                  )}
                   <button
                     type="button"
                     data-testid={`order-line-remove-${line.id}`}

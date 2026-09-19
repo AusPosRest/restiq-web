@@ -13,6 +13,7 @@ import { fetchAllergens, fetchCategories, fetchCombos, fetchItems, fetchModifier
 import { LoadErrorPanel, Skeleton } from "../data-states";
 import { useOutlets } from "../outlet-context";
 import { CategorySidebar } from "./category-sidebar";
+import { CombosPanel } from "./combos-panel";
 import { ItemDrawer } from "./item-drawer";
 import { AllergenView, ALL_CATEGORY, CategoryView, ComboView, ItemView, ModifierGroupView, visibleItems } from "./menu-state";
 import { MenuTable } from "./menu-table";
@@ -75,6 +76,7 @@ export function MenuManagement() {
   const [category, setCategory] = useState<string>(ALL_CATEGORY);
   const [search, setSearch] = useState("");
   const [drawerItem, setDrawerItem] = useState<ItemView | null | "closed">("closed");
+  const [tab, setTab] = useState<"items" | "combos">("items");
 
   const effectiveItems = useMemo(() => items ?? data?.items ?? [], [items, data]);
   const effectiveCategories = categories ?? data?.categories ?? [];
@@ -120,10 +122,11 @@ export function MenuManagement() {
           <p className="mt-1 text-sm text-muted-foreground" data-testid="menu-summary">
             {effectiveItems.length} item{effectiveItems.length === 1 ? "" : "s"} in {effectiveCategories.length} categor
             {effectiveCategories.length === 1 ? "y" : "ies"}
+            {effectiveCombos.length > 0 ? `, ${effectiveCombos.length} combo${effectiveCombos.length === 1 ? "" : "s"}` : ""}
             {outlets.length > 0 ? `, synced to ${outlets.length} outlet${outlets.length === 1 ? "" : "s"}` : ""}
           </p>
         </div>
-        <div className="flex gap-2">
+        <div className={`flex gap-2 ${tab === "combos" ? "hidden" : ""}`}>
           <Button asChild variant="secondary" data-testid="menu-import-link">
             <Link href="/admin/menu/import">
               <Upload aria-hidden="true" /> Import
@@ -135,46 +138,71 @@ export function MenuManagement() {
         </div>
       </div>
 
-      <div className="relative mt-4 w-full sm:w-72">
-        <Search className="absolute left-2.5 top-1/2 size-4 -translate-y-1/2 text-muted-foreground" aria-hidden="true" />
-        <input
-          type="search"
-          data-testid="menu-search"
-          aria-label="Search menu items"
-          placeholder="Search items..."
-          value={search}
-          onChange={(event) => setSearch(event.target.value)}
-          className="h-9 w-full rounded-lg border border-border bg-input py-1 pl-8 pr-3 text-sm placeholder:text-muted-foreground/60 focus:outline-none focus-visible:ring-2 focus-visible:ring-ring"
-        />
+      {/* restiq-web#264: combos live beside items, not inside one item's drawer. */}
+      <div role="tablist" aria-label="Menu" className="mt-4 flex gap-1 border-b border-border/40">
+        {(["items", "combos"] as const).map((key) => (
+          <button
+            key={key}
+            type="button"
+            role="tab"
+            aria-selected={tab === key}
+            data-testid={`menu-tab-${key}`}
+            onClick={() => setTab(key)}
+            className={`-mb-px border-b-2 px-3 py-2 text-sm font-medium focus:outline-none focus-visible:ring-2 focus-visible:ring-ring ${
+              tab === key ? "border-primary text-foreground" : "border-transparent text-muted-foreground hover:text-foreground"
+            }`}
+          >
+            {key === "items" ? "Items" : `Combos${effectiveCombos.length ? ` (${effectiveCombos.length})` : ""}`}
+          </button>
+        ))}
       </div>
 
-      {/* Categories stack above the item table below md (issue #228). */}
-      <div className="mt-4 flex flex-1 flex-col gap-4 md:flex-row md:gap-6">
-        <CategorySidebar
-          categories={effectiveCategories}
-          totalItems={effectiveItems.length}
-          selected={category}
-          onSelect={setCategory}
-          onCategoryCreated={(created) => setCategories([...effectiveCategories, created])}
-        />
-
-        <div className="flex-1 overflow-x-auto rounded-lg border border-border/40 bg-card">
-          {filtered.length === 0 ? (
-            <EmptyState filtered={filteredOrSearched} onClearFilters={() => { setCategory(ALL_CATEGORY); setSearch(""); }} onAddItem={() => setDrawerItem(null)} />
-          ) : (
-            <MenuTable items={filtered} currency={CURRENCY} onSelect={setDrawerItem} onAvailabilityChanged={handleAvailabilityChanged} />
-          )}
+      {tab === "combos" ? (
+        <div className="mt-4 flex flex-1">
+          <CombosPanel combos={effectiveCombos} items={effectiveItems} categories={effectiveCategories} currency={CURRENCY} onChanged={setCombos} />
         </div>
-      </div>
+      ) : (
+        <>
+          <div className="relative mt-4 w-full sm:w-72">
+            <Search className="absolute left-2.5 top-1/2 size-4 -translate-y-1/2 text-muted-foreground" aria-hidden="true" />
+            <input
+              type="search"
+              data-testid="menu-search"
+              aria-label="Search menu items"
+              placeholder="Search items..."
+              value={search}
+              onChange={(event) => setSearch(event.target.value)}
+              className="h-9 w-full rounded-lg border border-border bg-input py-1 pl-8 pr-3 text-sm placeholder:text-muted-foreground/60 focus:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+            />
+          </div>
+
+          {/* Categories stack above the item table below md (issue #228). */}
+          <div className="mt-4 flex flex-1 flex-col gap-4 md:flex-row md:gap-6">
+            <CategorySidebar
+              categories={effectiveCategories}
+              totalItems={effectiveItems.length}
+              selected={category}
+              onSelect={setCategory}
+              onCategoryCreated={(created) => setCategories([...effectiveCategories, created])}
+            />
+
+            <div className="flex-1 overflow-x-auto rounded-lg border border-border/40 bg-card">
+              {filtered.length === 0 ? (
+                <EmptyState filtered={filteredOrSearched} onClearFilters={() => { setCategory(ALL_CATEGORY); setSearch(""); }} onAddItem={() => setDrawerItem(null)} />
+              ) : (
+                <MenuTable items={filtered} currency={CURRENCY} onSelect={setDrawerItem} onAvailabilityChanged={handleAvailabilityChanged} />
+              )}
+            </div>
+          </div>
+        </>
+      )}
 
       <ItemDrawer
         open={drawerItem !== "closed"}
         item={drawerItem === "closed" ? null : drawerItem}
-        allItems={effectiveItems}
         categories={effectiveCategories}
         modifierGroupCatalog={effectiveModifierGroups}
         allergenCatalog={effectiveAllergens}
-        comboCatalog={effectiveCombos}
         outlets={outlets}
         selectedOutletId={selectedOutletId}
         defaultCategoryId={category !== ALL_CATEGORY ? category : (effectiveCategories[0]?.id ?? "")}
@@ -186,7 +214,6 @@ export function MenuManagement() {
         }}
         onModifierGroupCreated={(group) => setModifierGroups([...effectiveModifierGroups, group])}
         onAllergenCreated={(allergen) => setAllergens([...effectiveAllergens, allergen])}
-        onComboCreated={(combo) => setCombos([...effectiveCombos, combo])}
       />
     </div>
   );

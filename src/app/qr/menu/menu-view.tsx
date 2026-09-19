@@ -7,7 +7,11 @@
 // rendered). WCAG 2.1 AA floor: labeled search input, `role="tablist"` for
 // categories, `aria-live` on the item list so a screen reader hears search/
 // tab changes, unavailable items carry a text label (never color-only).
-import { useEffect, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
+import { ComboPicker, type ComboPickerConfirmValue } from "@/components/combo-picker";
+import { combosFor, comboSavingsMinor, type ComboItemInfo, type ComboMenuView } from "@/lib/combo";
+import { GuestApiError } from "../api-client";
+import { addCartCombo } from "../cart/cart-api";
 import { useRouter } from "next/navigation";
 import { CartPill } from "../cart-pill";
 import { SessionEndedView } from "../session-ended-view";
@@ -41,6 +45,34 @@ export function MenuView() {
   const [state, setState] = useState<LoadState>({ kind: "loading" });
   const [activeCategoryId, setActiveCategoryId] = useState<string | null>(null);
   const [query, setQuery] = useState("");
+  const [activeCombo, setActiveCombo] = useState<ComboMenuView | null>(null);
+  const [addingCombo, setAddingCombo] = useState(false);
+  const [comboError, setComboError] = useState<string | null>(null);
+  // Bumped after a combo lands so the cart pill remounts and re-reads the cart at once.
+  const [cartVersion, setCartVersion] = useState(0);
+  const itemsById = useMemo<ReadonlyMap<string, ComboItemInfo>>(
+    () => new Map(state.kind === "loaded" ? state.menu.categories.flatMap((c) => c.items).map((item) => [item.id, item]) : []),
+    [state],
+  );
+
+  async function handleConfirmCombo(value: ComboPickerConfirmValue) {
+    if (!activeCombo) return;
+    setAddingCombo(true);
+    setComboError(null);
+    try {
+      await addCartCombo({ comboId: activeCombo.id, ...value });
+      setCartVersion((v) => v + 1);
+      setActiveCombo(null);
+    } catch (error) {
+      if (error instanceof GuestApiError && error.status === 410) {
+        setState({ kind: "session-ended" });
+        return;
+      }
+      setComboError(error instanceof Error ? error.message : "Couldn't add this combo - please try again");
+    } finally {
+      setAddingCombo(false);
+    }
+  }
 
   useEffect(() => {
     let active = true;
@@ -100,8 +132,12 @@ export function MenuView() {
     );
   }
 
-  const categories = nonEmptyCategories(state.menu.categories);
+  const allCombos = state.menu.combos ?? [];
+  // A category holding only combos still gets a tab.
+  const categories = state.menu.categories.filter((c) => nonEmptyCategories([c]).length > 0 || allCombos.some((combo) => combo.categoryId === c.id));
   const items = visibleItems(state.menu.categories, activeCategoryId, query);
+  const combos = combosFor(allCombos, activeCategoryId, query);
+  const currency = allCombos[0]?.currency ?? "INR";
   const menuHref = "/qr/menu";
 
   return (
@@ -141,7 +177,15 @@ export function MenuView() {
       </div>
 
       <div aria-live="polite" className="flex flex-col gap-3 px-4 pt-4">
-        {items.length === 0 ? (
+        {comboError && (
+          <p role="alert" data-testid="qr-combo-error" className="rounded-lg border border-border bg-card px-4 py-3 text-sm text-error-soft">
+            {comboError}
+          </p>
+        )}
+        {combos.map((combo) => (
+          <ComboCard key={combo.id} combo={combo} savingsMinor={comboSavingsMinor(combo, itemsById)} onOpen={() => setActiveCombo(combo)} />
+        ))}
+        {items.length === 0 && combos.length === 0 ? (
           <p data-testid="qr-menu-empty" className="mt-8 text-center text-sm text-muted-foreground">
             {query.trim() !== "" ? "No dishes match your search" : "Nothing here yet"}
           </p>
@@ -156,8 +200,53 @@ export function MenuView() {
         )}
       </div>
 
-      <CartPill />
+      <CartPill key={cartVersion} />
+
+      {activeCombo && (
+        <ComboPicker
+          combo={activeCombo}
+          itemsById={itemsById}
+          formatPrice={(minor) => formatPriceMinor(minor, currency)}
+          themeClass="qr-theme"
+          busy={addingCombo}
+          confirmLabel="Add to cart"
+          onCancel={() => setActiveCombo(null)}
+          onConfirm={(value) => void handleConfirmCombo(value)}
+        />
+      )}
     </main>
+  );
+}
+
+/** A combo in the guest menu (restiq-web#264): what's in it, its price, and what it saves. */
+function ComboCard({ combo, savingsMinor, onOpen }: Readonly<{ combo: ComboMenuView; savingsMinor: number; onOpen: () => void }>) {
+  const summary = combo.slots.map((s) => (s.options.length === 1 ? s.options[0].itemName : `${s.pickCount > 1 ? `${s.pickCount} ` : ""}${s.name.toLowerCase()} of your choice`)).join(" + ");
+  return (
+    <button
+      type="button"
+      data-testid={`qr-menu-combo-${combo.id}`}
+      disabled={!combo.available}
+      onClick={onOpen}
+      className="flex items-center gap-4 rounded-xl border border-primary/40 bg-card p-4 text-left hover:bg-accent focus-visible:outline focus-visible:outline-2 focus-visible:outline-ring disabled:opacity-50 disabled:grayscale"
+    >
+      <div aria-hidden="true" className="flex size-16 shrink-0 items-center justify-center rounded-lg bg-primary/15 text-xs font-bold uppercase tracking-wider text-primary">
+        Combo
+      </div>
+      <div className="min-w-0 flex-1">
+        <p className="truncate font-headline text-base font-semibold text-foreground">{combo.name}</p>
+        <p className="mt-0.5 line-clamp-2 text-xs text-muted-foreground">{summary}</p>
+        <p className="mt-1 flex flex-wrap items-baseline gap-x-2 text-sm font-semibold tabular-nums">
+          {combo.available ? (
+            <>
+              <span className="text-foreground">{formatPriceMinor(combo.priceMinor, combo.currency)}</span>
+              {savingsMinor > 0 && <span className="text-xs font-medium text-status-healthy">Save {formatPriceMinor(savingsMinor, combo.currency)}</span>}
+            </>
+          ) : (
+            <span className="text-muted-foreground">Unavailable today</span>
+          )}
+        </p>
+      </div>
+    </button>
   );
 }
 
