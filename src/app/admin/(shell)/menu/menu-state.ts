@@ -17,19 +17,6 @@
 
 export type PriceChannel = "dine_in" | "takeaway" | "delivery" | "qr" | "aggregator";
 
-export const PRICE_CHANNELS: PriceChannel[] = ["dine_in", "takeaway", "delivery", "qr", "aggregator"];
-
-export const CHANNEL_LABEL: Record<PriceChannel, string> = {
-  dine_in: "Dine-in",
-  takeaway: "Takeaway",
-  delivery: "Delivery",
-  qr: "QR",
-  aggregator: "Aggregator",
-};
-
-/** The two channels shown as list/drawer price columns - the others remain settable through the same API, just not surfaced as their own column in v1. */
-export const PRIMARY_CHANNELS: PriceChannel[] = ["dine_in", "delivery"];
-
 export interface VariantView {
   id: string;
   name: string;

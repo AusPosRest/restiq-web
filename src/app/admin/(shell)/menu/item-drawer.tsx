@@ -30,7 +30,6 @@ import {
   CategoryView,
   ComboView,
   combosForItem,
-  CHANNEL_LABEL,
   formatEffectiveDate,
   formatPriceMinor,
   ItemView,
@@ -105,7 +104,8 @@ function DrawerBody({
   const [priceBusy, setPriceBusy] = useState(false);
   const [priceError, setPriceError] = useState<string | null>(null);
   const [pending, setPending] = useState<PendingPriceInfo[]>([]);
-  const [currentPrices, setCurrentPrices] = useState<Record<string, { dineInPriceMinor: number; deliveryPriceMinor: number }>>({});
+  // One price per line (#272): the dine-in channel price, keyed by variant id or "base".
+  const [currentPrices, setCurrentPrices] = useState<Record<string, number>>({});
 
   const errors = validateItemDraft(draft);
   const canSave = Object.keys(errors).length === 0;
@@ -116,19 +116,14 @@ function DrawerBody({
     const lines: Array<string | null> = [null, ...liveItem.variants.map((v) => v.id)];
     Promise.all(
       lines.map(async (variantId) => {
-        const [dineIn, delivery] = await Promise.all([
-          fetchCurrentPrice(liveItem.id, { channel: "dine_in", variantId: variantId ?? undefined }),
-          fetchCurrentPrice(liveItem.id, { channel: "delivery", variantId: variantId ?? undefined }),
-        ]);
-        return [variantId, dineIn, delivery] as const;
+        const price = await fetchCurrentPrice(liveItem.id, { channel: "dine_in", variantId: variantId ?? undefined });
+        return [variantId, price] as const;
       }),
     )
       .then((results) => {
         if (cancelled) return;
-        const map: Record<string, { dineInPriceMinor: number; deliveryPriceMinor: number }> = {};
-        for (const [variantId, dineIn, delivery] of results) {
-          map[variantId ?? "base"] = { dineInPriceMinor: dineIn?.priceMinor ?? 0, deliveryPriceMinor: delivery?.priceMinor ?? 0 };
-        }
+        const map: Record<string, number> = {};
+        for (const [variantId, price] of results) map[variantId ?? "base"] = price?.priceMinor ?? 0;
         setCurrentPrices(map);
       })
       .catch(() => undefined);
@@ -222,33 +217,23 @@ function DrawerBody({
     const effectiveAt = priceScheduleEffectiveAt(form) ?? undefined;
     const reason = form.reason.trim();
     try {
-      for (const [channel, value] of [
-        ["dine_in", form.dineIn],
-        ["delivery", form.delivery],
-      ] as const) {
-        const priceMinor = majorStringToPriceMinor(value) ?? 0;
-        await createItemPrice(liveItem.id, {
-          variantId: priceLine.variantId ?? undefined,
-          channel,
-          priceMinor,
-          currency,
-          effectiveAt,
-          reason,
-        });
-        if (effectiveAt) {
-          setPending((current) => [
-            ...current.filter((p) => !(p.variantId === priceLine.variantId && p.channel === channel)),
-            { variantId: priceLine.variantId, channel, priceMinor, currency, effectiveAt },
-          ]);
-        } else {
-          setCurrentPrices((current) => ({
-            ...current,
-            [priceLine.variantId ?? "base"]: {
-              ...(current[priceLine.variantId ?? "base"] ?? { dineInPriceMinor: 0, deliveryPriceMinor: 0 }),
-              ...(channel === "dine_in" ? { dineInPriceMinor: priceMinor } : { deliveryPriceMinor: priceMinor }),
-            },
-          }));
-        }
+      const channel = "dine_in";
+      const priceMinor = majorStringToPriceMinor(form.dineIn) ?? 0;
+      await createItemPrice(liveItem.id, {
+        variantId: priceLine.variantId ?? undefined,
+        channel,
+        priceMinor,
+        currency,
+        effectiveAt,
+        reason,
+      });
+      if (effectiveAt) {
+        setPending((current) => [
+          ...current.filter((p) => !(p.variantId === priceLine.variantId && p.channel === channel)),
+          { variantId: priceLine.variantId, channel, priceMinor, currency, effectiveAt },
+        ]);
+      } else {
+        setCurrentPrices((current) => ({ ...current, [priceLine.variantId ?? "base"]: priceMinor }));
       }
       setPriceLine(null);
     } catch (error) {
@@ -403,7 +388,7 @@ function DrawerBody({
           open
           itemLabel={priceLine.label}
           currency={currency}
-          current={currentPrices[priceLine.variantId ?? "base"] ?? { dineInPriceMinor: 0, deliveryPriceMinor: 0 }}
+          current={currentPrices[priceLine.variantId ?? "base"] ?? 0}
           busy={priceBusy}
           error={priceError}
           onCancel={() => {
@@ -428,7 +413,7 @@ function VariantsSection({
 }: Readonly<{
   item: ItemView;
   currency: string;
-  currentPrices: Record<string, { dineInPriceMinor: number; deliveryPriceMinor: number }>;
+  currentPrices: Record<string, number>;
   pending: PendingPriceInfo[];
   onAddVariant: (name: string) => void;
   onRemoveVariant: (id: string) => void;
@@ -444,11 +429,8 @@ function VariantsSection({
         label={item.variants.length === 0 ? "Base price" : undefined}
         testId="item-base-price"
         currency={currency}
-        current={currentPrices.base ?? { dineInPriceMinor: 0, deliveryPriceMinor: 0 }}
-        pending={{
-          dineIn: pendingChangeFor(pending, null, "dine_in"),
-          delivery: pendingChangeFor(pending, null, "delivery"),
-        }}
+        current={currentPrices.base ?? 0}
+        pending={pendingChangeFor(pending, null, "dine_in")}
         onChange={() => onOpenPriceChange({ variantId: null, label: item.name })}
       />
 
@@ -470,11 +452,8 @@ function VariantsSection({
             <PriceRow
               testId={`item-variant-${variant.id}-price`}
               currency={currency}
-              current={currentPrices[variant.id] ?? { dineInPriceMinor: 0, deliveryPriceMinor: 0 }}
-              pending={{
-                dineIn: pendingChangeFor(pending, variant.id, "dine_in"),
-                delivery: pendingChangeFor(pending, variant.id, "delivery"),
-              }}
+              current={currentPrices[variant.id] ?? 0}
+              pending={pendingChangeFor(pending, variant.id, "dine_in")}
               onChange={() => onOpenPriceChange({ variantId: variant.id, label: variant.name })}
             />
           </li>
@@ -518,8 +497,8 @@ function PriceRow({
   label?: string;
   testId: string;
   currency: string;
-  current: { dineInPriceMinor: number; deliveryPriceMinor: number };
-  pending: { dineIn: PendingPriceInfo | null; delivery: PendingPriceInfo | null };
+  current: number;
+  pending: PendingPriceInfo | null;
   onChange: () => void;
 }>) {
   return (
@@ -527,17 +506,15 @@ function PriceRow({
       {label && <p className="text-xs text-muted-foreground">{label}</p>}
       <div className="flex items-center justify-between gap-2">
         <p data-testid={`${testId}-current`} className="text-sm tabular-nums">
-          {CHANNEL_LABEL.dine_in} {formatPriceMinor(current.dineInPriceMinor, currency)} / {CHANNEL_LABEL.delivery}{" "}
-          {formatPriceMinor(current.deliveryPriceMinor, currency)}
+          {formatPriceMinor(current, currency)}
         </p>
         <button type="button" data-testid={`${testId}-change`} onClick={onChange} className="text-xs font-medium text-primary hover:underline">
           Change price
         </button>
       </div>
-      {(pending.dineIn || pending.delivery) && (
+      {pending && (
         <p data-testid={`${testId}-pending`} className="text-xs text-status-scheduled">
-          {pending.dineIn && `Dine-in changes to ${formatPriceMinor(pending.dineIn.priceMinor, currency)} on ${formatEffectiveDate(pending.dineIn.effectiveAt)}. `}
-          {pending.delivery && `Delivery changes to ${formatPriceMinor(pending.delivery.priceMinor, currency)} on ${formatEffectiveDate(pending.delivery.effectiveAt)}.`}
+          Changes to {formatPriceMinor(pending.priceMinor, currency)} on {formatEffectiveDate(pending.effectiveAt)}.
         </p>
       )}
     </div>

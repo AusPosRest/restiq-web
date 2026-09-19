@@ -7,6 +7,7 @@ with the payments epic.
 ## [Unreleased]
 
 ### Fixed
+- **Owner Menu shows one price per item** (#272): RESTIQ has no delivery, so the Delivery column, the drawer's "Dine-in ₹149 / Delivery ₹149" line and the Delivery field in Change price are gone. Each item and variant has a single **Price** (the dine-in price the POS charges).
 - POS text overflow (#240):
   - **Payment method buttons** (settle and counter) now fit as many as the column holds - two per row in the counter's narrow tender column - so "Card terminal" / "External" no longer spill past their buttons.
   - **Bill panel lines** get column padding and keep the amount on one line, so a long item name ("Soup of the Day") wraps instead of running into its price.

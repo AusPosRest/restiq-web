@@ -1,5 +1,9 @@
 # Completed
 
+- **2026-09-19** - Owner Menu: one price per item, no Delivery price (issue #272). Menu table has a single
+  Price column, the item drawer shows one price per line, and Change price edits the dine-in channel only;
+  unused `PRIMARY_CHANNELS` / `PRICE_CHANNELS` / `CHANNEL_LABEL` removed. Backend price channels unchanged.
+
 - **2026-09-15** - Fix: POS text overflow (issue #240). `tender-keypad.tsx`'s method grid is
   `repeat(auto-fit,minmax(6.5rem,1fr))` (two per row in the counter's w-80 column); `bill-summary.tsx`
   lines get `pr-3` column padding and a no-wrap amount so long names wrap.
