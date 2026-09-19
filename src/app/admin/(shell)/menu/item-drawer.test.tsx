@@ -128,6 +128,16 @@ describe("ItemDrawer open/close and field editing", () => {
     expect(onClose).toHaveBeenCalled();
   });
 
+  it("scrolls only the form body, keeping Save pinned outside the scroll area (issue #266)", () => {
+    stubFetch();
+    renderDrawer();
+
+    const body = screen.getByTestId("item-drawer-body");
+    expect(body.className).toContain("scrollbar-visible");
+    expect(body.className).toContain("min-h-0");
+    expect(screen.getByTestId("item-drawer").className).not.toContain("overflow-y-auto");
+  });
+
   it("updates a field's value as the owner types", async () => {
     stubFetch();
     renderDrawer();

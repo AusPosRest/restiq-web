@@ -7,6 +7,10 @@ with the payments epic.
 ## [Unreleased]
 
 ### Fixed
+- Owner console sidebar and Menu scrolling (#266):
+  - **Sidebar** is sticky and full height on every owner page, so the nav and Sign out never scroll away.
+  - **Menu item table** scrolls inside a viewport-high panel (min 20rem) with a sticky column header, so the category list stays beside it. Unchanged below `md`.
+  - **Item drawer** pins its header and its Delete / Save Changes footer and scrolls only the form, with an always-visible scrollbar (the new `.scrollbar-visible` utility in `src/app/globals.css`), matching the combo editor.
 - POS text overflow (#240):
   - **Payment method buttons** (settle and counter) now fit as many as the column holds - two per row in the counter's narrow tender column - so "Card terminal" / "External" no longer spill past their buttons.
   - **Bill panel lines** get column padding and keep the amount on one line, so a long item name ("Soup of the Day") wraps instead of running into its price.
