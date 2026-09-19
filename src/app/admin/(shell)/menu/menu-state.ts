@@ -73,18 +73,35 @@ export interface CategoryView {
   itemCount: number;
 }
 
-export interface ComboComponentView {
+// restiq-backend#160: a combo is built from slots. A slot picks pickCount
+// items from its options; a slot with one option is a fixed part of the
+// combo. Same shape the POS and guest menus receive.
+export interface ComboOptionView {
+  id: string;
   itemId: string;
-  quantity: number;
+  itemName: string;
+  variantId: string | null;
+  variantName: string | null;
+  upchargeMinor: number;
+  available: boolean;
+}
+
+export interface ComboSlotView {
+  id: string;
+  name: string;
+  pickCount: number;
+  options: ComboOptionView[];
 }
 
 export interface ComboView {
   id: string;
-  name: string;
   categoryId: string | null;
+  name: string;
+  photoUrl: string | null;
   priceMinor: number;
   currency: string;
-  components: ComboComponentView[];
+  available: boolean;
+  slots: ComboSlotView[];
 }
 
 export interface CurrentPriceView {
@@ -210,8 +227,4 @@ export function validateModifierGroup(
 
 export function modifierGroupIsValid(group: Pick<ModifierGroupView, "name" | "minSelections" | "maxSelections" | "modifiers">): boolean {
   return Object.keys(validateModifierGroup(group)).length === 0;
-}
-
-export function combosForItem(combos: readonly ComboView[], itemId: string): ComboView[] {
-  return combos.filter((combo) => combo.components.some((component) => component.itemId === itemId));
 }

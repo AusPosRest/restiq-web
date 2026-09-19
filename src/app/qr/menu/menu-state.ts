@@ -25,6 +25,8 @@
 // marker, Hindi name, rating, and bestseller badge entirely rather than
 // inventing any of them.
 
+import type { ComboMenuView } from "@/lib/combo";
+
 export interface MenuModifierView {
   id: string;
   name: string;
@@ -75,6 +77,8 @@ export interface MenuCategoryView {
 export interface GuestMenuView {
   outletId: string;
   categories: MenuCategoryView[];
+  /** restiq-backend#160: live combos, availability at this outlet. */
+  combos?: ComboMenuView[];
 }
 
 export interface PriceDisplay {

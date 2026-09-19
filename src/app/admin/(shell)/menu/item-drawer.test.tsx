@@ -57,11 +57,9 @@ function renderDrawer(props: Partial<React.ComponentProps<typeof ItemDrawer>> = 
     <ItemDrawer
       open
       item={item()}
-      allItems={[item()]}
       categories={CATEGORIES}
       modifierGroupCatalog={[]}
       allergenCatalog={[]}
-      comboCatalog={[]}
       outlets={[]}
       selectedOutletId={null}
       defaultCategoryId="tandoor"
@@ -70,7 +68,6 @@ function renderDrawer(props: Partial<React.ComponentProps<typeof ItemDrawer>> = 
       onSaved={onSaved}
       onModifierGroupCreated={vi.fn()}
       onAllergenCreated={vi.fn()}
-      onComboCreated={vi.fn()}
       {...props}
     />,
   );
@@ -87,12 +84,10 @@ describe("ItemDrawer open/close and field editing", () => {
       <ItemDrawer
         open={false}
         item={null}
-        allItems={[]}
         categories={CATEGORIES}
         modifierGroupCatalog={[]}
         allergenCatalog={[]}
-        comboCatalog={[]}
-        outlets={[]}
+          outlets={[]}
         selectedOutletId={null}
         defaultCategoryId="tandoor"
         currency="INR"
@@ -100,8 +95,7 @@ describe("ItemDrawer open/close and field editing", () => {
         onSaved={vi.fn()}
         onModifierGroupCreated={vi.fn()}
         onAllergenCreated={vi.fn()}
-        onComboCreated={vi.fn()}
-      />,
+        />,
     );
     expect(screen.queryByTestId("item-drawer")).toBeNull();
   });

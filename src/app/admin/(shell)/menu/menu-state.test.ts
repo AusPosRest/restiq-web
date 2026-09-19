@@ -1,7 +1,6 @@
 import { describe, expect, it } from "vitest";
 import {
   ALL_CATEGORY,
-  combosForItem,
   formatEffectiveDate,
   formatPriceMinor,
   ItemView,
@@ -152,15 +151,5 @@ describe("validateModifierGroup", () => {
       ],
     };
     expect(validateModifierGroup(multi)).toEqual({});
-  });
-});
-
-describe("combosForItem", () => {
-  it("returns only combos whose components include the item", () => {
-    const combos = [
-      { id: "c1", name: "Thali", categoryId: null, priceMinor: 1, currency: "INR", components: [{ itemId: "i1", quantity: 1 }] },
-      { id: "c2", name: "Other", categoryId: null, priceMinor: 1, currency: "INR", components: [{ itemId: "i2", quantity: 1 }] },
-    ];
-    expect(combosForItem(combos, "i1").map((c) => c.id)).toEqual(["c1"]);
   });
 });

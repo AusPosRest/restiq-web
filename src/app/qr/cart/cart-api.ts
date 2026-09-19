@@ -3,6 +3,7 @@
 // cart.controller.ts, read directly - not a self-authored guess). The shape
 // below is copied field-for-field from CartLineModifierView/CartLineView/
 // GuestCartView/TableCartView there.
+import type { ComboSelection } from "@/lib/combo";
 import { guestApi } from "../api-client";
 
 export interface CartLineModifierView {
@@ -15,7 +16,10 @@ export interface CartLineView {
   id: string;
   guestId: string;
   guestName: string;
-  itemId: string;
+  /** Null on a combo line (restiq-backend#160) - itemName is then the combo's name and components its picks. */
+  itemId: string | null;
+  comboId?: string | null;
+  components?: string[];
   itemName: string;
   variantId: string | null;
   variantName: string | null;
@@ -43,6 +47,11 @@ export interface TableCartView {
 /** GET /guest/v1/cart - the whole table's shared cart, grouped by guest. */
 export function fetchCart(): Promise<TableCartView> {
   return guestApi<TableCartView>("cart");
+}
+
+/** POST /guest/v1/cart/combos - a combo with its picks (restiq-backend#160). */
+export function addCartCombo(input: { comboId: string; quantity: number; selections: ComboSelection[] }): Promise<TableCartView> {
+  return guestApi<TableCartView>("cart/combos", { method: "POST", body: JSON.stringify(input) });
 }
 
 /** PATCH /guest/v1/cart/lines/:id - quantity only (own line; a 403 on someone else's line is a backend guard, never reachable from this UI - see cart-screen.tsx). */

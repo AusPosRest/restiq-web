@@ -324,6 +324,11 @@ function CartLineRow({
         {line.modifiers.length > 0 ? (
           <p className="text-xs text-muted-foreground">{line.modifiers.map((m) => m.name).join(", ")}</p>
         ) : null}
+        {line.components && line.components.length > 0 ? (
+          <p data-testid={`cart-line-components-${line.id}`} className="text-xs text-muted-foreground">
+            {line.components.join(" · ")}
+          </p>
+        ) : null}
       </div>
       <span data-testid={`cart-line-total-${line.id}`} className="text-sm font-semibold tabular-nums text-foreground">
         {formatMinor(line.lineTotalMinor, currency)}
