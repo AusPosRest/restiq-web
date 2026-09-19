@@ -159,7 +159,7 @@ function ComboEditor({
         <Dialog.Content
           data-testid="combo-editor"
           aria-describedby={undefined}
-          className="admin-theme fixed inset-y-0 right-0 z-40 flex w-full max-w-lg flex-col overflow-y-auto border-l border-border/60 bg-card text-foreground shadow-2xl"
+          className="admin-theme fixed inset-y-0 right-0 z-40 flex w-full max-w-lg flex-col border-l border-border/60 bg-card text-foreground shadow-2xl"
         >
           <div className="flex items-center justify-between border-b border-border/40 px-6 py-4">
             <Dialog.Title className="font-headline text-lg font-semibold">{combo ? "Edit combo" : "Add combo"}</Dialog.Title>
@@ -175,7 +175,8 @@ function ComboEditor({
             </Dialog.Close>
           </div>
 
-          <div className="flex-1 space-y-5 px-6 py-5">
+          {/* Only the form scrolls; the title and Save stay put however many slots there are. */}
+          <div className="min-h-0 flex-1 space-y-5 overflow-y-auto px-6 py-5">
             <div>
               <label htmlFor="combo-name" className={LABEL_CLASS}>
                 Name *
