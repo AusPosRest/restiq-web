@@ -1,5 +1,9 @@
 # Completed
 
+- **2026-09-19** - Fix: POS counter flashed to its loading skeleton after every tap (issue #269). `loadBill()` in
+  `counter/counter-view.tsx` only sets `billLoading` when no bill is on screen yet, so refreshes after add /
+  quantity / remove / tender update in place. Regression test in `counter-view.test.tsx`.
+
 - **2026-09-15** - Fix: POS text overflow (issue #240). `tender-keypad.tsx`'s method grid is
   `repeat(auto-fit,minmax(6.5rem,1fr))` (two per row in the counter's w-80 column); `bill-summary.tsx`
   lines get `pr-3` column padding and a no-wrap amount so long names wrap.
