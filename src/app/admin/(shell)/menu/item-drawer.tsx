@@ -266,7 +266,7 @@ function DrawerBody({
         <Dialog.Overlay className="fixed inset-0 z-30 bg-black/60" />
         <Dialog.Content
           data-testid="item-drawer"
-          className="admin-theme fixed inset-y-0 right-0 z-40 flex w-full max-w-lg flex-col overflow-y-auto border-l border-border/60 bg-card text-foreground shadow-2xl"
+          className="admin-theme fixed inset-y-0 right-0 z-40 flex w-full max-w-lg flex-col border-l border-border/60 bg-card text-foreground shadow-2xl"
         >
           <div className="flex items-center justify-between border-b border-border/40 px-6 py-4">
             <Dialog.Title className="font-headline text-lg font-semibold">{isCreate ? "Add Item" : "Edit Item"}</Dialog.Title>
@@ -282,7 +282,7 @@ function DrawerBody({
             </Dialog.Close>
           </div>
 
-          <div className="flex-1 space-y-6 px-6 py-5">
+          <div data-testid="item-drawer-body" className="scrollbar-visible min-h-0 flex-1 space-y-6 px-6 py-5">
             <div>
               <label htmlFor="item-name" className={LABEL_CLASS}>
                 Name *
