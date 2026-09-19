@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { describeSlots, draftFromCombo, toSaveComboInput, validateComboDraft } from "./combo-editor-state";
+import { describeSlots, draftFromCombo, filterCombos, toSaveComboInput, validateComboDraft } from "./combo-editor-state";
 import type { ComboView } from "./menu-state";
 
 const option = (id: string, itemName: string, upchargeMinor = 0) => ({ id, itemId: `i-${id}`, itemName, variantId: null, variantName: null, upchargeMinor, available: true });
@@ -60,5 +60,16 @@ describe("combo editor state (restiq-web#264)", () => {
 
   it("summarises slots for the combo list", () => {
     expect(describeSlots(thali)).toBe("Main: pick 1 of 2 · Drink: pick 1 of 2 · Dessert: Gulab jamun");
+  });
+
+  it("searches combos by name, slot name or item in a slot", () => {
+    const coffee: ComboView = { ...thali, id: "c2", name: "Coffee & cake" };
+    const all = [thali, coffee];
+    expect(filterCombos(all, "").map((c) => c.id)).toEqual(["c1", "c2"]);
+    expect(filterCombos(all, "  thali ").map((c) => c.id)).toEqual(["c1"]);
+    expect(filterCombos(all, "COFFEE").map((c) => c.id)).toEqual(["c2"]);
+    expect(filterCombos(all, "dessert").map((c) => c.id)).toEqual(["c1", "c2"]);
+    expect(filterCombos(all, "gulab")).toHaveLength(2);
+    expect(filterCombos(all, "pizza")).toEqual([]);
   });
 });

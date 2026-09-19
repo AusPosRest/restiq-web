@@ -3,13 +3,13 @@
 // Owner Combos tab (restiq-web#264): the list of combos and the combo editor
 // drawer. A combo is built from slots - "pick 1 main from these", "pick 2
 // breads", or one fixed item - and saved whole (restiq-backend#160).
-import { ImagePlus, Layers, Plus, Trash2 } from "lucide-react";
+import { ImagePlus, Layers, Plus, Search, Trash2 } from "lucide-react";
 import { Dialog } from "radix-ui";
 import { useState } from "react";
 import { Button } from "@/components/ui/button";
 import { PHOTO_MAX_CHARS, photoToDataUrl } from "@/lib/photo";
 import { archiveCombo, saveCombo } from "../../api";
-import { ComboDraft, describeSlots, draftFromCombo, emptySlot, SlotDraft, toSaveComboInput, validateComboDraft } from "./combo-editor-state";
+import { ComboDraft, describeSlots, draftFromCombo, emptySlot, filterCombos, SlotDraft, toSaveComboInput, validateComboDraft } from "./combo-editor-state";
 import { CategoryView, ComboView, formatPriceMinor, ItemView } from "./menu-state";
 
 const FIELD_CLASS =
@@ -24,7 +24,9 @@ export function CombosPanel({
   onChanged,
 }: Readonly<{ combos: ComboView[]; items: ItemView[]; categories: CategoryView[]; currency: string; onChanged: (combos: ComboView[]) => void }>) {
   const [editing, setEditing] = useState<ComboView | null | "closed">("closed");
+  const [search, setSearch] = useState("");
   const categoryName = (id: string | null) => categories.find((c) => c.id === id)?.name ?? "No category";
+  const visible = filterCombos(combos, search);
 
   return (
     <div className="flex-1">
@@ -44,36 +46,60 @@ export function CombosPanel({
           </p>
         </div>
       ) : (
-        <ul className="mt-4 divide-y divide-border/40 rounded-lg border border-border/40 bg-card" data-testid="combos-list">
-          {combos.map((combo) => (
-            <li key={combo.id}>
-              <button
-                type="button"
-                data-testid={`combo-row-${combo.id}`}
-                onClick={() => setEditing(combo)}
-                className="flex w-full flex-wrap items-center gap-x-4 gap-y-1 px-4 py-3 text-left hover:bg-muted/40 focus:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-ring"
-              >
-                {combo.photoUrl ? (
-                  // eslint-disable-next-line @next/next/no-img-element -- inline data: photo, nothing for next/image to optimise
-                  <img src={combo.photoUrl} alt="" className="size-10 shrink-0 rounded-md object-cover" />
-                ) : (
-                  <span aria-hidden="true" className="grid size-10 shrink-0 place-items-center rounded-md bg-muted text-muted-foreground">
-                    <Layers className="size-4" />
-                  </span>
-                )}
-                <span className="min-w-0 flex-1">
-                  <span className="block font-medium">{combo.name}</span>
-                  <span className="block truncate text-xs text-muted-foreground">{describeSlots(combo)}</span>
-                </span>
-                <span className="text-xs text-muted-foreground">{categoryName(combo.categoryId)}</span>
-                <span className={`rounded-full px-2 py-0.5 text-xs font-medium ${combo.available ? "bg-status-healthy/15 text-status-healthy" : "bg-muted text-muted-foreground"}`}>
-                  {combo.available ? "On sale" : "Off"}
-                </span>
-                <span className="w-20 text-right font-semibold tabular-nums">{formatPriceMinor(combo.priceMinor, combo.currency)}</span>
-              </button>
-            </li>
-          ))}
-        </ul>
+        <>
+          <div className="relative mt-4 w-full sm:w-72">
+            <Search className="absolute left-2.5 top-1/2 size-4 -translate-y-1/2 text-muted-foreground" aria-hidden="true" />
+            <input
+              type="search"
+              data-testid="combo-search"
+              aria-label="Search combos"
+              placeholder="Search combos..."
+              value={search}
+              onChange={(event) => setSearch(event.target.value)}
+              className="h-9 w-full rounded-lg border border-border bg-input py-1 pl-8 pr-3 text-sm placeholder:text-muted-foreground/60 focus:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+            />
+          </div>
+
+          {visible.length === 0 ? (
+            <div data-testid="combos-search-empty" className="mt-4 flex flex-col items-center gap-2 rounded-lg border border-border/40 bg-card px-8 py-12 text-center">
+              <p className="text-sm text-muted-foreground">No combos match &ldquo;{search.trim()}&rdquo;.</p>
+              <Button variant="outline" size="sm" data-testid="combo-search-clear" onClick={() => setSearch("")}>
+                Clear search
+              </Button>
+            </div>
+          ) : (
+            <ul className="mt-4 divide-y divide-border/40 rounded-lg border border-border/40 bg-card" data-testid="combos-list">
+              {visible.map((combo) => (
+                <li key={combo.id}>
+                  <button
+                    type="button"
+                    data-testid={`combo-row-${combo.id}`}
+                    onClick={() => setEditing(combo)}
+                    className="flex w-full flex-wrap items-center gap-x-4 gap-y-1 px-4 py-3 text-left hover:bg-muted/40 focus:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-ring"
+                  >
+                    {combo.photoUrl ? (
+                      // eslint-disable-next-line @next/next/no-img-element -- inline data: photo, nothing for next/image to optimise
+                      <img src={combo.photoUrl} alt="" className="size-10 shrink-0 rounded-md object-cover" />
+                    ) : (
+                      <span aria-hidden="true" className="grid size-10 shrink-0 place-items-center rounded-md bg-muted text-muted-foreground">
+                        <Layers className="size-4" />
+                      </span>
+                    )}
+                    <span className="min-w-0 flex-1">
+                      <span className="block font-medium">{combo.name}</span>
+                      <span className="block truncate text-xs text-muted-foreground">{describeSlots(combo)}</span>
+                    </span>
+                    <span className="text-xs text-muted-foreground">{categoryName(combo.categoryId)}</span>
+                    <span className={`rounded-full px-2 py-0.5 text-xs font-medium ${combo.available ? "bg-status-healthy/15 text-status-healthy" : "bg-muted text-muted-foreground"}`}>
+                      {combo.available ? "On sale" : "Off"}
+                    </span>
+                    <span className="w-20 text-right font-semibold tabular-nums">{formatPriceMinor(combo.priceMinor, combo.currency)}</span>
+                  </button>
+                </li>
+              ))}
+            </ul>
+          )}
+        </>
       )}
 
       {editing !== "closed" && (

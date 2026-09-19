@@ -99,3 +99,12 @@ export function describeSlots(combo: ComboView): string {
     .map((s) => (s.options.length === 1 ? `${s.name}: ${s.pickCount > 1 ? `${s.pickCount}× ` : ""}${s.options[0].itemName}` : `${s.name}: pick ${s.pickCount} of ${s.options.length}`))
     .join(" · ");
 }
+
+/** Combos whose name, slot name or any option item matches the search box. */
+export function filterCombos(combos: ComboView[], search: string): ComboView[] {
+  const query = search.trim().toLowerCase();
+  if (!query) return combos;
+  return combos.filter((combo) =>
+    [combo.name, ...combo.slots.flatMap((slot) => [slot.name, ...slot.options.map((o) => o.itemName)])].join(" ").toLowerCase().includes(query),
+  );
+}
