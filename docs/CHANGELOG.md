@@ -7,6 +7,7 @@ with the payments epic.
 ## [Unreleased]
 
 ### Fixed
+- **KDS ticket clocks read in h/m/s** (#285): an old ticket showed `11148:58`. Now under a minute is `45s`, under an hour `12m 05s`, and beyond that `3h 42m` - on the station cards, expo, the waiting-on panel and the bumped "took" line.
 - POS text overflow (#240):
   - **Payment method buttons** (settle and counter) now fit as many as the column holds - two per row in the counter's narrow tender column - so "Card terminal" / "External" no longer spill past their buttons.
   - **Bill panel lines** get column padding and keep the amount on one line, so a long item name ("Soup of the Day") wraps instead of running into its price.
