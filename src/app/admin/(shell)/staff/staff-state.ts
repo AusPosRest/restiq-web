@@ -8,17 +8,18 @@
 // 'none'|'active'|'revoked'). AddStaffForm keeps two fields for form UX;
 // api.ts concatenates them into `name` on the wire.
 //
-// Because Role carries no permission list, the "role permission matrix"
-// (EXPERIENCE.md T7 pattern: read-only reference, roles are seeded not
-// editable) can't be sourced from GET /admin/v1/roles - it's rendered from
-// the static SYSTEM_ROLE_PERMISSIONS reference below instead, matching the
-// render's intent (T7 shows Cashier's effective POS permissions as a fixed
-// checklist). This is a deliberate deviation, flagged in the PR.
+// The role permission matrix (EXPERIENCE.md T7: read-only reference) shows
+// each role's `permissions` from GET /admin/v1/roles - since restiq-backend
+// #169 that is the catalog the API actually enforces. The static
+// SYSTEM_ROLE_PERMISSIONS below is only the fallback for an older API that
+// doesn't send them.
 
 export interface RoleView {
   id: string;
   name: string;
   isSystem: boolean;
+  /** restiq-backend#169: what this role may do - the list the API enforces. Absent from an older API. */
+  permissions?: string[];
 }
 
 export type PinStatus = "active" | "none" | "revoked";
@@ -104,4 +105,9 @@ export const SYSTEM_ROLE_PERMISSIONS: Record<string, readonly string[]> = {
 
 export function roleHasPermission(roleName: string, permissionKey: string): boolean {
   return SYSTEM_ROLE_PERMISSIONS[roleName]?.includes(permissionKey) ?? false;
+}
+
+/** The API's own list when it sent one (#169), else the static reference. */
+export function roleGrants(role: RoleView, permissionKey: string): boolean {
+  return role.permissions ? role.permissions.includes(permissionKey) : roleHasPermission(role.name, permissionKey);
 }

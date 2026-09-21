@@ -53,6 +53,34 @@ describe("POST /pos/auth/login", () => {
     expect(JSON.parse(init.body as string)).toEqual({ tenantId: TENANT_ID, pin: "1234" });
   });
 
+  it("passes the tab's device and the browser's address (signed) to the API (#290)", async () => {
+    const fetchMock = vi.fn().mockResolvedValue(upstreamJson(401, { error: { code: "invalid_pin", message: "Incorrect tenant or PIN" } }));
+    vi.stubGlobal("fetch", fetchMock);
+    process.env.PROXY_SHARED_SECRET = "proxy-secret";
+    try {
+      const deviceId = "0193dddd-0000-7000-8000-000000000009";
+      const req = new Request("https://web.example.test/pos/auth/login", {
+        method: "POST",
+        headers: { "content-type": "application/json", "x-real-ip": "203.0.113.7" },
+        body: JSON.stringify({ pin: "1234", deviceId }),
+      });
+      await POST(req);
+      const [, init] = fetchMock.mock.calls[0] as [string, RequestInit];
+      expect(JSON.parse(init.body as string)).toEqual({ tenantId: TENANT_ID, pin: "1234", deviceId });
+      expect(init.headers).toMatchObject({ "x-restiq-client-ip": "203.0.113.7", "x-restiq-proxy-secret": "proxy-secret" });
+    } finally {
+      delete process.env.PROXY_SHARED_SECRET;
+    }
+  });
+
+  it("rejects a malformed deviceId before calling the backend", async () => {
+    const fetchMock = vi.fn();
+    vi.stubGlobal("fetch", fetchMock);
+    const res = await POST(jsonRequest({ pin: "1234", deviceId: "not-a-uuid" }));
+    expect(res.status).toBe(400);
+    expect(fetchMock).not.toHaveBeenCalled();
+  });
+
   it("sets an httpOnly pos_session cookie and strips the token from the response on success", async () => {
     vi.stubGlobal(
       "fetch",

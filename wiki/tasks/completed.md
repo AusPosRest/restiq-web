@@ -1,5 +1,13 @@
 # Completed
 
+- **2026-09-22** - Web half of the POS security fixes (issue #290; restiq-backend#169/#170/#171):
+  - `src/lib/client-ip-headers.ts` makes the pos/admin/ops login route handlers forward the
+    browser's address with `PROXY_SHARED_SECRET`.
+  - The POS login forwards `deviceId` (from `getTabDeviceId()`).
+  - The pin pad uses `retryAfterSeconds`.
+  - `/pos/auth/logout` calls `POST /pos/v1/auth/logout` before clearing cookies.
+  - The permission matrix uses `RoleView.permissions` via `roleGrants`.
+
 - **2026-09-15** - Fix: POS text overflow (issue #240). `tender-keypad.tsx`'s method grid is
   `repeat(auto-fit,minmax(6.5rem,1fr))` (two per row in the counter's w-80 column); `bill-summary.tsx`
   lines get `pr-3` column padding and a no-wrap amount so long names wrap.
