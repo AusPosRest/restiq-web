@@ -291,7 +291,7 @@ export function PinPad({ nextPath }: { nextPath: string }) {
           </div>
 
           <p className="mt-8 font-headline text-sm font-semibold text-primary">Clock In / Out</p>
-          <p className="mt-1 text-xs text-muted-foreground">5 attempts, then 30 second lockout</p>
+          <p className="mt-1 text-xs text-muted-foreground">10 wrong PINs locks this terminal for up to 15 minutes</p>
         </>
       )}
 
