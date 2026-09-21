@@ -7,6 +7,11 @@ with the payments epic.
 ## [Unreleased]
 
 ### Fixed
+- Web half of the POS security fixes (#290; restiq-backend#169/#170/#171):
+  - **Sign-in throttling sees the real browser.** POS, owner and operator sign-in routes pass the browser's address to the API (`X-Restiq-Client-Ip`), signed with the server-only `PROXY_SHARED_SECRET`. The POS PIN login also sends the tab's enrolled device, so a till gets its own wrong-PIN allowance.
+  - **The PIN pad counts down to the API's real lockout end** (`retryAfterSeconds`, up to 15 minutes, shown as m:ss) instead of a fixed 30 seconds.
+  - **POS/KDS Sign out ends the session at the API**, so a copied token stops working. It is best effort; the cookies are cleared either way.
+  - **The owner's permission matrix** shows each role's permissions as the API enforces them, falling back to the static table on an older API.
 - POS text overflow (#240):
   - **Payment method buttons** (settle and counter) now fit as many as the column holds - two per row in the counter's narrow tender column - so "Card terminal" / "External" no longer spill past their buttons.
   - **Bill panel lines** get column padding and keep the amount on one line, so a long item name ("Soup of the Day") wraps instead of running into its price.

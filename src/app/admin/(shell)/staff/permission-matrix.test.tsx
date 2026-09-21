@@ -27,4 +27,11 @@ describe("PermissionMatrix", () => {
     expect(screen.getByTestId("permission-cell-refunds-r-kitchen").textContent).toContain("Cannot");
     expect(screen.getByTestId("permission-cell-refunds-r-owner").textContent).toContain("Can");
   });
+
+  it("shows what the API says each role may do when it sends permissions (#290)", () => {
+    // The API is authoritative: here it grants Kitchen refunds, unlike the static table.
+    render(<PermissionMatrix roles={[{ id: "r-kitchen", name: "Kitchen", isSystem: true, permissions: ["fire_kitchen", "refunds"] }]} />);
+    expect(screen.getByTestId("permission-cell-refunds-r-kitchen").textContent).toContain("Can");
+    expect(screen.getByTestId("permission-cell-take_orders-r-kitchen").textContent).toContain("Cannot");
+  });
 });

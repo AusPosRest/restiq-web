@@ -624,13 +624,10 @@ story. Backend counterpart: `restiq-backend/wiki/features/tenant-admin.md`.
     admin and ops never share components across the route split (AD-4).
   - **Role permission matrix** (`permission-matrix.tsx`): read-only
     reference table, one column per seeded role, one row per permission.
-    **Deviation:** `GET /admin/v1/roles` (see Key decisions) returns only
-    `{ id, name, isSystem }` - no permission metadata - so this can't be
-    sourced from the API the way the render's Effective POS Permissions list
-    implies. It's rendered instead from a static reference
-    (`staff-state.ts#SYSTEM_ROLE_PERMISSIONS`), matching the render's intent
-    (a fixed, non-editable permission story per role) without inventing a
-    backend field that doesn't exist.
+    Since restiq-backend#169 / web #290, each cell comes from the role's
+    `permissions` in `GET /admin/v1/roles`, which is the catalog the API
+    enforces on every POS/KDS action (`staff-state.ts#roleGrants`). The static
+    `SYSTEM_ROLE_PERMISSIONS` is only the fallback for an older API.
   - **Not built** (out of this story's scope, T7 render shows them but
     issue #30's scope and the current data model don't support them): the
     render's per-user Outlet Access checkbox panel and per-user "Effective
