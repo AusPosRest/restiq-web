@@ -67,6 +67,7 @@ import { canFinalizeWithElectronic, isElectronicMethod, remainingToTenderMinor }
 import { TerminalIntentPanel } from "../orders/[orderId]/settle/terminal-intent-panel";
 import { useTerminalIntent } from "../orders/[orderId]/settle/use-terminal-intent";
 import { TokenBadge } from "./token-badge";
+import { openDrawerForTenders } from "@/lib/desktop";
 
 export function CounterView({ outletId, currentStaffId }: Readonly<{ outletId: string; currentStaffId: string }>) {
   const menuLoad = usePosLoad<PosMenuView>("menu");
@@ -267,7 +268,10 @@ function CounterLoaded({
     setFinalizeBusy(true);
     setFinalizeError(null);
     finalizeBill(bill.id, { tenders: pendingTenders })
-      .then(setBill)
+      .then((finalised) => {
+        setBill(finalised);
+        openDrawerForTenders(pendingTenders);
+      })
       .catch((error: unknown) => setFinalizeError(errorMessage(error, "Couldn't finalise this bill.")))
       .finally(() => setFinalizeBusy(false));
   }
