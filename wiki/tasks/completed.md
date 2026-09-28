@@ -1317,3 +1317,8 @@ faked.
   and card payments, poll with `?deviceId=`, and heartbeat every 30 s
   (`pos/device-heartbeat.tsx`). Tests: `topology.test.tsx`,
   `devices-state.test.ts` (`connectionState`), `terminal-binding.test.ts`.
+- **2026-09-29 - Windows app printer + drawer (#292).** `src/lib/desktop.ts`
+  wraps the restiq-desktop bridge (`window.restiqDesktop`): invoice Print
+  uses `printPage()` (silent print in the app, `window.print()` elsewhere),
+  and both finalise paths call `openDrawerForTenders()` when a cash tender
+  was taken. Tests: `src/lib/desktop.test.ts`.

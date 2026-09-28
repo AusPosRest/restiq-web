@@ -1549,3 +1549,16 @@ exactly this gap:
   other story in this doc - verified by reading restiq-backend's real, merged
   `src/pos/bills/{bill-core.ts,bills.service.ts,bills.controller.ts}` and
   `src/guest/bills/{bills.service.ts,bills.controller.ts}` directly.
+
+## Windows app: receipt printer and cash drawer (issue #292)
+
+Inside the RESTIQ Windows app (AusPosRest/restiq-desktop) the page gets
+`window.restiqDesktop` (only on the configured RESTIQ origin). `src/lib/desktop.ts`:
+
+- `printPage()` - invoice **Print** (`invoice-print`) prints silently on the
+  receipt printer chosen in the app's Device settings, using the page's print
+  CSS; in a browser it is `window.print()` as before. A failed app print shows
+  "Couldn't print" on the button.
+- `openDrawerForTenders(tenders)` - after a successful finalise on the counter
+  or table settle screen, opens the drawer when any tender is `cash`. The bill
+  is already final, so a drawer failure is only logged.

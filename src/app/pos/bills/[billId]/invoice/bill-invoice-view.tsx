@@ -26,6 +26,7 @@ import { fetchInvoice, PosApiError, sendBillToPrinter, type InvoiceView } from "
 import { LoadErrorPanel, Skeleton } from "../../../data-states";
 import { formatMinor } from "../../../(shell)/shift/shift-state";
 import { TENDER_METHOD_LABEL, type BillTenderMethod } from "../../../orders/[orderId]/settle/bill-state";
+import { printPage } from "@/lib/desktop";
 
 interface InvoiceLanded {
   attempt: number;
@@ -92,6 +93,13 @@ function InvoiceLoaded({ invoice, billId }: Readonly<{ invoice: InvoiceView; bil
   // "idle" -> "sending" -> "sent" | "failed"; resets to idle so the button can be pressed again for a reprint.
   const [sendState, setSendState] = useState<"idle" | "sending" | "sent" | "failed">("idle");
 
+  const [printFailed, setPrintFailed] = useState(false);
+
+  function print() {
+    setPrintFailed(false);
+    printPage().catch(() => setPrintFailed(true));
+  }
+
   function sendToPrinter() {
     setSendState("sending");
     sendBillToPrinter(billId)
@@ -110,8 +118,8 @@ function InvoiceLoaded({ invoice, billId }: Readonly<{ invoice: InvoiceView; bil
           <Button size="sm" variant="outline" data-testid="invoice-send-to-printer" disabled={sendState === "sending"} onClick={sendToPrinter}>
             {sendState === "sent" ? "Sent to printer" : sendState === "failed" ? "Couldn't send" : "Send to printer"}
           </Button>
-          <Button size="sm" data-testid="invoice-print" onClick={() => window.print()}>
-            Print
+          <Button size="sm" data-testid="invoice-print" onClick={print}>
+            {printFailed ? "Couldn't print" : "Print"}
           </Button>
         </div>
       </div>

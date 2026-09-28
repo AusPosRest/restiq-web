@@ -6,6 +6,9 @@ with the payments epic.
 
 ## [Unreleased]
 
+### Added
+- Windows POS app support (#292): inside the RESTIQ Windows app (AusPosRest/restiq-desktop), invoice **Print** prints silently on the device's receipt printer, and finalising a bill with a cash tender opens the cash drawer (counter and table settle). Browsers are unchanged. Bridge: `src/lib/desktop.ts`.
+
 ### Fixed
 - POS text overflow (#240):
   - **Payment method buttons** (settle and counter) now fit as many as the column holds - two per row in the counter's narrow tender column - so "Card terminal" / "External" no longer spill past their buttons.
