@@ -12,7 +12,7 @@ const highlights = [
 export default async function AdminLoginPage({
   searchParams,
 }: {
-  searchParams: Promise<{ next?: string; expired?: string }>;
+  searchParams: Promise<{ next?: string; expired?: string; reset?: string }>;
 }) {
   const params = await searchParams;
   return (
@@ -39,7 +39,7 @@ export default async function AdminLoginPage({
         <div className="mx-auto w-full max-w-md">
           <h1 className="font-headline text-3xl font-semibold">Sign in to Owner Console</h1>
           <p className="mt-2 text-sm text-muted-foreground">Owner credentials required</p>
-          <LoginForm nextPath={sanitizeAdminNextPath(params.next)} sessionExpired={params.expired === "1"} />
+          <LoginForm nextPath={sanitizeAdminNextPath(params.next)} sessionExpired={params.expired === "1"} passwordReset={params.reset === "1"} />
         </div>
         <p className="mt-16 text-center text-xs text-muted-foreground">
           Restaurant owners &middot; secure access
