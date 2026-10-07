@@ -1,7 +1,9 @@
 import { describe, expect, it } from "vitest";
+import type { OwnerAgreementView } from "../api";
 import { needsSignature } from "./agreement-banner";
 
-const current = { id: "v2", version: 2, title: "Platform agreement", body: "", publishedAt: "2026-10-08T00:00:00.000Z" };
+// Only id and version matter here; the cast keeps this fixture valid when the agreement body becomes a PDF (#298).
+const current = { id: "v2", version: 2, title: "Platform agreement", publishedAt: "2026-10-08T00:00:00.000Z" } as NonNullable<OwnerAgreementView["current"]>;
 const signatureFor = (agreementVersionId: string) => ({
   agreementVersionId,
   version: 1,
