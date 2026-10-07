@@ -11,6 +11,8 @@
 // instead (reactively, from the start/join responses themselves).
 //   GET /guest/v1/outlets/{outletId}/availability ->
 //     200 { available: boolean, reason?: "not_found" | "qr_ordering_disabled" }
+import { apiUrl } from "@/lib/api-url";
+
 export type AvailabilityReason = "not_found" | "qr_ordering_disabled";
 
 export type AvailabilityResult =
@@ -19,12 +21,12 @@ export type AvailabilityResult =
   | { kind: "unreachable" };
 
 export async function checkAvailability(outletId: string): Promise<AvailabilityResult> {
-  const apiUrl = process.env.NEXT_PUBLIC_API_URL;
-  if (!apiUrl) return { kind: "unreachable" };
+  const url = apiUrl();
+  if (!url) return { kind: "unreachable" };
 
   let upstream: Response;
   try {
-    upstream = await fetch(`${apiUrl}/guest/v1/outlets/${outletId}/availability`, { cache: "no-store" });
+    upstream = await fetch(`${url}/guest/v1/outlets/${outletId}/availability`, { cache: "no-store" });
   } catch {
     return { kind: "unreachable" };
   }

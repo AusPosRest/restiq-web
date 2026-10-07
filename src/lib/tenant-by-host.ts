@@ -1,6 +1,8 @@
 // Which restaurant lives at this address (restiq-backend D14: <slug>.<base domain>). Server-side only:
 // the sign-in pages and the POS PIN route ask the API's public lookup. Anything but a clear answer
 // (no match, API down, no address) is null - callers fall back to the generic RESTIQ look.
+import { apiUrl } from "@/lib/api-url";
+
 export interface TenantPublic {
   tenantId: string;
   slug: string;
@@ -17,10 +19,10 @@ export function hostOf(headers: Pick<Headers, "get">): string | null {
 }
 
 export async function fetchTenantByHost(host: string | null): Promise<TenantPublic | null> {
-  const apiUrl = process.env.NEXT_PUBLIC_API_URL;
-  if (!apiUrl || !host) return null;
+  const url = apiUrl();
+  if (!url || !host) return null;
   try {
-    const res = await fetch(`${apiUrl}/public/v1/tenant?host=${encodeURIComponent(host)}`, { cache: "no-store" });
+    const res = await fetch(`${url}/public/v1/tenant?host=${encodeURIComponent(host)}`, { cache: "no-store" });
     return res.ok ? ((await res.json()) as TenantPublic) : null;
   } catch {
     return null;

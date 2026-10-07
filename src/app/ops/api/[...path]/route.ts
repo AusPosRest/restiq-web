@@ -3,6 +3,7 @@
 // /ops/api/* and this handler attaches the Authorization header. The backend
 // guard remains the enforcement point - this adds a credential, not authz.
 import { NextRequest, NextResponse } from "next/server";
+import { apiUrl } from "@/lib/api-url";
 import { OPS_SESSION_COOKIE } from "@/lib/ops-session";
 
 const SEGMENT = /^[a-z0-9_-]+$/i;
@@ -13,8 +14,8 @@ async function forward(request: NextRequest, params: Promise<{ path: string[] }>
     return NextResponse.json({ error: { code: "not_found", message: "Unknown API path" } }, { status: 404 });
   }
 
-  const apiUrl = process.env.NEXT_PUBLIC_API_URL;
-  if (!apiUrl) {
+  const url = apiUrl();
+  if (!url) {
     return NextResponse.json({ error: { code: "misconfigured", message: "NEXT_PUBLIC_API_URL is not set" } }, { status: 500 });
   }
 
@@ -32,7 +33,7 @@ async function forward(request: NextRequest, params: Promise<{ path: string[] }>
 
   let upstream: Response;
   try {
-    upstream = await fetch(`${apiUrl}/ops/v1/${path.join("/")}${request.nextUrl.search}`, init);
+    upstream = await fetch(`${url}/ops/v1/${path.join("/")}${request.nextUrl.search}`, init);
   } catch {
     return NextResponse.json({ error: { code: "upstream_unreachable", message: "The API could not be reached" } }, { status: 502 });
   }

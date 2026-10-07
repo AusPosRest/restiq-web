@@ -1,14 +1,15 @@
 import { NextRequest, NextResponse } from "next/server";
+import { apiUrl } from "@/lib/api-url";
 import { OPS_SESSION_COOKIE } from "@/lib/ops-session";
 
 export async function POST(request: NextRequest): Promise<NextResponse> {
   const token = request.cookies.get(OPS_SESSION_COOKIE)?.value;
-  const apiUrl = process.env.NEXT_PUBLIC_API_URL;
+  const url = apiUrl();
 
   // Best-effort: the backend writes the logout audit row; clearing the cookie
   // must succeed even if the API is briefly unreachable.
-  if (token && apiUrl) {
-    await fetch(`${apiUrl}/ops/v1/auth/logout`, {
+  if (token && url) {
+    await fetch(`${url}/ops/v1/auth/logout`, {
       method: "POST",
       headers: { authorization: `Bearer ${token}` },
       cache: "no-store",
