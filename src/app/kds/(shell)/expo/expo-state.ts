@@ -10,6 +10,8 @@ export interface ExpoRollUpItem {
   key: string;
   itemName: string;
   variantName: string | null;
+  /** Present only for an item picked inside a combo (restiq-backend#160). */
+  comboName?: string;
   quantity: number;
 }
 
@@ -19,10 +21,10 @@ export function rollUpItems(tickets: { lines: TicketLineView[] }[]): ExpoRollUpI
   for (const ticket of tickets) {
     for (const line of ticket.lines) {
       if (line.voided) continue;
-      const key = `${line.itemId}:${line.variantName ?? ""}`;
+      const key = `${line.itemId}:${line.variantName ?? ""}${line.comboName ? `:${line.comboName}` : ""}`;
       const existing = byKey.get(key);
       if (existing) existing.quantity += line.quantity;
-      else byKey.set(key, { key, itemName: line.itemName, variantName: line.variantName, quantity: line.quantity });
+      else byKey.set(key, { key, itemName: line.itemName, variantName: line.variantName, ...(line.comboName ? { comboName: line.comboName } : {}), quantity: line.quantity });
     }
   }
   return [...byKey.values()];

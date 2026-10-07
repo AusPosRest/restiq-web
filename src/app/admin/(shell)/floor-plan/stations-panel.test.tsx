@@ -8,10 +8,14 @@ import type { PrinterView, StationView } from "./floor-plan-state";
 const updateStation = vi.fn();
 const createStation = vi.fn();
 const createPrinter = vi.fn();
+const deleteStation = vi.fn();
+const applyStarterSetup = vi.fn();
 vi.mock("../../api", () => ({
   updateStation: (...args: unknown[]) => updateStation(...args),
   createStation: (...args: unknown[]) => createStation(...args),
   createPrinter: (...args: unknown[]) => createPrinter(...args),
+  deleteStation: (...args: unknown[]) => deleteStation(...args),
+  applyStarterSetup: (...args: unknown[]) => applyStarterSetup(...args),
 }));
 
 const PRINTERS: PrinterView[] = [
@@ -28,6 +32,8 @@ function renderPanel(stations: StationView[] = STATIONS, printers: PrinterView[]
   const onStationUpdated = vi.fn();
   const onStationCreated = vi.fn();
   const onPrinterCreated = vi.fn();
+  const onStationDeleted = vi.fn();
+  const onStarterApplied = vi.fn();
   render(
     <ToastProvider>
       <StationsPanel
@@ -36,11 +42,13 @@ function renderPanel(stations: StationView[] = STATIONS, printers: PrinterView[]
         printers={printers}
         onStationUpdated={onStationUpdated}
         onStationCreated={onStationCreated}
+        onStationDeleted={onStationDeleted}
+        onStarterApplied={onStarterApplied}
         onPrinterCreated={onPrinterCreated}
       />
     </ToastProvider>,
   );
-  return { onStationUpdated, onStationCreated, onPrinterCreated };
+  return { onStationUpdated, onStationCreated, onPrinterCreated, onStationDeleted, onStarterApplied };
 }
 
 afterEach(() => {
@@ -48,6 +56,8 @@ afterEach(() => {
   updateStation.mockReset();
   createStation.mockReset();
   createPrinter.mockReset();
+  deleteStation.mockReset();
+  applyStarterSetup.mockReset();
 });
 
 describe("StationsPanel", () => {
@@ -209,5 +219,47 @@ describe("StationsPanel", () => {
       await screen.findByTestId("toast-error");
       expect(screen.getByTestId("add-printer-name")).toHaveProperty("value", "KOT Printer");
     });
+  });
+
+  it("asks before removing a station, then removes it and tells the page", async () => {
+    deleteStation.mockResolvedValue(undefined);
+    const { onStationDeleted } = renderPanel();
+    await userEvent.click(screen.getByTestId("station-remove-station-2"));
+    expect(deleteStation).not.toHaveBeenCalled();
+    await userEvent.click(screen.getByTestId("station-remove-confirm-station-2"));
+
+    await waitFor(() => expect(onStationDeleted).toHaveBeenCalledWith("station-2"));
+    expect(deleteStation).toHaveBeenCalledWith("outlet-1", "station-2");
+  });
+
+  it("keeps the station when the owner backs out of removing it", async () => {
+    renderPanel();
+    await userEvent.click(screen.getByTestId("station-remove-station-2"));
+    await userEvent.click(screen.getByTestId("station-remove-cancel-station-2"));
+    expect(deleteStation).not.toHaveBeenCalled();
+    expect(screen.getByTestId("station-remove-station-2")).toBeTruthy();
+  });
+
+  it("offers the starter setup on an outlet with no stations and reloads the plan when it lands", async () => {
+    applyStarterSetup.mockResolvedValue({ type: "dine_in", stationsCreated: ["Hot Kitchen", "Bar"], tablesCreated: 8, capabilitiesSet: ["qr_ordering"] });
+    const { onStarterApplied } = renderPanel([]);
+    await userEvent.click(screen.getByTestId("stations-starter-setup"));
+
+    await waitFor(() => expect(onStarterApplied).toHaveBeenCalled());
+    expect(applyStarterSetup).toHaveBeenCalledWith("outlet-1");
+  });
+
+  it("does not offer the starter setup once the outlet has stations", () => {
+    renderPanel();
+    expect(screen.queryByTestId("stations-starter-setup")).toBeNull();
+  });
+
+  it("says so and stays put when the starter setup fails", async () => {
+    applyStarterSetup.mockRejectedValue(new Error("boom"));
+    const { onStarterApplied } = renderPanel([]);
+    await userEvent.click(screen.getByTestId("stations-starter-setup"));
+
+    expect(await screen.findByText(/Couldn't set up this outlet/)).toBeTruthy();
+    expect(onStarterApplied).not.toHaveBeenCalled();
   });
 });

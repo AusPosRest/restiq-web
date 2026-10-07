@@ -22,7 +22,7 @@ describe("EightySixToggle", () => {
   beforeEach(() => vi.unstubAllGlobals());
   afterEach(cleanup);
 
-  it("flips to checked (86'd) immediately (optimistic), before the request resolves", async () => {
+  it("is on while available and flips off (sold out) immediately, before the request resolves", async () => {
     let resolveRequest: (value: Response) => void = () => {};
     vi.stubGlobal(
       "fetch",
@@ -30,14 +30,14 @@ describe("EightySixToggle", () => {
     );
     render(<Harness initial={true} />);
 
-    const toggle = screen.getByTestId("item-86-toggle-item-1");
-    expect(toggle).toHaveProperty("ariaChecked", "false");
-
-    await userEvent.click(toggle);
+    const toggle = screen.getByRole("switch", { name: "Paneer Tikka available" });
     expect(toggle).toHaveProperty("ariaChecked", "true");
 
+    await userEvent.click(toggle);
+    expect(toggle).toHaveProperty("ariaChecked", "false");
+
     resolveRequest(jsonResponse({ id: "item-1", available: false }));
-    await waitFor(() => expect(toggle).toHaveProperty("ariaChecked", "true"));
+    await waitFor(() => expect(toggle).toHaveProperty("ariaChecked", "false"));
   });
 
   it("sends a PATCH to the item's availability endpoint with the new state", async () => {
@@ -63,7 +63,7 @@ describe("EightySixToggle", () => {
     await userEvent.click(toggle);
 
     await screen.findByTestId("toast-error");
-    await waitFor(() => expect(toggle).toHaveProperty("ariaChecked", "false"));
+    await waitFor(() => expect(toggle).toHaveProperty("ariaChecked", "true"));
     expect(screen.getByTestId("toast-error").textContent).toContain("Paneer Tikka");
   });
 
@@ -79,7 +79,7 @@ describe("EightySixToggle", () => {
     await screen.findByTestId("toast-error");
     await userEvent.click(screen.getByTestId("toast-retry"));
 
-    await waitFor(() => expect(screen.getByTestId("item-86-toggle-item-1")).toHaveProperty("ariaChecked", "true"));
+    await waitFor(() => expect(screen.getByTestId("item-86-toggle-item-1")).toHaveProperty("ariaChecked", "false"));
     expect(fetchMock).toHaveBeenCalledTimes(2);
   });
 });

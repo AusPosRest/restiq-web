@@ -1,5 +1,84 @@
 # Completed
 
+- **2026-09-22** - Web half of the POS security fixes (issue #290; restiq-backend#169/#170/#171):
+  - `src/lib/client-ip-headers.ts` makes the pos/admin/ops login route handlers forward the
+    browser's address with `PROXY_SHARED_SECRET`.
+  - The POS login forwards `deviceId` (from `getTabDeviceId()`).
+  - The pin pad uses `retryAfterSeconds`.
+  - `/pos/auth/logout` calls `POST /pos/v1/auth/logout` before clearing cookies.
+  - The permission matrix uses `RoleView.permissions` via `roleGrants`.
+- **2026-09-20** - Fix: KDS ticket age showed uncapped minutes (issue #285). `formatElapsed` in
+  `kds/(shell)/station/station-queue-state.ts` now returns `45s` / `12m 05s` / `3h 42m`; every KDS screen
+  and the bumped "took" line read through it.
+- **2026-09-19** - Owner Menu: one price per item, no Delivery price (issue #272). Menu table has a single
+  Price column, the item drawer shows one price per line, and Change price edits the dine-in channel only;
+  unused `PRIMARY_CHANNELS` / `PRICE_CHANNELS` / `CHANNEL_LABEL` removed. Backend price channels unchanged.
+- **2026-09-19** - Fix: POS counter flashed to its loading skeleton after every tap (issue #269). `loadBill()` in
+  `counter/counter-view.tsx` only sets `billLoading` when no bill is on screen yet, so refreshes after add /
+  quantity / remove / tender update in place. Regression test in `counter-view.test.tsx`.
+- **2026-09-19** - Owner console sidebar + Menu/Item drawer scrolling (issue #266, PR #267).
+  `(shell)/layout.tsx` sidebar is sticky and full height on every owner page. `MenuTable` scrolls
+  inside a viewport-high panel (min 20rem) with a sticky column header, category list stays put
+  beside it (unchanged below md). `item-drawer.tsx` pins its header and Delete/Save Changes footer
+  and scrolls only the form, via the new `.scrollbar-visible` utility in `globals.css`, matching
+  the combo editor.
+- **2026-09-19** - Combo menu (issue #264, backend restiq-backend#160). Owner **Combos** tab
+  (`combos-panel.tsx`, `combo-editor-state.ts`, `saveCombo`/`archiveCombo` in admin `api.ts`);
+  shared picker `src/components/combo-picker.tsx` over `src/lib/combo.ts` (picks, pricing,
+  savings, validation) used by POS order/counter (`pos-combo-tile.tsx`, `addComboLine`) and the QR
+  menu (`addCartCombo`); POS `toOrderView` folds a combo's child lines into its parent line
+  (`components`, combined total); invoice/receipt and cart print combo components; KDS station and
+  expo tag lines with `comboName`. Tests: `combo.test.ts`, `combo-picker.test.tsx`,
+  `combo-editor-state.test.ts`, a combo case in `order-taking-state.test.ts`.
+
+- **2026-09-18** - Marketing landing page (issue #262): new static `src/app/page.tsx` (fonts in `landing-fonts.ts` so tests can mock next/font), demo portal moved to `src/app/demo/` with its test, install banner skips `/`. Tests in `page.test.tsx`, `demo/page.test.tsx`, `install-state.test.ts`.
+- **2026-09-16** - Fix: floor-plan overlap on drop (issue #258). `nearestFreeSpot` in
+  `floor-plan-state.ts` keeps a clear drop, else picks the nearest free spot beside an overlapped
+  table (one grid step clear, x/y >= 0), else below every table. The canvas's `commit()` runs every
+  drag and arrow-key move through it, so no overlap reaches the backend's 409.
+
+- **2026-09-16** - Infinite floor-plan canvas (issue #237). `floor-plan-canvas.tsx` is a native scroll
+  viewport over a surface sized by `canvasExtent` (farthest table + 480 px), zoom 25-200% as a CSS scale
+  with pointer maths in canvas units, mouse-drag pan on empty space, edge-scroll while dragging a table,
+  and per-floor pan/zoom. `computeDragPosition` only floors at 0 (backend `@Min(0)`). Picked up from the
+  uncommitted work in the `restiq-web-floorcanvas` worktree.
+- **2026-09-16** - List pagination (issue #255). `src/lib/pagination.ts#paginate` (pure, 20/page,
+  clamped) + `src/components/pagination.tsx` (`usePagination(list, resetKey)` and
+  `PaginationControls`), applied to owner Menu / Staff / Devices and ops Sync Health /
+  Subscriptions. Tests: `pagination.test.ts(x)` and a 25-item case in `menu-management.test.tsx`.
+- **2026-09-16** - POS payment history (issue #253). `/pos/payments`
+  (`src/app/pos/(shell)/payments/payments-screen.tsx`, cookie-scoped outlet like status/), shift-bar
+  "Payments" link, `PaymentHistoryView` types in `pos/api.ts`.
+  Vitest for the screen and the bar link. Backend restiq-backend#158 / PR #159.
+- **2026-09-16** - Menu import and delete fixes (issues #246, #247, #248, each with a restiq-backend
+  half). #246: photos/PDFs are refused (backend 422 `extraction_unavailable`; the dropzone takes
+  CSV/XLSX) instead of a fixed 3-item sample. #247: commit returns 409 `duplicate_items` naming each
+  clash with an item already on the menu or repeated in the draft; the review table flags those rows
+  and every row has Remove (`PATCH removeIds`). #248: `DELETE /admin/v1/menu/items/:id` archives
+  (`menu_items.archived_at`, partial unique index on live names), every menu read skips archived
+  items, and the item drawer has Delete with a confirm step.
+
+- **2026-09-16** - Fix: Menu Import as a dialog (issue #239). `menu-management.tsx` opens
+  `MenuImport` in a radix `Dialog` from the header and empty-state buttons. `MenuImport` takes
+  `onCommitted(itemCount)`, which the Menu page uses to close the dialog, refetch items and
+  categories, and show a toast. The standalone `/admin/menu/import` stays for the onboarding
+  checklist, which now links with `?from=setup`. Its success button reads "Back to setup" only then,
+  otherwise "Go to your menu" (`/admin/menu`). 5 new component tests.
+- **2026-09-16** - Product directory (issue #245). Ops `/ops/catalog`
+  (`src/app/ops/(shell)/catalog/`: list, tag chips, market filter, add/edit dialog, delete via
+  `ConfirmReasonDialog`) and owner `Browse directory` on the Menu page
+  (`src/app/admin/(shell)/menu/directory-dialog.tsx`: search, tag chips, tick-and-import; the
+  menu drops its local overrides and refetches after an import). Vitest for both. Backend
+  restiq-backend#153 / PR #154.
+- **2026-09-15** - Settle screen: removed Back to table map / Refund… / Print invoice from the
+  Bill finalised panel (issue #226, owner request). Refund lost its only entry point.
+
+- **2026-09-15** - External payment + direct Print bill (issue #224, web half of
+  restiq-backend#146): `external` tender with a required reference in `tender-keypad.tsx`;
+  `print-bill-button.tsx` replaces the new-tab invoice link on settle and counter and posts
+  `bills/:id/print`. Tests in `bill-settle-view.test.tsx` / `counter-view.test.tsx`.
+- **2026-10-07** - Simulator page (issue #294): `src/app/simulator/` - pure `simulator-state.ts` (presets, camera/zoom/fit math, validation, persistence) + `simulator-canvas.tsx`. Iframes give each frame its own sessionStorage device identity; new frames place to the right of existing ones.
+
 - **2026-09-15** - Fix: POS text overflow (issue #240). `tender-keypad.tsx`'s method grid is
   `repeat(auto-fit,minmax(6.5rem,1fr))` (two per row in the counter's w-80 column); `bill-summary.tsx`
   lines get `pr-3` column padding and a no-wrap amount so long names wrap.
@@ -13,6 +92,31 @@
   metadata, and `install-banner.tsx` (Install button on Android/Chrome, Add to Home Screen
   steps on iOS; hidden when installed, dismissed, or on `/qr`). No service worker.
   4 new unit tests (`install-state.test.ts`).
+- **2026-09-12** - "Print bill" fires the print spool directly + thermal receipt on the
+  simulated printer (issue #208): shared `PrintBillButton` on settle, counter and the invoice
+  page (Sending → Sent to printer / Couldn't send, no page hop); `/pos/printer` renders each
+  job as an 80mm monospace receipt with a torn edge that feeds out of a paper slot
+  (`animate-paper-feed`, reduced-motion safe). Details in
+  [pos-cashier-waiter.md](../features/pos-cashier-waiter.md#print-bill-goes-straight-to-the-printer--thermal-receipt-issue-208).
+  4 test files touched, 26 passing; lint/typecheck clean.
+- **2026-09-12** - Owner Devices: Devices / Topology tabs (issue #212). The table,
+  enrolment code and printer config sit on one tab and the topology map on the other;
+  state stays above the tabs so switching is instant and keeps an active code. 1 new test,
+  40 passing in the devices folder; lint/typecheck clean.
+- **2026-09-15** - Menu photos everywhere + Menu Photos setting (issue #230, web half of
+  restiq-backend#148): the owner Menu table shows a thumbnail (or initial) per item; POS
+  order-taking and counter tiles show the item photo; QR / kiosk already did. Settings ▸
+  Capabilities gains **Menu Photos** (key `menu_photos`, on by default) - off makes the
+  backend send `photoUrl: null` to POS and guest menus, so every surface drops photos.
+  Capability tests updated; 263 passing across the touched folders; lint + typecheck clean.
+
+- **2026-09-12** - Kiosk: simulated kiosk screen + ordering from the kiosk (issue #214, web
+  half of restiq-backend#138). `/qr/kiosk/[outletId]` attract screen starts a device-bound
+  guest session and reuses the menu / cart / status screens in kiosk mode (token number
+  headline, pay at the counter, no Request bill); "Start over" and a 90 s idle timeout reset
+  the kiosk. Device "Continue" and the landing page open it. Details in
+  [qr-self-order.md](../features/qr-self-order.md#kiosk---simulated-kiosk-screen-and-ordering-from-the-kiosk-issue-214).
+  13 new tests, 236 passing across the touched folders; lint clean.
 
 - **2026-09-09** - Agreements with versioning + owner digital signature (issue #192, web half
   of restiq-backend#133): `/ops/agreements` (publish through the reason dialog, expand a row
@@ -1317,3 +1421,28 @@ faked.
   and card payments, poll with `?deviceId=`, and heartbeat every 30 s
   (`pos/device-heartbeat.tsx`). Tests: `topology.test.tsx`,
   `devices-state.test.ts` (`connectionState`), `terminal-binding.test.ts`.
+- **2026-09-09** - KDS: plain-language tab names (issue #184). The header
+  tabs now read Cook / Serve / Done / Counts instead of Station / Expo /
+  Bumped / All-Day, and each `TAB_SUBTITLES` line leads with the kitchen
+  term it replaced ("Station queue — …", "Expo — …", "Bumped tickets — …",
+  "All-day summary — …") so trained staff still recognise the view. One-file
+  copy change in `kds-header.tsx`; routes, `KdsMode` values and test ids
+  unchanged; the four screen tests' subtitle assertions updated. See
+  [wiki/features/kitchen-display.md](../features/kitchen-display.md).
+- **2026-09-12** - Owner Devices: Remove a device with confirm-and-reason
+  (issue #215). Per-row `device-remove-<id>` on enrolled devices →
+  `ConfirmReasonDialog` → `revokeDevice` (restiq-backend#140's owner-scoped
+  revoke); the row flips to Revoked in place, linked peripherals fall back
+  to shared, success/error toasts. Tests on the table and the screen flow.
+  See [wiki/features/tenant-admin.md](../features/tenant-admin.md)
+  (Remove a device).
+- **2026-09-29 - Windows app printer + drawer (#292).** `src/lib/desktop.ts`
+  wraps the restiq-desktop bridge (`window.restiqDesktop`): invoice Print
+  uses `printPage()` (silent print in the app, `window.print()` elsewhere),
+  and both finalise paths call `openDrawerForTenders()` when a cash tender
+  was taken. Tests: `src/lib/desktop.test.ts`.
+- **2026-10-07 - Set up an outlet from its type, remove stations (D2).** On the
+  floor-plan page an outlet with no stations shows "Set up for my outlet type"
+  (`stations-starter-setup`), which builds the type's stations, tables and
+  switches and reloads the plan; each station row has Remove with a confirm step.
+  Tests: `stations-panel.test.tsx`.

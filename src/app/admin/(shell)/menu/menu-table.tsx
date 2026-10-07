@@ -1,12 +1,13 @@
 "use client";
 
-// T4/T4a Menu Management item list: 86 toggle per row, dine-in/delivery price
-// columns. Price is fetched per item (GET .../price?channel=X - the only
+// T4/T4a Menu Management item list: Available switch per row, one price column
+// (dine-in channel; no delivery price, #272). Price is fetched per item (GET .../price?channel=X - the only
 // price read the real backend exposes, see menu-state.ts's file header) once
 // the row mounts; an item with variants shows "Varies by variant" instead of
 // fetching every variant's price for every list row.
 import { GripVertical } from "lucide-react";
 import { useEffect, useState } from "react";
+import { PaginationControls, usePagination } from "@/components/pagination";
 import { fetchCurrentPrice } from "../../api";
 import { EightySixToggle } from "./eighty-six-toggle";
 import { formatPriceMinor, ItemView } from "./menu-state";
@@ -14,27 +15,38 @@ import { formatPriceMinor, ItemView } from "./menu-state";
 export function MenuTable({
   items,
   currency,
+  filterKey,
   onSelect,
   onAvailabilityChanged,
-}: Readonly<{ items: ItemView[]; currency: string; onSelect: (item: ItemView) => void; onAvailabilityChanged: (itemId: string, available: boolean) => void }>) {
+}: Readonly<{
+  items: ItemView[];
+  currency: string;
+  /** Changes whenever the category/search filter changes, so the pager returns to page 1 (issue #255). */
+  filterKey?: string;
+  onSelect: (item: ItemView) => void;
+  onAvailabilityChanged: (itemId: string, available: boolean) => void;
+}>) {
+  const pager = usePagination(items, filterKey);
   return (
+    <>
     <table data-testid="menu-table" className="w-full text-sm">
-      <thead className="text-left text-xs font-semibold uppercase tracking-wider text-muted-foreground">
+      <thead className="sticky top-0 z-10 bg-card text-left text-xs font-semibold uppercase tracking-wider text-muted-foreground">
         <tr className="h-12 border-b border-border/40">
           <th className="w-6" />
           <th className="px-3">Item</th>
-          <th className="px-3 text-right">Dine-in</th>
-          <th className="px-3 text-right">Delivery</th>
+          <th className="px-3 text-right">Price</th>
           <th className="px-3">Variants</th>
-          <th className="px-3 text-center">86&apos;d</th>
+          <th className="px-3 text-center">Available</th>
         </tr>
       </thead>
       <tbody>
-        {items.map((item) => (
+        {pager.items.map((item) => (
           <MenuTableRow key={item.id} item={item} currency={currency} onSelect={onSelect} onAvailabilityChanged={onAvailabilityChanged} />
         ))}
       </tbody>
     </table>
+    <PaginationControls pager={pager} testId="menu-pagination" />
+    </>
   );
 }
 
@@ -45,17 +57,14 @@ function MenuTableRow({
   onAvailabilityChanged,
 }: Readonly<{ item: ItemView; currency: string; onSelect: (item: ItemView) => void; onAvailabilityChanged: (itemId: string, available: boolean) => void }>) {
   const hasVariants = item.variants.length > 0;
-  const [price, setPrice] = useState<{ dineInPriceMinor: number | null; deliveryPriceMinor: number | null }>({
-    dineInPriceMinor: null,
-    deliveryPriceMinor: null,
-  });
+  const [priceMinor, setPriceMinor] = useState<number | null>(null);
 
   useEffect(() => {
     if (hasVariants) return;
     let cancelled = false;
-    Promise.all([fetchCurrentPrice(item.id, { channel: "dine_in" }), fetchCurrentPrice(item.id, { channel: "delivery" })])
-      .then(([dineIn, delivery]) => {
-        if (!cancelled) setPrice({ dineInPriceMinor: dineIn?.priceMinor ?? null, deliveryPriceMinor: delivery?.priceMinor ?? null });
+    fetchCurrentPrice(item.id, { channel: "dine_in" })
+      .then((price) => {
+        if (!cancelled) setPriceMinor(price?.priceMinor ?? null);
       })
       .catch(() => undefined);
     return () => {
@@ -80,19 +89,24 @@ function MenuTableRow({
       </td>
       <td className="px-3">
         <div className="flex items-center gap-2">
+          {item.photoUrl ? (
+            // eslint-disable-next-line @next/next/no-img-element -- owner-supplied https or data: URLs, not something next/image's optimizer can handle
+            <img data-testid={`menu-item-row-${item.id}-photo`} src={item.photoUrl} alt="" loading="lazy" className="size-9 shrink-0 rounded-md object-cover" />
+          ) : (
+            <span aria-hidden="true" className="flex size-9 shrink-0 items-center justify-center rounded-md bg-muted text-xs font-semibold text-muted-foreground">
+              {item.name.charAt(0).toUpperCase()}
+            </span>
+          )}
           <p className="font-medium">{item.name}</p>
           {!item.available && (
             <span data-testid={`menu-item-row-${item.id}-86-badge`} className="rounded-full bg-status-error/15 px-2 py-0.5 text-xs text-status-error">
-              86&apos;d
+              Sold out
             </span>
           )}
         </div>
       </td>
       <td className="px-3 text-right tabular-nums">
-        {hasVariants ? <span className="text-xs text-muted-foreground">Varies</span> : price.dineInPriceMinor === null ? "-" : formatPriceMinor(price.dineInPriceMinor, currency)}
-      </td>
-      <td className="px-3 text-right tabular-nums">
-        {hasVariants ? <span className="text-xs text-muted-foreground">Varies</span> : price.deliveryPriceMinor === null ? "-" : formatPriceMinor(price.deliveryPriceMinor, currency)}
+        {hasVariants ? <span className="text-xs text-muted-foreground">Varies</span> : priceMinor === null ? "-" : formatPriceMinor(priceMinor, currency)}
       </td>
       <td className="px-3">
         {hasVariants ? (

@@ -17,19 +17,6 @@
 
 export type PriceChannel = "dine_in" | "takeaway" | "delivery" | "qr" | "aggregator";
 
-export const PRICE_CHANNELS: PriceChannel[] = ["dine_in", "takeaway", "delivery", "qr", "aggregator"];
-
-export const CHANNEL_LABEL: Record<PriceChannel, string> = {
-  dine_in: "Dine-in",
-  takeaway: "Takeaway",
-  delivery: "Delivery",
-  qr: "QR",
-  aggregator: "Aggregator",
-};
-
-/** The two channels shown as list/drawer price columns - the others remain settable through the same API, just not surfaced as their own column in v1. */
-export const PRIMARY_CHANNELS: PriceChannel[] = ["dine_in", "delivery"];
-
 export interface VariantView {
   id: string;
   name: string;
@@ -61,6 +48,8 @@ export interface ItemView {
   name: string;
   shortName: string;
   available: boolean;
+  // https or an uploaded data:image URL (issue #218); optional for older backends.
+  photoUrl?: string | null;
   variants: VariantView[];
   modifierGroups: ModifierGroupView[];
   allergens: AllergenView[];
@@ -73,18 +62,35 @@ export interface CategoryView {
   itemCount: number;
 }
 
-export interface ComboComponentView {
+// restiq-backend#160: a combo is built from slots. A slot picks pickCount
+// items from its options; a slot with one option is a fixed part of the
+// combo. Same shape the POS and guest menus receive.
+export interface ComboOptionView {
+  id: string;
   itemId: string;
-  quantity: number;
+  itemName: string;
+  variantId: string | null;
+  variantName: string | null;
+  upchargeMinor: number;
+  available: boolean;
+}
+
+export interface ComboSlotView {
+  id: string;
+  name: string;
+  pickCount: number;
+  options: ComboOptionView[];
 }
 
 export interface ComboView {
   id: string;
-  name: string;
   categoryId: string | null;
+  name: string;
+  photoUrl: string | null;
   priceMinor: number;
   currency: string;
-  components: ComboComponentView[];
+  available: boolean;
+  slots: ComboSlotView[];
 }
 
 export interface CurrentPriceView {
@@ -210,8 +216,4 @@ export function validateModifierGroup(
 
 export function modifierGroupIsValid(group: Pick<ModifierGroupView, "name" | "minSelections" | "maxSelections" | "modifiers">): boolean {
   return Object.keys(validateModifierGroup(group)).length === 0;
-}
-
-export function combosForItem(combos: readonly ComboView[], itemId: string): ComboView[] {
-  return combos.filter((combo) => combo.components.some((component) => component.itemId === itemId));
 }

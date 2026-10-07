@@ -13,14 +13,13 @@
 // (src/pos/auth/lockout.ts, auth.service.ts, read directly): a wrong PIN
 // returns just `{code, message}` - no attemptsRemaining - and a lockout
 // returns `{code: "locked_out", message}` with no lockedUntil timestamp
-// either. The 30s window is a fixed backend constant (lockout.ts's
-// LOCKOUT_MS), not something the response carries, so the client times the
-// countdown off its own clock the moment the 429 arrives - same fixed
-// window the static caption below already advertised.
+// either. restiq-backend#171 moved the lock onto the till / address and
+// added `retryAfterSeconds` to the 429, so the countdown runs to the real
+// end of the window; 30s is only the fallback for an older API.
 import { Delete } from "lucide-react";
 import { useEffect, useRef, useState } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
-import { clearTerminalBinding, getTerminalBinding, saveTabDeviceId, saveTerminalBinding, type TerminalBinding } from "../terminal-binding";
+import { clearTerminalBinding, getTabDeviceId, getTerminalBinding, saveTabDeviceId, saveTerminalBinding, type TerminalBinding } from "../terminal-binding";
 import {
   appendDigit,
   backspacePin,
@@ -33,7 +32,7 @@ import {
 } from "./pin-login-state";
 
 const DIGIT_KEYS = ["1", "2", "3", "4", "5", "6", "7", "8", "9", "", "0", "backspace"] as const;
-// Mirrors restiq-backend's lockout.ts LOCKOUT_MS exactly.
+// Fallback when the 429 carries no retryAfterSeconds (an API before restiq-backend#171).
 const LOCKOUT_MS = 30_000;
 
 interface ErrorBody {
@@ -42,7 +41,7 @@ interface ErrorBody {
   // Our own route handler's synthesized errors (validation/misconfigured/
   // upstream_unreachable) nest under `error`; the backend's own errors,
   // passed through untouched, don't. Read either shape.
-  error?: { code?: string; message?: string };
+  error?: { code?: string; message?: string; retryAfterSeconds?: number };
 }
 
 function errorMessage(body: ErrorBody, fallback: string): string {
@@ -92,12 +91,14 @@ async function postJson(path: string, body: unknown): Promise<SubmitResult> {
   }
 
   if (res.status === 429) {
+    const lockBody = (await res.json().catch(() => ({}))) as ErrorBody;
+    const retryAfterMs = (lockBody.error?.retryAfterSeconds ?? LOCKOUT_MS / 1000) * 1000;
     // Computed here (a plain module-level function, not inside the
     // component) rather than in the click-handler chain that consumes it -
     // React's purity rule disallows calling Date.now() from a component's
     // render-associated functions, even ones only ever invoked from an
     // event handler.
-    return { kind: "locked", lockedUntil: new Date(Date.now() + LOCKOUT_MS).toISOString() };
+    return { kind: "locked", lockedUntil: new Date(Date.now() + retryAfterMs).toISOString() };
   }
   const errBody = (await res.json().catch(() => ({}))) as ErrorBody;
   if (res.status === 401) {
@@ -107,7 +108,9 @@ async function postJson(path: string, body: unknown): Promise<SubmitResult> {
 }
 
 function submitPin(pin: string, tenantId: string | undefined): Promise<SubmitResult> {
-  return postJson("/pos/auth/login", tenantId ? { pin, tenantId } : { pin });
+  // restiq-backend#171: an enrolled till gets its own wrong-PIN allowance.
+  const deviceId = getTabDeviceId() ?? undefined;
+  return postJson("/pos/auth/login", { pin, ...(tenantId ? { tenantId } : {}), ...(deviceId ? { deviceId } : {}) });
 }
 
 function submitOutletSelection(pendingToken: string, outletId: string): Promise<SubmitResult> {
@@ -150,8 +153,8 @@ export function PinPad({ nextPath }: { nextPath: string }) {
   }
 
   // Live lockout countdown, timed off this tab's own clock from the moment
-  // the 429 arrived (see file header - the backend's fixed 30s window isn't
-  // echoed back in the response) - ticks every second and clears the lock as
+  // the 429 arrived, for the API's retryAfterSeconds (see file header) -
+  // ticks every second and clears the lock as
   // soon as real elapsed time says it has expired.
   useEffect(() => {
     if (state.step !== "locked") return;
@@ -288,7 +291,7 @@ export function PinPad({ nextPath }: { nextPath: string }) {
           </div>
 
           <p className="mt-8 font-headline text-sm font-semibold text-primary">Clock In / Out</p>
-          <p className="mt-1 text-xs text-muted-foreground">5 attempts, then 30 second lockout</p>
+          <p className="mt-1 text-xs text-muted-foreground">10 wrong PINs locks this terminal for up to 15 minutes</p>
         </>
       )}
 
@@ -344,7 +347,7 @@ function LockedPanel({ remaining }: Readonly<{ remaining: number }>) {
       <h1 className="font-headline text-xl font-semibold text-foreground">Terminal locked</h1>
       <p className="mt-2 text-sm text-muted-foreground">Too many incorrect attempts.</p>
       <p className="mt-6 font-headline text-4xl font-bold tabular-nums text-primary" data-testid="pos-pin-lockout-countdown">
-        {remaining}s
+        {remaining >= 60 ? `${Math.floor(remaining / 60)}:${String(remaining % 60).padStart(2, "0")}` : `${remaining}s`}
       </p>
       <p className="mt-2 text-xs text-muted-foreground">Try again shortly</p>
     </div>

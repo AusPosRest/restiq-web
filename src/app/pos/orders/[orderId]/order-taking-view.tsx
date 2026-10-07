@@ -13,15 +13,19 @@
 import Link from "next/link";
 import { useMemo, useState } from "react";
 import { Search } from "lucide-react";
-import { addOrderLine, PosApiError, removeOrderLine, sendOrderToKitchen, updateOrderLineQuantity } from "../../api";
+import { ComboPicker, type ComboPickerConfirmValue } from "@/components/combo-picker";
+import { combosFor, type ComboMenuView } from "@/lib/combo";
+import { addComboLine, addOrderLine, PosApiError, removeOrderLine, sendOrderToKitchen, updateOrderLineQuantity } from "../../api";
 import { LoadErrorPanel, Skeleton } from "../../data-states";
 import { usePosLoad } from "../../use-pos-load";
 import { ModifierSheet, type ModifierSheetConfirmValue } from "./modifier-sheet";
 import { OrderPanel } from "./order-panel";
+import { PosComboTile } from "./pos-combo-tile";
 import { PosItemTile } from "./pos-item-tile";
 import {
   canSendToKitchen,
   filterMenuItems,
+  formatPriceMinor,
   itemNeedsModifierSheet,
   orderOriginLabel,
   toOrderView,
@@ -65,6 +69,7 @@ function OrderTakingLoaded({
   const [selectedCategoryId, setSelectedCategoryId] = useState<string | null>(null);
   const [query, setQuery] = useState("");
   const [activeItem, setActiveItem] = useState<PosMenuItemView | null>(null);
+  const [activeCombo, setActiveCombo] = useState<ComboMenuView | null>(null);
   const [addingLine, setAddingLine] = useState(false);
   const [busyLineId, setBusyLineId] = useState<string | null>(null);
   const [actionError, setActionError] = useState<string | null>(null);
@@ -73,6 +78,8 @@ function OrderTakingLoaded({
   const sortedCategories = useMemo(() => [...menu.categories].sort((a, b) => a.sortOrder - b.sortOrder), [menu.categories]);
   const effectiveCategoryId = selectedCategoryId ?? sortedCategories[0]?.id ?? null;
   const visibleItems = useMemo(() => filterMenuItems(menu.items, effectiveCategoryId, query), [menu.items, effectiveCategoryId, query]);
+  const visibleCombos = useMemo(() => combosFor(menu.combos, effectiveCategoryId, query), [menu.combos, effectiveCategoryId, query]);
+  const itemsById = useMemo(() => new Map(menu.items.map((item) => [item.id, item])), [menu.items]);
   const activeCategory = sortedCategories.find((category) => category.id === effectiveCategoryId) ?? null;
 
   function submitLine(itemId: string, value: ModifierSheetConfirmValue, onSettled: () => void) {
@@ -121,6 +128,19 @@ function OrderTakingLoaded({
   function handleConfirmModifiers(value: ModifierSheetConfirmValue) {
     if (!activeItem) return;
     submitLine(activeItem.id, value, () => setActiveItem(null));
+  }
+
+  function handleConfirmCombo(value: ComboPickerConfirmValue) {
+    if (!activeCombo) return;
+    setAddingLine(true);
+    setActionError(null);
+    addComboLine(orderId, { comboId: activeCombo.id, ...value }, menu)
+      .then((updated) => {
+        setOrder(updated);
+        setActiveCombo(null);
+      })
+      .catch((error: unknown) => setActionError(errorMessage(error, "Couldn't add that combo to the order.")))
+      .finally(() => setAddingLine(false));
   }
 
   function handleIncrement(line: OrderLineView) {
@@ -227,12 +247,15 @@ function OrderTakingLoaded({
           <h2 className="mb-3 font-headline text-base font-semibold text-foreground">
             {query.trim() ? "Search results" : activeCategory?.name} <span className="font-normal text-muted-foreground">· {visibleItems.length} items</span>
           </h2>
-          {visibleItems.length === 0 ? (
+          {visibleItems.length === 0 && visibleCombos.length === 0 ? (
             <p data-testid="menu-empty" className="text-sm text-muted-foreground">
               No items match.
             </p>
           ) : (
             <div data-testid="item-grid" className="grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-4">
+              {visibleCombos.map((combo) => (
+                <PosComboTile key={combo.id} combo={combo} itemsById={itemsById} currency={menu.currency} onTap={() => !addingLine && setActiveCombo(combo)} />
+              ))}
               {visibleItems.map((item) => (
                 <PosItemTile key={item.id} item={item} currency={menu.currency} onTap={() => item.available && handleTapItem(item)} />
               ))}
@@ -256,6 +279,18 @@ function OrderTakingLoaded({
           onSendToKitchen={handleSendToKitchen}
         />
       </div>
+
+      {activeCombo && (
+        <ComboPicker
+          combo={activeCombo}
+          itemsById={itemsById}
+          formatPrice={(minor) => formatPriceMinor(minor, menu.currency)}
+          themeClass="pos-theme"
+          busy={addingLine}
+          onCancel={() => setActiveCombo(null)}
+          onConfirm={handleConfirmCombo}
+        />
+      )}
 
       {activeItem && (
         <ModifierSheet item={activeItem} currency={menu.currency} busy={addingLine} onCancel={() => setActiveItem(null)} onConfirm={handleConfirmModifiers} />

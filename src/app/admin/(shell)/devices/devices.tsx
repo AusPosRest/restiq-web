@@ -7,9 +7,11 @@
 import { MonitorSmartphone, Plus } from "lucide-react";
 import { useEffect, useState } from "react";
 import { Button } from "@/components/ui/button";
-import { fetchDevices, fetchFloorPlan } from "../../api";
+import { AdminApiError, fetchDevices, fetchFloorPlan, revokeDevice } from "../../api";
+import { ConfirmReasonDialog } from "../confirm-reason-dialog";
 import { LoadErrorPanel, Skeleton } from "../data-states";
 import { useOutlets } from "../outlet-context";
+import { useToast } from "../toast";
 import { CodeChip } from "./code-chip";
 import { DevicesTable } from "./devices-table";
 import { GenerateCodeDialog } from "./generate-code-dialog";
@@ -93,6 +95,16 @@ function OutletDevices({ outletId }: Readonly<{ outletId: string }>) {
 // The topology's online dots follow the devices' 30 s heartbeat (issue #210).
 const DEVICES_REFRESH_MS = 30_000;
 
+// Devices (table, enrolment code, printer config) and Topology (the map) as
+// two tabs (issue #212) - all state lives in DevicesEditor so switching is
+// instant and never drops an active code or an in-flight link. Same
+// role=tablist idiom as /ops's Tenant Detail; ponytail: no URL param.
+const VIEWS = [
+  { key: "devices", label: "Devices" },
+  { key: "topology", label: "Topology" },
+] as const;
+type ViewKey = (typeof VIEWS)[number]["key"];
+
 function DevicesEditor({ outletId, initial }: Readonly<{ outletId: string; initial: DevicesData }>) {
   const [devices, setDevices] = useState<AdminDeviceView[]>(initial.devices);
   const [now, setNow] = useState(() => Date.now());
@@ -100,6 +112,33 @@ function DevicesEditor({ outletId, initial }: Readonly<{ outletId: string; initi
   const [stations, setStations] = useState<StationView[]>(initial.stations);
   const [activeCode, setActiveCode] = useState<EnrolmentCodeResult | null>(null);
   const [generateOpen, setGenerateOpen] = useState(false);
+  const [view, setView] = useState<ViewKey>("devices");
+  // Remove device (issue #215): confirm with a reason, then revoke - the row
+  // flips to Revoked in place and anything linked to it goes back to the outlet.
+  const [removeTarget, setRemoveTarget] = useState<AdminDeviceView | null>(null);
+  const [removeBusy, setRemoveBusy] = useState(false);
+  const toast = useToast();
+
+  async function handleConfirmRemove(reason: string) {
+    if (!removeTarget) return;
+    const target = removeTarget;
+    setRemoveBusy(true);
+    try {
+      const result = await revokeDevice(outletId, target.id, reason);
+      setDevices((current) =>
+        current.map((d) => {
+          if (d.id === result.id) return { ...d, status: "revoked", revokedAt: result.revokedAt, pairedPosId: null };
+          return d.pairedPosId === result.id ? { ...d, pairedPosId: null } : d;
+        }),
+      );
+      setRemoveTarget(null);
+      toast({ kind: "success", message: `${target.label} removed.` });
+    } catch (error) {
+      toast({ kind: "error", message: error instanceof AdminApiError ? error.message : "Couldn't remove this device." });
+    } finally {
+      setRemoveBusy(false);
+    }
+  }
 
   useEffect(() => {
     const id = setInterval(() => {
@@ -126,30 +165,64 @@ function DevicesEditor({ outletId, initial }: Readonly<{ outletId: string; initi
         </Button>
       </div>
 
-      <Topology
-        outletId={outletId}
-        devices={devices}
-        now={now}
-        onLinked={(deviceId, posDeviceId) => setDevices((current) => current.map((d) => (d.id === deviceId ? { ...d, pairedPosId: posDeviceId } : d)))}
-      />
-
-      <div className="grid grid-cols-1 gap-6 2xl:grid-cols-[minmax(0,1fr)_320px]">
-        <DevicesTable devices={devices} />
-        {activeCode ? (
-          <CodeChip key={activeCode.code} code={activeCode.code} expiresAt={activeCode.expiresAt} onRegenerate={() => setGenerateOpen(true)} />
-        ) : (
-          <div data-testid="devices-no-active-code" className="flex flex-col items-center justify-center gap-2 rounded-lg border border-dashed border-border/60 bg-card/50 p-5 text-center text-sm text-muted-foreground">
-            No active enrolment code. Enrol a device to generate one.
-          </div>
-        )}
+      <div role="tablist" aria-label="Device views" className="flex gap-1 border-b border-border/40">
+        {VIEWS.map(({ key, label }) => (
+          <button
+            key={key}
+            type="button"
+            role="tab"
+            aria-selected={view === key}
+            data-testid={`devices-tab-${key}`}
+            onClick={() => setView(key)}
+            className={`-mb-px border-b-2 px-4 py-2.5 text-sm transition-colors focus:outline-none focus-visible:ring-2 focus-visible:ring-ring ${
+              view === key ? "border-primary font-semibold text-primary" : "border-transparent text-muted-foreground hover:text-foreground"
+            }`}
+          >
+            {label}
+          </button>
+        ))}
       </div>
 
-      <PrinterConfigPanel
-        outletId={outletId}
-        printers={printers}
-        stations={stations}
-        onPrinterUpdated={(saved) => setPrinters((current) => current.map((p) => (p.id === saved.id ? saved : p)))}
-        onStationUpdated={(saved) => setStations((current) => current.map((s) => (s.id === saved.id ? saved : s)))}
+      {view === "topology" && (
+        <Topology
+          outletId={outletId}
+          devices={devices}
+          now={now}
+          onLinked={(deviceId, posDeviceId) => setDevices((current) => current.map((d) => (d.id === deviceId ? { ...d, pairedPosId: posDeviceId } : d)))}
+        />
+      )}
+
+      {view === "devices" && (
+        <div className="grid grid-cols-1 gap-6 2xl:grid-cols-[minmax(0,1fr)_320px]">
+          <DevicesTable devices={devices} onRemove={setRemoveTarget} />
+          {activeCode ? (
+            <CodeChip key={activeCode.code} code={activeCode.code} expiresAt={activeCode.expiresAt} onRegenerate={() => setGenerateOpen(true)} />
+          ) : (
+            <div data-testid="devices-no-active-code" className="flex flex-col items-center justify-center gap-2 rounded-lg border border-dashed border-border/60 bg-card/50 p-5 text-center text-sm text-muted-foreground">
+              No active enrolment code. Enrol a device to generate one.
+            </div>
+          )}
+        </div>
+      )}
+
+      {view === "devices" && (
+        <PrinterConfigPanel
+          outletId={outletId}
+          printers={printers}
+          stations={stations}
+          onPrinterUpdated={(saved) => setPrinters((current) => current.map((p) => (p.id === saved.id ? saved : p)))}
+          onStationUpdated={(saved) => setStations((current) => current.map((s) => (s.id === saved.id ? saved : s)))}
+        />
+      )}
+
+      <ConfirmReasonDialog
+        open={removeTarget !== null}
+        title={removeTarget ? `Remove ${removeTarget.label}?` : ""}
+        description="It won't be able to sign in, print or take payments any more, and stays listed as Revoked for the audit trail. Anything linked to it goes back to serving the whole outlet."
+        verb="Remove device"
+        busy={removeBusy}
+        onCancel={() => !removeBusy && setRemoveTarget(null)}
+        onConfirm={(reason) => void handleConfirmRemove(reason)}
       />
 
       <GenerateCodeDialog open={generateOpen} onClose={() => setGenerateOpen(false)} outletId={outletId} onGenerated={setActiveCode} />

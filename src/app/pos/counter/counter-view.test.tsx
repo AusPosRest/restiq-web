@@ -182,12 +182,11 @@ describe("CounterView - ring up and settle in one continuous flow", () => {
     expect(screen.getByTestId("bill-line-line-1").textContent).toContain("Butter Naan");
     expect(screen.getByTestId("bill-line-line-1").textContent).not.toContain("item-naan");
 
-    // Print bill (issue #160): available next to Charge while the bill is
-    // still open, opens the same invoice route in a new tab.
-    const printBillLink = screen.getByTestId("print-bill-link");
-    expect(printBillLink.getAttribute("href")).toBe("/pos/bills/bill-order-47/invoice");
-    expect(printBillLink.getAttribute("target")).toBe("_blank");
-    expect(printBillLink.getAttribute("rel")).toBe("noopener");
+    // Print bill (issues #160, #224): next to Charge while the bill is still
+    // open; a button that sends to the printer, not a link to the invoice page.
+    const printBill = screen.getByTestId("print-bill");
+    expect(printBill.textContent).toBe("Print bill");
+    expect(printBill.getAttribute("href")).toBeNull();
 
     // Settle right here, no navigation to a /settle route.
     await user.click(screen.getByTestId("tender-fill-remaining"));
@@ -201,6 +200,46 @@ describe("CounterView - ring up and settle in one continuous flow", () => {
     expect(screen.queryByTestId("tender-keypad")).toBeNull();
     expect(screen.queryByTestId("item-grid")).toBeNull();
     expect(screen.getByTestId("print-invoice-link").getAttribute("href")).toBe("/pos/bills/bill-order-47/invoice");
+  });
+
+  it("keeps the counter on screen while the bill refreshes after a tap, no loading flash (#269)", async () => {
+    const user = userEvent.setup();
+    let billRequests = 0;
+    stubFetch({
+      "GET menu": () => jsonResponse(MENU),
+      [`POST outlets/${OUTLET_ID}/counter-orders`]: () => jsonResponse(counterOrder(), 201),
+      // First read resolves; the refresh after the tap never does, so any
+      // loading shell it triggers would stay on screen.
+      "POST orders/order-47/bill": () => (++billRequests === 1 ? jsonResponse(bill("order-47"), 201) : (new Promise(() => {}) as unknown as Response)),
+      "POST orders/order-47/lines": () =>
+        jsonResponse(
+          counterOrder({
+            lines: [
+              {
+                id: "line-1",
+                orderId: "order-47",
+                itemId: "item-naan",
+                variantId: null,
+                quantity: 1,
+                unitPriceMinor: 6000,
+                seatNumber: null,
+                addedByStaffId: "staff-priya",
+                createdAt: "2026-08-25T09:01:00.000Z",
+                modifiers: [],
+              },
+            ],
+          }),
+        ),
+    });
+
+    render(<CounterView outletId={OUTLET_ID} currentStaffId={CURRENT_STAFF_ID} />);
+    await screen.findByTestId("counter-view");
+    await user.click(screen.getByTestId("item-tile-item-naan"));
+
+    await waitFor(() => expect(billRequests).toBe(2));
+    expect(screen.queryByTestId("counter-loading")).toBeNull();
+    expect(screen.getByTestId("item-grid")).toBeTruthy();
+    expect(screen.getByTestId("bill-line-line-1")).toBeTruthy();
   });
 
   it("bumps the existing line's quantity on a repeat tap instead of adding a duplicate line (#129)", async () => {

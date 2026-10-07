@@ -10,16 +10,16 @@ export interface PriceScheduleForm {
   mode: PriceScheduleMode;
   effectiveDate: string;
   dineIn: string;
-  delivery: string;
   reason: string;
 }
 
-export function initialPriceScheduleForm(current: { dineInPriceMinor: number; deliveryPriceMinor: number }): PriceScheduleForm {
+// One price per item or variant (#272): RESTIQ has no delivery channel, so the
+// form edits the dine-in price only.
+export function initialPriceScheduleForm(currentPriceMinor: number): PriceScheduleForm {
   return {
     mode: "today",
     effectiveDate: "",
-    dineIn: (current.dineInPriceMinor / 100).toFixed(2),
-    delivery: (current.deliveryPriceMinor / 100).toFixed(2),
+    dineIn: (currentPriceMinor / 100).toFixed(2),
     reason: "",
   };
 }
@@ -27,7 +27,6 @@ export function initialPriceScheduleForm(current: { dineInPriceMinor: number; de
 export interface PriceScheduleErrors {
   effectiveDate?: string;
   dineIn?: string;
-  delivery?: string;
   reason?: string;
 }
 
@@ -42,8 +41,7 @@ function isValidMoney(value: string): boolean {
 
 export function validatePriceScheduleForm(form: PriceScheduleForm, today: Date): PriceScheduleErrors {
   const errors: PriceScheduleErrors = {};
-  if (!isValidMoney(form.dineIn)) errors.dineIn = "Enter a valid dine-in price.";
-  if (!isValidMoney(form.delivery)) errors.delivery = "Enter a valid delivery price.";
+  if (!isValidMoney(form.dineIn)) errors.dineIn = "Enter a valid price.";
   if (form.mode === "schedule") {
     if (!form.effectiveDate) errors.effectiveDate = "Pick a date for this change.";
     else if (form.effectiveDate <= todayIsoDate(today)) errors.effectiveDate = "Pick a date after today.";

@@ -79,7 +79,11 @@ export function decideGuestRoute(
   // instead (/qr/cart, matching this function's own pre-existing test
   // literal /qr/menu) precisely so they fall through to the session check
   // below rather than needing to dodge this regex.
-  if (/^\/qr\/t\/[^/]+\/[^/]+\/?$/.test(pathname) || pathname.startsWith("/qr/auth/")) {
+  // The kiosk attract screen (issue #214, /qr/kiosk/:outletId) is the kiosk's
+  // own entry point - reachable with or without a session, same as the table
+  // QR entry, since it is where every kiosk order starts and where an ended
+  // session lands.
+  if (/^\/qr\/t\/[^/]+\/[^/]+\/?$/.test(pathname) || /^\/qr\/kiosk\/[^/]+\/?$/.test(pathname) || pathname.startsWith("/qr/auth/")) {
     return { allow: true };
   }
   // Every other /qr/* path (menu/cart/checkout/status) gates on a live

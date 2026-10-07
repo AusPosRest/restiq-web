@@ -204,7 +204,7 @@ actually built here, story by story. Backend counterpart:
     quantity, specialInstructions}` back to the caller, which is all the caller needs to
     build the API's `AddOrderLineInput`.
   - **P3 order-taking screen** (`order-taking-view.tsx`) - a category-tab rail (left) +
-    item grid (`pos-item-tile.tsx`, `POSItemTile`: name, resolved price, "86'd" label for
+    item grid (`pos-item-tile.tsx`, `POSItemTile`: name, resolved price, "Sold out" label for
     an unavailable item shown-disabled rather than hidden) + a running `OrderPanel`
     (right rail: line items, per-line qty +/-/remove, running total, "Added by {staff}" on
     every line). A search bar searches every category at once (ignoring the active tab)
@@ -222,10 +222,14 @@ actually built here, story by story. Backend counterpart:
     has no dietary-type field (only free-form tenant-defined `Allergen` tags), so nothing
     reliable exists to derive it from; guessing from an allergen tag's name would be
     exactly the kind of fabricated-looking data this codebase's honesty pattern forbids.
-  - **Combos (also named in stories.yaml story 4's title) are out of scope for this
-    pass** - the task's own build list and test plan never call for them, and a combo is a
-    meaningfully different concept (a bundle of items) from a single `OrderLine`. Flagged
-    here as an explicit, documented gap rather than silently dropped.
+  - **Combos** landed later (restiq-web#264 / restiq-backend#160). They show as tiles
+    marked "Combo" (with "Save ₹X") in their category on the order and counter screens.
+    Tapping one opens the shared `ComboPicker` (`src/components/combo-picker.tsx`, logic in
+    `src/lib/combo.ts`): fixed slots show as included, choice slots take taps (pick-1 swaps,
+    pick-N counts up), and a picked item's modifier groups show inline. Add stays disabled
+    until every slot is filled; it posts `POST /pos/v1/orders/:id/combos`. The order panel,
+    counter bill and invoice show a combo as one line with its picks listed underneath;
+    combo lines can be removed but not stepped.
 - **Backend not available at build time, verified via the real GitHub tree, not a stale
   local checkout.** `restiq-backend#52` ("Order taking with modifiers, variants, combos")
   has no branch and no commits (`gh issue view 52`/`gh api .../branches` against
@@ -1270,6 +1274,38 @@ done now, this is what actually happened:
   `bill-invoice-view.test.tsx` cases - the open-bill Unpaid badge/omitted invoice
   number/hidden payments section, and a finalized-bill control confirming neither shows.
 
+### "Print bill" goes straight to the printer + thermal receipt (issue #208)
+
+- **Intent:** one tap. "Print bill" on settle and counter used to open the invoice page in a
+  new tab, where the cashier then clicked "Send to printer" or "Print" - two extra steps for
+  the common case. And the simulated printer showed the receipt as the same dark web card as
+  the invoice page, not as something a receipt printer would produce.
+- **Built:**
+  - `src/app/pos/bills/print-bill-button.tsx` - one `PrintBillButton` (`billId`, `label`,
+    `testId`, `size`) that posts `POST bills/:id/print` (`sendBillToPrinter`) and reports on
+    the button itself: Sending… → Sent to printer / Couldn't send → back to the label after
+    2s so a reprint is one more tap; disabled only while sending; `aria-live="polite"`. Used
+    three times: settle's and counter's open-bill footer (`data-testid="print-bill"`,
+    replacing the old `print-bill-link` `<Link>`; the page never navigates) and the invoice
+    page's "Send to printer" (`invoice-send-to-printer`, whose inline state machine moved
+    into the component). "Print invoice" after finalise still opens the invoice page for
+    browser printing - unchanged on purpose.
+  - `src/app/pos/printer/thermal-receipt.tsx` - `ThermalReceipt` renders the spooled
+    `InvoiceView` as an 80mm strip (`w-[302px]`, white paper, black `font-mono` 12px,
+    centred seller header, `- - -` rules, `<title> (unpaid)` for an open bill, `qty x unit`
+    under each item name, totals, payments, credit notes, notes/footer, a zig-zag torn bottom
+    edge via `clip-path`). `printedAt` (the job's `createdAt`) stamps an open bill that has
+    no `issuedAt`.
+  - `printer-screen.tsx` - a paper slot bar with the newest receipt emerging under it
+    (roll order flipped to newest-first, still capped at 10), each `li` animated with
+    `animate-paper-feed` (`globals.css`: `@keyframes paper-feed` reveals the strip top-down
+    with `clip-path: inset`, `steps(36)` so it advances line by line like a print head;
+    `motion-reduce:animate-none`). Poll/ack behaviour and every `printer-*` test id are
+    unchanged.
+- **Tests:** `print-bill-button.test.tsx` (POST + Sent + reset; Couldn't send + disabled
+  only while sending); settle and counter tests now click the button and assert the POST
+  with no navigation; printer tests unchanged and green against the thermal render.
+
 ### Simulated card terminal (issue #188 web / restiq-backend#130)
 
 - **Intent:** the payments sibling of the simulated printer below, and the
@@ -1549,3 +1585,37 @@ exactly this gap:
   other story in this doc - verified by reading restiq-backend's real, merged
   `src/pos/bills/{bill-core.ts,bills.service.ts,bills.controller.ts}` and
   `src/guest/bills/{bills.service.ts,bills.controller.ts}` directly.
+
+## Payments - today's payment history (issue #253)
+
+- **Intent:** a cashier checks what has been taken at the outlet today
+  without leaving the POS - useful before a shift close or when a guest asks
+  about a payment.
+- **Built:** "Payments" link in the shift bar (`pos-shift-bar-payments-link`)
+  → `/pos/payments` (`src/app/pos/(shell)/payments/`). The page reads the
+  outlet id from the `pos_staff` cookie like `status/page.tsx` and loads
+  `outlets/:outletId/payments` through `usePosLoad`. Per-method total cards
+  (`pos-payments-total-<method>`), a summary line (count · total · outlet-local
+  date), a Refresh button, and a table newest-first: time, bill (`#n · T3` or
+  `#n · Token 14`), method, amount, reference, taken by. Empty state when
+  nothing has been taken yet. Five-state pattern; skeleton/error pieces come
+  from `../status/data-states`, money from `../shift/shift-state#formatMinor`.
+- **API:** `GET pos/v1/outlets/:outletId/payments` (`PaymentHistoryView` in
+  `pos/api.ts`). "Today" is decided by the backend in the outlet's timezone;
+  the screen never computes dates.
+- **Tests:** `payments-screen.test.tsx` (totals + rows as served, empty
+  state, retry) and the link assertion in `shift-bar.test.tsx`.
+- **Not built (by design):** refunds in the list, a date picker, per-cashier
+  filter, drill-down into a bill.
+## Windows app: receipt printer and cash drawer (issue #292)
+
+Inside the RESTIQ Windows app (AusPosRest/restiq-desktop) the page gets
+`window.restiqDesktop` (only on the configured RESTIQ origin). `src/lib/desktop.ts`:
+
+- `printPage()` - invoice **Print** (`invoice-print`) prints silently on the
+  receipt printer chosen in the app's Device settings, using the page's print
+  CSS; in a browser it is `window.print()` as before. A failed app print shows
+  "Couldn't print" on the button.
+- `openDrawerForTenders(tenders)` - after a successful finalise on the counter
+  or table settle screen, opens the drawer when any tender is `cash`. The bill
+  is already final, so a drawer failure is only logged.

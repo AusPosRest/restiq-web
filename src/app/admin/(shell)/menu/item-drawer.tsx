@@ -5,17 +5,18 @@
 // create and edit. Field-by-field API shape verified against
 // restiq-backend's actual admin/v1/menu working tree (see menu-state.ts's
 // file header and api.ts's CAP-4 comment for what that means and its limits).
+import { Trash2 } from "lucide-react";
 import { Dialog } from "radix-ui";
 import { useEffect, useState } from "react";
 import { Button } from "@/components/ui/button";
 import {
   addVariant as apiAddVariant,
   createAllergen,
-  createCombo,
   createItemPrice,
   createMenuItem,
   createModifierGroup,
   CreateItemInput,
+  deleteMenuItem,
   fetchCurrentPrice,
   removeVariant as apiRemoveVariant,
   replaceItemAllergens,
@@ -28,9 +29,6 @@ import { itemDraftFromView, ItemDraft, toggleId, validateItemDraft } from "./ite
 import {
   AllergenView,
   CategoryView,
-  ComboView,
-  combosForItem,
-  CHANNEL_LABEL,
   formatEffectiveDate,
   formatPriceMinor,
   ItemView,
@@ -49,6 +47,23 @@ const FIELD_CLASS =
   "w-full rounded-lg border border-border bg-input px-3 py-2 text-sm text-foreground placeholder:text-muted-foreground/60 focus:outline-none focus-visible:ring-2 focus-visible:ring-ring";
 const LABEL_CLASS = "font-label mb-1 block text-xs font-semibold uppercase tracking-wider text-muted-foreground";
 
+// Item photo upload (issue #218). No object storage: the photo is shrunk in
+// the browser to a small JPEG and stored inline as a data:image URL
+// (restiq-backend#142 caps it at PHOTO_MAX_CHARS).
+const PHOTO_MAX_PX = 480;
+const PHOTO_MAX_CHARS = 280_000;
+
+async function photoToDataUrl(file: File): Promise<string> {
+  const bitmap = await createImageBitmap(file);
+  const scale = Math.min(1, PHOTO_MAX_PX / Math.max(bitmap.width, bitmap.height));
+  const canvas = document.createElement("canvas");
+  canvas.width = Math.round(bitmap.width * scale);
+  canvas.height = Math.round(bitmap.height * scale);
+  canvas.getContext("2d")?.drawImage(bitmap, 0, 0, canvas.width, canvas.height);
+  bitmap.close();
+  return canvas.toDataURL("image/jpeg", 0.8);
+}
+
 interface PriceLine {
   variantId: string | null;
   label: string;
@@ -57,20 +72,19 @@ interface PriceLine {
 export interface ItemDrawerProps {
   open: boolean;
   item: ItemView | null;
-  allItems: ItemView[];
   categories: CategoryView[];
   modifierGroupCatalog: ModifierGroupView[];
   allergenCatalog: AllergenView[];
-  comboCatalog: ComboView[];
   outlets: OutletView[];
   selectedOutletId: string | null;
   defaultCategoryId: string;
   currency: string;
   onClose: () => void;
   onSaved: (item: ItemView) => void;
+  /** Issue #248: called after the item is deleted (archived on the backend). */
+  onDeleted?: (item: ItemView) => void;
   onModifierGroupCreated: (group: ModifierGroupView) => void;
   onAllergenCreated: (allergen: AllergenView) => void;
-  onComboCreated: (combo: ComboView) => void;
 }
 
 export function ItemDrawer(props: Readonly<ItemDrawerProps>) {
@@ -79,20 +93,18 @@ export function ItemDrawer(props: Readonly<ItemDrawerProps>) {
 
 function DrawerBody({
   item,
-  allItems,
   categories,
   modifierGroupCatalog,
   allergenCatalog,
-  comboCatalog,
   outlets,
   selectedOutletId,
   defaultCategoryId,
   currency,
   onClose,
   onSaved,
+  onDeleted,
   onModifierGroupCreated,
   onAllergenCreated,
-  onComboCreated,
 }: Readonly<ItemDrawerProps>) {
   const isCreate = item === null;
   const [draft, setDraft] = useState<ItemDraft>(() => itemDraftFromView(item, defaultCategoryId || categories[0]?.id || ""));
@@ -101,14 +113,31 @@ function DrawerBody({
   const [selectedAllergenIds, setSelectedAllergenIds] = useState<string[]>(item?.allergens.map((a) => a.id) ?? []);
   const [saving, setSaving] = useState(false);
   const [saveError, setSaveError] = useState<string | null>(null);
+  const [confirmingDelete, setConfirmingDelete] = useState(false);
+  const [deleting, setDeleting] = useState(false);
+  const [photoBusy, setPhotoBusy] = useState(false);
   const [priceLine, setPriceLine] = useState<PriceLine | null>(null);
   const [priceBusy, setPriceBusy] = useState(false);
   const [priceError, setPriceError] = useState<string | null>(null);
   const [pending, setPending] = useState<PendingPriceInfo[]>([]);
-  const [currentPrices, setCurrentPrices] = useState<Record<string, { dineInPriceMinor: number; deliveryPriceMinor: number }>>({});
+  // One price per line (#272): the dine-in channel price, keyed by variant id or "base".
+  const [currentPrices, setCurrentPrices] = useState<Record<string, number>>({});
 
   const errors = validateItemDraft(draft);
   const canSave = Object.keys(errors).length === 0;
+
+  async function handleDelete() {
+    if (!liveItem) return;
+    setDeleting(true);
+    setSaveError(null);
+    try {
+      await deleteMenuItem(liveItem.id);
+      onDeleted?.(liveItem);
+    } catch (error) {
+      setSaveError(error instanceof Error ? error.message : "That item couldn't be deleted. Try again.");
+      setDeleting(false);
+    }
+  }
 
   useEffect(() => {
     if (!liveItem) return;
@@ -116,19 +145,14 @@ function DrawerBody({
     const lines: Array<string | null> = [null, ...liveItem.variants.map((v) => v.id)];
     Promise.all(
       lines.map(async (variantId) => {
-        const [dineIn, delivery] = await Promise.all([
-          fetchCurrentPrice(liveItem.id, { channel: "dine_in", variantId: variantId ?? undefined }),
-          fetchCurrentPrice(liveItem.id, { channel: "delivery", variantId: variantId ?? undefined }),
-        ]);
-        return [variantId, dineIn, delivery] as const;
+        const price = await fetchCurrentPrice(liveItem.id, { channel: "dine_in", variantId: variantId ?? undefined });
+        return [variantId, price] as const;
       }),
     )
       .then((results) => {
         if (cancelled) return;
-        const map: Record<string, { dineInPriceMinor: number; deliveryPriceMinor: number }> = {};
-        for (const [variantId, dineIn, delivery] of results) {
-          map[variantId ?? "base"] = { dineInPriceMinor: dineIn?.priceMinor ?? 0, deliveryPriceMinor: delivery?.priceMinor ?? 0 };
-        }
+        const map: Record<string, number> = {};
+        for (const [variantId, price] of results) map[variantId ?? "base"] = price?.priceMinor ?? 0;
         setCurrentPrices(map);
       })
       .catch(() => undefined);
@@ -162,6 +186,44 @@ function DrawerBody({
       setSaveError(error instanceof Error ? error.message : "That didn't save. Try again.");
     } finally {
       setSaving(false);
+    }
+  }
+
+  async function handlePhoto(file: File | undefined) {
+    if (!liveItem || !file) return;
+    setSaveError(null);
+    if (!file.type.startsWith("image/")) {
+      setSaveError("Choose an image file (JPEG, PNG or WebP).");
+      return;
+    }
+    setPhotoBusy(true);
+    try {
+      const photoUrl = await photoToDataUrl(file);
+      if (photoUrl.length > PHOTO_MAX_CHARS) {
+        setSaveError("That photo is too large - try a smaller one.");
+        return;
+      }
+      const updated = await updateMenuItem(liveItem.id, { photoUrl });
+      setLiveItem(updated);
+      onSaved(updated);
+    } catch (error) {
+      setSaveError(error instanceof Error ? error.message : "That photo didn't upload. Try another one.");
+    } finally {
+      setPhotoBusy(false);
+    }
+  }
+
+  async function handleRemovePhoto() {
+    if (!liveItem) return;
+    setPhotoBusy(true);
+    try {
+      const updated = await updateMenuItem(liveItem.id, { photoUrl: null });
+      setLiveItem(updated);
+      onSaved(updated);
+    } catch (error) {
+      setSaveError(error instanceof Error ? error.message : "That photo couldn't be removed. Try again.");
+    } finally {
+      setPhotoBusy(false);
     }
   }
 
@@ -222,33 +284,23 @@ function DrawerBody({
     const effectiveAt = priceScheduleEffectiveAt(form) ?? undefined;
     const reason = form.reason.trim();
     try {
-      for (const [channel, value] of [
-        ["dine_in", form.dineIn],
-        ["delivery", form.delivery],
-      ] as const) {
-        const priceMinor = majorStringToPriceMinor(value) ?? 0;
-        await createItemPrice(liveItem.id, {
-          variantId: priceLine.variantId ?? undefined,
-          channel,
-          priceMinor,
-          currency,
-          effectiveAt,
-          reason,
-        });
-        if (effectiveAt) {
-          setPending((current) => [
-            ...current.filter((p) => !(p.variantId === priceLine.variantId && p.channel === channel)),
-            { variantId: priceLine.variantId, channel, priceMinor, currency, effectiveAt },
-          ]);
-        } else {
-          setCurrentPrices((current) => ({
-            ...current,
-            [priceLine.variantId ?? "base"]: {
-              ...(current[priceLine.variantId ?? "base"] ?? { dineInPriceMinor: 0, deliveryPriceMinor: 0 }),
-              ...(channel === "dine_in" ? { dineInPriceMinor: priceMinor } : { deliveryPriceMinor: priceMinor }),
-            },
-          }));
-        }
+      const channel = "dine_in";
+      const priceMinor = majorStringToPriceMinor(form.dineIn) ?? 0;
+      // No channel: one price for dine-in, QR, takeaway and aggregator orders alike.
+      await createItemPrice(liveItem.id, {
+        variantId: priceLine.variantId ?? undefined,
+        priceMinor,
+        currency,
+        effectiveAt,
+        reason,
+      });
+      if (effectiveAt) {
+        setPending((current) => [
+          ...current.filter((p) => !(p.variantId === priceLine.variantId && p.channel === channel)),
+          { variantId: priceLine.variantId, channel, priceMinor, currency, effectiveAt },
+        ]);
+      } else {
+        setCurrentPrices((current) => ({ ...current, [priceLine.variantId ?? "base"]: priceMinor }));
       }
       setPriceLine(null);
     } catch (error) {
@@ -266,7 +318,7 @@ function DrawerBody({
         <Dialog.Overlay className="fixed inset-0 z-30 bg-black/60" />
         <Dialog.Content
           data-testid="item-drawer"
-          className="admin-theme fixed inset-y-0 right-0 z-40 flex w-full max-w-lg flex-col overflow-y-auto border-l border-border/60 bg-card text-foreground shadow-2xl"
+          className="admin-theme fixed inset-y-0 right-0 z-40 flex w-full max-w-lg flex-col border-l border-border/60 bg-card text-foreground shadow-2xl"
         >
           <div className="flex items-center justify-between border-b border-border/40 px-6 py-4">
             <Dialog.Title className="font-headline text-lg font-semibold">{isCreate ? "Add Item" : "Edit Item"}</Dialog.Title>
@@ -282,7 +334,7 @@ function DrawerBody({
             </Dialog.Close>
           </div>
 
-          <div className="flex-1 space-y-6 px-6 py-5">
+          <div data-testid="item-drawer-body" className="scrollbar-visible min-h-0 flex-1 space-y-6 px-6 py-5">
             <div>
               <label htmlFor="item-name" className={LABEL_CLASS}>
                 Name *
@@ -339,6 +391,50 @@ function DrawerBody({
             </div>
 
             {!isCreate && liveItem && (
+              <div data-testid="item-photo-section">
+                <p className={LABEL_CLASS}>Photo</p>
+                <div className="flex items-center gap-4">
+                  <div className="flex size-24 shrink-0 items-center justify-center overflow-hidden rounded-lg border border-border/60 bg-muted text-xs text-muted-foreground">
+                    {liveItem.photoUrl ? (
+                      // eslint-disable-next-line @next/next/no-img-element -- an https or data: URL, not something next/image's optimizer can handle
+                      <img data-testid="item-photo-preview" src={liveItem.photoUrl} alt={`${liveItem.name} photo`} className="size-full object-cover" />
+                    ) : (
+                      "No photo"
+                    )}
+                  </div>
+                  <div className="flex flex-col items-start gap-2">
+                    <label className="cursor-pointer rounded-md border border-border/60 px-3 py-1.5 text-sm font-medium hover:bg-accent focus-within:ring-2 focus-within:ring-ring">
+                      {photoBusy ? "Uploading…" : liveItem.photoUrl ? "Replace photo" : "Upload photo"}
+                      <input
+                        type="file"
+                        accept="image/jpeg,image/png,image/webp"
+                        data-testid="item-photo-input"
+                        disabled={photoBusy}
+                        className="sr-only"
+                        onChange={(event) => {
+                          void handlePhoto(event.target.files?.[0]);
+                          event.target.value = "";
+                        }}
+                      />
+                    </label>
+                    {liveItem.photoUrl && (
+                      <button
+                        type="button"
+                        data-testid="item-photo-remove"
+                        disabled={photoBusy}
+                        onClick={() => void handleRemovePhoto()}
+                        className="text-xs font-medium text-muted-foreground hover:text-status-error focus:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+                      >
+                        Remove photo
+                      </button>
+                    )}
+                    <p className="text-xs text-muted-foreground">Shown on the QR menu and the kiosk.</p>
+                  </div>
+                </div>
+              </div>
+            )}
+
+            {!isCreate && liveItem && (
               <VariantsSection
                 item={liveItem}
                 currency={currency}
@@ -368,16 +464,6 @@ function DrawerBody({
               onCreated={onAllergenCreated}
             />
 
-            {!isCreate && liveItem && (
-              <ComboSection
-                item={liveItem}
-                allItems={allItems}
-                currency={currency}
-                comboCatalog={comboCatalog}
-                onComboCreated={onComboCreated}
-              />
-            )}
-
             {!isCreate && liveItem && outlet && (
               <OutletAvailabilitySection itemId={liveItem.id} outlet={outlet} />
             )}
@@ -389,8 +475,30 @@ function DrawerBody({
                 {saveError}
               </p>
             )}
-            <div className="flex justify-end">
-              <Button data-testid="item-save" disabled={!canSave || saving} onClick={() => void handleSave()}>
+            {confirmingDelete && liveItem && (
+              <div data-testid="item-delete-confirm" role="alert" className="mb-3 rounded-lg border border-status-error/40 p-3 text-sm">
+                <p>
+                  Delete <strong>{liveItem.name}</strong>? It disappears from the menu, POS, QR and kiosk. Past bills keep it.
+                </p>
+                <div className="mt-2 flex justify-end gap-2">
+                  <Button variant="secondary" size="sm" data-testid="item-delete-cancel" disabled={deleting} onClick={() => setConfirmingDelete(false)}>
+                    Cancel
+                  </Button>
+                  <Button size="sm" data-testid="item-delete-confirm-button" disabled={deleting} onClick={() => void handleDelete()}>
+                    {deleting ? "Deleting..." : "Delete item"}
+                  </Button>
+                </div>
+              </div>
+            )}
+            <div className="flex items-center justify-between gap-3">
+              {!isCreate && liveItem && !confirmingDelete ? (
+                <Button variant="secondary" data-testid="item-delete" className="text-status-error" onClick={() => setConfirmingDelete(true)}>
+                  <Trash2 aria-hidden="true" /> Delete
+                </Button>
+              ) : (
+                <span />
+              )}
+              <Button data-testid="item-save" disabled={!canSave || saving || deleting} onClick={() => void handleSave()}>
                 {saving ? "Saving..." : "Save Changes"}
               </Button>
             </div>
@@ -403,7 +511,7 @@ function DrawerBody({
           open
           itemLabel={priceLine.label}
           currency={currency}
-          current={currentPrices[priceLine.variantId ?? "base"] ?? { dineInPriceMinor: 0, deliveryPriceMinor: 0 }}
+          current={currentPrices[priceLine.variantId ?? "base"] ?? 0}
           busy={priceBusy}
           error={priceError}
           onCancel={() => {
@@ -428,7 +536,7 @@ function VariantsSection({
 }: Readonly<{
   item: ItemView;
   currency: string;
-  currentPrices: Record<string, { dineInPriceMinor: number; deliveryPriceMinor: number }>;
+  currentPrices: Record<string, number>;
   pending: PendingPriceInfo[];
   onAddVariant: (name: string) => void;
   onRemoveVariant: (id: string) => void;
@@ -444,11 +552,8 @@ function VariantsSection({
         label={item.variants.length === 0 ? "Base price" : undefined}
         testId="item-base-price"
         currency={currency}
-        current={currentPrices.base ?? { dineInPriceMinor: 0, deliveryPriceMinor: 0 }}
-        pending={{
-          dineIn: pendingChangeFor(pending, null, "dine_in"),
-          delivery: pendingChangeFor(pending, null, "delivery"),
-        }}
+        current={currentPrices.base ?? 0}
+        pending={pendingChangeFor(pending, null, "dine_in")}
         onChange={() => onOpenPriceChange({ variantId: null, label: item.name })}
       />
 
@@ -470,11 +575,8 @@ function VariantsSection({
             <PriceRow
               testId={`item-variant-${variant.id}-price`}
               currency={currency}
-              current={currentPrices[variant.id] ?? { dineInPriceMinor: 0, deliveryPriceMinor: 0 }}
-              pending={{
-                dineIn: pendingChangeFor(pending, variant.id, "dine_in"),
-                delivery: pendingChangeFor(pending, variant.id, "delivery"),
-              }}
+              current={currentPrices[variant.id] ?? 0}
+              pending={pendingChangeFor(pending, variant.id, "dine_in")}
               onChange={() => onOpenPriceChange({ variantId: variant.id, label: variant.name })}
             />
           </li>
@@ -518,8 +620,8 @@ function PriceRow({
   label?: string;
   testId: string;
   currency: string;
-  current: { dineInPriceMinor: number; deliveryPriceMinor: number };
-  pending: { dineIn: PendingPriceInfo | null; delivery: PendingPriceInfo | null };
+  current: number;
+  pending: PendingPriceInfo | null;
   onChange: () => void;
 }>) {
   return (
@@ -527,17 +629,15 @@ function PriceRow({
       {label && <p className="text-xs text-muted-foreground">{label}</p>}
       <div className="flex items-center justify-between gap-2">
         <p data-testid={`${testId}-current`} className="text-sm tabular-nums">
-          {CHANNEL_LABEL.dine_in} {formatPriceMinor(current.dineInPriceMinor, currency)} / {CHANNEL_LABEL.delivery}{" "}
-          {formatPriceMinor(current.deliveryPriceMinor, currency)}
+          {formatPriceMinor(current, currency)}
         </p>
         <button type="button" data-testid={`${testId}-change`} onClick={onChange} className="text-xs font-medium text-primary hover:underline">
           Change price
         </button>
       </div>
-      {(pending.dineIn || pending.delivery) && (
+      {pending && (
         <p data-testid={`${testId}-pending`} className="text-xs text-status-scheduled">
-          {pending.dineIn && `Dine-in changes to ${formatPriceMinor(pending.dineIn.priceMinor, currency)} on ${formatEffectiveDate(pending.dineIn.effectiveAt)}. `}
-          {pending.delivery && `Delivery changes to ${formatPriceMinor(pending.delivery.priceMinor, currency)} on ${formatEffectiveDate(pending.delivery.effectiveAt)}.`}
+          Changes to {formatPriceMinor(pending.priceMinor, currency)} on {formatEffectiveDate(pending.effectiveAt)}.
         </p>
       )}
     </div>
@@ -737,96 +837,6 @@ function AllergensSection({
         <button type="button" data-testid="item-add-allergen" onClick={() => setAdding(true)} className="mt-2 text-xs font-medium text-primary hover:underline">
           + New tag
         </button>
-      )}
-    </div>
-  );
-}
-
-function ComboSection({
-  item,
-  allItems,
-  currency,
-  comboCatalog,
-  onComboCreated,
-}: Readonly<{ item: ItemView; allItems: ItemView[]; currency: string; comboCatalog: ComboView[]; onComboCreated: (combo: ComboView) => void }>) {
-  const [adding, setAdding] = useState(false);
-  const [name, setName] = useState("");
-  const [price, setPrice] = useState("");
-  const [selectedItemIds, setSelectedItemIds] = useState<string[]>([item.id]);
-  const pickable = allItems.filter((candidate) => candidate.id !== item.id);
-  const combos = combosForItem(comboCatalog, item.id);
-
-  async function handleAdd() {
-    if (!name.trim() || selectedItemIds.length === 0) return;
-    const created = await createCombo({
-      name: name.trim(),
-      priceMinor: majorStringToPriceMinor(price) ?? 0,
-      currency,
-      components: selectedItemIds.map((itemId) => ({ itemId })),
-    });
-    onComboCreated(created);
-    setName("");
-    setPrice("");
-    setSelectedItemIds([item.id]);
-    setAdding(false);
-  }
-
-  return (
-    <div data-testid="item-combos-section">
-      <div className="flex items-center justify-between">
-        <p className={LABEL_CLASS}>Combos</p>
-        {!adding && (
-          <button type="button" data-testid="item-add-combo" onClick={() => setAdding(true)} className="text-sm font-medium text-primary hover:underline">
-            + Add combo
-          </button>
-        )}
-      </div>
-
-      <ul className="mt-2 space-y-2">
-        {combos.map((combo) => (
-          <li key={combo.id} data-testid={`item-combo-${combo.id}`} className="rounded-lg border border-border/60 px-3 py-2 text-sm">
-            {combo.name} - {formatPriceMinor(combo.priceMinor, combo.currency)} - {combo.components.length} item{combo.components.length === 1 ? "" : "s"}
-          </li>
-        ))}
-      </ul>
-
-      {adding && (
-        <div className="mt-2 space-y-2 rounded-lg border border-border/60 p-3">
-          <input data-testid="item-combo-name-input" value={name} placeholder="Combo name (e.g. Thali Combo)" onChange={(event) => setName(event.target.value)} className={FIELD_CLASS} />
-          <input
-            type="number"
-            step="0.01"
-            min="0"
-            data-testid="item-combo-price-input"
-            placeholder={`Combo price (${currency})`}
-            value={price}
-            onChange={(event) => setPrice(event.target.value)}
-            className={FIELD_CLASS}
-          />
-          <div className="max-h-32 space-y-1 overflow-y-auto">
-            {pickable.map((candidate) => (
-              <label key={candidate.id} className="flex items-center gap-1.5 text-sm">
-                <input
-                  type="checkbox"
-                  data-testid={`item-combo-pick-${candidate.id}`}
-                  checked={selectedItemIds.includes(candidate.id)}
-                  onChange={(event) =>
-                    setSelectedItemIds((current) => (event.target.checked ? [...current, candidate.id] : current.filter((id) => id !== candidate.id)))
-                  }
-                />
-                {candidate.name}
-              </label>
-            ))}
-          </div>
-          <div className="flex justify-end gap-2">
-            <Button type="button" variant="secondary" size="sm" data-testid="item-combo-cancel" onClick={() => setAdding(false)}>
-              Cancel
-            </Button>
-            <Button type="button" size="sm" data-testid="item-combo-confirm" disabled={!name.trim()} onClick={() => void handleAdd()}>
-              Add
-            </Button>
-          </div>
-        </div>
       )}
     </div>
   );

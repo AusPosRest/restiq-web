@@ -197,16 +197,49 @@ describe("BillSettleView - tenders", () => {
   });
 });
 
-describe("BillSettleView - print bill (issue #160)", () => {
-  it("shows a Print bill link next to Finalise while the bill is still open", async () => {
-    stubFetch();
+describe("BillSettleView - print bill (issues #160, #224)", () => {
+  it("sends the open bill straight to the printer - no invoice page in between", async () => {
+    const fetchMock = stubFetch({ "POST bills/bill-1/print": () => jsonResponse({ id: "job-1" }, 201) });
     render(<BillSettleView orderId={ORDER_ID} />);
 
     await screen.findByTestId("bill-summary");
-    const printBillLink = screen.getByTestId("print-bill-link");
-    expect(printBillLink.getAttribute("href")).toBe("/pos/bills/bill-1/invoice");
-    expect(printBillLink.getAttribute("target")).toBe("_blank");
-    expect(printBillLink.getAttribute("rel")).toBe("noopener");
+    const printBill = screen.getByTestId("print-bill");
+    expect(printBill.getAttribute("href")).toBeNull();
+    await userEvent.click(printBill);
+
+    await waitFor(() => expect(printBill.textContent).toBe("Sent to printer"));
+    expect(fetchMock.mock.calls.some(([input, init]) => String(input).endsWith("/bills/bill-1/print") && init?.method === "POST")).toBe(true);
+  });
+
+  it("says so when the print job can't be sent", async () => {
+    stubFetch({ "POST bills/bill-1/print": () => jsonResponse({ error: { code: "boom", message: "boom" } }, 500) });
+    render(<BillSettleView orderId={ORDER_ID} />);
+
+    await screen.findByTestId("bill-summary");
+    await userEvent.click(screen.getByTestId("print-bill"));
+    await waitFor(() => expect(screen.getByTestId("print-bill").textContent).toBe("Couldn't send"));
+  });
+});
+
+describe("BillSettleView - external payment (issue #224)", () => {
+  it("needs a reference before an external tender can be added, then finalises with it", async () => {
+    const fetchMock = stubFetch({
+      "POST bills/bill-1/finalize": () => jsonResponse(makeBill({ status: "finalized", finalizedAt: "2026-08-25T10:05:00.000Z" })),
+    });
+    render(<BillSettleView orderId={ORDER_ID} />);
+
+    await screen.findByTestId("bill-summary");
+    await userEvent.click(screen.getByTestId("tender-method-external"));
+    expect(screen.getByTestId("tender-fill-remaining")).toHaveProperty("disabled", true);
+
+    await userEvent.type(screen.getByTestId("tender-external-reference"), "EFT-004512");
+    await userEvent.click(screen.getByTestId("tender-fill-remaining"));
+    expect(screen.getByTestId("tender-captured-0").textContent).toContain("External #EFT-004512");
+
+    await userEvent.click(screen.getByTestId("finalize-bill"));
+    await screen.findByTestId("bill-finalised-panel");
+    const finalizeCall = fetchMock.mock.calls.find(([input]) => String(input).endsWith("/bills/bill-1/finalize"));
+    expect(JSON.parse(String(finalizeCall![1]?.body)).tenders).toEqual([{ method: "external", amountMinor: 81900, reference: "EFT-004512" }]);
   });
 });
 
@@ -297,7 +330,7 @@ describe("BillSettleView - discount", () => {
 });
 
 describe("BillSettleView - after finalization", () => {
-  it("leaves no mutation UI reachable once the bill is finalized, and links to refund with the bill id", async () => {
+  it("leaves no mutation UI or panel actions once the bill is finalized (issue #226)", async () => {
     stubFetch({
       [`POST orders/${ORDER_ID}/bill`]: () => jsonResponse(makeBill({ status: "finalized", finalizedAt: "2026-08-25T10:05:00.000Z", tenders: [{ id: "t1", method: "cash", amountMinor: 81900, createdAt: "2026-08-25T10:00:00.000Z" }] }), 201),
     });
@@ -307,8 +340,9 @@ describe("BillSettleView - after finalization", () => {
     expect(screen.queryByTestId("tender-keypad")).toBeNull();
     expect(screen.queryByTestId("finalize-bill")).toBeNull();
     expect(screen.queryByTestId("bill-add-discount")).toBeNull();
-    expect(screen.getByTestId("bill-finalised-refund").getAttribute("href")).toBe(`/pos/orders/${ORDER_ID}/refund?billId=bill-1`);
-    expect(screen.getByTestId("print-invoice-link").getAttribute("href")).toBe("/pos/bills/bill-1/invoice");
+    expect(screen.queryByTestId("bill-finalised-back")).toBeNull();
+    expect(screen.queryByTestId("bill-finalised-refund")).toBeNull();
+    expect(screen.queryByTestId("print-invoice-link")).toBeNull();
   });
 });
 

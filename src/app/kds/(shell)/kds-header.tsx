@@ -21,21 +21,27 @@ import { LogOut } from "lucide-react";
 
 export type KdsMode = "station" | "expo" | "bumped" | "all-day";
 
+// Plain-language tab names (issue #184): each label is the question the
+// view answers, not the kitchen term for it - "Station / Expo / Bumped /
+// All-Day" meant nothing to anyone who hadn't worked a pass. The term
+// itself moves into the subtitle below so trained staff still recognise
+// the view. Routes, `KdsMode` values and test ids are unchanged.
 const NAV: { mode: KdsMode; label: string; href: string }[] = [
-  { mode: "station", label: "Station", href: "/kds" },
-  { mode: "expo", label: "Expo", href: "/kds/expo" },
-  { mode: "bumped", label: "Bumped", href: "/kds/bumped" },
-  { mode: "all-day", label: "All-Day", href: "/kds/all-day" },
+  { mode: "station", label: "Cook", href: "/kds" },
+  { mode: "expo", label: "Serve", href: "/kds/expo" },
+  { mode: "bumped", label: "Done", href: "/kds/bumped" },
+  { mode: "all-day", label: "Counts", href: "/kds/all-day" },
 ];
 
 // One-line explainer per tab (issue #134: "none of the four tabs... explain
-// what they are"). Kept here, not per-page, so the four modes' copy can
+// what they are"), now leading with the kitchen term the label no longer
+// carries (issue #184). Kept here, not per-page, so the four modes' copy can
 // never drift out of sync with each other.
 const TAB_SUBTITLES: Record<KdsMode, string> = {
-  station: "Tickets for this station, oldest first — bump when plated",
-  expo: "Everything across stations that's ready to go out",
-  bumped: "Done tickets — recall one if a plate comes back",
-  "all-day": "Counts of everything fired today",
+  station: "Station queue — tickets for this station, oldest first; bump when plated",
+  expo: "Expo — orders by table; send out when every station is ready",
+  bumped: "Bumped tickets — recall one if a plate comes back",
+  "all-day": "All-day summary — how many of each item is cooking right now",
 };
 
 export function KdsHeader({ activeMode, stationName }: Readonly<{ activeMode: KdsMode; stationName?: string }>) {

@@ -29,7 +29,7 @@
 // CAP-11 (device & staff attendance status, story 11) adds the same shape of
 // plain nav link to /pos/status - the attendance list and mocked device
 // panel fetch on that screen itself.
-import { ClipboardList, LogOut, MonitorSmartphone, Wallet, Wifi } from "lucide-react";
+import { ClipboardList, LogOut, MonitorSmartphone, Receipt, Wallet, Wifi } from "lucide-react";
 import Link from "next/link";
 import { useState } from "react";
 import { useRouter } from "next/navigation";
@@ -102,6 +102,13 @@ export function ShiftBar({ initial }: Readonly<{ initial: PosStaffDisplay | null
             className="flex items-center gap-1.5 rounded-lg px-2 py-1.5 text-xs font-medium text-muted-foreground transition-colors hover:bg-accent hover:text-foreground focus:outline-none focus-visible:ring-2 focus-visible:ring-ring"
           >
             <Wallet className="size-3.5" aria-hidden="true" /> Shift
+          </Link>
+          <Link
+            href="/pos/payments"
+            data-testid="pos-shift-bar-payments-link"
+            className="flex items-center gap-1.5 rounded-lg px-2 py-1.5 text-xs font-medium text-muted-foreground transition-colors hover:bg-accent hover:text-foreground focus:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+          >
+            <Receipt className="size-3.5" aria-hidden="true" /> Payments
           </Link>
           <Link
             href="/pos/status"

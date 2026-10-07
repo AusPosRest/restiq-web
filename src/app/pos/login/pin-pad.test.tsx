@@ -25,6 +25,7 @@ describe("PinPad", () => {
     replace.mockReset();
     search = "";
     window.localStorage.clear();
+    window.sessionStorage.clear();
     vi.unstubAllGlobals();
   });
   afterEach(cleanup);
@@ -57,7 +58,8 @@ describe("PinPad", () => {
 
     await waitFor(() => expect(replace).toHaveBeenCalledWith("/pos"));
     const [, init] = fetchMock.mock.calls[0] as [string, RequestInit];
-    expect(JSON.parse(init.body as string)).toEqual({ pin: "1234", tenantId: "tenant-9" });
+    // #290: the enrolled device rides along so the API gives this till its own wrong-PIN allowance.
+    expect(JSON.parse(init.body as string)).toEqual({ pin: "1234", tenantId: "tenant-9", deviceId: "dev-1" });
   });
 
   it("reuses a previously saved binding with no query string, and clears it on Re-enrol", async () => {

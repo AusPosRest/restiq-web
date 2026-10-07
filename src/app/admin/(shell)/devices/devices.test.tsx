@@ -1,4 +1,4 @@
-import { cleanup, render, screen, within } from "@testing-library/react";
+import { cleanup, render, screen, waitFor, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { OutletProvider } from "../outlet-context";
@@ -27,10 +27,17 @@ function jsonResponse(body: unknown, status = 200): Response {
   return new Response(JSON.stringify(body), { status, headers: { "content-type": "application/json" } });
 }
 
+const revokeCalls: { reason: string }[] = [];
+
 function stubFetch() {
+  revokeCalls.length = 0;
   const fetchMock = vi.fn((input: RequestInfo | URL, init?: RequestInit) => {
     const url = String(input);
     const method = init?.method ?? "GET";
+    if (url.includes("/devices/d1/revoke") && method === "POST") {
+      revokeCalls.push(JSON.parse(String(init?.body)) as { reason: string });
+      return Promise.resolve(jsonResponse({ id: "d1", status: "revoked", revokedAt: "2026-08-24T12:01:00.000Z" }));
+    }
     if (url.includes("/devices/enrolment-codes") && method === "POST") {
       return Promise.resolve(jsonResponse({ code: "R7K-4PD", deviceType: "pos", expiresAt: "2026-08-24T12:15:00.000Z" }));
     }
@@ -77,6 +84,29 @@ describe("Devices", () => {
     expect(screen.getByTestId("devices-no-active-code")).toBeTruthy();
   });
 
+  it("switches between the Devices and Topology tabs without losing the enrolment code (issue #212)", async () => {
+    stubFetch();
+    renderDevices();
+    await screen.findByTestId("devices-row-d1");
+    expect(screen.queryByTestId("topology")).toBeNull();
+    expect(screen.getByTestId("devices-tab-devices").getAttribute("aria-selected")).toBe("true");
+
+    await userEvent.click(screen.getByTestId("devices-generate-code"));
+    await userEvent.click(screen.getByTestId("generate-code-submit"));
+    await userEvent.click(screen.getByTestId("generate-code-done"));
+    expect(screen.getByTestId("device-code-chip-countdown")).toBeTruthy();
+
+    await userEvent.click(screen.getByTestId("devices-tab-topology"));
+    expect(screen.getByTestId("topology")).toBeTruthy();
+    expect(screen.queryByTestId("devices-row-d1")).toBeNull();
+    expect(screen.queryByTestId("printer-row-p1")).toBeNull();
+    expect(screen.getByTestId("devices-tab-topology").getAttribute("aria-selected")).toBe("true");
+
+    await userEvent.click(screen.getByTestId("devices-tab-devices"));
+    expect(screen.getByTestId("devices-row-d1")).toBeTruthy();
+    expect(screen.getByTestId("device-code-chip-countdown")).toBeTruthy();
+  });
+
   it("generates an enrolment code and shows the live code chip in place of the empty state", async () => {
     stubFetch();
     renderDevices();
@@ -90,5 +120,41 @@ describe("Devices", () => {
     await userEvent.click(screen.getByTestId("generate-code-done"));
     expect(screen.queryByTestId("devices-no-active-code")).toBeNull();
     expect(screen.getByTestId("device-code-chip-countdown").textContent).toContain("15:00");
+  });
+});
+
+
+describe("Devices - remove a device (issue #215)", () => {
+  it("confirms with a reason, POSTs the revoke, and flips the row to Revoked in place", async () => {
+    stubFetch();
+    renderDevices();
+
+    await userEvent.click(await screen.findByTestId("device-remove-d1"));
+    const dialog = await screen.findByTestId("confirm-reason-dialog");
+    expect(dialog.textContent).toContain("Remove Terminal 1?");
+    expect(screen.getByTestId("confirm-submit").hasAttribute("disabled")).toBe(true);
+
+    await userEvent.type(screen.getByTestId("confirm-reason"), "Tablet retired");
+    await userEvent.click(screen.getByTestId("confirm-submit"));
+
+    await waitFor(() => expect(screen.queryByTestId("confirm-reason-dialog")).toBeNull());
+    expect(revokeCalls).toEqual([{ reason: "Tablet retired" }]);
+    const row = screen.getByTestId("devices-row-d1");
+    expect(within(row).getByTestId("device-status-d1").textContent).toContain("Revoked");
+    expect(screen.queryByTestId("device-remove-d1")).toBeNull();
+    expect(screen.queryByTestId("device-open-d1")).toBeNull();
+  });
+
+  it("cancelling leaves the device enrolled and sends nothing", async () => {
+    stubFetch();
+    renderDevices();
+
+    await userEvent.click(await screen.findByTestId("device-remove-d1"));
+    await screen.findByTestId("confirm-reason-dialog");
+    await userEvent.click(screen.getByTestId("confirm-cancel"));
+
+    expect(screen.queryByTestId("confirm-reason-dialog")).toBeNull();
+    expect(revokeCalls).toEqual([]);
+    expect(screen.getByTestId("device-status-d1").textContent).toContain("Enrolled");
   });
 });

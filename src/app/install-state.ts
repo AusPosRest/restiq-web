@@ -16,8 +16,9 @@ export interface InstallEnv {
 
 export function installMode(env: InstallEnv): InstallMode {
   // Already running as the installed app, or the owner said no. Guest QR
-  // pages (/qr/...) are diners' phones - never ask them to install the POS.
-  if (env.standalone || env.dismissed || env.path.startsWith("/qr")) return null;
+  // pages (/qr/...) are diners' phones, and / is the public marketing page
+  // (issue #262) - never ask those visitors to install the POS.
+  if (env.standalone || env.dismissed || env.path === "/" || env.path.startsWith("/qr")) return null;
   if (env.ios) return "ios";
   return env.promptReady ? "prompt" : null;
 }

@@ -5,14 +5,18 @@
 // (EXPERIENCE.md: "item editor as a drawer, not a full-page navigation").
 // Currency defaults to INR (same convention as CAP-3's menu import) - the
 // backend's menu endpoints carry no tenant-currency field to read instead.
-import { Plus, Search, Soup, Upload } from "lucide-react";
-import Link from "next/link";
+import { LibraryBig, Plus, Search, Soup, Upload } from "lucide-react";
+import { Dialog } from "radix-ui";
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { Button } from "@/components/ui/button";
 import { fetchAllergens, fetchCategories, fetchCombos, fetchItems, fetchModifierGroups } from "../../api";
+import { MenuImport } from "../../menu-import";
 import { LoadErrorPanel, Skeleton } from "../data-states";
 import { useOutlets } from "../outlet-context";
+import { useToast } from "../toast";
 import { CategorySidebar } from "./category-sidebar";
+import { CombosPanel } from "./combos-panel";
+import { DirectoryDialog } from "./directory-dialog";
 import { ItemDrawer } from "./item-drawer";
 import { AllergenView, ALL_CATEGORY, CategoryView, ComboView, ItemView, ModifierGroupView, visibleItems } from "./menu-state";
 import { MenuTable } from "./menu-table";
@@ -75,6 +79,10 @@ export function MenuManagement() {
   const [category, setCategory] = useState<string>(ALL_CATEGORY);
   const [search, setSearch] = useState("");
   const [drawerItem, setDrawerItem] = useState<ItemView | null | "closed">("closed");
+  const [tab, setTab] = useState<"items" | "combos">("items");
+  const [importOpen, setImportOpen] = useState(false);
+  const pushToast = useToast();
+  const [directoryOpen, setDirectoryOpen] = useState(false);
 
   const effectiveItems = useMemo(() => items ?? data?.items ?? [], [items, data]);
   const effectiveCategories = categories ?? data?.categories ?? [];
@@ -99,6 +107,16 @@ export function MenuManagement() {
     setItems((current) => (current ?? effectiveItems).map((item) => (item.id === itemId ? { ...item, available } : item)));
   }
 
+  // An import can add categories as well as items, so refetch rather than merge.
+  function handleImported(itemCount: number) {
+    setImportOpen(false);
+    setDirectoryOpen(false);
+    setItems(null);
+    setCategories(null);
+    retry();
+    pushToast({ kind: "success", message: `${itemCount} item${itemCount === 1 ? "" : "s"} added to your menu.` });
+  }
+
   if (loading) {
     return (
       <div className="space-y-4" data-testid="menu-loading">
@@ -120,14 +138,16 @@ export function MenuManagement() {
           <p className="mt-1 text-sm text-muted-foreground" data-testid="menu-summary">
             {effectiveItems.length} item{effectiveItems.length === 1 ? "" : "s"} in {effectiveCategories.length} categor
             {effectiveCategories.length === 1 ? "y" : "ies"}
+            {effectiveCombos.length > 0 ? `, ${effectiveCombos.length} combo${effectiveCombos.length === 1 ? "" : "s"}` : ""}
             {outlets.length > 0 ? `, synced to ${outlets.length} outlet${outlets.length === 1 ? "" : "s"}` : ""}
           </p>
         </div>
-        <div className="flex gap-2">
-          <Button asChild variant="secondary" data-testid="menu-import-link">
-            <Link href="/admin/menu/import">
-              <Upload aria-hidden="true" /> Import
-            </Link>
+        <div className={`flex flex-wrap gap-2 ${tab === "combos" ? "hidden" : ""}`}>
+          <Button variant="secondary" data-testid="menu-browse-directory" onClick={() => setDirectoryOpen(true)}>
+            <LibraryBig aria-hidden="true" /> Browse directory
+          </Button>
+          <Button variant="secondary" data-testid="menu-import-link" onClick={() => setImportOpen(true)}>
+            <Upload aria-hidden="true" /> Import
           </Button>
           <Button data-testid="menu-add-item" onClick={() => setDrawerItem(null)}>
             <Plus aria-hidden="true" /> Add Item
@@ -135,46 +155,73 @@ export function MenuManagement() {
         </div>
       </div>
 
-      <div className="relative mt-4 w-full sm:w-72">
-        <Search className="absolute left-2.5 top-1/2 size-4 -translate-y-1/2 text-muted-foreground" aria-hidden="true" />
-        <input
-          type="search"
-          data-testid="menu-search"
-          aria-label="Search menu items"
-          placeholder="Search items..."
-          value={search}
-          onChange={(event) => setSearch(event.target.value)}
-          className="h-9 w-full rounded-lg border border-border bg-input py-1 pl-8 pr-3 text-sm placeholder:text-muted-foreground/60 focus:outline-none focus-visible:ring-2 focus-visible:ring-ring"
-        />
+      {/* restiq-web#264: combos live beside items, not inside one item's drawer. */}
+      <div role="tablist" aria-label="Menu" className="mt-4 flex gap-1 border-b border-border/40">
+        {(["items", "combos"] as const).map((key) => (
+          <button
+            key={key}
+            type="button"
+            role="tab"
+            aria-selected={tab === key}
+            data-testid={`menu-tab-${key}`}
+            onClick={() => setTab(key)}
+            className={`-mb-px border-b-2 px-3 py-2 text-sm font-medium focus:outline-none focus-visible:ring-2 focus-visible:ring-ring ${
+              tab === key ? "border-primary text-foreground" : "border-transparent text-muted-foreground hover:text-foreground"
+            }`}
+          >
+            {key === "items" ? "Items" : `Combos${effectiveCombos.length ? ` (${effectiveCombos.length})` : ""}`}
+          </button>
+        ))}
       </div>
 
-      {/* Categories stack above the item table below md (issue #228). */}
-      <div className="mt-4 flex flex-1 flex-col gap-4 md:flex-row md:gap-6">
-        <CategorySidebar
-          categories={effectiveCategories}
-          totalItems={effectiveItems.length}
-          selected={category}
-          onSelect={setCategory}
-          onCategoryCreated={(created) => setCategories([...effectiveCategories, created])}
-        />
-
-        <div className="flex-1 overflow-x-auto rounded-lg border border-border/40 bg-card">
-          {filtered.length === 0 ? (
-            <EmptyState filtered={filteredOrSearched} onClearFilters={() => { setCategory(ALL_CATEGORY); setSearch(""); }} onAddItem={() => setDrawerItem(null)} />
-          ) : (
-            <MenuTable items={filtered} currency={CURRENCY} onSelect={setDrawerItem} onAvailabilityChanged={handleAvailabilityChanged} />
-          )}
+      {tab === "combos" ? (
+        <div className="mt-4 flex flex-1">
+          <CombosPanel combos={effectiveCombos} items={effectiveItems} categories={effectiveCategories} currency={CURRENCY} onChanged={setCombos} />
         </div>
-      </div>
+      ) : (
+        <>
+          <div className="relative mt-4 w-full sm:w-72">
+            <Search className="absolute left-2.5 top-1/2 size-4 -translate-y-1/2 text-muted-foreground" aria-hidden="true" />
+            <input
+              type="search"
+              data-testid="menu-search"
+              aria-label="Search menu items"
+              placeholder="Search items..."
+              value={search}
+              onChange={(event) => setSearch(event.target.value)}
+              className="h-9 w-full rounded-lg border border-border bg-input py-1 pl-8 pr-3 text-sm placeholder:text-muted-foreground/60 focus:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+            />
+          </div>
+
+          {/* Categories stack above the item table below md (issue #228). */}
+          <div className="mt-4 flex flex-1 flex-col gap-4 md:flex-row md:gap-6">
+            <CategorySidebar
+              categories={effectiveCategories}
+              totalItems={effectiveItems.length}
+              selected={category}
+              onSelect={setCategory}
+              onCategoryCreated={(created) => setCategories([...effectiveCategories, created])}
+            />
+
+            <div data-testid="menu-list-scroll" className="flex-1 overflow-auto rounded-lg border border-border/40 bg-card md:max-h-[max(20rem,calc(100dvh-17rem))]">
+              {filtered.length === 0 ? (
+                <EmptyState filtered={filteredOrSearched} onClearFilters={() => { setCategory(ALL_CATEGORY); setSearch(""); }} onImport={() => setImportOpen(true)} onAddItem={() => setDrawerItem(null)} onBrowseDirectory={() => setDirectoryOpen(true)} />
+              ) : (
+                <MenuTable items={filtered} currency={CURRENCY} filterKey={`${category}|${search}`} onSelect={setDrawerItem} onAvailabilityChanged={handleAvailabilityChanged} />
+              )}
+            </div>
+          </div>
+        </>
+      )}
+
+      <DirectoryDialog open={directoryOpen} onClose={() => setDirectoryOpen(false)} onImported={handleImported} />
 
       <ItemDrawer
         open={drawerItem !== "closed"}
         item={drawerItem === "closed" ? null : drawerItem}
-        allItems={effectiveItems}
         categories={effectiveCategories}
         modifierGroupCatalog={effectiveModifierGroups}
         allergenCatalog={effectiveAllergens}
-        comboCatalog={effectiveCombos}
         outlets={outlets}
         selectedOutletId={selectedOutletId}
         defaultCategoryId={category !== ALL_CATEGORY ? category : (effectiveCategories[0]?.id ?? "")}
@@ -184,15 +231,58 @@ export function MenuManagement() {
           upsertItem(saved);
           setDrawerItem("closed");
         }}
+        onDeleted={(deleted) => {
+          setItems((current) => (current ?? effectiveItems).filter((i) => i.id !== deleted.id));
+          setCategories(effectiveCategories.map((c) => (c.id === deleted.categoryId ? { ...c, itemCount: Math.max(0, c.itemCount - 1) } : c)));
+          setDrawerItem("closed");
+          pushToast({ kind: "success", message: `${deleted.name} was deleted from your menu.` });
+        }}
         onModifierGroupCreated={(group) => setModifierGroups([...effectiveModifierGroups, group])}
         onAllergenCreated={(allergen) => setAllergens([...effectiveAllergens, allergen])}
-        onComboCreated={(combo) => setCombos([...effectiveCombos, combo])}
       />
+
+      <ImportDialog open={importOpen} onClose={() => setImportOpen(false)} onCommitted={handleImported} />
     </div>
   );
 }
 
-function EmptyState({ filtered, onClearFilters, onAddItem }: Readonly<{ filtered: boolean; onClearFilters: () => void; onAddItem: () => void }>) {
+// Import as a dialog over the menu (issue #239). /admin/menu/import stays for
+// the onboarding checklist's link.
+function ImportDialog({ open, onClose, onCommitted }: Readonly<{ open: boolean; onClose: () => void; onCommitted: (itemCount: number) => void }>) {
+  return (
+    <Dialog.Root open={open} onOpenChange={(next) => !next && onClose()}>
+      <Dialog.Portal>
+        <Dialog.Overlay className="fixed inset-0 z-40 bg-black/60" />
+        <Dialog.Content
+          data-testid="menu-import-dialog"
+          aria-describedby={undefined}
+          className="admin-theme fixed left-1/2 top-1/2 z-50 max-h-[90vh] w-[calc(100%-2rem)] max-w-5xl -translate-x-1/2 -translate-y-1/2 overflow-y-auto rounded-lg border border-border/60 bg-popover p-4 text-foreground shadow-xl sm:p-6"
+        >
+          <Dialog.Title className="sr-only">Import menu</Dialog.Title>
+          <Dialog.Close asChild>
+            <button
+              type="button"
+              data-testid="menu-import-dialog-close"
+              aria-label="Close"
+              className="absolute right-3 top-3 rounded-md p-1 text-muted-foreground hover:text-foreground focus:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+            >
+              ✕
+            </button>
+          </Dialog.Close>
+          <MenuImport onCommitted={onCommitted} />
+        </Dialog.Content>
+      </Dialog.Portal>
+    </Dialog.Root>
+  );
+}
+
+function EmptyState({
+  filtered,
+  onClearFilters,
+  onImport,
+  onAddItem,
+  onBrowseDirectory,
+}: Readonly<{ filtered: boolean; onClearFilters: () => void; onImport: () => void; onAddItem: () => void; onBrowseDirectory: () => void }>) {
   return (
     <div className="flex flex-col items-center gap-3 px-8 py-16 text-center">
       <Soup className="size-8 text-muted-foreground" aria-hidden="true" />
@@ -206,10 +296,13 @@ function EmptyState({ filtered, onClearFilters, onAddItem }: Readonly<{ filtered
       ) : (
         <div data-testid="menu-empty">
           <p className="font-headline text-lg font-medium">Your menu is empty</p>
-          <p className="mt-1 text-sm text-muted-foreground">Import a menu or add your first item to get started.</p>
-          <div className="mt-3 flex justify-center gap-2">
-            <Button asChild variant="secondary" size="sm" data-testid="menu-empty-import">
-              <Link href="/admin/menu/import">Import menu</Link>
+          <p className="mt-1 text-sm text-muted-foreground">Pick items from the product directory, import a menu, or add your first item.</p>
+          <div className="mt-3 flex flex-wrap justify-center gap-2">
+            <Button variant="secondary" size="sm" data-testid="menu-empty-directory" onClick={onBrowseDirectory}>
+              Browse directory
+            </Button>
+            <Button variant="secondary" size="sm" data-testid="menu-empty-import" onClick={onImport}>
+              Import menu
             </Button>
             <Button size="sm" data-testid="menu-empty-add" onClick={onAddItem}>
               Add item

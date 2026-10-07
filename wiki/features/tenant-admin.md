@@ -102,6 +102,25 @@ story. Backend counterpart: `restiq-backend/wiki/features/tenant-admin.md`.
   same call, so the checklist reflects it on return - no separate write from
   here). A draft with zero extracted items shows an empty state with a
   restart action rather than a bare table.
+- **From the Menu page (issue #239):** the header's **Import** button and the
+  empty state's **Import menu** open the same `MenuImport` in a dialog over
+  `/admin/menu` instead of navigating away. With `onCommitted(itemCount)` set,
+  commit skips the onboarding success screen. The Menu page then closes the
+  dialog, refetches items and categories (an import can create categories),
+  and shows a success toast.
+- **Photos and PDFs (issue #246):** the backend has no vision/OCR reader, and
+  used to answer every image or PDF with the same 3 sample items. It now
+  refuses them (422 `extraction_unavailable`), and `isAcceptedMenuFile` only
+  takes `.csv` / `.xlsx`, with copy pointing at the sample spreadsheet.
+- **Clashes on commit (issue #247):** commit checks the draft against live
+  menu items and against itself first, and answers 409 `duplicate_items` with
+  a message naming each item plus a `duplicates` list (id, name, category,
+  reason). The table flags those rows, and every row has a Remove button
+  (`PATCH ... { items: [], removeIds: [id] }`).
+- **Deleting items (issue #248, CAP-4):** the item drawer's Delete (with a
+  confirm step) calls `DELETE /admin/api/menu/items/:id`. The backend archives
+  (`menu_items.archived_at`), so past bills keep the item; menu, POS, QR and
+  kiosk reads skip archived items, and the name can be reused.
 - **Multipart uploads through the proxy:** `src/app/admin/api/[...path]/route.ts`
   previously forced every non-GET request to `application/json` and read the
   body as text, which would have silently corrupted a binary file upload. It
@@ -114,7 +133,8 @@ story. Backend counterpart: `restiq-backend/wiki/features/tenant-admin.md`.
 
 - **Intent:** an owner manages categories, items, variants, modifier groups
   (min/max rules), combos, allergen/dietary tags, per-outlet availability and
-  per-channel/scheduled prices, and item availability (86), from one screen
+  per-channel/scheduled prices, and item availability (the "Available" switch,
+  on = on sale, off = sold out; #234 replaced the "86'd" slang), from one screen
   that keeps list context (item editor as a drawer, not a page nav); a price
   edit creates a new version rather than rewriting the old one.
 - **Built:** `/admin/menu` (`src/app/admin/(shell)/menu/`) - the first screen
@@ -134,8 +154,12 @@ story. Backend counterpart: `restiq-backend/wiki/features/tenant-admin.md`.
   variants immediately (their own endpoints, not batched); Modifier Groups and
   Allergen tags as checkbox pickers against the tenant-wide catalogs (with an
   inline "create and attach" form for a new one) rather than per-item free
-  text; Combos as a read-only list of combos containing this item plus a
-  create form; a per-outlet availability override section. Modifier-group
+  text; a per-outlet availability override section. Combos moved out of the
+  drawer to their own **Combos** tab beside Items (restiq-web#264,
+  `combos-panel.tsx` + `combo-editor-state.ts`): a list (name, slot summary,
+  category, on sale / off, price) and an editor drawer for the name, price,
+  category, on sale, and slots (name, pick count, items with an optional
+  extra charge each). Saving replaces the whole combo; Delete archives it. Modifier-group
   min/max validation (`menu-state.ts#validateModifierGroup`) surfaces a
   specific message per failure (missing name, no options yet, negative
   minimum, maximum below 1, maximum below minimum, maximum above the option
@@ -152,6 +176,28 @@ story. Backend counterpart: `restiq-backend/wiki/features/tenant-admin.md`.
   `src/app/admin/(shell)/` rather than building a one-off header just for
   Menu. `/admin/menu/import` (CAP-3, prior story) is untouched and still
   lives outside the shell at its original route.
+- **Sidebar, table and drawer scrolling (issue #266):** the `(shell)/layout.tsx`
+  sidebar is now sticky and full height on every owner page, so
+  the nav and Sign out stay put instead of scrolling away with the page.
+  `MenuTable` scrolls inside a viewport-high panel (min 20rem) with a sticky
+  column header, so the category list stays beside it - unchanged below `md`.
+  `ItemDrawer` pins its header and its Delete / Save Changes footer and
+  scrolls only the form, with an always-visible scrollbar (the new
+  `.scrollbar-visible` utility in `src/app/globals.css`), matching the combo
+  editor.
+
+### Devices / Topology tabs (issue #212)
+
+`devices.tsx`'s `DevicesEditor` now shows a `role="tablist"` strip under the
+page header (`devices-tab-devices`, `devices-tab-topology`; same idiom as
+/ops's Tenant Detail tabs, local state only, no URL param). **Devices** holds
+the table, the enrolment-code chip / empty state and the printer config
+panel; **Topology** holds the map from issue #210. Every piece of state
+(device list, 30 s refresh, active code, dialog) lives in `DevicesEditor`
+above the tabs, so switching never refetches or drops an active code, and a
+link change made on Topology is already reflected in the table. "Enrol
+device" stays in the header for both. Default tab: Devices. Test:
+`devices.test.tsx` "switches between the Devices and Topology tabs".
 
 ## CAP-10 - Branding & capabilities
 
@@ -300,11 +346,19 @@ story. Backend counterpart: `restiq-backend/wiki/features/tenant-admin.md`.
     SVG (rects/circles with a text label needed no path drawing). A floor
     tab strip switches which floor's tables render. Each table shape is
     draggable (pointer events) and keyboard-operable (arrow keys nudge by
-    `GRID_SNAP_PX`, both funnel through the same
-    `floor-plan-state.ts#computeDragPosition` so mouse and keyboard users get
-    identical snap/clamp behaviour). Dragging shows a live client-side
+    `GRID_SNAP_PX`). Dragging shows a live client-side
     overlap tint (`findOverlap`, bounding-box intersection) purely as visual
     feedback - the backend remains the actual source of truth on save.
+    **Infinite per floor (#237):** a native scroll viewport (`h-[70vh]`)
+    over a dotted surface sized by `canvasExtent` to 480px past the farthest
+    table, so dragging outward always has more room; it grows right/down
+    only (backend `@Min(0)`), and `computeDragPosition` clamps at 0 only.
+    Pan = scroll/trackpad/touch or mouse-drag on empty space; dragging a
+    table against the edge scrolls along. Zoom 25-200% via
+    `floor-plan-zoom-out/reset/in/fit` or Ctrl/⌘ + wheel (pinch), anchored
+    at the cursor; pointer maths runs in canvas units so drags track at any
+    zoom. Zoom and scroll are remembered per floor for the session. New
+    tables still auto-place in 640-wide rows.
   - **List** (`floor-plan-list-view.tsx`): the EXPERIENCE.md-required
     non-pointer fallback - a plain table, one row per table grouped by
     floor, with editable X/Y/capacity number fields (commit on blur/Enter,
@@ -574,6 +628,28 @@ story. Backend counterpart: `restiq-backend/wiki/features/tenant-admin.md`.
   Errors are the real backend codes with honest per-code copy
   (`code_invalid`/`code_expired`/`code_already_used`).
 
+### Remove a device (issue #215 web / restiq-backend#140)
+
+- **Intent:** an owner can retire a mis-enrolled or replaced device from the
+  Devices table themselves instead of asking the Platform Console.
+- **What's built:** every enrolled row of `devices-table.tsx` gets a
+  `device-remove-<id>` button (kiosk / CDS rows too, which have no Open
+  link); `devices.tsx` confirms it through the shared
+  `ConfirmReasonDialog` ("Remove <label>?", verb "Remove device", reason
+  mandatory) and calls `revokeDevice` (`POST
+  admin/v1/outlets/:outletId/devices/:deviceId/revoke { reason }`). On
+  success the row flips to **Revoked** in place (status badge, Open / QR /
+  Remove actions gone), any peripheral linked to it loses its link (the
+  topology re-draws it as shared), and a success toast names the device; a
+  failure keeps the dialog open with an error toast.
+- **Key decisions:** revoke, never delete - the row stays listed as Revoked
+  so the enrolment history is visible, matching the ops realm's revoke
+  (restiq-backend's `device.revoked` audit row with the owner as actor).
+  Hard delete and un-revoke are deliberately out of scope.
+- **Tests:** `devices-table.test.tsx` (Remove on enrolled rows only,
+  reports the device), `devices.test.tsx` (full flow: Remove → reason →
+  POST revoke → row shows Revoked).
+
 ## CAP-7 - Staff & roles
 
 - **Intent:** an owner manages users, assigns outlet-scoped roles from the
@@ -624,13 +700,10 @@ story. Backend counterpart: `restiq-backend/wiki/features/tenant-admin.md`.
     admin and ops never share components across the route split (AD-4).
   - **Role permission matrix** (`permission-matrix.tsx`): read-only
     reference table, one column per seeded role, one row per permission.
-    **Deviation:** `GET /admin/v1/roles` (see Key decisions) returns only
-    `{ id, name, isSystem }` - no permission metadata - so this can't be
-    sourced from the API the way the render's Effective POS Permissions list
-    implies. It's rendered instead from a static reference
-    (`staff-state.ts#SYSTEM_ROLE_PERMISSIONS`), matching the render's intent
-    (a fixed, non-editable permission story per role) without inventing a
-    backend field that doesn't exist.
+    Since restiq-backend#169 / web #290, each cell comes from the role's
+    `permissions` in `GET /admin/v1/roles`, which is the catalog the API
+    enforces on every POS/KDS action (`staff-state.ts#roleGrants`). The static
+    `SYSTEM_ROLE_PERMISSIONS` is only the fallback for an older API.
   - **Not built** (out of this story's scope, T7 render shows them but
     issue #30's scope and the current data model don't support them): the
     render's per-user Outlet Access checkbox panel and per-user "Effective
@@ -888,9 +961,8 @@ endpoint) takes `{ renderMode }`.
     four; this build only implements what the backend can actually persist
     and drops the rest rather than faking client-only fields with nowhere to
     save.
-  - Combos have `GET`/`POST` only (`/admin/v1/menu/combos`) - no update or
-    delete, so the drawer can list combos containing an item and create a
-    new one, but can't edit or remove an existing combo from here.
+  - Combos: `GET`/`POST /admin/v1/menu/combos`, `PUT`/`DELETE .../:id`
+    (restiq-backend#160) - see the Combos tab above.
   - **86 is `available: boolean`** via `PATCH .../items/:id/availability`,
     not the `is86d` + `/86` path an earlier draft of this UI guessed.
   - **Per-outlet "override" is availability, not price** -
@@ -1292,3 +1364,42 @@ mocked-fetch component tests (`reports.test.tsx`,
   (`agreement-empty`) when nothing has been published.
 - **Not built:** a pending-agreement banner elsewhere in the shell, gating
   go-live on a signature, PDF download.
+
+## List pagination (issue #255)
+
+- Client-side, 20 rows per page: `src/lib/pagination.ts#paginate` (pure,
+  clamps the page, reports `from–to of total`) and
+  `src/components/pagination.tsx` (`usePagination(list, resetKey)` +
+  `PaginationControls`). The controls render only when there is more than one
+  page; a change of `resetKey` (the Menu passes `category|search`) returns
+  to page 1. Applied to the Menu items table (`menu-pagination`), Staff
+  (`staff-pagination`) and Devices (`devices-pagination`). Lists that already
+  page through a backend cursor (Reports ▸ Payments) keep their Load more.
+## Menu ▸ Browse directory - import from the product directory (issue #245)
+
+- **Intent:** an owner picks ready-made products from the platform directory
+  instead of typing every item, then edits the copies freely.
+- **Built:** a "Browse directory" button beside Import on `/admin/menu` (and
+  in the empty state) opens `src/app/admin/(shell)/menu/directory-dialog.tsx`:
+  search (`useDeferredValue`, no debounce library), tag chips from
+  `GET menu/directory/tags`, a checkbox list with photo/initial, name,
+  category, veg marker, tags and suggested price, and an "Import N items"
+  button. The backend scopes the list to the tenant's currency, so an Indian
+  tenant never sees AUD products. On success the menu drops its local
+  item/category overrides and refetches, so new categories appear in the
+  sidebar; a name collision inside a category surfaces the backend's 409
+  message as an error toast and keeps the dialog open.
+- **API:** `GET admin/v1/menu/directory?q=&tag=`, `GET .../tags`,
+  `POST .../import { productIds[] }` (`api.ts`: `directoryPath`,
+  `importDirectoryProducts`).
+- **Tests:** `directory-dialog.test.tsx` (search + tag filter, ticking,
+  import payload and count callback; 409 keeps the dialog open).
+## Menu photos + Menu Photos setting (issue #230)
+
+- **Upload:** Menu ▸ item drawer ▸ Upload photo (browser-resized JPEG, see #218).
+- **Where they show:** owner Menu table (thumbnail, initial when none), POS
+  order-taking and counter tiles, QR menu + item detail, kiosk tiles.
+- **Turn off:** Settings ▸ Capabilities ▸ **Menu Photos** (`menu_photos`, per outlet,
+  on by default). Off = the backend returns `photoUrl: null` on POS and guest menus
+  (restiq-backend#148), so staff and guests see names only. The owner Menu table
+  keeps its thumbnails so photos can still be managed.

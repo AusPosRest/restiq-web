@@ -1,5 +1,7 @@
 import { describe, expect, it } from "vitest";
 import {
+  canvasExtent,
+  nearestFreeSpot,
   computeDragPosition,
   computeNextTablePosition,
   findOverlap,
@@ -24,31 +26,69 @@ describe("snapToGrid", () => {
 });
 
 describe("computeDragPosition", () => {
-  const canvas = { width: 400, height: 300 };
-  const size = { width: 40, height: 40 };
-
   it("translates the table by the pointer's movement, snapped to the grid", () => {
     const origin = { pointerX: 100, pointerY: 100, tableX: 40, tableY: 40 };
-    const result = computeDragPosition(origin, 121, 137, size, canvas);
+    const result = computeDragPosition(origin, 121, 137);
     // rawX = 40 + (121-100) = 61 -> snaps to 64; rawY = 40 + (137-100) = 77 -> snaps to 80
     expect(result).toEqual({ x: 64, y: 80 });
   });
 
   it("clamps to the canvas's left/top edge", () => {
     const origin = { pointerX: 100, pointerY: 100, tableX: 10, tableY: 10 };
-    const result = computeDragPosition(origin, 0, 0, size, canvas);
-    expect(result).toEqual({ x: 0, y: 0 });
+    expect(computeDragPosition(origin, 0, 0)).toEqual({ x: 0, y: 0 });
   });
 
-  it("clamps to the canvas's right/bottom edge, accounting for table size", () => {
+  it("has no right/bottom edge - the canvas is infinite that way", () => {
     const origin = { pointerX: 0, pointerY: 0, tableX: 0, tableY: 0 };
-    const result = computeDragPosition(origin, 10000, 10000, size, canvas);
-    expect(result).toEqual({ x: canvas.width - size.width, y: canvas.height - size.height });
+    expect(computeDragPosition(origin, 10000, 10000)).toEqual({ x: 10000, y: 10000 });
   });
 
   it("is a no-op when the pointer hasn't moved", () => {
     const origin = { pointerX: 50, pointerY: 50, tableX: 88, tableY: 32 };
-    expect(computeDragPosition(origin, 50, 50, size, canvas)).toEqual({ x: 88, y: 32 });
+    expect(computeDragPosition(origin, 50, 50)).toEqual({ x: 88, y: 32 });
+  });
+});
+
+describe("nearestFreeSpot (issue #258)", () => {
+  const t1 = { id: "t1", x: 100, y: 100, width: 80, height: 80 };
+  const dropped = (x: number, y: number) => ({ id: "moving", x, y, width: 40, height: 40 });
+
+  it("keeps a clear drop exactly where it is", () => {
+    expect(nearestFreeSpot(dropped(300, 100), [t1])).toEqual({ x: 300, y: 100 });
+  });
+
+  it("settles an overlapping drop beside the table it landed on, on the nearest side", () => {
+    // t1's right edge is 180; one grid step past it, on the grid, is 192.
+    expect(nearestFreeSpot(dropped(160, 120), [t1])).toEqual({ x: 192, y: 120 });
+  });
+
+  it("never settles at a negative position", () => {
+    const corner = { id: "corner", x: 0, y: 0, width: 80, height: 80 };
+    expect(nearestFreeSpot(dropped(0, 0), [corner])).toEqual({ x: 88, y: 0 });
+  });
+
+  it("skips a spot beside the table that a third table already fills", () => {
+    const t3 = { id: "t3", x: 192, y: 100, width: 80, height: 80 };
+    const spot = nearestFreeSpot(dropped(160, 120), [t1, t3]);
+    expect(spot).toEqual({ x: 160, y: 48 });
+  });
+
+  it("ignores the moving table's own old position", () => {
+    expect(nearestFreeSpot(dropped(20, 20), [{ ...dropped(0, 0) }])).toEqual({ x: 20, y: 20 });
+  });
+});
+
+describe("canvasExtent", () => {
+  it("is just the room on an empty floor", () => {
+    expect(canvasExtent([], 100)).toEqual({ width: 100, height: 100 });
+  });
+
+  it("reaches the farthest table's right and bottom edges, plus the room", () => {
+    const tables = [
+      { id: "a", x: 900, y: 0, width: 60, height: 40 },
+      { id: "b", x: 0, y: 1200, width: 40, height: 80 },
+    ];
+    expect(canvasExtent(tables, 100)).toEqual({ width: 1060, height: 1380 });
   });
 });
 

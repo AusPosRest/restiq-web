@@ -91,7 +91,8 @@ export function BillSummary({
               return (
                 <tr key={line.id} data-testid={`bill-line-${line.id}`} className="align-top">
                   <td className="py-1.5 pr-3 tabular-nums">
-                    {editable ? (
+                    {/* A combo can only be removed, not stepped (restiq-backend#160). */}
+                    {editable && !line.comboId ? (
                       <div className="flex items-center gap-1">
                         <button
                           type="button"
@@ -129,6 +130,11 @@ export function BillSummary({
                     </p>
                     {line.modifiers.length > 0 && (
                       <p className="text-xs text-muted-foreground">{line.modifiers.map((modifier) => modifier.name).join(", ")}</p>
+                    )}
+                    {line.components.length > 0 && (
+                      <p data-testid={`bill-line-components-${line.id}`} className="text-xs text-muted-foreground">
+                        {line.components.join(" · ")}
+                      </p>
                     )}
                   </td>
                   <td className="whitespace-nowrap py-1.5 text-right tabular-nums">{formatMinor(line.lineTotalMinor, currency)}</td>

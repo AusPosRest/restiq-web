@@ -25,6 +25,8 @@
 // marker, Hindi name, rating, and bestseller badge entirely rather than
 // inventing any of them.
 
+import type { ComboMenuView } from "@/lib/combo";
+
 export interface MenuModifierView {
   id: string;
   name: string;
@@ -63,6 +65,9 @@ export interface MenuItemView {
   variants: MenuVariantView[];
   modifierGroups: MenuModifierGroupView[];
   allergens: MenuAllergenView[];
+  // Issue #218: the backend has carried photoUrl since #73's guest fields;
+  // optional so an older backend still falls back to the letter tile.
+  photoUrl?: string | null;
 }
 
 export interface MenuCategoryView {
@@ -75,6 +80,8 @@ export interface MenuCategoryView {
 export interface GuestMenuView {
   outletId: string;
   categories: MenuCategoryView[];
+  /** restiq-backend#160: live combos, availability at this outlet. */
+  combos?: ComboMenuView[];
 }
 
 export interface PriceDisplay {
@@ -201,4 +208,9 @@ export function resolveSelectedModifiers(item: Pick<MenuItemView, "modifierGroup
 
 export function computeUnitTotalMinor(unitPriceMinor: number, modifiers: readonly MenuModifierView[]): number {
   return unitPriceMinor + modifiers.reduce((sum, modifier) => sum + modifier.priceMinor, 0);
+}
+
+/** The menu's one-tap "+" adds it straight to the cart (issue #218) - only when there is nothing to choose: no variants and no required modifier group. */
+export function canQuickAdd(item: MenuItemView): boolean {
+  return item.available && item.variants.length === 0 && item.modifierGroups.every((group) => group.minSelections === 0);
 }

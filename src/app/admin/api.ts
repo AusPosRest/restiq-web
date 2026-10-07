@@ -25,6 +25,8 @@ export class AdminApiError extends Error {
     message: string,
     readonly status: number,
     readonly code?: string,
+    /** The whole error envelope, for errors that carry detail next to code/message (e.g. duplicate_items' `duplicates`). */
+    readonly details?: Record<string, unknown>,
   ) {
     super(message);
   }
@@ -42,8 +44,8 @@ export async function adminApi<T>(path: string, init?: RequestInit): Promise<T> 
   }
   const body: unknown = res.status === 204 ? null : await res.json().catch(() => null);
   if (!res.ok) {
-    const error = (body as { error?: { code?: string; message?: string } } | null)?.error;
-    throw new AdminApiError(error?.message ?? "The request failed", res.status, error?.code);
+    const error = (body as { error?: { code?: string; message?: string } & Record<string, unknown> } | null)?.error;
+    throw new AdminApiError(error?.message ?? "The request failed", res.status, error?.code, error);
   }
   return body as T;
 }
@@ -115,6 +117,14 @@ export function updateMenuImportItem(
   });
 }
 
+// Drops a draft row before commit, e.g. one already on the menu (issue #247).
+export function removeMenuImportItem(importId: string, itemId: string): Promise<MenuImportDraft> {
+  return adminApi<MenuImportDraft>(`menu-import/${importId}`, {
+    method: "PATCH",
+    body: JSON.stringify({ items: [], removeIds: [itemId] }),
+  });
+}
+
 export interface MenuImportCommitResult {
   importId: string;
   committedAt: string;
@@ -175,6 +185,8 @@ export interface UpdateItemInput {
   name?: string;
   shortName?: string;
   categoryId?: string;
+  /** null removes the photo (restiq-backend#142). */
+  photoUrl?: string | null;
 }
 
 export function updateMenuItem(itemId: string, input: UpdateItemInput): Promise<ItemView> {
@@ -183,6 +195,11 @@ export function updateMenuItem(itemId: string, input: UpdateItemInput): Promise<
 
 export function setItemAvailability(itemId: string, available: boolean): Promise<ItemView> {
   return adminApi<ItemView>(`menu/items/${itemId}/availability`, { method: "PATCH", body: JSON.stringify({ available }) });
+}
+
+// Issue #248: the backend archives rather than deletes, so past bills keep the item.
+export function deleteMenuItem(itemId: string): Promise<null> {
+  return adminApi<null>(`menu/items/${itemId}`, { method: "DELETE" });
 }
 
 export function addVariant(itemId: string, name: string): Promise<ItemView> {
@@ -211,7 +228,8 @@ export function clearOutletAvailability(itemId: string, outletId: string): Promi
 
 export interface CreatePriceInput {
   variantId?: string;
-  channel: PriceChannel;
+  /** Omitted = every channel (the owner console sets one price per item). */
+  channel?: PriceChannel;
   outletId?: string;
   priceMinor: number;
   currency: string;
@@ -274,16 +292,25 @@ export function fetchCombos(): Promise<ComboView[]> {
   return adminApi<ComboView[]>("menu/combos");
 }
 
-export interface CreateComboInput {
+// restiq-backend#160: a combo is saved whole - fields and every slot.
+export interface SaveComboInput {
   name: string;
   categoryId?: string;
   priceMinor: number;
   currency: string;
-  components: Array<{ itemId: string; quantity?: number }>;
+  photoUrl?: string;
+  available: boolean;
+  slots: Array<{ name: string; pickCount: number; options: Array<{ itemId: string; variantId?: string; upchargeMinor?: number }> }>;
 }
 
-export function createCombo(input: CreateComboInput): Promise<ComboView> {
-  return adminApi<ComboView>("menu/combos", { method: "POST", body: JSON.stringify(input) });
+export function saveCombo(comboId: string | null, input: SaveComboInput): Promise<ComboView> {
+  return comboId
+    ? adminApi<ComboView>(`menu/combos/${comboId}`, { method: "PUT", body: JSON.stringify(input) })
+    : adminApi<ComboView>("menu/combos", { method: "POST", body: JSON.stringify(input) });
+}
+
+export function archiveCombo(comboId: string): Promise<void> {
+  return adminApi<void>(`menu/combos/${comboId}`, { method: "DELETE" });
 }
 
 // --- CAP-10 Branding & capabilities. Verified against restiq-backend's
@@ -405,6 +432,22 @@ export function updateStation(outletId: string, stationId: string, input: Update
   });
 }
 
+export function deleteStation(outletId: string, stationId: string): Promise<void> {
+  return adminApi<void>(`outlets/${outletId}/floor-plan/stations/${stationId}`, { method: "DELETE" });
+}
+
+export interface StarterSetupResult {
+  type: string;
+  stationsCreated: string[];
+  tablesCreated: number;
+  capabilitiesSet: string[];
+}
+
+/** Builds the outlet type's starting stations, tables and switches; safe to repeat - it only adds what is missing. */
+export function applyStarterSetup(outletId: string): Promise<StarterSetupResult> {
+  return adminApi<StarterSetupResult>(`outlets/${outletId}/starter-setup`, { method: "POST" });
+}
+
 export function updatePrinter(outletId: string, printerId: string, renderMode: PrinterRenderMode): Promise<PrinterView> {
   return adminApi<PrinterView>(`outlets/${outletId}/floor-plan/printers/${printerId}`, {
     method: "PATCH",
@@ -486,6 +529,20 @@ export function setDevicePairing(outletId: string, deviceId: string, posDeviceId
     method: "PATCH",
     body: JSON.stringify({ posDeviceId }),
   });
+}
+
+// Owner-side removal (issue #215 / restiq-backend#140): POST
+// .../devices/:deviceId/revoke { reason } -> { id, status: "revoked",
+// revokedAt }. Revoke, never delete - the row stays listed as Revoked for
+// the audit trail. 409 conflict when it is already revoked.
+export interface DeviceRevokeResult {
+  id: string;
+  status: "revoked";
+  revokedAt: string;
+}
+
+export function revokeDevice(outletId: string, deviceId: string, reason: string): Promise<DeviceRevokeResult> {
+  return adminApi<DeviceRevokeResult>(`outlets/${outletId}/devices/${deviceId}/revoke`, { method: "POST", body: JSON.stringify({ reason }) });
 }
 
 // --- CAP-7 Staff & roles. Reconciled against the real restiq-backend#38/#39
@@ -652,4 +709,33 @@ export interface OwnerAgreementView {
 
 export function signAgreement(versionId: string, signerName: string): Promise<{ signature: AgreementSignatureView }> {
   return adminApi(`agreement/${versionId}/sign`, { method: "POST", body: JSON.stringify({ signerName, accepted: true }) });
+}
+
+// --- Product directory (issue #245): the platform catalog, scoped by the
+// backend to this tenant's currency. Import copies the chosen products into
+// the tenant's own menu (same result shape as a menu-import commit).
+
+export interface DirectoryProduct {
+  id: string;
+  name: string;
+  shortName: string;
+  nameHindi: string | null;
+  vegMarker: "veg" | "non_veg" | null;
+  photoUrl: string | null;
+  category: string;
+  suggestedPriceMinor: number;
+  currency: string;
+  tags: string[];
+}
+
+export function directoryPath(q: string, tag: string): string {
+  const params = new URLSearchParams();
+  if (q.trim()) params.set("q", q.trim());
+  if (tag) params.set("tag", tag);
+  const search = params.toString();
+  return `menu/directory${search ? `?${search}` : ""}`;
+}
+
+export function importDirectoryProducts(productIds: string[]): Promise<MenuImportCommitResult> {
+  return adminApi<MenuImportCommitResult>("menu/directory/import", { method: "POST", body: JSON.stringify({ productIds }) });
 }
