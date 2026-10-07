@@ -4,6 +4,7 @@
 // backend guard remains the enforcement point - this adds a credential, not
 // authz.
 import { NextRequest, NextResponse } from "next/server";
+import { apiUrl } from "@/lib/api-url";
 import { tenantHostHeaders } from "@/lib/tenant-host-headers";
 import { ADMIN_SESSION_COOKIE } from "@/lib/admin-session";
 
@@ -15,8 +16,8 @@ async function forward(request: NextRequest, params: Promise<{ path: string[] }>
     return NextResponse.json({ error: { code: "not_found", message: "Unknown API path" } }, { status: 404 });
   }
 
-  const apiUrl = process.env.NEXT_PUBLIC_API_URL;
-  if (!apiUrl) {
+  const url = apiUrl();
+  if (!url) {
     return NextResponse.json({ error: { code: "misconfigured", message: "NEXT_PUBLIC_API_URL is not set" } }, { status: 500 });
   }
 
@@ -43,7 +44,7 @@ async function forward(request: NextRequest, params: Promise<{ path: string[] }>
 
   let upstream: Response;
   try {
-    upstream = await fetch(`${apiUrl}/admin/v1/${path.join("/")}${request.nextUrl.search}`, init);
+    upstream = await fetch(`${url}/admin/v1/${path.join("/")}${request.nextUrl.search}`, init);
   } catch {
     return NextResponse.json({ error: { code: "upstream_unreachable", message: "The API could not be reached" } }, { status: 502 });
   }

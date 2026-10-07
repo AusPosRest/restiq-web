@@ -3,6 +3,7 @@
 // The API base comes from the environment only (house rule: no hostnames in
 // source).
 import { NextResponse } from "next/server";
+import { apiUrl } from "@/lib/api-url";
 import { ADMIN_SESSION_COOKIE, ADMIN_SESSION_MAX_AGE_SECONDS } from "@/lib/admin-session";
 
 interface AcceptInviteResponse {
@@ -20,14 +21,14 @@ export async function POST(request: Request): Promise<NextResponse> {
     return errorResponse(400, "validation_failed", "token and password are required");
   }
 
-  const apiUrl = process.env.NEXT_PUBLIC_API_URL;
-  if (!apiUrl) {
+  const url = apiUrl();
+  if (!url) {
     return errorResponse(500, "misconfigured", "NEXT_PUBLIC_API_URL is not set");
   }
 
   let upstream: Response;
   try {
-    upstream = await fetch(`${apiUrl}/admin/v1/auth/accept-invite`, {
+    upstream = await fetch(`${url}/admin/v1/auth/accept-invite`, {
       method: "POST",
       headers: { "content-type": "application/json" },
       body: JSON.stringify({ token, password }),

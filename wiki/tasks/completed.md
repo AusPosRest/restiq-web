@@ -1460,3 +1460,8 @@ faked.
   wizard has an optional Subdomain field that checks availability on blur and sends
   `slug` at the top level of the submit. Tests: tenant-by-host, tenant-host-headers,
   login-form, POS login route, wizard-state, wizard.
+- **2026-10-07 - API address at run time, standalone build (#304).** `src/lib/api-url.ts`
+  reads `RESTIQ_API_URL` at call time, falling back to `NEXT_PUBLIC_API_URL` (which Next
+  inlines at build time). All 21 server-side reads use it. `next.config.ts` sets
+  `output: "standalone"` so the Windows hub till (offline sync design) can start the
+  built app with plain Node against its local POS service. Tests: api-url, POS API route.

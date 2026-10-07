@@ -7,6 +7,7 @@
 // keeps the same same-origin-fetch shape. Mirrors src/app/qr/api/[...path]/
 // route.ts and src/app/pos/api/[...path]/route.ts minus the cookie/token step.
 import { NextRequest, NextResponse } from "next/server";
+import { apiUrl } from "@/lib/api-url";
 
 const SEGMENT = /^[a-z0-9_-]+$/i;
 
@@ -16,8 +17,8 @@ async function forward(request: NextRequest, params: Promise<{ path: string[] }>
     return NextResponse.json({ error: { code: "not_found", message: "Unknown API path" } }, { status: 404 });
   }
 
-  const apiUrl = process.env.NEXT_PUBLIC_API_URL;
-  if (!apiUrl) {
+  const url = apiUrl();
+  if (!url) {
     return NextResponse.json({ error: { code: "misconfigured", message: "NEXT_PUBLIC_API_URL is not set" } }, { status: 500 });
   }
 
@@ -30,7 +31,7 @@ async function forward(request: NextRequest, params: Promise<{ path: string[] }>
 
   let upstream: Response;
   try {
-    upstream = await fetch(`${apiUrl}/device/v1/${path.join("/")}${request.nextUrl.search}`, init);
+    upstream = await fetch(`${url}/device/v1/${path.join("/")}${request.nextUrl.search}`, init);
   } catch {
     return NextResponse.json({ error: { code: "upstream_unreachable", message: "The API could not be reached" } }, { status: 502 });
   }

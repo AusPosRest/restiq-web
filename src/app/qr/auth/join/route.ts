@@ -11,6 +11,7 @@
 // flips into start mode rather than showing it as a submission error, so
 // this route passes the upstream body through untouched either way.
 import { NextResponse } from "next/server";
+import { apiUrl } from "@/lib/api-url";
 import { guestSessionResponse } from "../session-cookies";
 import type { GuestApiError, GuestJoinResult } from "../types";
 
@@ -34,14 +35,14 @@ export async function POST(request: Request): Promise<NextResponse> {
     return errorResponse(400, "validation_failed", "Your name is required");
   }
 
-  const apiUrl = process.env.NEXT_PUBLIC_API_URL;
-  if (!apiUrl) {
+  const url = apiUrl();
+  if (!url) {
     return errorResponse(500, "misconfigured", "NEXT_PUBLIC_API_URL is not set");
   }
 
   let upstream: Response;
   try {
-    upstream = await fetch(`${apiUrl}/guest/v1/sessions/join`, {
+    upstream = await fetch(`${url}/guest/v1/sessions/join`, {
       method: "POST",
       headers: { "content-type": "application/json" },
       body: JSON.stringify({ outletId, tableId, pin, name: name.trim() }),

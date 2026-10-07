@@ -7,6 +7,7 @@
 // that is not an active kiosk at this outlet, 403 kiosk_disabled) so the
 // attract screen can show the backend's own message.
 import { NextResponse } from "next/server";
+import { apiUrl } from "@/lib/api-url";
 import { guestSessionResponse } from "../session-cookies";
 import type { GuestApiError, KioskStartResult } from "../types";
 
@@ -21,14 +22,14 @@ export async function POST(request: Request): Promise<NextResponse> {
     return errorResponse(400, "validation_failed", "outletId and deviceId are required");
   }
 
-  const apiUrl = process.env.NEXT_PUBLIC_API_URL;
-  if (!apiUrl) {
+  const url = apiUrl();
+  if (!url) {
     return errorResponse(500, "misconfigured", "NEXT_PUBLIC_API_URL is not set");
   }
 
   let upstream: Response;
   try {
-    upstream = await fetch(`${apiUrl}/guest/v1/kiosk/sessions`, {
+    upstream = await fetch(`${url}/guest/v1/kiosk/sessions`, {
       method: "POST",
       headers: { "content-type": "application/json" },
       body: JSON.stringify({ outletId, deviceId }),
