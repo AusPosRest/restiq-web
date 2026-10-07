@@ -1446,3 +1446,8 @@ faked.
   (`stations-starter-setup`), which builds the type's stations, tables and
   switches and reloads the plan; each station row has Remove with a confirm step.
   Tests: `stations-panel.test.tsx`.
+- **2026-10-07 - Owner forgot and reset password pages (#300).** "Forgot your
+  password?" on the owner sign-in; `/admin/forgot-password` always confirms the same
+  way; `/admin/reset-password?token=` checks the new password, handles an expired,
+  used or missing link with a way to ask again, and sends the owner to sign in with a
+  notice. Tests: forgot-password-form, reset-password-form, login-form, admin-session.

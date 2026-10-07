@@ -33,6 +33,12 @@ describe("LoginForm", () => {
     expect(screen.getByText("Got an invite link? Open it to set your password.")).toBeTruthy();
   });
 
+  it("links to the password reset, and shows a notice after a reset (?reset=1)", () => {
+    render(<LoginForm nextPath="/admin" sessionExpired={false} passwordReset={true} />);
+    expect(screen.getByTestId("admin-login-forgot").getAttribute("href")).toBe("/admin/forgot-password");
+    expect(screen.getByTestId("admin-login-reset-banner").textContent).toContain("password was changed");
+  });
+
   it("shows the session-expired banner when redirected with ?expired=1", () => {
     render(<LoginForm nextPath="/admin" sessionExpired={true} />);
     expect(screen.getByTestId("admin-login-expired-banner").textContent).toContain("Session expired");
