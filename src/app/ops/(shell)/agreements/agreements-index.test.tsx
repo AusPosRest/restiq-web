@@ -118,6 +118,8 @@ describe("AgreementsIndex", () => {
     await screen.findByTestId("agreement-row-2");
     expect(screen.getByTestId("toast-success").textContent).toContain("Agreement v2 published.");
     expect((screen.getByTestId("agreement-title") as HTMLInputElement).value).toBe("");
+    // The file picker forgets terms.pdf too, so version 3 can't reuse it by accident.
+    expect((screen.getByTestId("agreement-file") as HTMLInputElement).files?.length ?? 0).toBe(0);
   });
 
   it("keeps the form and shows the backend's message when publishing fails", async () => {

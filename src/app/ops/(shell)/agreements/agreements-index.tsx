@@ -31,6 +31,8 @@ export function AgreementsIndex() {
   const [title, setTitle] = useState("");
   const [file, setFile] = useState<File | null>(null);
   const [fileError, setFileError] = useState<string | null>(null);
+  // Bumped after a publish so the browser's file input forgets the old file (it kept showing it under "Publish version 2").
+  const [fileInputKey, setFileInputKey] = useState(0);
   const [previewUrl, setPreviewUrl] = useState<string | null>(null);
   const [confirming, setConfirming] = useState(false);
   const [busy, setBusy] = useState(false);
@@ -62,6 +64,7 @@ export function AgreementsIndex() {
       setConfirming(false);
       setTitle("");
       chooseFile(null);
+      setFileInputKey((key) => key + 1);
       toast({ kind: "success", message: `Agreement v${version.version} published.` });
       retry();
     } catch (error) {
@@ -107,6 +110,7 @@ export function AgreementsIndex() {
               Agreement PDF (max 5 MB)
             </label>
             <input
+              key={fileInputKey}
               id="agreement-file"
               data-testid="agreement-file"
               type="file"
