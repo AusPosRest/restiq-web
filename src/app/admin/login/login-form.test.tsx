@@ -4,6 +4,13 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { LoginForm } from "./login-form";
 import AdminLoginPage from "./page";
 
+const tenantLookup = vi.fn();
+vi.mock("next/headers", () => ({ headers: () => Promise.resolve(new Headers({ host: "bayleaf.idelta.com.au" })) }));
+vi.mock("@/lib/tenant-by-host", async (importOriginal) => ({
+  ...(await importOriginal<typeof import("@/lib/tenant-by-host")>()),
+  fetchTenantByHost: (host: string | null) => tenantLookup(host),
+}));
+
 const replace = vi.fn();
 vi.mock("next/navigation", () => ({
   useRouter: () => ({ replace }),
@@ -15,6 +22,8 @@ function jsonResponse(status: number, body: unknown): Response {
 
 describe("LoginForm", () => {
   beforeEach(() => {
+    tenantLookup.mockReset();
+    tenantLookup.mockResolvedValue(null);
     replace.mockReset();
     vi.unstubAllGlobals();
   });
@@ -37,6 +46,18 @@ describe("LoginForm", () => {
     render(<LoginForm nextPath="/admin" sessionExpired={false} passwordReset={true} />);
     expect(screen.getByTestId("admin-login-forgot").getAttribute("href")).toBe("/admin/forgot-password");
     expect(screen.getByTestId("admin-login-reset-banner").textContent).toContain("password was changed");
+  });
+
+  it("names the restaurant on the sign-in page at its own address, and stays generic elsewhere (D14)", async () => {
+    tenantLookup.mockResolvedValue({ tenantId: "t-1", slug: "bayleaf", displayName: "Bay Leaf Kitchens", status: "active", country: "IN", currency: "INR", branding: {} });
+    render(await AdminLoginPage({ searchParams: Promise.resolve({}) }));
+    expect(screen.getByTestId("admin-login-tenant").textContent).toBe("Bay Leaf Kitchens");
+    expect(tenantLookup).toHaveBeenCalledWith("bayleaf.idelta.com.au");
+    cleanup();
+
+    tenantLookup.mockResolvedValue(null);
+    render(await AdminLoginPage({ searchParams: Promise.resolve({}) }));
+    expect(screen.queryByTestId("admin-login-tenant")).toBeNull();
   });
 
   it("shows the session-expired banner when redirected with ?expired=1", () => {

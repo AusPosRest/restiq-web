@@ -7,6 +7,7 @@ with the payments epic.
 ## [Unreleased]
 
 ### Added
+- **Restaurant addresses** (#302, web half of restiq-backend#183). Each restaurant lives at its own subdomain. The sign-in pages name the restaurant at its address, POS sign-in finds the restaurant from the address when no terminal binding or POS_TENANT_ID is set, and the new-tenant wizard has a Subdomain field that checks the name is free. Our server forwards the address to the API, which refuses a session from another restaurant.
 - **Owner password reset** (#300, web half of restiq-backend#181). "Forgot your password?" on the owner sign-in sends a reset link by email; the link opens a page to choose a new password, and the owner signs in again (every older session is ended).
 - **Set up an outlet from its type** (D2). An outlet with no stations shows a "Set up for my outlet type" button on the floor-plan page that creates the stations, tables and switches for a dine-in restaurant, counter, cloud kitchen or food-court stall. Every station row can now be removed (with a confirm step); everything the setup makes can be edited or removed.
 - **Combo menu** (#264, web half of restiq-backend#160). A combo is one price for a set of **slots**: "pick 1 main from these", "pick 2 breads", or a fixed item that's always included. Any option can carry an extra charge (+₹30 for a lassi).

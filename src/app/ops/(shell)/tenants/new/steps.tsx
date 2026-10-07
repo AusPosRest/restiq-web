@@ -4,7 +4,9 @@
 // is illustrative display copy only - plans have no money model until the
 // subscription story.
 import { Check, Plus, Trash2 } from "lucide-react";
+import { useState } from "react";
 import { Button } from "@/components/ui/button";
+import { opsApi } from "../../api";
 import { FieldError, SelectField, TextAreaField, TextField, ToggleField } from "./fields";
 import {
   BrandsOutletsData,
@@ -17,6 +19,7 @@ import {
   SubscriptionData,
   TAX_PROFILES,
   TaxData,
+  SLUG_PATTERN,
   TIMEZONES,
   emptyOutlet,
 } from "./wizard-state";
@@ -36,6 +39,63 @@ function SectionHeading({ children }: { children: React.ReactNode }) {
   );
 }
 
+const BASE_DOMAIN = process.env.NEXT_PUBLIC_BASE_DOMAIN ?? "idelta.com.au";
+
+type SlugStatus = { slug: string; available: boolean; reason: "taken" | "reserved" | "invalid" | null } | "checking" | "unknown" | null;
+
+/** Where the restaurant will live, and whether that name is free. Informational: the API checks again on submit. */
+function SubdomainField({ slug, error, onChange, onFieldBlur }: Readonly<{ slug: string; error: string | undefined; onChange: (slug: string) => void; onFieldBlur: (field: string) => void }>) {
+  const [status, setStatus] = useState<SlugStatus>(null);
+  const clean = slug.trim().toLowerCase();
+
+  async function check() {
+    onFieldBlur("slug");
+    if (!clean || !SLUG_PATTERN.test(clean)) return setStatus(null);
+    setStatus("checking");
+    try {
+      setStatus(await opsApi<Exclude<SlugStatus, string | null>>(`tenant-slugs/${encodeURIComponent(clean)}`));
+    } catch {
+      setStatus("unknown");
+    }
+  }
+
+  const note =
+    status === "checking"
+      ? "Checking..."
+      : status === "unknown"
+        ? "Could not check this name - it will be checked when you finish."
+        : status && status.available
+          ? `${clean}.${BASE_DOMAIN} is available.`
+          : status
+            ? status.reason === "taken"
+              ? "That subdomain is already used by another restaurant."
+              : "That subdomain is not allowed. Choose another."
+            : clean && !error
+              ? `Will live at ${clean}.${BASE_DOMAIN}`
+              : `Leave blank to make one from the company name. It cannot be changed later.`;
+  const bad = status !== null && typeof status === "object" && !status.available;
+
+  return (
+    <div>
+      <TextField
+        id="onb-slug"
+        label="Subdomain (optional)"
+        placeholder="e.g. bayleaf"
+        value={slug}
+        error={error}
+        onChange={(value) => {
+          setStatus(null);
+          onChange(value.toLowerCase());
+        }}
+        onBlur={() => void check()}
+      />
+      <p data-testid="onb-slug-note" role="status" className={`mt-1.5 text-xs ${bad ? "text-status-error" : "text-muted-foreground"}`}>
+        {note}
+      </p>
+    </div>
+  );
+}
+
 export function BusinessStep({ data, errors, onChange, onFieldBlur }: StepProps<BusinessData>) {
   const set = (patch: Partial<BusinessData>) => onChange({ ...data, ...patch });
   return (
@@ -51,6 +111,7 @@ export function BusinessStep({ data, errors, onChange, onFieldBlur }: StepProps<
           onChange={(companyName) => set({ companyName })}
           onBlur={() => onFieldBlur("companyName")}
         />
+        <SubdomainField slug={data.slug} error={errors.slug} onChange={(slug) => set({ slug })} onFieldBlur={onFieldBlur} />
         <TextAreaField
           id="onb-registered-address"
           label="Registered Address"

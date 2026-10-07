@@ -26,6 +26,7 @@
 // opened with no binding (e.g. a bare /pos/login in dev).
 import { NextResponse } from "next/server";
 import { clientIpHeaders } from "@/lib/client-ip-headers";
+import { fetchTenantByHost, hostOf } from "@/lib/tenant-by-host";
 import { posLoginResponse } from "../session-cookies";
 import type { PosLoginResult } from "../types";
 
@@ -51,9 +52,10 @@ export async function POST(request: Request): Promise<NextResponse> {
   }
 
   const apiUrl = process.env.NEXT_PUBLIC_API_URL;
-  const tenantId = (requestedTenantId as string | undefined) ?? process.env.POS_TENANT_ID;
+  // A terminal's own binding wins, then the POS_TENANT_ID setting, then the restaurant whose address this is (D14).
+  const tenantId = (requestedTenantId as string | undefined) ?? process.env.POS_TENANT_ID ?? (await fetchTenantByHost(hostOf(request.headers)))?.tenantId;
   if (!apiUrl || !tenantId) {
-    return errorResponse(500, { error: { code: "misconfigured", message: "NEXT_PUBLIC_API_URL/POS_TENANT_ID is not set" } });
+    return errorResponse(500, { error: { code: "misconfigured", message: "No restaurant found for this address - open the till at its own address, or set POS_TENANT_ID" } });
   }
 
   let upstream: Response;

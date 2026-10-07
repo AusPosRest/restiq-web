@@ -1,6 +1,8 @@
 import { Suspense } from "react";
 import { Wifi } from "lucide-react";
+import { headers } from "next/headers";
 import { sanitizePosNextPath } from "@/lib/pos-session";
+import { fetchTenantByHost, hostOf } from "@/lib/tenant-by-host";
 import { LiveClock } from "./live-clock";
 import { PinPad } from "./pin-pad";
 
@@ -15,6 +17,8 @@ export default async function PosLoginPage({
 }) {
   const params = await searchParams;
   const nextPath = sanitizePosNextPath(params.next);
+  // D14: at a restaurant's own address the till names the restaurant.
+  const tenant = await fetchTenantByHost(hostOf(await headers()));
 
   return (
     <main className="flex min-h-screen flex-1">
@@ -38,6 +42,11 @@ export default async function PosLoginPage({
 
         <div>
           <p className="font-headline text-5xl font-bold tracking-tight text-primary">RESTIQ</p>
+          {tenant ? (
+            <p data-testid="pos-login-tenant" className="font-headline mt-2 text-2xl font-semibold">
+              {tenant.displayName}
+            </p>
+          ) : null}
           <div className="mt-8">
             <LiveClock />
           </div>
