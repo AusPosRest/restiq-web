@@ -228,7 +228,8 @@ export function clearOutletAvailability(itemId: string, outletId: string): Promi
 
 export interface CreatePriceInput {
   variantId?: string;
-  channel: PriceChannel;
+  /** Omitted = every channel (the owner console sets one price per item). */
+  channel?: PriceChannel;
   outletId?: string;
   priceMinor: number;
   currency: string;

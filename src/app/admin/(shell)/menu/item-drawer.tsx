@@ -286,9 +286,9 @@ function DrawerBody({
     try {
       const channel = "dine_in";
       const priceMinor = majorStringToPriceMinor(form.dineIn) ?? 0;
+      // No channel: one price for dine-in, QR, takeaway and aggregator orders alike.
       await createItemPrice(liveItem.id, {
         variantId: priceLine.variantId ?? undefined,
-        channel,
         priceMinor,
         currency,
         effectiveAt,

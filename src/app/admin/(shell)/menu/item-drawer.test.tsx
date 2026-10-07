@@ -367,10 +367,11 @@ describe("ItemDrawer price - current vs pending distinction", () => {
     );
 
     const priceCalls = fetchMock.mock.calls.filter(([url]) => url === "/admin/api/menu/items/item-1/prices");
-    expect(priceCalls).toHaveLength(1); // dine-in only; RESTIQ has no delivery price (#272)
+    expect(priceCalls).toHaveLength(1); // one price for every channel; RESTIQ has no delivery price (#272)
     const [, init] = priceCalls[0] as [string, RequestInit];
     const sentBody = JSON.parse(init.body as string);
-    expect(sentBody).toMatchObject({ channel: "dine_in", effectiveAt: `${futureYmd}T00:00:00.000Z`, reason: "Menu refresh" });
+    expect(sentBody).toMatchObject({ effectiveAt: `${futureYmd}T00:00:00.000Z`, reason: "Menu refresh" });
+    expect(sentBody).not.toHaveProperty("channel"); // no channel = every channel, so QR and takeaway are priced too
   });
 
   it("requires a reason before the price-change submit is enabled", async () => {
