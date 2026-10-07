@@ -27,6 +27,7 @@
 // than a second, parallel line-item component) is the ponytail
 // reuse-over-rewrite call.
 import { Minus, Plus, Trash2 } from "lucide-react";
+import { taxLines } from "@/app/admin/(shell)/reports/payments-state";
 import { formatMinor } from "../../../(shell)/shift/shift-state";
 import type { OrderLineView } from "../order-taking-state";
 import { billTotalMinor, type BillView, type PendingDiscount } from "./bill-state";
@@ -169,7 +170,10 @@ export function BillSummary({
               tone="available"
             />
           )}
-          <Row label="Tax" value={formatMinor(bill.taxMinor, currency)} />
+          {/* issue #306: the per-rate lines (CGST + SGST) the backend already snapshots, else one Tax line. */}
+          {taxLines(bill).map((line) => (
+            <Row key={line.label || "tax"} label={line.label || "Tax"} value={formatMinor(line.amountMinor, currency)} />
+          ))}
           <div className="mt-1 flex items-center justify-between border-t border-border/60 pt-2">
             <span className="font-label text-sm font-semibold uppercase tracking-wider text-foreground">Total</span>
             <span data-testid="bill-grand-total" className="tabular-nums text-lg font-bold text-primary">

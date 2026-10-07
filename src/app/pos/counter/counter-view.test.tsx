@@ -131,6 +131,7 @@ describe("CounterView - ring up and settle in one continuous flow", () => {
   it("rings up an item and settles the bill without navigating away from /pos/counter", async () => {
     const user = userEvent.setup();
     let currentBill = bill("order-47");
+    let fired = false;
 
     stubFetch({
       "GET menu": () => jsonResponse(MENU),
@@ -157,7 +158,14 @@ describe("CounterView - ring up and settle in one continuous flow", () => {
           }),
         );
       },
+      // issue #306: Charge fires the unsent lines to the kitchen before finalising.
+      "PATCH orders/order-47/status": (init) => {
+        expect(JSON.parse(String(init?.body))).toEqual({ status: "sent" });
+        fired = true;
+        return jsonResponse(counterOrder({ status: "sent" }));
+      },
       "POST bills/bill-order-47/finalize": (init) => {
+        expect(fired).toBe(true);
         const body = JSON.parse(String(init?.body)) as { tenders: { method: string; amountMinor: number }[] };
         currentBill = {
           ...currentBill,
@@ -362,6 +370,7 @@ describe("CounterView - card terminal (issue #188)", () => {
       },
       "GET payment-intents/pi-7": () => jsonResponse({ ...pending, status: "succeeded", succeededAt: "2026-08-25T09:02:30.000Z", tenderId: "tender-c1" }),
       [`GET bills/${openBill.id}`]: () => jsonResponse({ ...openBill, tenders: [captured] }),
+      "PATCH orders/order-47/status": () => jsonResponse({ ...rungUp, status: "sent" }),
       [`POST bills/${openBill.id}/finalize`]: (init) => {
         expect(JSON.parse(String(init?.body)).tenders).toEqual([]);
         return jsonResponse({ ...openBill, status: "finalized", billNumber: 12, finalizedAt: "2026-08-25T09:03:00.000Z", tenders: [captured] });

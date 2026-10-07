@@ -170,7 +170,7 @@ describe("BillSettleView - tenders", () => {
     await screen.findByTestId("bill-summary");
     expect(screen.getByTestId("tender-remaining").textContent).toBe("₹819.00");
 
-    for (const digit of ["5", "0", "0", "0", "0"]) {
+    for (const digit of ["5", "0", "0"]) {
       await userEvent.click(screen.getByTestId(`tender-keypad-amount-digit-${digit}`));
     }
     await userEvent.click(screen.getByTestId("tender-add"));
@@ -244,6 +244,35 @@ describe("BillSettleView - external payment (issue #224)", () => {
 });
 
 describe("BillSettleView - finalize", () => {
+  it("takes ₹1000 cash on an ₹819 bill, shows ₹181 change and posts the cash net of change (issue #306)", async () => {
+    const fetchMock = stubFetch({
+      "POST bills/bill-1/finalize": (init) => {
+        const body = JSON.parse(String(init?.body)) as { tenders: { method: string; amountMinor: number }[] };
+        return jsonResponse(
+          makeBill({
+            status: "finalized",
+            finalizedAt: "2026-08-25T10:05:00.000Z",
+            tenders: body.tenders.map((t, i) => ({ id: `tender-${i}`, method: t.method as "cash", amountMinor: t.amountMinor, createdAt: "2026-08-25T10:05:00.000Z" })),
+          }),
+        );
+      },
+    });
+    render(<BillSettleView orderId={ORDER_ID} />);
+    await screen.findByTestId("bill-summary");
+
+    for (const digit of ["1", "0", "0", "0"]) {
+      await userEvent.click(screen.getByTestId(`tender-keypad-amount-digit-${digit}`));
+    }
+    await userEvent.click(screen.getByTestId("tender-add"));
+    expect(screen.getByTestId("tender-change-due").textContent).toBe("Change due ₹181.00");
+    expect(screen.getByTestId("finalize-bill")).toHaveProperty("disabled", false);
+
+    await userEvent.click(screen.getByTestId("finalize-bill"));
+    expect((await screen.findByTestId("finalised-change-due")).textContent).toBe("Change due ₹181.00");
+    const finalizeCall = fetchMock.mock.calls.find(([input]) => String(input).endsWith("/bills/bill-1/finalize"));
+    expect(JSON.parse(String(finalizeCall![1]?.body)).tenders).toEqual([{ method: "cash", amountMinor: 81900 }]);
+  });
+
   it("disables Finalize until pending tenders exactly cover the total, then submits discount + tenders together", async () => {
     const fetchMock = stubFetch({
       "POST bills/bill-1/finalize": (init) => {
@@ -413,7 +442,7 @@ describe("BillSettleView - card terminal (issue #188)", () => {
     await screen.findByTestId("bill-summary");
 
     await userEvent.click(screen.getByTestId("tender-method-card_terminal"));
-    for (const digit of ["5", "0", "0", "0", "0"]) {
+    for (const digit of ["5", "0", "0"]) {
       await userEvent.click(screen.getByTestId(`tender-keypad-amount-digit-${digit}`));
     }
     await userEvent.click(screen.getByTestId("tender-send-terminal"));

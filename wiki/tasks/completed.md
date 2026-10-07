@@ -1,5 +1,11 @@
 # Completed
 
+- **2026-10-08** - POS money fixes from the Binflow walkthrough (issue #306):
+  - `electronic-tender-state.ts` adds `cashChangeMinor` and `tendersNetOfChange`. Cash over the total is change, and finalize posts it net so bill-core's exact-sum rule holds.
+  - `tender-keypad.tsx` enters whole currency units.
+  - `bill-summary.tsx` renders `taxBreakdown` via the payments `taxLines` helper.
+  - The counter's Charge fires unsent lines first (`sendOrderToKitchen`).
+  - `order-panel.tsx` locks closed orders.
 - **2026-09-22** - Web half of the POS security fixes (issue #290; restiq-backend#169/#170/#171):
   - `src/lib/client-ip-headers.ts` makes the pos/admin/ops login route handlers forward the
     browser's address with `PROXY_SHARED_SECRET`.

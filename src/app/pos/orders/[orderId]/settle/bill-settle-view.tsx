@@ -32,10 +32,11 @@ import { LoadErrorPanel, Skeleton } from "../../../data-states";
 import { usePosLoad } from "../../../use-pos-load";
 import { orderOriginLabel, toOrderView, type PosMenuView, type RawOrder } from "../order-taking-state";
 import { BillSummary } from "./bill-summary";
+import { formatMinor } from "../../../(shell)/shift/shift-state";
 import { TenderKeypad } from "./tender-keypad";
 import { DiscountDialog } from "./discount-dialog";
 import { billTotalMinor, isBillReadOnly, type BillView } from "./bill-state";
-import { canFinalizeWithElectronic, isElectronicMethod, remainingToTenderMinor } from "./electronic-tender-state";
+import { canFinalizeWithElectronic, cashChangeMinor, isElectronicMethod, remainingToTenderMinor, tendersNetOfChange } from "./electronic-tender-state";
 import { TerminalIntentPanel } from "./terminal-intent-panel";
 import { useTerminalIntent } from "./use-terminal-intent";
 import { openDrawerForTenders } from "@/lib/desktop";
@@ -110,6 +111,7 @@ function BillSettleLoaded({
   const [pendingTenders, setPendingTenders] = useState<PendingTender[]>([]);
   const [finalizeBusy, setFinalizeBusy] = useState(false);
   const [finalizeError, setFinalizeError] = useState<string | null>(null);
+  const [changeGiven, setChangeGiven] = useState(0);
   // Card terminal (issue #188): once the terminal approves, the tender is
   // already on the server - re-read the bill rather than inventing it here.
   const terminal = useTerminalIntent(bill.id, () => {
@@ -133,16 +135,19 @@ function BillSettleLoaded({
   }
 
   function handleFinalize() {
+    const change = cashChangeMinor(totalMinor, bill, pendingTenders);
     setFinalizeBusy(true);
     setFinalizeError(null);
     finalizeBill(bill.id, {
       discountMinor: pendingDiscount?.amountMinor,
       discountReason: pendingDiscount?.reason,
       managerPin: pendingDiscount?.managerPin,
-      tenders: pendingTenders,
+      tenders: tendersNetOfChange(pendingTenders, change),
     })
       .then((finalised) => {
         setBill(finalised);
+        setChangeGiven(change);
+        // The drawer opens for the cash handed over, even when it all goes back as change.
         openDrawerForTenders(pendingTenders);
       })
       .catch((error: unknown) => setFinalizeError(errorMessage(error, "Couldn't finalise this bill.")))
@@ -175,6 +180,11 @@ function BillSettleLoaded({
             <p className="text-sm text-muted-foreground">
               {bill.tenders.length} tender{bill.tenders.length === 1 ? "" : "s"} captured · no further changes are possible.
             </p>
+            {changeGiven > 0 && (
+              <p data-testid="finalised-change-due" className="font-headline text-2xl font-bold tabular-nums text-foreground">
+                Change due {formatMinor(changeGiven, menu.currency)}
+              </p>
+            )}
             {/* issue #226: no actions here - Back to table map, Refund… and
                 Print invoice were removed at the owner's request. Refund
                 (/pos/orders/:id/refund?billId=) has no other entry point now. */}
@@ -193,6 +203,7 @@ function BillSettleLoaded({
                 onRemoveTender={handleRemoveTender}
                 onSendToTerminal={terminal.send}
                 terminalBusy={terminal.busy}
+                changeMinor={cashChangeMinor(totalMinor, bill, pendingTenders)}
               />
             )}
             <footer className="border-t border-border/60 p-4">

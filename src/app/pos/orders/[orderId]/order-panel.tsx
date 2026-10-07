@@ -56,6 +56,8 @@ export function OrderPanel({
 }: Readonly<OrderPanelProps>) {
   const totalMinor = computeOrderTotalMinor(lines);
   const canSend = canSendToKitchen({ lines, status });
+  // issue #306: a closed (paid) order is a record - no quantity or remove controls.
+  const closed = status === "closed";
   const sendButtonLabel = status === "closed" ? "Closed" : status === "sent" ? "Sent to kitchen" : sendingToKitchen ? "Sending…" : "Send to kitchen";
 
   return (
@@ -111,7 +113,7 @@ export function OrderPanel({
                         type="button"
                         data-testid={`order-line-decrement-${line.id}`}
                         aria-label="Decrease quantity"
-                        disabled={isBusy}
+                        disabled={isBusy || closed}
                         onClick={() => onDecrement(line)}
                         className="flex size-7 items-center justify-center rounded-md border border-border text-foreground hover:bg-accent disabled:opacity-40"
                       >
@@ -124,7 +126,7 @@ export function OrderPanel({
                         type="button"
                         data-testid={`order-line-increment-${line.id}`}
                         aria-label="Increase quantity"
-                        disabled={isBusy}
+                        disabled={isBusy || closed}
                         onClick={() => onIncrement(line)}
                         className="flex size-7 items-center justify-center rounded-md border border-border text-foreground hover:bg-accent disabled:opacity-40"
                       >
@@ -136,7 +138,7 @@ export function OrderPanel({
                     type="button"
                     data-testid={`order-line-remove-${line.id}`}
                     aria-label="Remove line"
-                    disabled={isBusy}
+                    disabled={isBusy || closed}
                     onClick={() => onRemove(line)}
                     className="ml-auto flex size-7 items-center justify-center rounded-md text-muted-foreground hover:bg-accent hover:text-status-alert disabled:opacity-40"
                   >
@@ -173,8 +175,8 @@ export function OrderPanel({
             Settle
           </Button>
         ) : (
-          <Button asChild size="lg" className="mt-3 w-full" data-testid="go-to-settle">
-            <Link href={`/pos/orders/${orderId}/settle`}>Settle</Link>
+          <Button asChild size="lg" variant={closed ? "outline" : "default"} className="mt-3 w-full" data-testid="go-to-settle">
+            <Link href={`/pos/orders/${orderId}/settle`}>{closed ? "View bill" : "Settle"}</Link>
           </Button>
         )}
       </footer>
