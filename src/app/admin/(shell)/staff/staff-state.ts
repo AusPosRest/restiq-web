@@ -31,6 +31,15 @@ export interface StaffView {
   roleId: string;
   roleName: string;
   pinStatus: PinStatus;
+  /** restiq-backend#197: outlets this person may sign in at; empty (or absent from an older API) = every outlet. */
+  outletIds?: string[];
+}
+
+/** "Every outlet", or the assigned outlets' names (closed outlets drop out of the list). */
+export function outletsLabel(outletIds: readonly string[] | undefined, outlets: readonly { id: string; name: string }[]): string {
+  if (!outletIds || outletIds.length === 0) return "Every outlet";
+  const names = outlets.filter((outlet) => outletIds.includes(outlet.id)).map((outlet) => outlet.name);
+  return names.length > 0 ? names.join(", ") : "No open outlets";
 }
 
 export function staffFullName(staff: Pick<StaffView, "name">): string {
@@ -44,9 +53,11 @@ export interface AddStaffForm {
   lastName: string;
   email: string;
   roleId: string;
+  /** Empty = every outlet. */
+  outletIds: string[];
 }
 
-export const EMPTY_ADD_STAFF_FORM: AddStaffForm = { firstName: "", lastName: "", email: "", roleId: "" };
+export const EMPTY_ADD_STAFF_FORM: AddStaffForm = { firstName: "", lastName: "", email: "", roleId: "", outletIds: [] };
 
 const EMAIL_PATTERN = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 

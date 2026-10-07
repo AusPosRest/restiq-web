@@ -22,12 +22,15 @@ function jsonResponse(body: unknown, status = 200): Response {
   return new Response(JSON.stringify(body), { status, headers: { "content-type": "application/json" } });
 }
 
-function stubFetch(overrides: { staff?: StaffView[]; onPatchRole?: (body: unknown) => unknown; onDeletePin?: (body: unknown) => unknown } = {}) {
+function stubFetch(
+  overrides: { staff?: StaffView[]; outlets?: { id: string; name: string }[]; onPatchRole?: (body: unknown) => unknown; onDeletePin?: (body: unknown) => unknown } = {},
+) {
   const staff = overrides.staff ?? STAFF;
   const fetchMock = vi.fn((input: RequestInfo | URL, init?: RequestInit) => {
     const url = String(input);
     const method = init?.method ?? "GET";
     if (url.includes("/admin/api/roles") && method === "GET") return Promise.resolve(jsonResponse(ROLES));
+    if (url.endsWith("/admin/api/outlets") && method === "GET" && overrides.outlets) return Promise.resolve(jsonResponse(overrides.outlets));
     if (url.includes("/admin/api/staff") && method === "GET") return Promise.resolve(jsonResponse({ staff }));
     if (url.endsWith("/admin/api/staff") && method === "POST") {
       const body = JSON.parse(String(init?.body)) as { name: string; email: string; roleId: string };
@@ -36,7 +39,11 @@ function stubFetch(overrides: { staff?: StaffView[]; onPatchRole?: (body: unknow
     }
     if (url.includes("/staff/s1") && method === "PATCH") {
       const body = JSON.parse(String(init?.body));
-      const result = overrides.onPatchRole ? overrides.onPatchRole(body) : { ...staff[0], roleId: body.roleId, roleName: ROLES.find((r) => r.id === body.roleId)?.name };
+      const result = overrides.onPatchRole
+        ? overrides.onPatchRole(body)
+        : body.outletIds
+          ? { ...staff[0], outletIds: body.outletIds }
+          : { ...staff[0], roleId: body.roleId, roleName: ROLES.find((r) => r.id === body.roleId)?.name };
       return Promise.resolve(jsonResponse(result));
     }
     if (url.includes("/staff/s1/revoke-pin") && method === "POST") {
@@ -86,7 +93,7 @@ describe("Staff", () => {
 
     await screen.findByTestId("staff-load-error");
     await userEvent.click(screen.getByTestId("staff-load-error-retry"));
-    expect(fetchMock).toHaveBeenCalledTimes(4);
+    expect(fetchMock).toHaveBeenCalledTimes(6);
   });
 
   it("adds a staff member through the Add staff dialog", async () => {
@@ -182,5 +189,28 @@ describe("Staff", () => {
     await userEvent.click(screen.getByTestId("staff-pin-chip-copy"));
     expect(writeText).toHaveBeenCalledWith("4821");
     expect(await screen.findByText("Copied")).toBeTruthy();
+  });
+  // restiq-backend#197
+  it("limits a person to some outlets when the restaurant has more than one", async () => {
+    const fetchMock = stubFetch({ outlets: [{ id: "o1", name: "Indiranagar" }, { id: "o2", name: "Koramangala" }] });
+    renderStaff();
+    const user = userEvent.setup();
+
+    await user.click(await screen.findByTestId("staff-outlets-s1"));
+    expect(screen.getByTestId("staff-outlets-s1").textContent).toBe("Every outlet");
+    await user.click(screen.getByTestId("staff-outlets-dialog-outlets-every"));
+    await user.click(screen.getByTestId("staff-outlets-dialog-outlet-o2"));
+    await user.click(screen.getByTestId("staff-outlets-save"));
+
+    await waitFor(() => expect(screen.getByTestId("staff-outlets-s1").textContent).toBe("Indiranagar"));
+    const patch = fetchMock.mock.calls.find(([url, init]) => String(url).includes("/staff/s1") && init?.method === "PATCH");
+    expect(JSON.parse(String(patch?.[1]?.body))).toEqual({ outletIds: ["o1"] });
+  });
+
+  it("hides the outlet picker for a single-outlet restaurant", async () => {
+    stubFetch({ outlets: [{ id: "o1", name: "Indiranagar" }] });
+    renderStaff();
+    await screen.findByTestId("staff-table");
+    expect(screen.queryByTestId("staff-outlets-s1")).toBeNull();
   });
 });

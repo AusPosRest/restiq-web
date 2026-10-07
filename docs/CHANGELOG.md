@@ -6,6 +6,9 @@ with the payments epic.
 
 ## [Unreleased]
 
+### Added
+- **Staff work at chosen outlets** (#316, needs restiq-backend#197): Add staff and the staff list let the owner pick the outlets each person works at ("Every outlet" by default). Their PIN only signs in there; a till of another outlet says they aren't set up to work there.
+
 ### Fixed (Binflow first-run walkthrough, 2026-10-08)
 - **POS money** (#306):
   - Cash above the total now gives change: the screen shows "Change due ₹43.70", Finalise works, and the cash is posted net of change so the bill sums exactly.

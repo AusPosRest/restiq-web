@@ -1,17 +1,17 @@
 "use client";
 
-// T7 Staff & Roles (CAP-7): tenant-wide, not per-outlet (Role has no outlet
-// scoping in restiq-backend's schema - see staff-state.ts's file header), so
-// unlike Devices/Floor Plan/Capabilities this view doesn't key off the
-// shell's outlet switcher at all.
+// T7 Staff & Roles (CAP-7): tenant-wide, so unlike Devices/Floor Plan/
+// Capabilities this view doesn't key off the shell's outlet switcher. Each
+// person can be limited to some outlets (restiq-backend#197).
 import { Plus, Users } from "lucide-react";
 import { useEffect, useState } from "react";
 import { Button } from "@/components/ui/button";
-import { AdminApiError, createStaff, fetchRoles, fetchStaff, issueStaffPin, revokeStaffPin, updateStaffRole } from "../../api";
+import { AdminApiError, createStaff, fetchOutlets, fetchRoles, fetchStaff, issueStaffPin, revokeStaffPin, updateStaffOutlets, updateStaffRole } from "../../api";
 import { ConfirmReasonDialog } from "../confirm-reason-dialog";
 import { LoadErrorPanel, Skeleton } from "../data-states";
 import { useToast } from "../toast";
 import { AddStaffDialog } from "./add-staff-dialog";
+import { StaffOutletsDialog, type OutletOption } from "./outlet-picker";
 import { PermissionMatrix } from "./permission-matrix";
 import { staffFullName, type AddStaffForm, type RoleView, type StaffView } from "./staff-state";
 import { StaffTable, type IssuedPinView } from "./staff-table";
@@ -19,6 +19,7 @@ import { StaffTable, type IssuedPinView } from "./staff-table";
 interface StaffData {
   roles: RoleView[];
   staff: StaffView[];
+  outlets: OutletOption[];
 }
 
 function useStaffData() {
@@ -27,9 +28,10 @@ function useStaffData() {
 
   useEffect(() => {
     let cancelled = false;
-    Promise.all([fetchRoles(), fetchStaff()])
-      .then(([roles, staff]) => {
-        if (!cancelled) setLanded({ attempt, failed: false, data: { roles, staff } });
+    // Outlets only drive the optional picker - the page still works without them.
+    Promise.all([fetchRoles(), fetchStaff(), fetchOutlets().catch(() => [])])
+      .then(([roles, staff, outlets]) => {
+        if (!cancelled) setLanded({ attempt, failed: false, data: { roles, staff, outlets } });
       })
       .catch(() => {
         if (!cancelled) setLanded({ attempt, failed: true, data: null });
@@ -82,8 +84,9 @@ function StaffEditor({ initial }: Readonly<{ initial: StaffData }>) {
   const [revokeTargetId, setRevokeTargetId] = useState<string | null>(null);
   const [busyStaffId, setBusyStaffId] = useState<string | null>(null);
   const [issuedPin, setIssuedPin] = useState<IssuedPinView | null>(null);
+  const [outletsTargetId, setOutletsTargetId] = useState<string | null>(null);
 
-  const roles = initial.roles;
+  const { roles, outlets } = initial;
 
   async function handleAddStaff(form: AddStaffForm) {
     setAddBusy(true);
@@ -158,6 +161,23 @@ function StaffEditor({ initial }: Readonly<{ initial: StaffData }>) {
     }
   }
 
+  async function handleSaveOutlets(outletIds: string[]) {
+    if (!outletsTargetId) return;
+    const staffId = outletsTargetId;
+    setBusyStaffId(staffId);
+    try {
+      const updated = await updateStaffOutlets(staffId, outletIds);
+      setStaff((current) => current.map((member) => (member.id === staffId ? updated : member)));
+      setOutletsTargetId(null);
+      toast({ kind: "success", message: `Saved where ${staffFullName(updated)} works.` });
+    } catch (error) {
+      toast({ kind: "error", message: error instanceof AdminApiError ? error.message : "Couldn't save those outlets." });
+    } finally {
+      setBusyStaffId(null);
+    }
+  }
+
+  const outletsMember = outletsTargetId ? staff.find((m) => m.id === outletsTargetId) : undefined;
   const roleChangeMember = roleChangeTarget ? staff.find((m) => m.id === roleChangeTarget.staffId) : undefined;
   const roleChangeRoleName = roleChangeTarget ? roles.find((r) => r.id === roleChangeTarget.roleId)?.name : undefined;
   const revokeMember = revokeTargetId ? staff.find((m) => m.id === revokeTargetId) : undefined;
@@ -179,12 +199,14 @@ function StaffEditor({ initial }: Readonly<{ initial: StaffData }>) {
       <StaffTable
         staff={staff}
         roles={roles}
+        outlets={outlets}
         busyStaffId={busyStaffId}
         issuedPin={issuedPin}
         onRoleSelected={(staffId, roleId) => setRoleChangeTarget({ staffId, roleId })}
         onIssuePin={(staffId) => void handleIssuePin(staffId)}
         onRevokeRequested={(staffId) => setRevokeTargetId(staffId)}
         onDismissIssuedPin={() => setIssuedPin(null)}
+        onEditOutlets={setOutletsTargetId}
       />
 
       <PermissionMatrix roles={roles} />
@@ -192,6 +214,7 @@ function StaffEditor({ initial }: Readonly<{ initial: StaffData }>) {
       <AddStaffDialog
         open={addOpen}
         roles={roles}
+        outlets={outlets}
         busy={addBusy}
         error={addError}
         onCancel={() => {
@@ -200,6 +223,17 @@ function StaffEditor({ initial }: Readonly<{ initial: StaffData }>) {
         }}
         onSubmit={(form) => void handleAddStaff(form)}
       />
+
+      {outletsMember && (
+        <StaffOutletsDialog
+          name={staffFullName(outletsMember)}
+          outlets={outlets}
+          initial={outletsMember.outletIds ?? []}
+          busy={busyStaffId === outletsMember.id}
+          onCancel={() => setOutletsTargetId(null)}
+          onSave={(outletIds) => void handleSaveOutlets(outletIds)}
+        />
+      )}
 
       <ConfirmReasonDialog
         open={roleChangeTarget !== null}
