@@ -21,7 +21,8 @@ const nextConfig: NextConfig = {
 
   // restiq-web#304: the Windows hub till runs a standalone build pointed at
   // its own local POS service via RESTIQ_API_URL, set at start - not build.
-  output: "standalone",
+  // Opt-in, so the Vercel build is exactly as before.
+  ...(process.env.RESTIQ_STANDALONE === "1" && { output: "standalone" as const }),
 };
 
 export default nextConfig;
