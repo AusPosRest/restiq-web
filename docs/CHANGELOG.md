@@ -6,6 +6,9 @@ with the payments epic.
 
 ## [Unreleased]
 
+### Added
+- Simulator (#294): `/simulator` infinite pan/zoom canvas of draggable, resizable device frames (POS, KDS, kiosk, printer, card terminal, guest QR, owner, ops, custom same-origin path); each frame is its own tab-scoped device. Layout persists in localStorage.
+
 ### Fixed
 - POS text overflow (#240):
   - **Payment method buttons** (settle and counter) now fit as many as the column holds - two per row in the counter's narrow tender column - so "Card terminal" / "External" no longer spill past their buttons.
