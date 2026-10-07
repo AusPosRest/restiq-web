@@ -13,6 +13,9 @@
 - **2026-09-19** - Owner Menu: one price per item, no Delivery price (issue #272). Menu table has a single
   Price column, the item drawer shows one price per line, and Change price edits the dine-in channel only;
   unused `PRIMARY_CHANNELS` / `PRICE_CHANNELS` / `CHANNEL_LABEL` removed. Backend price channels unchanged.
+- **2026-09-19** - Fix: POS counter flashed to its loading skeleton after every tap (issue #269). `loadBill()` in
+  `counter/counter-view.tsx` only sets `billLoading` when no bill is on screen yet, so refreshes after add /
+  quantity / remove / tender update in place. Regression test in `counter-view.test.tsx`.
 
 - **2026-09-15** - Fix: POS text overflow (issue #240). `tender-keypad.tsx`'s method grid is
   `repeat(auto-fit,minmax(6.5rem,1fr))` (two per row in the counter's w-80 column); `bill-summary.tsx`

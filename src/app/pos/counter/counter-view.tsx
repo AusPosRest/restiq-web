@@ -127,8 +127,10 @@ function CounterLoaded({
   const [finalizeBusy, setFinalizeBusy] = useState(false);
   const [finalizeError, setFinalizeError] = useState<string | null>(null);
 
+  // Refreshes after add / quantity / remove / tender keep the counter on
+  // screen (#269); only the first read or a retry shows the loading shell.
   function loadBill() {
-    setBillLoading(true);
+    if (!bill) setBillLoading(true);
     setBillError(false);
     fetchOrCreateBill(order.id)
       .then(setBill)
