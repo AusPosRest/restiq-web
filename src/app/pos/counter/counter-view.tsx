@@ -35,6 +35,7 @@ import { Search } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { ComboPicker, type ComboPickerConfirmValue } from "@/components/combo-picker";
 import { combosFor, type ComboMenuView } from "@/lib/combo";
+import { PrintBillButton } from "../bills/print-bill-button";
 import {
   addComboLine,
   addOrderLine,
@@ -462,11 +463,7 @@ function CounterLoaded({
                 >
                   {finalizeBusy ? "Charging…" : "Charge"}
                 </Button>
-                <Button asChild size="lg" variant="outline" data-testid="print-bill-link">
-                  <Link href={`/pos/bills/${bill.id}/invoice`} target="_blank" rel="noopener">
-                    Print bill
-                  </Link>
-                </Button>
+                <PrintBillButton billId={bill.id} label="Print bill" testId="print-bill" size="lg" />
               </div>
             </footer>
           </div>
