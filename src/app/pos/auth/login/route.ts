@@ -55,7 +55,7 @@ export async function POST(request: Request): Promise<NextResponse> {
   // A terminal's own binding wins, then the POS_TENANT_ID setting, then the restaurant whose address this is (D14).
   const tenantId = (requestedTenantId as string | undefined) ?? process.env.POS_TENANT_ID ?? (await fetchTenantByHost(hostOf(request.headers)))?.tenantId;
   if (!apiUrl || !tenantId) {
-    return errorResponse(500, { error: { code: "misconfigured", message: "No restaurant found for this address - open the till at its own address, or set POS_TENANT_ID" } });
+    return errorResponse(500, { error: { code: "misconfigured", message: "This till isn't linked to a restaurant yet. Set it up with a code from the owner console's Devices page." } });
   }
 
   let upstream: Response;

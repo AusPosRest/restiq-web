@@ -13,6 +13,13 @@ with the payments epic.
   - The bill lists CGST and SGST (or GST) lines instead of one Tax line.
   - A counter sale's Charge sends its lines to the kitchen before finalising, so counter orders reach the kitchen screen.
   - A paid order is read-only: no quantity or remove buttons, and its button reads "View bill".
+- **Tills, kitchen screens and device pages** (#308, with restiq-backend#187):
+  - A kitchen screen signs in after enrolling. Continue goes through the PIN pad bound to its restaurant, not to a page that said "set POS_TENANT_ID".
+  - An enrolled till signs in to its own outlet without the outlet chooser, and shows the restaurant's name instead of an id. The device card shows the outlet name.
+  - The mocked "Online" / "Printer Ready" pills and the made-up "App Version v2.4.1" are gone.
+  - A wrong PIN says "Wrong PIN. Try again."
+  - Opening a new code on a device that's already set up says it wasn't used.
+  - Un-enrol sits behind "Set this device up as something else".
 
 ### Added
 - **Restaurant addresses** (#302, web half of restiq-backend#183). Each restaurant lives at its own subdomain. The sign-in pages name the restaurant at its address, POS sign-in finds the restaurant from the address when no terminal binding or POS_TENANT_ID is set, and the new-tenant wizard has a Subdomain field that checks the name is free. Our server forwards the address to the API, which refuses a session from another restaurant.

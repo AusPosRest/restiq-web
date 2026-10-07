@@ -18,7 +18,7 @@ const publicSans = Public_Sans({
 
 export const metadata: Metadata = {
   title: "RESTIQ Device Enrolment",
-  description: "Turn this browser tab into a POS, KDS, kiosk, or customer-display terminal",
+  description: "Set this device up as a RESTIQ till, kitchen screen, kiosk or customer display",
   robots: { index: false, follow: false },
 };
 

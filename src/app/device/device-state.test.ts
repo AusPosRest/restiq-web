@@ -96,19 +96,26 @@ describe("continueTargetFor", () => {
   const device = (type: string, outletId: string | null = "o1") => ({ id: "d1", tenantId: "t1", type, outletId });
 
   it("routes pos to the POS login bound to this device's tenant", () => {
-    expect(continueTargetFor(device("pos"))).toEqual({ kind: "redirect", path: "/pos/login?device=d1&tenant=t1" });
+    expect(continueTargetFor(device("pos"))).toEqual({ kind: "redirect", path: "/pos/login?device=d1&tenant=t1&outlet=o1" });
   });
 
-  it("routes kds to the KDS entry", () => {
-    expect(continueTargetFor(device("kds"))).toEqual({ kind: "redirect", path: "/kds" });
+  it("carries the restaurant name so the PIN pad never shows an id", () => {
+    expect(continueTargetFor({ ...device("pos"), tenantName: "Binflow Foods" })).toEqual({
+      kind: "redirect",
+      path: "/pos/login?device=d1&tenant=t1&outlet=o1&name=Binflow+Foods",
+    });
+  });
+
+  it("routes kds through the bound PIN pad to the KDS (it had no restaurant to sign in against before)", () => {
+    expect(continueTargetFor(device("kds"))).toEqual({ kind: "redirect", path: "/pos/login?device=d1&tenant=t1&outlet=o1&next=%2Fkds" });
   });
 
   it("sends a printer through the bound POS login to the simulated receipt printer", () => {
-    expect(continueTargetFor(device("printer"))).toEqual({ kind: "redirect", path: "/pos/login?device=d1&tenant=t1&next=%2Fpos%2Fprinter" });
+    expect(continueTargetFor(device("printer"))).toEqual({ kind: "redirect", path: "/pos/login?device=d1&tenant=t1&outlet=o1&next=%2Fpos%2Fprinter" });
   });
 
   it("sends a terminal through the bound POS login to the simulated card terminal", () => {
-    expect(continueTargetFor(device("terminal"))).toEqual({ kind: "redirect", path: "/pos/login?device=d1&tenant=t1&next=%2Fpos%2Fterminal" });
+    expect(continueTargetFor(device("terminal"))).toEqual({ kind: "redirect", path: "/pos/login?device=d1&tenant=t1&outlet=o1&next=%2Fpos%2Fterminal" });
   });
 
   it("sends a kiosk to its outlet's attract screen, carrying the device id (issue #214)", () => {

@@ -69,7 +69,7 @@ describe("DeviceScreen", () => {
     expect(screen.getByTestId("device-card-label").textContent).toBe("Front Counter 1");
     expect(screen.getByTestId("device-card-type").textContent).toBe("POS terminal");
     expect(screen.getByTestId("device-card-status").textContent).toBe("Enrolled");
-    expect(readStoredDevice()).toEqual(POS_DEVICE);
+    expect(readStoredDevice()).toEqual({ ...POS_DEVICE, tenantName: null, outletName: null });
 
     const [url, init] = fetchMock.mock.calls[0] as [string, RequestInit];
     expect(url).toBe("/device/api/enroll");
@@ -141,15 +141,25 @@ describe("DeviceScreen", () => {
     render(<DeviceScreen />);
 
     await userEvent.click(await screen.findByTestId("device-continue"));
-    expect(push).toHaveBeenCalledWith("/pos/login?device=d1&tenant=t1");
+    expect(push).toHaveBeenCalledWith("/pos/login?device=d1&tenant=t1&outlet=o1");
   });
 
-  it("routes Continue by device type - kds to /kds", async () => {
+  it("names the outlet and says when a newly opened code wasn't used (walkthrough fix)", async () => {
+    window.sessionStorage.setItem("device:enrolled", JSON.stringify({ ...POS_DEVICE, outletName: "Binflow Indiranagar" }));
+    window.history.replaceState({}, "", "/device?code=ABC234");
+    render(<DeviceScreen />);
+
+    expect((await screen.findByTestId("device-card-outlet")).textContent).toBe("Binflow Indiranagar");
+    expect(screen.getByTestId("device-code-ignored").textContent).toContain("code ABC-234 wasn't used");
+    window.history.replaceState({}, "", "/");
+  });
+
+  it("routes Continue by device type - kds through the PIN pad to /kds", async () => {
     window.sessionStorage.setItem("device:enrolled", JSON.stringify({ ...POS_DEVICE, type: "kds" }));
     render(<DeviceScreen />);
 
     await userEvent.click(await screen.findByTestId("device-continue"));
-    expect(push).toHaveBeenCalledWith("/kds");
+    expect(push).toHaveBeenCalledWith(expect.stringMatching(/^\/pos\/login\?device=d1&tenant=t1.*&next=%2Fkds$/));
   });
 
   it("shows a plain no-web-surface line for a cds device instead of a Continue button", async () => {

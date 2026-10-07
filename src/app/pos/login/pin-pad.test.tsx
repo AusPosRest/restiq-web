@@ -51,7 +51,7 @@ describe("PinPad", () => {
     vi.stubGlobal("fetch", fetchMock);
     render(<PinPad nextPath="/pos" />);
 
-    expect(await screen.findByTestId("pos-terminal-binding")).toHaveProperty("textContent", "Terminal bound to tenant-9");
+    expect(await screen.findByTestId("pos-terminal-binding")).toHaveProperty("textContent", "This till is linked to a restaurant");
     expect(JSON.parse(window.localStorage.getItem("pos:terminal-binding") ?? "null")).toEqual({ tenantId: "tenant-9", deviceId: "dev-1" });
 
     await typePin("1234");
@@ -67,7 +67,7 @@ describe("PinPad", () => {
     vi.stubGlobal("fetch", vi.fn());
     render(<PinPad nextPath="/pos" />);
 
-    expect(await screen.findByTestId("pos-terminal-binding")).toHaveProperty("textContent", "Terminal bound to tenant-5");
+    expect(await screen.findByTestId("pos-terminal-binding")).toHaveProperty("textContent", "This till is linked to a restaurant");
 
     await userEvent.click(screen.getByTestId("pos-rebind"));
 
@@ -97,7 +97,7 @@ describe("PinPad", () => {
     await typePin("9999");
 
     const error = await screen.findByTestId("pos-pin-error");
-    expect(error.textContent).toBe("Incorrect tenant or PIN");
+    expect(error.textContent).toBe("Wrong PIN. Try again.");
     expect(screen.getByTestId("pos-pin-dot-0").className).not.toContain("bg-primary");
     expect(replace).not.toHaveBeenCalled();
   });
@@ -137,6 +137,33 @@ describe("PinPad", () => {
     const [url, secondInit] = fetchMock.mock.calls[1] as [string, RequestInit];
     expect(url).toBe("/pos/auth/select-outlet");
     expect(JSON.parse(secondInit.body as string)).toEqual({ pendingToken: "pending-jwt", outletId: "o2" });
+  });
+
+  it("signs a till straight into its own outlet, with the restaurant's name, when it was enrolled to one", async () => {
+    search = "device=dev-1&tenant=tenant-9&outlet=o2&name=Binflow+Foods";
+    const fetchMock = vi
+      .fn()
+      .mockResolvedValueOnce(
+        jsonResponse(200, {
+          status: "select_outlet",
+          pendingToken: "pending-jwt",
+          staff: { id: "s1", name: "Priya" },
+          outlets: [
+            { id: "o1", name: "Binflow Indiranagar" },
+            { id: "o2", name: "Binflow Koramangala" },
+          ],
+        }),
+      )
+      .mockResolvedValueOnce(jsonResponse(200, { status: "authenticated", staff: { id: "s1", name: "Priya" }, outlet: { id: "o2", name: "Binflow Koramangala" } }));
+    vi.stubGlobal("fetch", fetchMock);
+    render(<PinPad nextPath="/pos" />);
+
+    expect((await screen.findByTestId("pos-terminal-binding")).textContent).toBe("This till belongs to Binflow Foods");
+    await typePin("1234");
+
+    await waitFor(() => expect(replace).toHaveBeenCalledWith("/pos"));
+    expect(screen.queryByTestId("pos-outlet-picker")).toBeNull();
+    expect(JSON.parse((fetchMock.mock.calls[1] as [string, RequestInit])[1].body as string)).toEqual({ pendingToken: "pending-jwt", outletId: "o2" });
   });
 
   it("shows a live lockout countdown after 5 wrong attempts and re-enables the keypad once it expires", async () => {

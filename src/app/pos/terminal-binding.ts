@@ -12,6 +12,8 @@ export interface TerminalBinding {
   tenantId: string;
   deviceId: string;
   tenantName?: string;
+  /** The outlet this device was enrolled to - the PIN pad picks it instead of asking. */
+  outletId?: string;
 }
 
 export function getTerminalBinding(): TerminalBinding | null {
@@ -24,6 +26,7 @@ export function getTerminalBinding(): TerminalBinding | null {
       tenantId: parsed.tenantId,
       deviceId: parsed.deviceId,
       ...(typeof parsed.tenantName === "string" ? { tenantName: parsed.tenantName } : {}),
+      ...(typeof parsed.outletId === "string" ? { outletId: parsed.outletId } : {}),
     };
   } catch {
     return null;
