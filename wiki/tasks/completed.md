@@ -1388,3 +1388,11 @@ faked.
   and card payments, poll with `?deviceId=`, and heartbeat every 30 s
   (`pos/device-heartbeat.tsx`). Tests: `topology.test.tsx`,
   `devices-state.test.ts` (`connectionState`), `terminal-binding.test.ts`.
+- **2026-09-09** - KDS: plain-language tab names (issue #184). The header
+  tabs now read Cook / Serve / Done / Counts instead of Station / Expo /
+  Bumped / All-Day, and each `TAB_SUBTITLES` line leads with the kitchen
+  term it replaced ("Station queue — …", "Expo — …", "Bumped tickets — …",
+  "All-day summary — …") so trained staff still recognise the view. One-file
+  copy change in `kds-header.tsx`; routes, `KdsMode` values and test ids
+  unchanged; the four screen tests' subtitle assertions updated. See
+  [wiki/features/kitchen-display.md](../features/kitchen-display.md).
