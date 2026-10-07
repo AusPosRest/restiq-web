@@ -586,6 +586,15 @@ This pass reconciled the guess against it:
   the landing page's `deviceOpenHref` does the same (`LandingDevice` gained
   `outletId`). `decideGuestRoute` treats `/qr/kiosk/:outletId` as public,
   like the table entry point.
+- **Kiosk menu + photos (issue #218):** `qr/menu/menu-view.tsx` renders a
+  vertical category rail and a 2-column photo grid on a kiosk tab
+  (`data-layout="kiosk"`), the list elsewhere. Each item shows `photoUrl`
+  (letter tile when null) and a separate "+" button: `canQuickAdd`
+  (`menu-state.ts` - available, no variants, no required group) POSTs
+  `/qr/api/cart/lines` with quantity 1 and remounts the CartPill so its count
+  updates at once; anything else opens the detail page. Photos come from the
+  admin item drawer: resized in the browser (480 px JPEG, q0.8) and sent as a
+  `data:image` URL in `photoUrl` (restiq-backend#142 validates it).
 - **Console link:** the admin devices table (`admin/(shell)/devices/devices-table.tsx`)
   shows "Open kiosk" + a scan QR for an enrolled kiosk, linking the same
   `/qr/kiosk/[outletId]?device=`. That fresh tab has no stored enrolment, so
