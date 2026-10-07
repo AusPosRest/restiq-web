@@ -564,11 +564,17 @@ export interface CreateStaffInput {
   lastName: string;
   email: string;
   roleId: string;
+  outletIds?: string[];
 }
 
 export function createStaff(input: CreateStaffInput): Promise<StaffView> {
   const name = `${input.firstName} ${input.lastName}`.trim();
-  return adminApi<StaffView>("staff", { method: "POST", body: JSON.stringify({ name, email: input.email, roleId: input.roleId }) });
+  return adminApi<StaffView>("staff", { method: "POST", body: JSON.stringify({ name, email: input.email, roleId: input.roleId, outletIds: input.outletIds ?? [] }) });
+}
+
+/** restiq-backend#197: where this person may sign in (empty = every outlet). Ends their open till sessions. */
+export function updateStaffOutlets(staffId: string, outletIds: string[]): Promise<StaffView> {
+  return adminApi<StaffView>(`staff/${staffId}`, { method: "PATCH", body: JSON.stringify({ outletIds }) });
 }
 
 // Role change is security-relevant (SPEC constraints: audited with actor +
