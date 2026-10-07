@@ -1446,3 +1446,9 @@ faked.
   (`stations-starter-setup`), which builds the type's stations, tables and
   switches and reloads the plan; each station row has Remove with a confirm step.
   Tests: `stations-panel.test.tsx`.
+- **2026-10-07 - Agreements are an uploaded PDF (#298).** Ops publishes by choosing
+  a PDF, previewed in the browser first (non-PDF and over-5-MB files are refused
+  before upload); a published version opens in a viewer. The owner reads the
+  current agreement in an embedded PDF viewer (with an open-in-new-tab link) and
+  signs, sending the file hash they were shown. Both proxies pass PDF bytes
+  through (`nosniff`, no cache) and the ops proxy forwards multipart.
