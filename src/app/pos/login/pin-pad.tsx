@@ -102,7 +102,8 @@ async function postJson(path: string, body: unknown): Promise<SubmitResult> {
   }
   const errBody = (await res.json().catch(() => ({}))) as ErrorBody;
   if (res.status === 401) {
-    return { kind: "invalid", message: errorMessage(errBody, "Incorrect PIN") };
+    // The API's "Incorrect tenant or PIN" is deliberately vague; on a bound till it is simply a wrong PIN.
+    return { kind: "invalid", message: "Wrong PIN. Try again." };
   }
   return { kind: "failure", message: errorMessage(errBody, "Sign-in failed. Check your connection and try again.") };
 }
@@ -134,18 +135,20 @@ export function PinPad({ nextPath }: { nextPath: string }) {
   // synchronous setState-in-effect for React's linter to flag.
   const queryTenantId = searchParams.get("tenant");
   const queryDeviceId = searchParams.get("device");
+  const queryOutletId = searchParams.get("outlet") ?? undefined;
+  const queryTenantName = searchParams.get("name") ?? undefined;
   const binding: TerminalBinding | null = rebound
     ? null
     : queryTenantId && queryDeviceId
-      ? { tenantId: queryTenantId, deviceId: queryDeviceId }
+      ? { tenantId: queryTenantId, deviceId: queryDeviceId, ...(queryTenantName ? { tenantName: queryTenantName } : {}), ...(queryOutletId ? { outletId: queryOutletId } : {}) }
       : getTerminalBinding();
 
   useEffect(() => {
     if (!queryTenantId || !queryDeviceId) return;
-    saveTerminalBinding({ tenantId: queryTenantId, deviceId: queryDeviceId });
+    saveTerminalBinding({ tenantId: queryTenantId, deviceId: queryDeviceId, ...(queryTenantName ? { tenantName: queryTenantName } : {}), ...(queryOutletId ? { outletId: queryOutletId } : {}) });
     // This tab's own identity for print/terminal routing and the heartbeat (issue #210).
     saveTabDeviceId(queryDeviceId);
-  }, [queryTenantId, queryDeviceId]);
+  }, [queryTenantId, queryDeviceId, queryTenantName, queryOutletId]);
 
   function rebind() {
     clearTerminalBinding();
@@ -175,6 +178,12 @@ export function PinPad({ nextPath }: { nextPath: string }) {
       return;
     }
     if (result.kind === "outlet_selection") {
+      // A till enrolled to one outlet signs in there - no chooser, no chance of picking the wrong outlet.
+      const own = binding?.outletId;
+      if (own && result.outlets.some((outlet) => outlet.id === own)) {
+        void attemptOutletSelection(result.pendingToken, own);
+        return;
+      }
       setState({ step: "choosing-outlet", pendingToken: result.pendingToken, staff: result.staff, outlets: result.outlets });
       return;
     }
@@ -298,7 +307,7 @@ export function PinPad({ nextPath }: { nextPath: string }) {
       {binding ? (
         <div className="mt-6 flex flex-col items-center gap-1">
           <p data-testid="pos-terminal-binding" className="text-xs text-muted-foreground">
-            Terminal bound to {binding.tenantName ?? binding.tenantId}
+            {binding.tenantName ? `This till belongs to ${binding.tenantName}` : "This till is linked to a restaurant"}
           </p>
           <button
             type="button"

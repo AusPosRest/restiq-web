@@ -35,6 +35,9 @@ export interface DeviceView {
   status: string;
   enrolledAt: string;
   revokedAt: string | null;
+  /** Names the enrol response carries (walkthrough fix), so screens never show raw ids. Absent on devices enrolled before it. */
+  tenantName?: string | null;
+  outletName?: string | null;
 }
 
 const FINGERPRINT_KEY = "device:hardwareKeyFingerprint";
@@ -121,12 +124,17 @@ export type ContinueTarget = { kind: "redirect"; path: string } | { kind: "unsup
  * the same links admin/(shell)/devices/devices-table.tsx builds (not imported
  * across route trees, AD-4).
  */
-export function continueTargetFor(device: Pick<DeviceView, "id" | "tenantId" | "type" | "outletId">): ContinueTarget {
-  const login = `/pos/login?device=${encodeURIComponent(device.id)}&tenant=${encodeURIComponent(device.tenantId)}`;
+export function continueTargetFor(device: Pick<DeviceView, "id" | "tenantId" | "type" | "outletId" | "tenantName">): ContinueTarget {
+  // The PIN pad also learns this device's outlet (no outlet chooser) and the restaurant's name.
+  const params = new URLSearchParams({ device: device.id, tenant: device.tenantId });
+  if (device.outletId) params.set("outlet", device.outletId);
+  if (device.tenantName) params.set("name", device.tenantName);
+  const login = `/pos/login?${params.toString()}`;
   if (device.type === "pos") return { kind: "redirect", path: login };
   // The kiosk (issue #214) is a guest-realm screen: no staff PIN, the enrolled device is the identity.
   if (device.type === "kiosk" && device.outletId) return { kind: "redirect", path: kioskAttractPath(device.outletId, device.id) };
-  if (device.type === "kds") return { kind: "redirect", path: "/kds" };
+  // A KDS signs in through the same PIN pad, bound to its restaurant - plain /kds had no tenant to sign in against.
+  if (device.type === "kds") return { kind: "redirect", path: `${login}&next=${encodeURIComponent("/kds")}` };
   if (device.type === "printer") return { kind: "redirect", path: `${login}&next=${encodeURIComponent("/pos/printer")}` };
   if (device.type === "terminal") return { kind: "redirect", path: `${login}&next=${encodeURIComponent("/pos/terminal")}` };
   return { kind: "unsupported" };

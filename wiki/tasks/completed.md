@@ -1,5 +1,9 @@
 # Completed
 
+- **2026-10-08** - Till, kitchen screen and device pages (issue #308):
+  - `device-state.ts` `continueTargetFor` passes `device`, `tenant`, `outlet` and `name` to `/pos/login`, and the KDS now goes through it (`next=/kds`).
+  - `terminal-binding.ts` keeps `outletId`. `pin-pad.tsx` auto-selects it on `select_outlet` and names the restaurant.
+  - The mocked status pills and version are removed from `/pos/login` and `/device`.
 - **2026-10-08** - POS money fixes from the Binflow walkthrough (issue #306):
   - `electronic-tender-state.ts` adds `cashChangeMinor` and `tendersNetOfChange`. Cash over the total is change, and finalize posts it net so bill-core's exact-sum rule holds.
   - `tender-keypad.tsx` enters whole currency units.
