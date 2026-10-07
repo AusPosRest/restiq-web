@@ -35,6 +35,7 @@ describe("ShiftBar", () => {
       expect.stringContaining("/pos/open-orders"),
     );
     expect(screen.getByTestId("pos-shift-bar-status-link")).toHaveProperty("href", expect.stringContaining("/pos/status"));
+    expect(screen.getByTestId("pos-shift-bar-payments-link")).toHaveProperty("href", expect.stringContaining("/pos/payments"));
     expect(fetchMock).not.toHaveBeenCalled();
   });
 
