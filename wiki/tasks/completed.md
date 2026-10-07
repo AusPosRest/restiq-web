@@ -1407,3 +1407,10 @@ faked.
   copy change in `kds-header.tsx`; routes, `KdsMode` values and test ids
   unchanged; the four screen tests' subtitle assertions updated. See
   [wiki/features/kitchen-display.md](../features/kitchen-display.md).
+- **2026-09-12** - Owner Devices: Remove a device with confirm-and-reason
+  (issue #215). Per-row `device-remove-<id>` on enrolled devices →
+  `ConfirmReasonDialog` → `revokeDevice` (restiq-backend#140's owner-scoped
+  revoke); the row flips to Revoked in place, linked peripherals fall back
+  to shared, success/error toasts. Tests on the table and the screen flow.
+  See [wiki/features/tenant-admin.md](../features/tenant-admin.md)
+  (Remove a device).
