@@ -222,10 +222,14 @@ actually built here, story by story. Backend counterpart:
     has no dietary-type field (only free-form tenant-defined `Allergen` tags), so nothing
     reliable exists to derive it from; guessing from an allergen tag's name would be
     exactly the kind of fabricated-looking data this codebase's honesty pattern forbids.
-  - **Combos (also named in stories.yaml story 4's title) are out of scope for this
-    pass** - the task's own build list and test plan never call for them, and a combo is a
-    meaningfully different concept (a bundle of items) from a single `OrderLine`. Flagged
-    here as an explicit, documented gap rather than silently dropped.
+  - **Combos** landed later (restiq-web#264 / restiq-backend#160). They show as tiles
+    marked "Combo" (with "Save ₹X") in their category on the order and counter screens.
+    Tapping one opens the shared `ComboPicker` (`src/components/combo-picker.tsx`, logic in
+    `src/lib/combo.ts`): fixed slots show as included, choice slots take taps (pick-1 swaps,
+    pick-N counts up), and a picked item's modifier groups show inline. Add stays disabled
+    until every slot is filled; it posts `POST /pos/v1/orders/:id/combos`. The order panel,
+    counter bill and invoice show a combo as one line with its picks listed underneath;
+    combo lines can be removed but not stepped.
 - **Backend not available at build time, verified via the real GitHub tree, not a stale
   local checkout.** `restiq-backend#52` ("Order taking with modifiers, variants, combos")
   has no branch and no commits (`gh issue view 52`/`gh api .../branches` against

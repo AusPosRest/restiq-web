@@ -20,6 +20,8 @@ function makeLine(overrides: Partial<OrderLineView> = {}): OrderLineView {
     id: "line-butter-naan",
     itemId: "item-butter-naan",
     itemName: "Butter Naan",
+    comboId: null,
+    components: [],
     variantId: null,
     variantName: null,
     quantity: 2,

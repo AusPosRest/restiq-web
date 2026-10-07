@@ -274,16 +274,25 @@ export function fetchCombos(): Promise<ComboView[]> {
   return adminApi<ComboView[]>("menu/combos");
 }
 
-export interface CreateComboInput {
+// restiq-backend#160: a combo is saved whole - fields and every slot.
+export interface SaveComboInput {
   name: string;
   categoryId?: string;
   priceMinor: number;
   currency: string;
-  components: Array<{ itemId: string; quantity?: number }>;
+  photoUrl?: string;
+  available: boolean;
+  slots: Array<{ name: string; pickCount: number; options: Array<{ itemId: string; variantId?: string; upchargeMinor?: number }> }>;
 }
 
-export function createCombo(input: CreateComboInput): Promise<ComboView> {
-  return adminApi<ComboView>("menu/combos", { method: "POST", body: JSON.stringify(input) });
+export function saveCombo(comboId: string | null, input: SaveComboInput): Promise<ComboView> {
+  return comboId
+    ? adminApi<ComboView>(`menu/combos/${comboId}`, { method: "PUT", body: JSON.stringify(input) })
+    : adminApi<ComboView>("menu/combos", { method: "POST", body: JSON.stringify(input) });
+}
+
+export function archiveCombo(comboId: string): Promise<void> {
+  return adminApi<void>(`menu/combos/${comboId}`, { method: "DELETE" });
 }
 
 // --- CAP-10 Branding & capabilities. Verified against restiq-backend's

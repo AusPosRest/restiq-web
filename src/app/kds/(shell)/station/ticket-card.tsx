@@ -30,6 +30,11 @@ function TicketLineRow({ line }: Readonly<{ line: TicketLineView }>) {
           {line.itemName}
           {line.variantName ? ` (${line.variantName})` : ""}
         </span>
+        {line.comboName && (
+          <span data-testid={`kds-line-${line.id}-combo`} className="rounded bg-primary/15 px-1.5 py-0.5 text-xs font-semibold uppercase text-primary">
+            {line.comboName}
+          </span>
+        )}
         {line.seatNumber != null && (
           <span data-testid={`kds-line-${line.id}-seat`} className="rounded bg-accent px-1.5 py-0.5 text-xs font-semibold text-muted-foreground">
             S{line.seatNumber}

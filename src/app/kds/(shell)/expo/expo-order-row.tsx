@@ -88,6 +88,7 @@ export function ExpoOrderRow({
                       {item.itemName}
                       {item.variantName ? ` (${item.variantName})` : ""}
                     </span>
+                    {item.comboName && <span className="text-xs font-semibold uppercase text-primary">{item.comboName}</span>}
                   </li>
                 ))}
               </ul>
