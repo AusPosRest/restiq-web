@@ -6,6 +6,14 @@ with the payments epic.
 
 ## [Unreleased]
 
+### Fixed (Binflow first-run walkthrough, 2026-10-08)
+- **POS money** (#306):
+  - Cash above the total now gives change: the screen shows "Change due ₹43.70", Finalise works, and the cash is posted net of change so the bill sums exactly.
+  - The payment keypad takes whole rupees/dollars (1100 is ₹1100, not ₹11). Exact remaining still covers paise and cents.
+  - The bill lists CGST and SGST (or GST) lines instead of one Tax line.
+  - A counter sale's Charge sends its lines to the kitchen before finalising, so counter orders reach the kitchen screen.
+  - A paid order is read-only: no quantity or remove buttons, and its button reads "View bill".
+
 ### Added
 - **Restaurant addresses** (#302, web half of restiq-backend#183). Each restaurant lives at its own subdomain. The sign-in pages name the restaurant at its address, POS sign-in finds the restaurant from the address when no terminal binding or POS_TENANT_ID is set, and the new-tenant wizard has a Subdomain field that checks the name is free. Our server forwards the address to the API, which refuses a session from another restaurant.
 - **Owner password reset** (#300, web half of restiq-backend#181). "Forgot your password?" on the owner sign-in sends a reset link by email; the link opens a page to choose a new password, and the owner signs in again (every older session is ended).

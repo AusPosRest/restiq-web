@@ -105,6 +105,7 @@ function OrderTakingLoaded({
   }
 
   function handleTapItem(item: PosMenuItemView) {
+    if (order.status === "closed") return; // issue #306: a paid order takes no new lines
     if (addingLine || busyLineId !== null) return;
     if (itemNeedsModifierSheet(item)) {
       setActiveItem(item);
@@ -254,7 +255,7 @@ function OrderTakingLoaded({
           ) : (
             <div data-testid="item-grid" className="grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-4">
               {visibleCombos.map((combo) => (
-                <PosComboTile key={combo.id} combo={combo} itemsById={itemsById} currency={menu.currency} onTap={() => !addingLine && setActiveCombo(combo)} />
+                <PosComboTile key={combo.id} combo={combo} itemsById={itemsById} currency={menu.currency} onTap={() => !addingLine && order.status !== "closed" && setActiveCombo(combo)} />
               ))}
               {visibleItems.map((item) => (
                 <PosItemTile key={item.id} item={item} currency={menu.currency} onTap={() => item.available && handleTapItem(item)} />

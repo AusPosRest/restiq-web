@@ -44,6 +44,7 @@ import {
   getBill,
   PosApiError,
   removeOrderLine,
+  sendOrderToKitchen,
   startCounterOrder,
   updateOrderLineQuantity,
   type PostableTenderMethod,
@@ -56,6 +57,7 @@ import { ModifierSheet, type ModifierSheetConfirmValue } from "../orders/[orderI
 import { PosComboTile } from "../orders/[orderId]/pos-combo-tile";
 import { PosItemTile } from "../orders/[orderId]/pos-item-tile";
 import {
+  canSendToKitchen,
   filterMenuItems,
   formatPriceMinor,
   itemNeedsModifierSheet,
@@ -67,9 +69,10 @@ import {
   type PosMenuView,
 } from "../orders/[orderId]/order-taking-state";
 import { BillSummary } from "../orders/[orderId]/settle/bill-summary";
+import { formatMinor } from "../(shell)/shift/shift-state";
 import { TenderKeypad } from "../orders/[orderId]/settle/tender-keypad";
 import { billTotalMinor, isBillReadOnly } from "../orders/[orderId]/settle/bill-state";
-import { canFinalizeWithElectronic, isElectronicMethod, remainingToTenderMinor } from "../orders/[orderId]/settle/electronic-tender-state";
+import { canFinalizeWithElectronic, cashChangeMinor, isElectronicMethod, remainingToTenderMinor, tendersNetOfChange } from "../orders/[orderId]/settle/electronic-tender-state";
 import { TerminalIntentPanel } from "../orders/[orderId]/settle/terminal-intent-panel";
 import { useTerminalIntent } from "../orders/[orderId]/settle/use-terminal-intent";
 import { TokenBadge } from "./token-badge";
@@ -134,6 +137,7 @@ function CounterLoaded({
   const [pendingTenders, setPendingTenders] = useState<PendingTender[]>([]);
   const [finalizeBusy, setFinalizeBusy] = useState(false);
   const [finalizeError, setFinalizeError] = useState<string | null>(null);
+  const [changeGiven, setChangeGiven] = useState(0);
 
   // Refreshes after add / quantity / remove / tender keep the counter on
   // screen (#269); only the first read or a retry shows the loading shell.
@@ -290,11 +294,17 @@ function CounterLoaded({
 
   function handleFinalize() {
     if (!bill) return;
+    const change = cashChangeMinor(billTotalMinor(bill), bill, pendingTenders);
     setFinalizeBusy(true);
     setFinalizeError(null);
-    finalizeBill(bill.id, { tenders: pendingTenders })
+    // issue #306: a counter sale has no separate Send step, so Charge fires the
+    // unsent lines to the kitchen first - otherwise no ticket is ever made.
+    const fired = canSendToKitchen(order) ? sendOrderToKitchen(order.id, menu).then(setOrder) : Promise.resolve();
+    fired
+      .then(() => finalizeBill(bill.id, { tenders: tendersNetOfChange(pendingTenders, change) }))
       .then((finalised) => {
         setBill(finalised);
+        setChangeGiven(change);
         openDrawerForTenders(pendingTenders);
       })
       .catch((error: unknown) => setFinalizeError(errorMessage(error, "Couldn't finalise this bill.")))
@@ -419,6 +429,11 @@ function CounterLoaded({
             <p className="text-sm text-muted-foreground">
               {bill.tenders.length} tender{bill.tenders.length === 1 ? "" : "s"} captured · no further changes are possible.
             </p>
+            {changeGiven > 0 && (
+              <p data-testid="counter-change-due" className="font-headline text-2xl font-bold tabular-nums text-foreground">
+                Change due {formatMinor(changeGiven, menu.currency)}
+              </p>
+            )}
             <div className="flex gap-2">
               <Button size="lg" data-testid="counter-start-next-order" onClick={onStartNextOrder}>
                 Start next order
@@ -443,6 +458,7 @@ function CounterLoaded({
                   onRemoveTender={handleRemoveTender}
                   onSendToTerminal={terminal.send}
                   terminalBusy={terminal.busy}
+                  changeMinor={cashChangeMinor(totalMinor, bill, pendingTenders)}
                 />
               )}
             </div>

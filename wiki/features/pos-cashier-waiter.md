@@ -957,6 +957,13 @@ done now, this is what actually happened:
 
 ## CAP-7 - Bill & Settle (story 8)
 
+> **Update 2026-10-08 (#306).**
+> - Cash can go over the total. The screen shows "Change due" and posts the cash net of change, because the backend still needs the tenders to equal the total.
+> - The payment keypad takes whole currency units.
+> - The bill lists `taxBreakdown` lines (CGST/SGST, GST).
+> - Counter Charge fires the order to the kitchen first.
+> - Closed orders are read-only.
+
 - **Intent:** cashier reviews a tax breakdown of the order, optionally applies a discount
   (gated by manager PIN once above a threshold), tenders payment across one or more
   methods until the remaining-to-settle figure hits zero, then finalises - after which the

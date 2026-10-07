@@ -25,6 +25,8 @@
 //    those are the Order/Menu's job (`order-taking-state.ts`), read
 //    separately by the settle screen alongside the Bill.
 
+import type { TaxBreakdownEntry } from "@/lib/tax-lines";
+
 export type BillStatus = "open" | "finalized";
 
 /** The methods a cashier can post in the finalize call (bills.dtos.ts's `TENDER_METHODS`). `external` (issue #224) is money taken outside RESTIQ, with its reference. */
@@ -62,6 +64,8 @@ export interface BillView {
   billNumber: number | null;
   subtotalMinor: number;
   taxMinor: number;
+  /** Per-rate tax lines (CGST/SGST for India, GST for AU), snapshotted when the bill is created (bills.dtos.ts's TaxBreakdownLineView). Optional for older fixtures. */
+  taxBreakdown?: TaxBreakdownEntry[];
   discountMinor: number | null;
   discountReason: string | null;
   /** True for tax-inclusive pricing (AU): subtotalMinor already contains taxMinor, so the payable total is subtotal - discount. Optional only for older fixtures; the backend always sends it. */

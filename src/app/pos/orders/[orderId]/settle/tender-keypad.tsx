@@ -45,6 +45,8 @@ export interface TenderKeypadProps {
   /** Present when the outlet can send an amount to the card terminal. */
   onSendToTerminal?: (amountMinor: number) => void;
   terminalBusy?: boolean;
+  /** Cash over the total, to hand back (issue #306). */
+  changeMinor?: number;
 }
 
 // External (issue #224): paid outside RESTIQ - a standalone EFTPOS machine, a
@@ -60,11 +62,13 @@ export function TenderKeypad({
   onRemoveTender,
   onSendToTerminal,
   terminalBusy = false,
+  changeMinor = 0,
 }: Readonly<TenderKeypadProps>) {
   const [method, setMethod] = useState<KeypadMethod>("cash");
   const [digits, setDigits] = useState("");
   const [reference, setReference] = useState("");
-  const amountMinor = digitsToMinor(digits);
+  // Whole rupees / dollars (issue #306): cashiers key the note value; "Exact remaining" covers paise/cents.
+  const amountMinor = digitsToMinor(digits) * 100;
   const isTerminal = method === "card_terminal";
   const isExternal = method === "external";
   const referenceReady = !isExternal || reference.trim() !== "";
@@ -86,6 +90,11 @@ export function TenderKeypad({
         <p data-testid="tender-remaining" className="font-headline text-3xl font-bold tabular-nums text-foreground">
           {formatMinor(remainingMinor, currency)}
         </p>
+        {changeMinor > 0 && (
+          <p data-testid="tender-change-due" className="mt-1 text-lg font-semibold tabular-nums text-status-available">
+            Change due {formatMinor(changeMinor, currency)}
+          </p>
+        )}
       </div>
 
       {(capturedTenders.length > 0 || tenders.length > 0) && (
@@ -170,6 +179,7 @@ export function TenderKeypad({
           testId="tender-keypad-amount"
           digits={digits}
           currency={currency}
+          display={formatMinor(amountMinor, currency)}
           onDigit={(digit) => setDigits((current) => appendDigit(current, digit))}
           onBackspace={() => setDigits((current) => current.slice(0, -1))}
           onClear={() => setDigits("")}
