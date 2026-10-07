@@ -37,7 +37,8 @@ export function Devices() {
 
   if (!selectedOutletId) return <LoadingShell />;
 
-  return <OutletDevices key={selectedOutletId} outletId={selectedOutletId} />;
+  const outletName = outlets.find((outlet) => outlet.id === selectedOutletId)?.name;
+  return <OutletDevices key={selectedOutletId} outletId={selectedOutletId} outletName={outletName} />;
 }
 
 function LoadingShell() {
@@ -82,14 +83,14 @@ function useDevicesData(outletId: string) {
   };
 }
 
-function OutletDevices({ outletId }: Readonly<{ outletId: string }>) {
+function OutletDevices({ outletId, outletName }: Readonly<{ outletId: string; outletName?: string }>) {
   const { loading, failed, data, retry } = useDevicesData(outletId);
 
   if (loading) return <LoadingShell />;
   if (failed) return <LoadErrorPanel testId="devices-load-error" message="Devices and printers couldn't be loaded." onRetry={retry} />;
   if (!data) return null;
 
-  return <DevicesEditor outletId={outletId} initial={data} />;
+  return <DevicesEditor outletId={outletId} outletName={outletName} initial={data} />;
 }
 
 // The topology's online dots follow the devices' 30 s heartbeat (issue #210).
@@ -105,7 +106,7 @@ const VIEWS = [
 ] as const;
 type ViewKey = (typeof VIEWS)[number]["key"];
 
-function DevicesEditor({ outletId, initial }: Readonly<{ outletId: string; initial: DevicesData }>) {
+function DevicesEditor({ outletId, outletName, initial }: Readonly<{ outletId: string; outletName?: string; initial: DevicesData }>) {
   const [devices, setDevices] = useState<AdminDeviceView[]>(initial.devices);
   const [now, setNow] = useState(() => Date.now());
   const [printers, setPrinters] = useState<PrinterView[]>(initial.printers);
@@ -225,7 +226,7 @@ function DevicesEditor({ outletId, initial }: Readonly<{ outletId: string; initi
         onConfirm={(reason) => void handleConfirmRemove(reason)}
       />
 
-      <GenerateCodeDialog open={generateOpen} onClose={() => setGenerateOpen(false)} outletId={outletId} onGenerated={setActiveCode} />
+      <GenerateCodeDialog open={generateOpen} onClose={() => setGenerateOpen(false)} outletId={outletId} outletName={outletName} onGenerated={setActiveCode} />
     </div>
   );
 }

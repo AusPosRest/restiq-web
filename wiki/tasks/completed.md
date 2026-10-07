@@ -1,5 +1,14 @@
 # Completed
 
+- **2026-10-08** - Owner console first-run fixes (issue #312):
+  - `go-live-checklist.tsx`: Mark as done on link steps, a live state for active tenants, and an "Open the console" link.
+  - `(shell)/agreement-banner.tsx` and a Setup nav item.
+  - `formatAsOf` takes the viewer's time zone.
+  - Dashboard tiles are Sales only.
+  - Reports with no export are hidden.
+  - The branding upload is removed.
+  - The PIN is auto-issued on staff add.
+  - The invite page reads restiq-backend#193 `invite-details`.
 - **2026-10-08** - Platform Console first-run polish (issue #310):
   - Changed: dashboard tiles and empty-state call to action, sidebar (no Subscriptions; "Failed syncs").
   - Capabilities: `capabilities-tab.tsx` is read-only per outlet. The branding tab files are deleted.

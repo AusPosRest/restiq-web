@@ -36,7 +36,7 @@ export function ReceiptPreview({ tokens, logoUrl }: Readonly<{ tokens: BrandingT
           <img src={logo} alt="" data-testid="receipt-preview-logo" className="mb-1 size-10 object-contain" />
         )}
         <p className="font-semibold" style={{ color: tokens.primaryColor }} data-testid="receipt-preview-tenant-name">
-          TENANT NAME
+          Your restaurant
         </p>
         {tokens.receiptHeader && (
           <p className="text-xs opacity-80" data-testid="receipt-preview-header">

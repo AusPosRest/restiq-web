@@ -1403,3 +1403,13 @@ mocked-fetch component tests (`reports.test.tsx`,
   on by default). Off = the backend returns `photoUrl: null` on POS and guest menus
   (restiq-backend#148), so staff and guests see names only. The owner Menu table
   keeps its thumbnails so photos can still be managed.
+
+## First-run fixes (issue #312, 2026-10-08)
+
+- **Go-live checklist.**
+  - Floor plan and menu have no automatic "done" signal (only devices and staff do), so each link step also has **Mark as done**.
+  - A tenant that is already live sees "You're live"; it goes live on its first sale (restiq-backend#189).
+  - The sidebar's **Setup** item returns to the checklist.
+- **Agreement banner.** It shows on every console page until the current agreement version is signed.
+- **Dashboard.** Only **Sales today** is shown, because margin, labour and waste have no data source. "As of" uses the viewer's clock.
+- **Branding.** The logo is saved as a URL; the backend stores no uploaded files.

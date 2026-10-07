@@ -233,7 +233,7 @@ function StationRow({
           onChange={(event) => handleNoPrinterAckChange(event.target.checked)}
           className="size-4 rounded border-border focus:outline-none focus-visible:ring-2 focus-visible:ring-ring"
         />
-        This station has no printer, on purpose.
+        Screen only - no printer for this station
       </label>
       {printerErrors.printer && (
         <p data-testid={`station-printer-error-${station.id}`} className="text-xs text-status-error">
@@ -380,7 +380,7 @@ function AddStationForm({
           onChange={(event) => handleNoPrinterAckChange(event.target.checked)}
           className="size-4 rounded border-border focus:outline-none focus-visible:ring-2 focus-visible:ring-ring"
         />
-        This station has no printer, on purpose.
+        Screen only - no printer for this station
       </label>
       {printerErrors.printer && (
         <p data-testid="add-station-printer-error" className="text-xs text-status-error">

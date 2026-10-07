@@ -7,7 +7,6 @@
 // security-relevant list - role change, PIN revoke, price change), so Save
 // is a plain pessimistic action with no reason prompt, same shape as
 // ItemDrawer's Save.
-import { Upload } from "lucide-react";
 import { useState } from "react";
 import { Button } from "@/components/ui/button";
 import { saveBranding } from "../../api";
@@ -20,7 +19,6 @@ import {
   brandingEqual,
   clampCornerRadius,
   hexLabel,
-  isAcceptedLogoFile,
   MAX_CORNER_RADIUS_PX,
   MAX_LOGO_URL_LENGTH,
   normalizeBranding,
@@ -65,14 +63,6 @@ function BrandingForm({ initial }: Readonly<{ initial: BrandingTokens }>) {
   const [draft, setDraft] = useState<BrandingTokens>(initial);
   const [saved, setSaved] = useState<BrandingTokens>(initial);
   const [saving, setSaving] = useState(false);
-  const [logoError, setLogoError] = useState<string | null>(null);
-  // A locally-picked file only ever previews - restiq-backend's `logoUrl` is
-  // a plain string capped at 2048 chars (read directly from
-  // branding.dtos.ts), so a data: URL encoding of any real image would be
-  // rejected outright. It's kept separate from `draft` so Save never tries
-  // to persist it; pasting an already-hosted URL into the Logo URL field
-  // below is the only way this API can actually save a logo today.
-  const [localLogoPreview, setLocalLogoPreview] = useState<string | null>(null);
   const pushToast = useToast();
 
   const dirty = !brandingEqual(draft, saved);
@@ -93,19 +83,6 @@ function BrandingForm({ initial }: Readonly<{ initial: BrandingTokens }>) {
     }
   }
 
-  function handleLogoFile(file: File | undefined) {
-    setLogoError(null);
-    if (!file) return;
-    if (!isAcceptedLogoFile(file)) {
-      setLogoError("Logo must be an SVG or PNG under 2MB.");
-      return;
-    }
-    const reader = new FileReader();
-    reader.onload = () => {
-      if (typeof reader.result === "string") setLocalLogoPreview(reader.result);
-    };
-    reader.readAsDataURL(file);
-  }
 
   return (
     <div className="grid grid-cols-1 gap-6 lg:grid-cols-[2fr_1fr]">
@@ -174,31 +151,10 @@ function BrandingForm({ initial }: Readonly<{ initial: BrandingTokens }>) {
         </div>
 
         <div>
-          <span className="font-label mb-1 block text-xs font-semibold uppercase tracking-wider text-muted-foreground">Brand Logo</span>
-          <label
-            htmlFor="branding-logo"
-            className="flex cursor-pointer flex-col items-center gap-2 rounded-lg border border-dashed border-border bg-input px-4 py-6 text-center text-xs text-muted-foreground focus-within:outline-none focus-within:ring-2 focus-within:ring-ring"
-          >
-            <Upload className="size-5" aria-hidden="true" />
-            <span>Upload a square SVG or PNG to preview it on the receipt below.</span>
-            <span className="font-semibold text-primary">Browse files</span>
-            <input
-              id="branding-logo"
-              data-testid="branding-logo-input"
-              type="file"
-              accept="image/svg+xml,image/png"
-              className="sr-only"
-              onChange={(event) => handleLogoFile(event.target.files?.[0])}
-            />
-          </label>
-          {logoError && (
-            <p role="alert" data-testid="branding-logo-error" className="mt-1 text-xs text-status-error">
-              {logoError}
-            </p>
-          )}
-
+          {/* The API stores a logo URL only (<= 2048 chars), so an uploaded file could
+              only ever preview - the misleading upload box is gone (walkthrough fix). */}
           <label htmlFor="branding-logo-url" className="font-label mb-1 mt-3 block text-xs font-semibold uppercase tracking-wider text-muted-foreground">
-            Logo URL
+            Brand logo (URL)
           </label>
           <input
             id="branding-logo-url"
@@ -209,7 +165,7 @@ function BrandingForm({ initial }: Readonly<{ initial: BrandingTokens }>) {
             onChange={(event) => setDraft((d) => ({ ...d, logoUrl: event.target.value || null }))}
             className="w-full rounded-lg border border-border bg-input px-3 py-2 text-sm text-foreground placeholder:text-muted-foreground/60 focus:outline-none focus-visible:ring-2 focus-visible:ring-ring"
           />
-          <p className="mt-1 text-xs text-muted-foreground">Used on receipts, POS login screens, and customer-facing menus once hosted somewhere - a browsed file only previews here for now.</p>
+          <p className="mt-1 text-xs text-muted-foreground">Paste the address of your logo image (SVG or PNG). It shows on receipts, POS sign-in and guest menus.</p>
           {logoUrlTooLong && (
             <p role="alert" data-testid="branding-logo-url-error" className="mt-1 text-xs text-status-error">
               Logo URL can&apos;t be longer than {MAX_LOGO_URL_LENGTH} characters.
@@ -259,7 +215,7 @@ function BrandingForm({ initial }: Readonly<{ initial: BrandingTokens }>) {
 
       <div>
         <h2 className="font-headline mb-2 text-sm font-semibold text-muted-foreground">Live Preview</h2>
-        <ReceiptPreview tokens={draft} logoUrl={localLogoPreview} />
+        <ReceiptPreview tokens={draft} />
       </div>
     </div>
   );

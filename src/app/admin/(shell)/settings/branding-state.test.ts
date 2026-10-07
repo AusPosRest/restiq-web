@@ -4,7 +4,6 @@ import {
   clampCornerRadius,
   DEFAULT_BRANDING,
   hexLabel,
-  isAcceptedLogoFile,
   isValidHexColor,
   MAX_CORNER_RADIUS_PX,
   normalizeBranding,
@@ -98,22 +97,6 @@ describe("brandingEqual", () => {
   });
 });
 
-describe("isAcceptedLogoFile", () => {
-  it("accepts a reasonably-sized svg or png", () => {
-    expect(isAcceptedLogoFile({ type: "image/png", size: 1024 })).toBe(true);
-    expect(isAcceptedLogoFile({ type: "image/svg+xml", size: 1024 })).toBe(true);
-  });
-
-  it("rejects other file types", () => {
-    expect(isAcceptedLogoFile({ type: "image/jpeg", size: 1024 })).toBe(false);
-    expect(isAcceptedLogoFile({ type: "application/pdf", size: 1024 })).toBe(false);
-  });
-
-  it("rejects empty and oversized files", () => {
-    expect(isAcceptedLogoFile({ type: "image/png", size: 0 })).toBe(false);
-    expect(isAcceptedLogoFile({ type: "image/png", size: 3 * 1024 * 1024 })).toBe(false);
-  });
-});
 
 describe("hexLabel", () => {
   it("strips the # and upper-cases", () => {
