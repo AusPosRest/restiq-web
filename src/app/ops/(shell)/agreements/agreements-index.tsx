@@ -4,16 +4,19 @@
 // first, plus the publish form. Publishing is pessimistic and goes through
 // the shared reason dialog like every other console mutation - the reason
 // lands in the control-plane audit trail (restiq-backend#133). A version is
-// immutable once published, so there is no edit or delete here by design.
+// immutable once published, so there is no edit or delete here by design. An
+// agreement is a PDF (restiq-backend#179): ops picks the file, previews it in the
+// browser before publishing, and can open any published version in the viewer.
 import { ChevronDown, ChevronRight } from "lucide-react";
-import { useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { Button } from "@/components/ui/button";
-import { AgreementVersionSummary, AgreementVersionView, opsApi, OpsApiError } from "../api";
+import { AgreementVersionSummary, AgreementVersionView, OpsApiError, publishAgreement } from "../api";
 import { ConfirmReasonDialog } from "../confirm-reason-dialog";
 import { LoadErrorPanel, Skeleton } from "../data-states";
 import { useToast } from "../toast";
 import { useOpsLoad } from "../use-ops-load";
 
+const MAX_PDF_BYTES = 5 * 1024 * 1024;
 const FIELD_CLASSES =
   "w-full rounded-lg border border-border bg-input px-3 py-2 text-sm text-foreground placeholder:text-muted-foreground/60 focus:outline-none focus-visible:ring-2 focus-visible:ring-ring";
 const TH_CLASSES = "font-label px-4 text-left text-xs font-semibold uppercase tracking-wider text-muted-foreground";
@@ -26,23 +29,39 @@ export function AgreementsIndex() {
   const toast = useToast();
   const { loading, failed, data, retry } = useOpsLoad<{ versions: AgreementVersionSummary[] }>("agreements");
   const [title, setTitle] = useState("");
-  const [body, setBody] = useState("");
+  const [file, setFile] = useState<File | null>(null);
+  const [fileError, setFileError] = useState<string | null>(null);
+  const [previewUrl, setPreviewUrl] = useState<string | null>(null);
   const [confirming, setConfirming] = useState(false);
   const [busy, setBusy] = useState(false);
 
   const nextVersion = (data?.versions[0]?.version ?? 0) + 1;
-  const canPublish = title.trim().length > 0 && body.trim().length > 0;
+  const canPublish = title.trim().length > 0 && file !== null && fileError === null;
+
+  // The chosen file is previewed locally, so what ops checks is exactly what gets uploaded.
+  const objectUrl = useRef<string | null>(null);
+  useEffect(() => () => { if (objectUrl.current) URL.revokeObjectURL(objectUrl.current); }, []);
+
+  function chooseFile(chosen: File | null) {
+    if (objectUrl.current) URL.revokeObjectURL(objectUrl.current);
+    objectUrl.current = null;
+    setPreviewUrl(null);
+    setFile(chosen);
+    if (!chosen) return setFileError(null);
+    if (chosen.type !== "application/pdf" && !chosen.name.toLowerCase().endsWith(".pdf")) return setFileError("Choose a PDF file.");
+    if (chosen.size > MAX_PDF_BYTES) return setFileError("The PDF is over 5 MB. Choose a smaller file.");
+    setFileError(null);
+    objectUrl.current = URL.createObjectURL(chosen);
+    setPreviewUrl(objectUrl.current);
+  }
 
   async function publish(reason: string) {
     setBusy(true);
     try {
-      const { version } = await opsApi<{ version: AgreementVersionView }>("agreements", {
-        method: "POST",
-        body: JSON.stringify({ title: title.trim(), body, reason }),
-      });
+      const { version } = await publishAgreement(title.trim(), file as File, reason);
       setConfirming(false);
       setTitle("");
-      setBody("");
+      chooseFile(null);
       toast({ kind: "success", message: `Agreement v${version.version} published.` });
       retry();
     } catch (error) {
@@ -84,18 +103,25 @@ export function AgreementsIndex() {
             />
           </div>
           <div>
-            <label htmlFor="agreement-body" className="font-label mb-1.5 block text-xs font-semibold uppercase tracking-wider text-muted-foreground">
-              Agreement text
+            <label htmlFor="agreement-file" className="font-label mb-1.5 block text-xs font-semibold uppercase tracking-wider text-muted-foreground">
+              Agreement PDF (max 5 MB)
             </label>
-            <textarea
-              id="agreement-body"
-              data-testid="agreement-body"
-              value={body}
-              rows={12}
-              placeholder="Paste the full agreement text. Owners see it exactly as entered."
-              onChange={(event) => setBody(event.target.value)}
-              className={`${FIELD_CLASSES} font-mono`}
+            <input
+              id="agreement-file"
+              data-testid="agreement-file"
+              type="file"
+              accept="application/pdf,.pdf"
+              onChange={(event) => chooseFile(event.target.files?.[0] ?? null)}
+              className={FIELD_CLASSES}
             />
+            {fileError && (
+              <p role="alert" data-testid="agreement-file-error" className="mt-1.5 text-xs text-status-error">
+                {fileError}
+              </p>
+            )}
+            {previewUrl && !fileError && (
+              <iframe data-testid="agreement-preview" title="Preview of the agreement PDF" src={previewUrl} className="mt-3 h-96 w-full rounded-lg border border-border/40 bg-background" />
+            )}
           </div>
         </div>
         <div className="mt-4 flex justify-end">
@@ -148,7 +174,7 @@ export function AgreementsIndex() {
       <ConfirmReasonDialog
         open={confirming}
         title={`Publish agreement v${nextVersion}`}
-        description="Every tenant owner will be asked to sign this version the next time they open their console. Published versions cannot be edited."
+        description="Every tenant owner will be asked to read and sign this PDF the next time they open their console. Published versions cannot be edited."
         verb="Publish"
         busy={busy}
         onCancel={() => setConfirming(false)}
@@ -201,10 +227,25 @@ function VersionRow({ version, current }: Readonly<{ version: AgreementVersionSu
 function VersionBody({ id }: Readonly<{ id: string }>) {
   const { loading, failed, data, retry } = useOpsLoad<{ version: AgreementVersionView }>(`agreements/${id}`);
   if (loading) return <Skeleton className="h-24 w-full" />;
-  if (failed || !data) return <LoadErrorPanel message="The agreement text could not be loaded." onRetry={retry} testId="agreement-body-error" />;
+  if (failed || !data) return <LoadErrorPanel message="The agreement could not be loaded." onRetry={retry} testId="agreement-body-error" />;
+  if (!data.version.hasFile) {
+    return (
+      <p data-testid="agreement-no-file" className="rounded-lg border border-border/40 bg-background p-4 text-sm text-muted-foreground">
+        Published as text before agreements became PDFs; there is no file to show. Owners cannot sign it - publish a new version.
+      </p>
+    );
+  }
+  const url = `/ops/api/agreements/${id}/file`;
   return (
-    <pre data-testid="agreement-body-text" className="max-h-96 overflow-auto whitespace-pre-wrap rounded-lg border border-border/40 bg-background p-4 font-sans text-sm">
-      {data.version.body}
-    </pre>
+    <div>
+      <iframe data-testid="agreement-viewer" title={`${data.version.title} (PDF)`} src={url} className="h-96 w-full rounded-lg border border-border/40 bg-background" />
+      <p className="mt-2 text-xs text-muted-foreground">
+        {data.version.fileName} ·{" "}
+        <a data-testid="agreement-open" href={url} target="_blank" rel="noreferrer" className="underline underline-offset-2">
+          open in a new tab
+        </a>{" "}
+        · SHA-256 <span className="font-mono">{data.version.fileSha256.slice(0, 12)}…</span>
+      </p>
+    </div>
   );
 }

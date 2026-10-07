@@ -211,15 +211,17 @@ export interface AgreementVersionSummary {
   id: string;
   version: number;
   title: string;
+  /** False for a version published as text before the PDF rework: nothing to open or sign. */
+  hasFile: boolean;
+  fileName: string | null;
+  sizeBytes: number | null;
+  fileSha256: string;
   publishedBy: string;
   publishedAt: string;
   signatureCount: number;
 }
 
-export interface AgreementVersionView extends AgreementVersionSummary {
-  body: string;
-  bodySha256: string;
-}
+export type AgreementVersionView = AgreementVersionSummary;
 
 export interface AgreementSignatureView {
   agreementVersionId: string;
@@ -229,6 +231,26 @@ export interface AgreementSignatureView {
   signerEmail: string;
   signedAt: string;
   evidenceSha256: string;
+}
+
+/** Publishing is multipart (title, reason, the PDF), so it cannot go through opsApi, which forces JSON. */
+export async function publishAgreement(title: string, file: File, reason: string): Promise<{ version: AgreementVersionView }> {
+  const body = new FormData();
+  body.append("title", title);
+  body.append("reason", reason);
+  body.append("file", file);
+  let res: Response;
+  try {
+    res = await fetch("/ops/api/agreements", { method: "POST", body });
+  } catch {
+    throw new OpsApiError("The API could not be reached", 0);
+  }
+  const payload: unknown = await res.json().catch(() => null);
+  if (!res.ok) {
+    const error = (payload as { error?: { code?: string; message?: string } } | null)?.error;
+    throw new OpsApiError(error?.message ?? "The agreement could not be published.", res.status, error?.code);
+  }
+  return payload as { version: AgreementVersionView };
 }
 
 export type TenantAgreementStatus = "signed" | "pending" | "no_agreement";

@@ -57,7 +57,7 @@ async function forward(request: NextRequest, params: Promise<{ path: string[] }>
   const contentType = upstream.headers.get("content-type") ?? "";
   if (!contentType.includes("application/json")) {
     const bytes = await upstream.arrayBuffer();
-    const headers: Record<string, string> = { "content-type": contentType || "application/octet-stream" };
+    const headers: Record<string, string> = { "content-type": contentType || "application/octet-stream", "x-content-type-options": "nosniff", "cache-control": "private, no-store" };
     const disposition = upstream.headers.get("content-disposition");
     if (disposition) headers["content-disposition"] = disposition;
     return new NextResponse(bytes, { status: upstream.status, headers });

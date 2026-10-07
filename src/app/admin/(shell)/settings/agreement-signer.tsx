@@ -1,16 +1,16 @@
 "use client";
 
-// Settings ▸ Agreement (issue #192): the owner reads the current platform
-// agreement and signs it by typing their full name and ticking consent - the
-// typed name is the signature, the backend seals it with a SHA-256 evidence
-// hash (restiq-backend#133). Signing is pessimistic (money/legal rule in
+// Settings ▸ Agreement (issue #192, PDF rework #298): the owner reads the current platform
+// agreement - a PDF shown in the browser's own viewer - and signs it by typing their full name
+// and ticking consent. The typed name is the signature; the backend seals it with a SHA-256
+// evidence hash over the file they were shown (restiq-backend#133, #179). Signing is pessimistic (money/legal rule in
 // EXPERIENCE.md): the form stays until the server confirms, then the signed
 // record replaces it. A new version published later re-opens the form; what
 // was signed before stays listed underneath.
 import { CheckCircle2 } from "lucide-react";
 import { useState } from "react";
 import { Button } from "@/components/ui/button";
-import { AdminApiError, AgreementSignatureView, OwnerAgreementView, signAgreement } from "../../api";
+import { AdminApiError, agreementFileUrl, AgreementSignatureView, OwnerAgreementView, signAgreement } from "../../api";
 import { LoadErrorPanel, Skeleton } from "../data-states";
 import { useToast } from "../toast";
 import { useAdminLoad } from "../use-admin-load";
@@ -70,7 +70,7 @@ function AgreementView({
   async function handleSign() {
     setSigning(true);
     try {
-      const result = await signAgreement(current.id, signerName.trim());
+      const result = await signAgreement(current.id, signerName.trim(), current.fileSha256);
       setSignature(result.signature);
       pushToast({ kind: "success", message: `Agreement v${current.version} signed.` });
     } catch (error) {
@@ -95,12 +95,30 @@ function AgreementView({
         <p className="mt-1 text-xs text-muted-foreground" data-testid="agreement-version">
           Version {current.version} · published {formatDateTime(current.publishedAt)}
         </p>
-        <pre data-testid="agreement-body" className="mt-4 max-h-[28rem] overflow-auto whitespace-pre-wrap rounded-lg border border-border/40 bg-background p-4 font-sans text-sm">
-          {current.body}
-        </pre>
+        {current.hasFile ? (
+          <>
+            <iframe
+              data-testid="agreement-viewer"
+              title={`${current.title} (PDF)`}
+              src={agreementFileUrl(current.id)}
+              className="mt-4 h-[32rem] w-full rounded-lg border border-border/40 bg-background"
+            />
+            <p className="mt-2 text-xs text-muted-foreground">
+              Can&apos;t see the document?{" "}
+              <a data-testid="agreement-open" href={agreementFileUrl(current.id)} target="_blank" rel="noreferrer" className="underline underline-offset-2">
+                Open the PDF in a new tab
+              </a>
+              {current.sizeBytes !== null && <> ({Math.max(1, Math.round(current.sizeBytes / 1024))} KB)</>}.
+            </p>
+          </>
+        ) : (
+          <p data-testid="agreement-no-file" className="mt-4 rounded-lg border border-border/40 bg-background p-4 text-sm text-muted-foreground">
+            This version was published without a document, so it can&apos;t be read or signed. A new version will be published soon.
+          </p>
+        )}
       </section>
 
-      {signature ? (
+      {!current.hasFile ? null : signature ? (
         <section
           className="flex items-start gap-3 rounded-lg border border-status-active/40 bg-status-active/10 p-5 text-sm"
           data-testid="agreement-signed"
@@ -151,7 +169,7 @@ function AgreementView({
               className="mt-0.5 size-4 rounded border-border accent-primary focus-visible:ring-2 focus-visible:ring-ring"
             />
             <span>
-              I have read and agree to version {current.version} of this agreement on behalf of my business. My name, email and the time of signing will be recorded.
+              I have read the agreement above and agree to version {current.version} on behalf of my business. My name, email and the time of signing will be recorded.
             </span>
           </label>
           <div className="flex justify-end border-t border-border/40 pt-4">

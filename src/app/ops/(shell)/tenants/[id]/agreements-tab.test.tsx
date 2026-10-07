@@ -8,7 +8,7 @@ const TENANT_ID = "0192cccc-0000-7000-8000-000000000003";
 
 function view(overrides: Partial<TenantAgreementsView> = {}): TenantAgreementsView {
   return {
-    current: { id: "v2", version: 2, title: "Platform Services Agreement (2026)", publishedBy: "ops@restiq.example", publishedAt: "2026-09-01T10:00:00.000Z" },
+    current: { id: "v2", version: 2, title: "Platform Services Agreement (2026)", hasFile: true, fileName: "psa.pdf", sizeBytes: 1024, fileSha256: "a".repeat(64), publishedBy: "ops@restiq.example", publishedAt: "2026-09-01T10:00:00.000Z" },
     status: "pending",
     signatures: [
       {
