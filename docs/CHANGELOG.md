@@ -7,6 +7,7 @@ with the payments epic.
 ## [Unreleased]
 
 ### Added
+- **Mail inbox simulator** (#318, needs restiq-backend#198): `/simulator/inbox` lists every email the backend would have sent (owner invites, password resets) when it runs with `MAIL_PROVIDER=simulator`. Newest first, filter by address, clickable links, refreshes every 5 seconds.
 - **Staff work at chosen outlets** (#316, needs restiq-backend#197): Add staff and the staff list let the owner pick the outlets each person works at ("Every outlet" by default). Their PIN only signs in there; a till of another outlet says they aren't set up to work there.
 
 ### Fixed (Binflow first-run walkthrough, 2026-10-08)
