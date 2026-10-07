@@ -110,3 +110,10 @@ first 12 characters of the SHA-256 evidence hash with the full hash in the
   instance in `detail.tsx` (mirrors `subscription-tab.tsx`'s
   suspend/reactivate `confirmKind` pattern) rather than one dialog per
   action, so there is exactly one place that renders the confirm modal.
+
+## List pagination (issue #255)
+
+- Sync Health (`sync-health-pagination`, resets on the rejections filter) and
+  Subscriptions (`subscriptions-pagination`) page client-side, 20 per page,
+  through the shared `src/components/pagination.tsx`. Tenants, Devices and
+  the DLQ already page through the backend cursor and are unchanged.

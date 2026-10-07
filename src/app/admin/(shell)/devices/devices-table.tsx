@@ -6,6 +6,7 @@
 import { Dialog } from "radix-ui";
 import { ExternalLink, MonitorSmartphone, QrCode, Radio } from "lucide-react";
 import { useState } from "react";
+import { PaginationControls, usePagination } from "@/components/pagination";
 import { QR_SIZE_PX, useQrDataUrl } from "../floor-plan/table-qr-dialog";
 import { formatLastSeen, type AdminDeviceView } from "./devices-state";
 
@@ -46,6 +47,7 @@ export function DevicesTable({ devices }: Readonly<{ devices: readonly AdminDevi
   // enrolment countdown does.
   const [now] = useState(() => Date.now());
   const [qrFor, setQrFor] = useState<AdminDeviceView | null>(null);
+  const pager = usePagination(devices);
 
   if (devices.length === 0) {
     return (
@@ -74,7 +76,7 @@ export function DevicesTable({ devices }: Readonly<{ devices: readonly AdminDevi
           </tr>
         </thead>
         <tbody>
-          {devices.map((device) => (
+          {pager.items.map((device) => (
             <tr key={device.id} data-testid={`devices-row-${device.id}`} className="h-14 border-b border-border/20 last:border-b-0">
               <td className="px-4 font-medium">{device.label}</td>
               <td className="px-4 text-muted-foreground">{device.type.toUpperCase()}</td>
@@ -133,6 +135,7 @@ export function DevicesTable({ devices }: Readonly<{ devices: readonly AdminDevi
           ))}
         </tbody>
       </table>
+      <PaginationControls pager={pager} testId="devices-pagination" />
       {qrFor && <DeviceQrDialog key={qrFor.id} device={qrFor} onClose={() => setQrFor(null)} />}
     </div>
   );

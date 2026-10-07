@@ -15,6 +15,7 @@ with the payments epic.
 ### Changed
 - **Home page is now a marketing landing page** (#262): what RESTIQ is, the five surfaces (tablet POS, kitchen display, QR ordering, kiosk, owner console), offline-first operation, payments, the four go-live steps and an FAQ, with calls to action into the live demo. The demo portal that used to be the home page (sign-in doors, demo logins, live devices) moved unchanged to **/demo** and is linked from the nav, hero, final call to action and footer. The install-app banner no longer shows on the marketing page.
 - `/.well-known/assetlinks.json` (#260): Digital Asset Links for the Android app (`com.restiq.app`, repo restiq-android), so Chrome runs the Trusted Web Activity full-screen. Lists the debug signing fingerprint; add the release / Play App Signing fingerprint when that key exists.
+- Pagination on long lists (#255): the owner Menu, Staff and Devices tables and the ops Sync Health and Subscriptions tables now show 20 rows per page with a "1–20 of 32" range and Prev / Next. The pager is hidden when everything fits on one page; changing a search or filter returns to page 1. Lists that already page through the backend cursor (ops Tenants / Devices / DLQ, owner Reports ▸ Payments) are unchanged.
 
 ### Fixed
 - Web half of the POS security fixes (#290; restiq-backend#169/#170/#171):
