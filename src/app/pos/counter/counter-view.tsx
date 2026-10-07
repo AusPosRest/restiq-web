@@ -51,7 +51,6 @@ import {
   type PendingTender,
 } from "../api";
 import { LoadErrorPanel, Skeleton } from "../data-states";
-import { PrintBillButton } from "../print-bill-button";
 import { usePosLoad } from "../use-pos-load";
 import { ModifierSheet, type ModifierSheetConfirmValue } from "../orders/[orderId]/modifier-sheet";
 import { PosComboTile } from "../orders/[orderId]/pos-combo-tile";

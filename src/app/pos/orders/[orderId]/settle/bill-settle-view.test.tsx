@@ -217,7 +217,7 @@ describe("BillSettleView - print bill (issues #160, #224)", () => {
 
     await screen.findByTestId("bill-summary");
     await userEvent.click(screen.getByTestId("print-bill"));
-    await waitFor(() => expect(screen.getByTestId("print-bill").textContent).toBe("Couldn't print"));
+    await waitFor(() => expect(screen.getByTestId("print-bill").textContent).toBe("Couldn't send"));
   });
 });
 

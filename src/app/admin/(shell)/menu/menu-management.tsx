@@ -103,15 +103,6 @@ export function MenuManagement() {
     [effectiveItems],
   );
 
-  // An import lands new categories and items server-side, so drop the local
-  // overrides and refetch rather than reconstruct ItemViews client-side.
-  function handleImported() {
-    setDirectoryOpen(false);
-    setItems(null);
-    setCategories(null);
-    retry();
-  }
-
   function handleAvailabilityChanged(itemId: string, available: boolean) {
     setItems((current) => (current ?? effectiveItems).map((item) => (item.id === itemId ? { ...item, available } : item)));
   }
@@ -119,6 +110,7 @@ export function MenuManagement() {
   // An import can add categories as well as items, so refetch rather than merge.
   function handleImported(itemCount: number) {
     setImportOpen(false);
+    setDirectoryOpen(false);
     setItems(null);
     setCategories(null);
     retry();

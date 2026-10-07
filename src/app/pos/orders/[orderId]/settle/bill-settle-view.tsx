@@ -29,7 +29,6 @@ import {
   type PostableTenderMethod,
 } from "../../../api";
 import { LoadErrorPanel, Skeleton } from "../../../data-states";
-import { PrintBillButton } from "../../../print-bill-button";
 import { usePosLoad } from "../../../use-pos-load";
 import { orderOriginLabel, toOrderView, type PosMenuView, type RawOrder } from "../order-taking-state";
 import { BillSummary } from "./bill-summary";

@@ -29,7 +29,6 @@ import { itemDraftFromView, ItemDraft, toggleId, validateItemDraft } from "./ite
 import {
   AllergenView,
   CategoryView,
-  CHANNEL_LABEL,
   formatEffectiveDate,
   formatPriceMinor,
   ItemView,
