@@ -10,6 +10,7 @@ function jsonResponse(status: number, body: unknown): Response {
 const PREPARING_ORDER: GuestOrderStatusView = {
   orderId: "018f3ab2-9c4d-7e21-8a4b-11223344d4e5",
   tableId: "t1",
+  tokenNumber: null,
   step: "preparing",
   steps: [
     { step: "placed", reachedAt: "2026-08-29T10:00:00.000Z" },
@@ -22,6 +23,7 @@ const PREPARING_ORDER: GuestOrderStatusView = {
 const READY_ORDER: GuestOrderStatusView = {
   orderId: "018f3ab2-0000-0000-0000-000000000001",
   tableId: "t1",
+  tokenNumber: null,
   step: "ready",
   steps: [
     { step: "placed", reachedAt: "2026-08-29T09:00:00.000Z" },

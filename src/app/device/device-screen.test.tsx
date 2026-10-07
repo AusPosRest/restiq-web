@@ -152,8 +152,8 @@ describe("DeviceScreen", () => {
     expect(push).toHaveBeenCalledWith("/kds");
   });
 
-  it("shows a plain no-web-surface line for a kiosk device instead of a Continue button", async () => {
-    window.sessionStorage.setItem("device:enrolled", JSON.stringify({ ...POS_DEVICE, type: "kiosk" }));
+  it("shows a plain no-web-surface line for a cds device instead of a Continue button", async () => {
+    window.sessionStorage.setItem("device:enrolled", JSON.stringify({ ...POS_DEVICE, type: "cds" }));
     render(<DeviceScreen />);
 
     expect(await screen.findByTestId("device-continue-unsupported")).toBeTruthy();

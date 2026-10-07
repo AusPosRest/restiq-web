@@ -11,6 +11,7 @@ function order(step: GuestOrderStatusView["step"]): GuestOrderStatusView {
   return {
     orderId: "order-1",
     tableId: "table-1",
+    tokenNumber: null,
     step,
     steps: [
       { step: "placed", reachedAt: "2026-08-29T10:00:00.000Z" },
