@@ -1441,3 +1441,8 @@ faked.
   uses `printPage()` (silent print in the app, `window.print()` elsewhere),
   and both finalise paths call `openDrawerForTenders()` when a cash tender
   was taken. Tests: `src/lib/desktop.test.ts`.
+- **2026-10-07 - Set up an outlet from its type, remove stations (D2).** On the
+  floor-plan page an outlet with no stations shows "Set up for my outlet type"
+  (`stations-starter-setup`), which builds the type's stations, tables and
+  switches and reloads the plan; each station row has Remove with a confirm step.
+  Tests: `stations-panel.test.tsx`.

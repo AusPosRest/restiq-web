@@ -7,6 +7,7 @@ with the payments epic.
 ## [Unreleased]
 
 ### Added
+- **Set up an outlet from its type** (D2). An outlet with no stations shows a "Set up for my outlet type" button on the floor-plan page that creates the stations, tables and switches for a dine-in restaurant, counter, cloud kitchen or food-court stall. Every station row can now be removed (with a confirm step); everything the setup makes can be edited or removed.
 - **Combo menu** (#264, web half of restiq-backend#160). A combo is one price for a set of **slots**: "pick 1 main from these", "pick 2 breads", or a fixed item that's always included. Any option can carry an extra charge (+₹30 for a lassi).
   - **Owner console:** Menu gets a **Combos** tab next to Items. It lists every combo (what's in it, category, on sale or off, price) with a search box over the list that matches a combo's name, a slot's name or any item inside it; the editor sets the name, price, category and slots, and can delete a combo. The old combo form inside the item drawer is gone.
   - **POS order and counter screens:** combos show as "Combo" tiles in their category with what they save. Tapping one opens a picker where fixed items show as included, each choice is a tap, and a chosen item's modifiers (spice, extra butter) show inline. Add stays disabled until every slot is filled. The order panel, bill and invoice show the combo as one line with its items listed underneath; a combo can be removed but not stepped.
