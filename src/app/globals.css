@@ -392,3 +392,13 @@
 .scrollbar-visible::-webkit-scrollbar-thumb:hover {
   background-color: var(--muted-foreground);
 }
+/* Kiosk receipt (issue #220): the paper is revealed top-down in steps, like a thermal printer feeding it out line by line. */
+@keyframes kiosk-receipt-feed {
+  from {
+    clip-path: inset(0 0 100% 0);
+  }
+  to {
+    clip-path: inset(0 0 0 0);
+  }
+}
+

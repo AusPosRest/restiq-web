@@ -110,6 +110,8 @@ export function KioskFrame({ children }: Readonly<{ children: React.ReactNode }>
             <div className={pick(kiosk, FRAME.scroll)}>{children}</div>
           </div>
           {kiosk && <KioskHardware />}
+          {/* The receipt slot's paper comes out here (kiosk/kiosk-pay.tsx portals into it, issue #220). */}
+          {kiosk && <div id="kiosk-receipt-tray" data-testid="kiosk-receipt-tray" className="flex justify-center" />}
         </div>
         {kiosk && (
           <>
