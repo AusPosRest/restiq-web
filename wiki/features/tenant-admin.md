@@ -1394,3 +1394,12 @@ mocked-fetch component tests (`reports.test.tsx`,
   `importDirectoryProducts`).
 - **Tests:** `directory-dialog.test.tsx` (search + tag filter, ticking,
   import payload and count callback; 409 keeps the dialog open).
+## Menu photos + Menu Photos setting (issue #230)
+
+- **Upload:** Menu ▸ item drawer ▸ Upload photo (browser-resized JPEG, see #218).
+- **Where they show:** owner Menu table (thumbnail, initial when none), POS
+  order-taking and counter tiles, QR menu + item detail, kiosk tiles.
+- **Turn off:** Settings ▸ Capabilities ▸ **Menu Photos** (`menu_photos`, per outlet,
+  on by default). Off = the backend returns `photoUrl: null` on POS and guest menus
+  (restiq-backend#148), so staff and guests see names only. The owner Menu table
+  keeps its thumbnails so photos can still be managed.

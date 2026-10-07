@@ -101,6 +101,13 @@
   enrolment code and printer config sit on one tab and the topology map on the other;
   state stays above the tabs so switching is instant and keeps an active code. 1 new test,
   40 passing in the devices folder; lint/typecheck clean.
+- **2026-09-15** - Menu photos everywhere + Menu Photos setting (issue #230, web half of
+  restiq-backend#148): the owner Menu table shows a thumbnail (or initial) per item; POS
+  order-taking and counter tiles show the item photo; QR / kiosk already did. Settings ▸
+  Capabilities gains **Menu Photos** (key `menu_photos`, on by default) - off makes the
+  backend send `photoUrl: null` to POS and guest menus, so every surface drops photos.
+  Capability tests updated; 263 passing across the touched folders; lint + typecheck clean.
+
 - **2026-09-12** - Kiosk: simulated kiosk screen + ordering from the kiosk (issue #214, web
   half of restiq-backend#138). `/qr/kiosk/[outletId]` attract screen starts a device-bound
   guest session and reuses the menu / cart / status screens in kiosk mode (token number
