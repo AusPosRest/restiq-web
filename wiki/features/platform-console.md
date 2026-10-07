@@ -117,3 +117,28 @@ first 12 characters of the SHA-256 evidence hash with the full hash in the
   Subscriptions (`subscriptions-pagination`) page client-side, 20 per page,
   through the shared `src/components/pagination.tsx`. Tenants, Devices and
   the DLQ already page through the backend cursor and are unchanged.
+## Catalog - the product directory tenants copy from (issue #245)
+
+- **Intent:** operators keep one platform-wide list of products; a tenant
+  owner searches it and imports copies into their own menu, then edits them
+  like any other item. Nothing links back, so a tenant's edits never touch
+  the directory and a directory edit never changes a tenant's menu.
+- **Built:** `/ops/catalog` (`src/app/ops/(shell)/catalog/catalog-index.tsx`,
+  nav entry `ops-nav-catalog`). Search box (`q` matches name, category or an
+  exact tag), market select (All / India / Australia - a product's currency
+  is its market), tag chips from `GET catalog/products/tags`, and a table
+  with photo thumbnail, category, suggested price, tags and market. "Add
+  product" and "Edit" open a centred dialog (`catalog-product-dialog`);
+  `catalog-state.ts` shapes the form to the API (`validateProductForm`,
+  `parseTags` lower-cases and de-duplicates comma-separated tags). "Delete"
+  goes through the shared `ConfirmReasonDialog`; the reason travels as
+  `?reason=` on the DELETE and lands in the control-plane audit row.
+- **API:** `ops/v1/catalog/products` (list, POST, PATCH `:id`, DELETE `:id`)
+  and `.../tags`, via the `/ops/api` pass-through. See restiq-backend's
+  wiki (`platform-console.md` ▸ Product directory) for the contract.
+- **Tests:** `catalog-state.test.ts` (form round-trip, validation, query
+  string) and `catalog-index.test.tsx` (list + tag filter, add through the
+  dialog with normalised payload, delete with reason).
+- **Not built (by design):** photo upload (https URL only, until the item
+  photo upload from #142 lands and the same regex can be shared), bulk CSV
+  import into the directory, "which tenants imported this" counts.

@@ -17,6 +17,9 @@ with the payments epic.
 - `/.well-known/assetlinks.json` (#260): Digital Asset Links for the Android app (`com.restiq.app`, repo restiq-android), so Chrome runs the Trusted Web Activity full-screen. Lists the debug signing fingerprint; add the release / Play App Signing fingerprint when that key exists.
 - Pagination on long lists (#255): the owner Menu, Staff and Devices tables and the ops Sync Health and Subscriptions tables now show 20 rows per page with a "1–20 of 32" range and Prev / Next. The pager is hidden when everything fits on one page; changing a search or filter returns to page 1. Lists that already page through the backend cursor (ops Tenants / Devices / DLQ, owner Reports ▸ Payments) are unchanged.
 - POS payment history (#253, backend restiq-backend#158): a **Payments** link in the POS top bar opens `/pos/payments`, listing every payment taken at the outlet today (outlet-local day) newest first - time, bill number with table or token, method, amount, reference, who took it - with per-method totals on top and a Refresh button.
+- Product directory (#245, backend restiq-backend#153):
+  - **Ops console ▸ Catalog** (`/ops/catalog`): operators curate a platform-wide list of products (name, short name, Hindi name, veg marker, photo URL, category, suggested price, market, tags) with search, tag chips and a market filter. Deletes go through the reason dialog and land in the control-plane audit trail.
+  - **Owner console ▸ Menu ▸ Browse directory**: a dialog that searches the directory (scoped to the tenant's market), filters by tag, and imports the ticked products as copies into the tenant's own menu. Imported items are ordinary menu items from then on; nothing links back to the directory.
 
 ### Fixed
 - Web half of the POS security fixes (#290; restiq-backend#169/#170/#171):
