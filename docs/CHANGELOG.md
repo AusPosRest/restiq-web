@@ -12,6 +12,8 @@ with the payments epic.
   - **POS order and counter screens:** combos show as "Combo" tiles in their category with what they save. Tapping one opens a picker where fixed items show as included, each choice is a tap, and a chosen item's modifiers (spice, extra butter) show inline. Add stays disabled until every slot is filled. The order panel, bill and invoice show the combo as one line with its items listed underneath; a combo can be removed but not stepped.
   - **QR ordering and kiosk:** the same combo cards and picker in the guest menu, added to the shared cart; the cart lists the combo's items.
   - **Kitchen display:** each item goes to its own station tagged with its combo's name, on the station and expo screens.
+### Changed
+- **Home page is now a marketing landing page** (#262): what RESTIQ is, the five surfaces (tablet POS, kitchen display, QR ordering, kiosk, owner console), offline-first operation, payments, the four go-live steps and an FAQ, with calls to action into the live demo. The demo portal that used to be the home page (sign-in doors, demo logins, live devices) moved unchanged to **/demo** and is linked from the nav, hero, final call to action and footer. The install-app banner no longer shows on the marketing page.
 
 ### Fixed
 - Web half of the POS security fixes (#290; restiq-backend#169/#170/#171):
