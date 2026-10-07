@@ -27,7 +27,7 @@
 // than a second, parallel line-item component) is the ponytail
 // reuse-over-rewrite call.
 import { Minus, Plus, Trash2 } from "lucide-react";
-import { taxLines } from "@/app/admin/(shell)/reports/payments-state";
+import { taxLines } from "@/lib/tax-lines";
 import { formatMinor } from "../../../(shell)/shift/shift-state";
 import type { OrderLineView } from "../order-taking-state";
 import { billTotalMinor, type BillView, type PendingDiscount } from "./bill-state";
