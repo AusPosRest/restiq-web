@@ -159,6 +159,28 @@ describe("POST /pos/auth/login", () => {
     expect(fetchMock).not.toHaveBeenCalled();
   });
 
+  it("finds the restaurant from the address when there is no binding and no POS_TENANT_ID (D14)", async () => {
+    delete process.env.POS_TENANT_ID;
+    const HOST_TENANT_ID = "0193aaaa-0000-7000-8000-000000000003";
+    const fetchMock = vi
+      .fn()
+      .mockResolvedValueOnce(upstreamJson(200, { tenantId: HOST_TENANT_ID, slug: "bayleaf", displayName: "Bay Leaf Kitchens", status: "active", country: "IN", currency: "INR", branding: {} }))
+      .mockResolvedValueOnce(upstreamJson(200, { status: "authenticated", token: "the-jwt", staff: { id: "s1", name: "Priya" }, outlet: { id: "o1", name: "Bay Leaf" } }));
+    vi.stubGlobal("fetch", fetchMock);
+
+    const req = new Request("https://web.example.test/pos/auth/login", {
+      method: "POST",
+      headers: { "content-type": "application/json", host: "web.internal", "x-forwarded-host": "bayleaf.idelta.com.au" },
+      body: JSON.stringify({ pin: "1234" }),
+    });
+    const res = await POST(req);
+
+    expect(res.status).toBe(200);
+    expect((fetchMock.mock.calls[0] as [string])[0]).toContain("/public/v1/tenant?host=bayleaf.idelta.com.au");
+    const [, init] = fetchMock.mock.calls[1] as [string, RequestInit];
+    expect(JSON.parse(init.body as string)).toEqual({ tenantId: HOST_TENANT_ID, pin: "1234" });
+  });
+
   it("sends the request body's tenantId instead of POS_TENANT_ID when the terminal is bound to a tenant", async () => {
     const BOUND_TENANT_ID = "0193aaaa-0000-7000-8000-000000000002";
     const fetchMock = vi.fn().mockResolvedValue(

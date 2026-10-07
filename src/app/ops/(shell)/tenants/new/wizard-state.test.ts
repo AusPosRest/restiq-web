@@ -12,6 +12,7 @@ function completeData() {
   const data = emptyWizardData();
   data.business = {
     companyName: "Spice Route Hospitality",
+    slug: "",
     registeredAddress: "12 MG Road, Bengaluru",
     contactName: "Arjun Mehta",
     contactEmail: "arjun@spiceroute.example",
@@ -144,6 +145,33 @@ describe("dataFromDraft", () => {
     expect(data.business.contactEmail).toBe("");
     expect(data.subscription.plan).toBe("standard");
     expect(data.ownerInvite.email).toBe("");
+  });
+});
+
+describe("subdomain (D14)", () => {
+  it("is optional, and when given must be 3 to 32 lowercase letters, digits or hyphens", () => {
+    const data = completeData();
+    expect(validateStep(1, data)).toEqual({});
+    data.business.slug = "bayleaf";
+    expect(validateStep(1, data)).toEqual({});
+    for (const bad of ["a", "ab", "-bay", "bay-", "bay_leaf", "bay.leaf", "bay--leaf", "x".repeat(33)]) {
+      data.business.slug = bad;
+      expect(validateStep(1, data).slug, bad).toContain("3 to 32");
+    }
+  });
+
+  it("goes to the API at the top level of the payload, not inside the business details", () => {
+    const data = completeData();
+    data.business.slug = " BayLeaf ";
+    const payload = toSubmitPayload(data) as { slug?: string; business: Record<string, unknown> };
+    expect(payload.slug).toBe("bayleaf");
+    expect(payload.business).not.toHaveProperty("slug");
+    data.business.slug = "";
+    expect(toSubmitPayload(data)).not.toHaveProperty("slug");
+  });
+
+  it("is empty for a draft saved before the field existed", () => {
+    expect(dataFromDraft({ "1": { companyName: "Draft Co" } }).business.slug).toBe("");
   });
 });
 

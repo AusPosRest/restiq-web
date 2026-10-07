@@ -1,5 +1,7 @@
 import { Store, MonitorSmartphone, Activity } from "lucide-react";
+import { headers } from "next/headers";
 import { sanitizeAdminNextPath } from "@/lib/admin-session";
+import { fetchTenantByHost, hostOf } from "@/lib/tenant-by-host";
 import { LoginForm } from "./login-form";
 
 const highlights = [
@@ -15,6 +17,8 @@ export default async function AdminLoginPage({
   searchParams: Promise<{ next?: string; expired?: string; reset?: string }>;
 }) {
   const params = await searchParams;
+  // D14: at a restaurant's own address the page names the restaurant.
+  const tenant = await fetchTenantByHost(hostOf(await headers()));
   return (
     <main className="flex min-h-screen flex-1">
       <section className="hidden flex-1 flex-col justify-between p-12 lg:flex" aria-hidden="true">
@@ -37,6 +41,11 @@ export default async function AdminLoginPage({
 
       <section className="flex flex-1 flex-col justify-center bg-card px-6 py-12 sm:px-16 lg:max-w-[44rem]">
         <div className="mx-auto w-full max-w-md">
+          {tenant ? (
+            <p data-testid="admin-login-tenant" className="font-label mb-2 text-sm font-semibold uppercase tracking-wider text-primary">
+              {tenant.displayName}
+            </p>
+          ) : null}
           <h1 className="font-headline text-3xl font-semibold">Sign in to Owner Console</h1>
           <p className="mt-2 text-sm text-muted-foreground">Owner credentials required</p>
           <LoginForm nextPath={sanitizeAdminNextPath(params.next)} sessionExpired={params.expired === "1"} passwordReset={params.reset === "1"} />

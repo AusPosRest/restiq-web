@@ -15,6 +15,8 @@ export type StepKey = (typeof STEPS)[number]["key"];
 
 export interface BusinessData {
   companyName: string;
+  /** The restaurant's subdomain, <slug>.<base domain> (D14). Optional: blank = made from the company name. */
+  slug: string;
   registeredAddress: string;
   contactName: string;
   contactEmail: string;
@@ -93,7 +95,7 @@ export function emptyOutlet(country: CountryCode): OutletData {
 
 export function emptyWizardData(): WizardData {
   return {
-    business: { companyName: "", registeredAddress: "", contactName: "", contactEmail: "", contactPhone: "" },
+    business: { companyName: "", slug: "", registeredAddress: "", contactName: "", contactEmail: "", contactPhone: "" },
     tax: {
       country: "IN",
       registrationNumber: "",
@@ -116,6 +118,8 @@ const EMAIL_PATTERN = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 const GSTIN_PATTERN = /^[0-9]{2}[A-Z]{5}[0-9]{4}[A-Z][1-9A-Z]Z[0-9A-Z]$/;
 const ABN_PATTERN = /^\d{11}$/;
 const FSSAI_PATTERN = /^\d{14}$/;
+// Same shape the API enforces for a tenant's subdomain (restiq-backend src/platform/tenant-slug.ts).
+export const SLUG_PATTERN = /^[a-z0-9][a-z0-9-]{1,30}[a-z0-9]$/;
 
 export type StepErrors = Record<string, string>;
 
@@ -134,6 +138,10 @@ export function validateBusiness(data: BusinessData): StepErrors {
     if (error) errors[field] = error;
   };
   put("companyName", required(data.companyName, "Company name"));
+  const slug = data.slug.trim().toLowerCase();
+  if (slug && (!SLUG_PATTERN.test(slug) || slug.includes("--"))) {
+    errors.slug = "Use 3 to 32 lowercase letters, digits or hyphens, starting and ending with a letter or digit";
+  }
   put("registeredAddress", required(data.registeredAddress, "Registered address"));
   put("contactName", required(data.contactName, "Contact person"));
   put("contactEmail", email(data.contactEmail, "Email address"));
@@ -239,8 +247,11 @@ export function dataFromDraft(steps: Record<string, unknown>): WizardData {
 
 /** The backend submit payload (drops UI-only empties). */
 export function toSubmitPayload(data: WizardData): Record<string, unknown> {
+  // The subdomain belongs to the tenant, not to the business details, in the API's shape.
+  const { slug, ...business } = data.business;
   return {
-    business: data.business,
+    business,
+    ...(slug.trim() ? { slug: slug.trim().toLowerCase() } : {}),
     tax: {
       country: data.tax.country,
       registrationNumber: data.tax.registrationNumber.trim().toUpperCase().replace(/\s/g, ""),

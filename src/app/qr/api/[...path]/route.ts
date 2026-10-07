@@ -8,6 +8,7 @@
 // token to attach) - later Q-screens (menu, cart, checkout, status) are the
 // first callers.
 import { NextRequest, NextResponse } from "next/server";
+import { tenantHostHeaders } from "@/lib/tenant-host-headers";
 import { GUEST_SESSION_COOKIE } from "@/lib/guest-session";
 
 const SEGMENT = /^[a-z0-9_-]+$/i;
@@ -28,7 +29,7 @@ async function forward(request: NextRequest, params: Promise<{ path: string[] }>
     return NextResponse.json({ error: { code: "unauthorized", message: "A valid guest session is required" } }, { status: 401 });
   }
 
-  const headers: Record<string, string> = { authorization: `Bearer ${token}` };
+  const headers: Record<string, string> = { authorization: `Bearer ${token}`, ...tenantHostHeaders(request) };
   const init: RequestInit = { method: request.method, headers, cache: "no-store" };
   if (request.method !== "GET" && request.method !== "HEAD") {
     headers["content-type"] = "application/json";

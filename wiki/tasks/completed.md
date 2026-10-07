@@ -1451,3 +1451,12 @@ faked.
   way; `/admin/reset-password?token=` checks the new password, handles an expired,
   used or missing link with a way to ask again, and sends the owner to sign in with a
   notice. Tests: forgot-password-form, reset-password-form, login-form, admin-session.
+- **2026-10-07 - Tenant subdomain addressing, web half (#302, D14).** Every API
+  proxy (owner, POS, kitchen, guest) forwards the visitor's address in
+  `X-Restiq-Tenant-Host` with the proxy secret, so the API refuses a token for a
+  different restaurant. POS sign-in finds its restaurant from the address when there
+  is no terminal binding and no `POS_TENANT_ID`. The owner and POS sign-in pages name
+  the restaurant at its own address (`GET /public/v1/tenant`). The ops new-tenant
+  wizard has an optional Subdomain field that checks availability on blur and sends
+  `slug` at the top level of the submit. Tests: tenant-by-host, tenant-host-headers,
+  login-form, POS login route, wizard-state, wizard.
