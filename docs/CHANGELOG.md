@@ -12,6 +12,7 @@ with the payments epic.
   - **The PIN pad counts down to the API's real lockout end** (`retryAfterSeconds`, up to 15 minutes, shown as m:ss) instead of a fixed 30 seconds.
   - **POS/KDS Sign out ends the session at the API**, so a copied token stops working. It is best effort; the cookies are cleared either way.
   - **The owner's permission matrix** shows each role's permissions as the API enforces them, falling back to the static table on an older API.
+- **KDS ticket clocks read in h/m/s** (#285): an old ticket showed `11148:58`. Now under a minute is `45s`, under an hour `12m 05s`, and beyond that `3h 42m` - on the station cards, expo, the waiting-on panel and the bumped "took" line.
 - POS text overflow (#240):
   - **Payment method buttons** (settle and counter) now fit as many as the column holds - two per row in the counter's narrow tender column - so "Card terminal" / "External" no longer spill past their buttons.
   - **Bill panel lines** get column padding and keep the amount on one line, so a long item name ("Soup of the Day") wraps instead of running into its price.

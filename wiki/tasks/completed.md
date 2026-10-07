@@ -7,6 +7,9 @@
   - The pin pad uses `retryAfterSeconds`.
   - `/pos/auth/logout` calls `POST /pos/v1/auth/logout` before clearing cookies.
   - The permission matrix uses `RoleView.permissions` via `roleGrants`.
+- **2026-09-20** - Fix: KDS ticket age showed uncapped minutes (issue #285). `formatElapsed` in
+  `kds/(shell)/station/station-queue-state.ts` now returns `45s` / `12m 05s` / `3h 42m`; every KDS screen
+  and the bumped "took" line read through it.
 
 - **2026-09-15** - Fix: POS text overflow (issue #240). `tender-keypad.tsx`'s method grid is
   `repeat(auto-fit,minmax(6.5rem,1fr))` (two per row in the counter's w-80 column); `bill-summary.tsx`
