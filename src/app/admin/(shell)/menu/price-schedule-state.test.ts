@@ -5,13 +5,13 @@ const TODAY = new Date("2026-08-24T12:00:00.000Z");
 
 describe("initialPriceScheduleForm", () => {
   it("seeds the form from the current price in major units, defaulting to today", () => {
-    const form = initialPriceScheduleForm({ dineInPriceMinor: 18000, deliveryPriceMinor: 20000 });
-    expect(form).toEqual({ mode: "today", effectiveDate: "", dineIn: "180.00", delivery: "200.00", reason: "" });
+    const form = initialPriceScheduleForm(18000);
+    expect(form).toEqual({ mode: "today", effectiveDate: "", dineIn: "180.00", reason: "" });
   });
 });
 
 describe("validatePriceScheduleForm", () => {
-  const valid = { mode: "today" as const, effectiveDate: "", dineIn: "180", delivery: "200", reason: "Menu refresh" };
+  const valid = { mode: "today" as const, effectiveDate: "", dineIn: "180", reason: "Menu refresh" };
 
   it("is valid for a same-day change with a reason", () => {
     expect(validatePriceScheduleForm(valid, TODAY)).toEqual({});
@@ -48,7 +48,7 @@ describe("validatePriceScheduleForm", () => {
 
 describe("priceScheduleFormIsValid", () => {
   it("mirrors validatePriceScheduleForm", () => {
-    const valid = { mode: "today" as const, effectiveDate: "", dineIn: "180", delivery: "200", reason: "Menu refresh" };
+    const valid = { mode: "today" as const, effectiveDate: "", dineIn: "180", reason: "Menu refresh" };
     expect(priceScheduleFormIsValid(valid, TODAY)).toBe(true);
     expect(priceScheduleFormIsValid({ ...valid, reason: "" }, TODAY)).toBe(false);
   });
@@ -56,11 +56,11 @@ describe("priceScheduleFormIsValid", () => {
 
 describe("priceScheduleEffectiveAt", () => {
   it("returns null for an immediate (today) change", () => {
-    expect(priceScheduleEffectiveAt({ mode: "today", effectiveDate: "", dineIn: "1", delivery: "1", reason: "x" })).toBeNull();
+    expect(priceScheduleEffectiveAt({ mode: "today", effectiveDate: "", dineIn: "1", reason: "x" })).toBeNull();
   });
 
   it("returns an ISO timestamp for a scheduled date", () => {
-    const iso = priceScheduleEffectiveAt({ mode: "schedule", effectiveDate: "2026-09-01", dineIn: "1", delivery: "1", reason: "x" });
+    const iso = priceScheduleEffectiveAt({ mode: "schedule", effectiveDate: "2026-09-01", dineIn: "1", reason: "x" });
     expect(iso).toBe("2026-09-01T00:00:00.000Z");
   });
 });
