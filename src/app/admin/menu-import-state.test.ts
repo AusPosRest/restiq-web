@@ -44,13 +44,16 @@ describe("confidenceLevel", () => {
 });
 
 describe("isAcceptedMenuFile", () => {
-  it("accepts the extensions the backend's resolveSourceType maps to a source type", () => {
+  it("accepts the spreadsheet types the backend actually reads", () => {
     expect(isAcceptedMenuFile(file("menu.csv"))).toBe(true);
-    expect(isAcceptedMenuFile(file("menu.xlsx"))).toBe(true);
-    expect(isAcceptedMenuFile(file("menu.pdf"))).toBe(true);
-    expect(isAcceptedMenuFile(file("menu.PNG"))).toBe(true);
-    expect(isAcceptedMenuFile(file("menu.jpg"))).toBe(true);
-    expect(isAcceptedMenuFile(file("menu.jpeg"))).toBe(true);
+    expect(isAcceptedMenuFile(file("menu.XLSX"))).toBe(true);
+  });
+
+  it("refuses photos and PDFs, which the backend can't read yet (issue #246)", () => {
+    expect(isAcceptedMenuFile(file("menu.pdf"))).toBe(false);
+    expect(isAcceptedMenuFile(file("menu.PNG"))).toBe(false);
+    expect(isAcceptedMenuFile(file("menu.jpg"))).toBe(false);
+    expect(isAcceptedMenuFile(file("menu.jpeg"))).toBe(false);
   });
 
   it("rejects extensions the backend doesn't recognise, and anything else", () => {

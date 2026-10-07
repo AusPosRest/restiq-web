@@ -5,6 +5,7 @@
 // create and edit. Field-by-field API shape verified against
 // restiq-backend's actual admin/v1/menu working tree (see menu-state.ts's
 // file header and api.ts's CAP-4 comment for what that means and its limits).
+import { Trash2 } from "lucide-react";
 import { Dialog } from "radix-ui";
 import { useEffect, useState } from "react";
 import { Button } from "@/components/ui/button";
@@ -15,6 +16,7 @@ import {
   createMenuItem,
   createModifierGroup,
   CreateItemInput,
+  deleteMenuItem,
   fetchCurrentPrice,
   removeVariant as apiRemoveVariant,
   replaceItemAllergens,
@@ -63,6 +65,8 @@ export interface ItemDrawerProps {
   currency: string;
   onClose: () => void;
   onSaved: (item: ItemView) => void;
+  /** Issue #248: called after the item is deleted (archived on the backend). */
+  onDeleted?: (item: ItemView) => void;
   onModifierGroupCreated: (group: ModifierGroupView) => void;
   onAllergenCreated: (allergen: AllergenView) => void;
 }
@@ -82,6 +86,7 @@ function DrawerBody({
   currency,
   onClose,
   onSaved,
+  onDeleted,
   onModifierGroupCreated,
   onAllergenCreated,
 }: Readonly<ItemDrawerProps>) {
@@ -92,6 +97,8 @@ function DrawerBody({
   const [selectedAllergenIds, setSelectedAllergenIds] = useState<string[]>(item?.allergens.map((a) => a.id) ?? []);
   const [saving, setSaving] = useState(false);
   const [saveError, setSaveError] = useState<string | null>(null);
+  const [confirmingDelete, setConfirmingDelete] = useState(false);
+  const [deleting, setDeleting] = useState(false);
   const [priceLine, setPriceLine] = useState<PriceLine | null>(null);
   const [priceBusy, setPriceBusy] = useState(false);
   const [priceError, setPriceError] = useState<string | null>(null);
@@ -101,6 +108,19 @@ function DrawerBody({
 
   const errors = validateItemDraft(draft);
   const canSave = Object.keys(errors).length === 0;
+
+  async function handleDelete() {
+    if (!liveItem) return;
+    setDeleting(true);
+    setSaveError(null);
+    try {
+      await deleteMenuItem(liveItem.id);
+      onDeleted?.(liveItem);
+    } catch (error) {
+      setSaveError(error instanceof Error ? error.message : "That item couldn't be deleted. Try again.");
+      setDeleting(false);
+    }
+  }
 
   useEffect(() => {
     if (!liveItem) return;
@@ -356,8 +376,30 @@ function DrawerBody({
                 {saveError}
               </p>
             )}
-            <div className="flex justify-end">
-              <Button data-testid="item-save" disabled={!canSave || saving} onClick={() => void handleSave()}>
+            {confirmingDelete && liveItem && (
+              <div data-testid="item-delete-confirm" role="alert" className="mb-3 rounded-lg border border-status-error/40 p-3 text-sm">
+                <p>
+                  Delete <strong>{liveItem.name}</strong>? It disappears from the menu, POS, QR and kiosk. Past bills keep it.
+                </p>
+                <div className="mt-2 flex justify-end gap-2">
+                  <Button variant="secondary" size="sm" data-testid="item-delete-cancel" disabled={deleting} onClick={() => setConfirmingDelete(false)}>
+                    Cancel
+                  </Button>
+                  <Button size="sm" data-testid="item-delete-confirm-button" disabled={deleting} onClick={() => void handleDelete()}>
+                    {deleting ? "Deleting..." : "Delete item"}
+                  </Button>
+                </div>
+              </div>
+            )}
+            <div className="flex items-center justify-between gap-3">
+              {!isCreate && liveItem && !confirmingDelete ? (
+                <Button variant="secondary" data-testid="item-delete" className="text-status-error" onClick={() => setConfirmingDelete(true)}>
+                  <Trash2 aria-hidden="true" /> Delete
+                </Button>
+              ) : (
+                <span />
+              )}
+              <Button data-testid="item-save" disabled={!canSave || saving || deleting} onClick={() => void handleSave()}>
                 {saving ? "Saving..." : "Save Changes"}
               </Button>
             </div>
