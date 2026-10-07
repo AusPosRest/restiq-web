@@ -19,7 +19,7 @@ export function MenuTable({
 }: Readonly<{ items: ItemView[]; currency: string; onSelect: (item: ItemView) => void; onAvailabilityChanged: (itemId: string, available: boolean) => void }>) {
   return (
     <table data-testid="menu-table" className="w-full text-sm">
-      <thead className="text-left text-xs font-semibold uppercase tracking-wider text-muted-foreground">
+      <thead className="sticky top-0 z-10 bg-card text-left text-xs font-semibold uppercase tracking-wider text-muted-foreground">
         <tr className="h-12 border-b border-border/40">
           <th className="w-6" />
           <th className="px-3">Item</th>

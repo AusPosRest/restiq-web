@@ -16,6 +16,12 @@
 - **2026-09-19** - Fix: POS counter flashed to its loading skeleton after every tap (issue #269). `loadBill()` in
   `counter/counter-view.tsx` only sets `billLoading` when no bill is on screen yet, so refreshes after add /
   quantity / remove / tender update in place. Regression test in `counter-view.test.tsx`.
+- **2026-09-19** - Owner console sidebar + Menu/Item drawer scrolling (issue #266, PR #267).
+  `(shell)/layout.tsx` sidebar is sticky and full height on every owner page. `MenuTable` scrolls
+  inside a viewport-high panel (min 20rem) with a sticky column header, category list stays put
+  beside it (unchanged below md). `item-drawer.tsx` pins its header and Delete/Save Changes footer
+  and scrolls only the form, via the new `.scrollbar-visible` utility in `globals.css`, matching
+  the combo editor.
 
 - **2026-09-15** - Fix: POS text overflow (issue #240). `tender-keypad.tsx`'s method grid is
   `repeat(auto-fit,minmax(6.5rem,1fr))` (two per row in the counter's w-80 column); `bill-summary.tsx`

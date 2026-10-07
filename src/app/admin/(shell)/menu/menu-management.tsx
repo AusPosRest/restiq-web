@@ -158,7 +158,7 @@ export function MenuManagement() {
           onCategoryCreated={(created) => setCategories([...effectiveCategories, created])}
         />
 
-        <div className="flex-1 overflow-x-auto rounded-lg border border-border/40 bg-card">
+        <div data-testid="menu-list-scroll" className="flex-1 overflow-auto rounded-lg border border-border/40 bg-card md:max-h-[max(20rem,calc(100dvh-17rem))]">
           {filtered.length === 0 ? (
             <EmptyState filtered={filteredOrSearched} onClearFilters={() => { setCategory(ALL_CATEGORY); setSearch(""); }} onAddItem={() => setDrawerItem(null)} />
           ) : (

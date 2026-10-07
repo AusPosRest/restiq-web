@@ -152,6 +152,15 @@ story. Backend counterpart: `restiq-backend/wiki/features/tenant-admin.md`.
   `src/app/admin/(shell)/` rather than building a one-off header just for
   Menu. `/admin/menu/import` (CAP-3, prior story) is untouched and still
   lives outside the shell at its original route.
+- **Sidebar, table and drawer scrolling (issue #266):** the `(shell)/layout.tsx`
+  sidebar is now sticky and full height on every owner page, so
+  the nav and Sign out stay put instead of scrolling away with the page.
+  `MenuTable` scrolls inside a viewport-high panel (min 20rem) with a sticky
+  column header, so the category list stays beside it - unchanged below `md`.
+  `ItemDrawer` pins its header and its Delete / Save Changes footer and
+  scrolls only the form, with an always-visible scrollbar (the new
+  `.scrollbar-visible` utility in `src/app/globals.css`), matching the combo
+  editor.
 
 ## CAP-10 - Branding & capabilities
 

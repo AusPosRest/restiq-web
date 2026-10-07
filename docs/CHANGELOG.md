@@ -15,6 +15,10 @@ with the payments epic.
 - **KDS ticket clocks read in h/m/s** (#285): an old ticket showed `11148:58`. Now under a minute is `45s`, under an hour `12m 05s`, and beyond that `3h 42m` - on the station cards, expo, the waiting-on panel and the bumped "took" line.
 - **Owner Menu shows one price per item** (#272): RESTIQ has no delivery, so the Delivery column, the drawer's "Dine-in ₹149 / Delivery ₹149" line and the Delivery field in Change price are gone. Each item and variant has a single **Price** (the dine-in price the POS charges).
 - **POS counter no longer flashes after every tap** (#269): adding an item, changing a quantity, removing a line or adding a tender used to swap the whole counter for the loading skeleton while the bill refreshed. The bill now refreshes in place; only the first load or a retry shows the skeleton.
+- Owner console sidebar and Menu scrolling (#266):
+  - **Sidebar** is sticky and full height on every owner page, so the nav and Sign out never scroll away.
+  - **Menu item table** scrolls inside a viewport-high panel (min 20rem) with a sticky column header, so the category list stays beside it. Unchanged below `md`.
+  - **Item drawer** pins its header and its Delete / Save Changes footer and scrolls only the form, with an always-visible scrollbar (the new `.scrollbar-visible` utility in `src/app/globals.css`), matching the combo editor.
 - POS text overflow (#240):
   - **Payment method buttons** (settle and counter) now fit as many as the column holds - two per row in the counter's narrow tender column - so "Card terminal" / "External" no longer spill past their buttons.
   - **Bill panel lines** get column padding and keep the amount on one line, so a long item name ("Soup of the Day") wraps instead of running into its price.
