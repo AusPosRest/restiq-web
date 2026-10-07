@@ -20,6 +20,15 @@ with the payments epic.
   - A wrong PIN says "Wrong PIN. Try again."
   - Opening a new code on a device that's already set up says it wasn't used.
   - Un-enrol sits behind "Set this device up as something else".
+- **Platform Console first run** (#310, with restiq-backend#189/#191):
+  - Dashboard KPIs are real.
+  - The empty dashboard links to onboarding.
+  - Subscriptions is folded into the tenant page.
+  - The Dead-Letter Queue is renamed Failed syncs.
+  - The Agreements page says to publish before the first onboarding.
+  - The tenant Capabilities tab shows each outlet's real (owner) switches, read-only. The unused tenant toggles and the ops Branding tab are gone.
+  - Delete tenant moves to a danger zone.
+  - The wizard prices plans per market (India: on quote) and recommends a plan from the outlet count. It clears fixed errors as you type, pre-fills the owner from the primary contact, and keeps the invite link inside its card.
 
 ### Added
 - **Restaurant addresses** (#302, web half of restiq-backend#183). Each restaurant lives at its own subdomain. The sign-in pages name the restaurant at its address, POS sign-in finds the restaurant from the address when no terminal binding or POS_TENANT_ID is set, and the new-tenant wizard has a Subdomain field that checks the name is free. Our server forwards the address to the API, which refuses a session from another restaurant.

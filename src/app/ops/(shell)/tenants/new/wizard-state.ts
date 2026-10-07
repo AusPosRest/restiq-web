@@ -267,3 +267,38 @@ export function toSubmitPayload(data: WizardData): Record<string, unknown> {
     ownerInvite: data.ownerInvite,
   };
 }
+
+// --- Walkthrough fixes (Binflow, 2026-10-08).
+
+/** Monthly price per outlet in the tenant's own currency, or null when no price is set for that market (India: no ₹ prices yet - shown "on quote"). */
+const PLAN_MONTHLY_PRICE: Record<CountryCode, Record<"standard" | "enterprise", number | null>> = {
+  AU: { standard: 49, enterprise: 129 },
+  IN: { standard: null, enterprise: null },
+};
+export const ANNUAL_DISCOUNT_PERCENT = 20;
+
+export function planPrice(plan: "standard" | "enterprise", country: CountryCode, annual: boolean): number | null {
+  const monthly = PLAN_MONTHLY_PRICE[country][plan];
+  if (monthly === null) return null;
+  return annual ? Math.round((monthly * (100 - ANNUAL_DISCOUNT_PERCENT)) / 100) : monthly;
+}
+
+/** Standard is for one outlet; anything more is Enterprise. */
+export function recommendedPlan(outletCount: number): "standard" | "enterprise" {
+  return outletCount > 1 ? "enterprise" : "standard";
+}
+
+/** The owner is usually the primary contact from step 1 - fill only what is still blank. */
+export function prefillOwner(owner: OwnerInviteData, business: Pick<BusinessData, "contactName" | "contactEmail">): OwnerInviteData {
+  const [first = "", ...rest] = business.contactName.trim().split(/\s+/);
+  return {
+    email: owner.email || business.contactEmail.trim(),
+    firstName: owner.firstName || first,
+    lastName: owner.lastName || rest.join(" "),
+  };
+}
+
+/** Drops shown errors the user has since fixed, without surfacing new ones before Next/blur. */
+export function keepUnfixedErrors(shown: StepErrors, now: StepErrors): StepErrors {
+  return Object.fromEntries(Object.entries(shown).filter(([field]) => field in now));
+}

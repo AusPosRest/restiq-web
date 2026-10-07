@@ -90,10 +90,11 @@ export interface TenantDetail {
     address: string;
     type: string;
     timezone: string;
+    /** The outlet's real switches (restiq-backend#191) - the owner sets them, guests and devices obey them. */
+    capabilities: Array<{ key: string; enabled: boolean }>;
   }>;
   rolesCount: number;
   ownerInvite: OwnerInvite | null;
-  capabilities: Array<{ key: string; enabled: boolean }>;
 }
 
 // --- CAP-4 device fleet.

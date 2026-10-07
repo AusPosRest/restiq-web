@@ -10,18 +10,7 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import { Button } from "@/components/ui/button";
 import { InviteLinkChip } from "../invite-link";
 import { BusinessStep, OutletsStep, OwnerInviteStep, SubscriptionStep, TaxStep } from "./steps";
-import {
-  STEP_COUNT,
-  STEPS,
-  StepErrors,
-  StepKey,
-  WizardData,
-  dataFromDraft,
-  emptyWizardData,
-  firstIncompleteStep,
-  toSubmitPayload,
-  validateStep,
-} from "./wizard-state";
+import { STEP_COUNT, STEPS, StepErrors, StepKey, WizardData, dataFromDraft, emptyWizardData, firstIncompleteStep, toSubmitPayload, validateStep, keepUnfixedErrors, prefillOwner } from "./wizard-state";
 
 const AUTOSAVE_DEBOUNCE_MS = 800;
 
@@ -111,6 +100,8 @@ export function OnboardingWizard() {
 
   function updateSection<K extends StepKey>(key: K, value: WizardData[K]): void {
     setData((current) => ({ ...current, [key]: value }));
+    // A fixed field loses its error as you type, instead of waiting for Next.
+    setErrors((current) => (Object.keys(current).length === 0 ? current : keepUnfixedErrors(current, validateStep(step, { ...dataRef.current, [key]: value }))));
     scheduleAutosave(step);
   }
 
@@ -129,6 +120,8 @@ export function OnboardingWizard() {
     void saveStep(step);
     setErrors({});
     setSubmitError(null);
+    // The owner is usually step 1's primary contact - start the invite from there.
+    if (target === 5) setData((current) => ({ ...current, ownerInvite: prefillOwner(current.ownerInvite, current.business) }));
     setStep(target);
   }
 
@@ -207,11 +200,12 @@ export function OnboardingWizard() {
         <h1 className="font-headline mt-6 text-3xl font-semibold">{phase.tenantName} is provisioned</h1>
         <p className="mt-3 text-muted-foreground">
           Tenant, outlets, system roles, tax profile and a sample menu were created together. The tenant stays in{" "}
-          <span className="font-semibold text-status-pending">provisioning</span> until the owner&apos;s first device syncs.
+          <span className="font-semibold text-status-pending">provisioning</span> until its first sale, or until the owner presses Go live.
         </p>
         <div className="mx-auto mt-8 flex max-w-md items-start gap-4 rounded-lg border border-border bg-card p-5 text-left">
           <MailCheck className="mt-0.5 size-5 shrink-0 text-primary" aria-hidden="true" />
-          <div>
+          {/* min-w-0 lets the long invite link truncate inside the card instead of pushing past it. */}
+          <div className="min-w-0 flex-1">
             <p className="text-sm font-semibold">Owner invite pending</p>
             <p className="mt-1 text-sm text-muted-foreground" data-testid="onb-success-invite-email">
               {phase.inviteEmail}
@@ -373,7 +367,13 @@ export function OnboardingWizard() {
               onFieldBlur={onFieldBlur}
             />
           ) : step === 4 ? (
-            <SubscriptionStep data={data.subscription} errors={errors} onChange={(value) => updateSection("subscription", value)} />
+            <SubscriptionStep
+              data={data.subscription}
+              errors={errors}
+              country={data.tax.country}
+              outletCount={data.brandsOutlets.outlets.length}
+              onChange={(value) => updateSection("subscription", value)}
+            />
           ) : (
             <OwnerInviteStep data={data.ownerInvite} errors={errors} onChange={(value) => updateSection("ownerInvite", value)} onFieldBlur={onFieldBlur} />
           )}

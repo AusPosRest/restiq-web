@@ -42,7 +42,6 @@ function tenantDetail(overrides: Partial<TenantDetail["tenant"]> = {}): TenantDe
     outlets: [],
     rolesCount: 0,
     ownerInvite: null,
-    capabilities: [],
   };
 }
 

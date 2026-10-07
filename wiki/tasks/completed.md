@@ -1,5 +1,10 @@
 # Completed
 
+- **2026-10-08** - Platform Console first-run polish (issue #310):
+  - Changed: dashboard tiles and empty-state call to action, sidebar (no Subscriptions; "Failed syncs").
+  - Capabilities: `capabilities-tab.tsx` is read-only per outlet. The branding tab files are deleted.
+  - Wizard helpers in `wizard-state.ts`: `planPrice`, `recommendedPlan`, `prefillOwner`, `keepUnfixedErrors`.
+  - The tenant danger zone.
 - **2026-10-08** - Till, kitchen screen and device pages (issue #308):
   - `device-state.ts` `continueTargetFor` passes `device`, `tenant`, `outlet` and `name` to `/pos/login`, and the KDS now goes through it (`next=/kds`).
   - `terminal-binding.ts` keeps `outletId`. `pin-pad.tsx` auto-selects it on `select_outlet` and names the restaurant.

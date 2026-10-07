@@ -99,6 +99,24 @@ O5 Tenant Detail gains an eighth tab, **Agreements**
 first 12 characters of the SHA-256 evidence hash with the full hash in the
 `title`). Only the owner can sign, from their own console.
 
+## First-run polish (issue #310, 2026-10-08)
+
+- **Dashboard.** It shows real KPIs: devices heard from in the last hour, and failed syncs (restiq-backend#189). An empty tenant list offers "Onboard your first tenant".
+- **Navigation.**
+  - Subscriptions is removed; use the tenant's Subscription tab.
+  - "Dead-Letter Queue" is now **Failed syncs**.
+  - Catalog's page title matches the menu item.
+- **Tenant detail.**
+  - The Capabilities tab is a read-only view of each outlet's real switches (restiq-backend#191). The owner sets them.
+  - The Branding tab is gone; the owner has the same editor.
+  - Delete tenant lives in a Danger zone at the bottom.
+  - Region reads "India (Mumbai)".
+- **Wizard.**
+  - Plan prices follow the tenant's market. India shows "Price on quote" until ₹ prices are set in `wizard-state.ts`'s `PLAN_MONTHLY_PRICE`.
+  - Standard is recommended for one outlet and Enterprise for more.
+  - Fixed fields lose their errors as you type.
+  - The owner step starts from the primary contact.
+
 ## Integration points for later stories
 
 - `ConfirmReasonDialog`'s `confirmCheckboxLabel` prop is reusable for any

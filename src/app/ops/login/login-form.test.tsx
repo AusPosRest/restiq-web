@@ -26,7 +26,8 @@ describe("LoginForm", () => {
     expect(screen.getByTestId("ops-login-submit")).toBeTruthy();
     expect(screen.queryByTestId("ops-login-expired-banner")).toBeNull();
     expect(screen.queryByTestId("ops-login-error")).toBeNull();
-    expect(screen.getByText("Internal RESTIQ staff only")).toBeTruthy();
+    // The page footer carries "Internal RESTIQ staff only"; the form no longer repeats it.
+    expect(screen.queryByText("Internal RESTIQ staff only")).toBeNull();
   });
 
   it("shows the session-expired banner when redirected with ?expired=1", () => {

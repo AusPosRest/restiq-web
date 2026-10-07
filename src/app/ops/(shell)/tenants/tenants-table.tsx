@@ -150,7 +150,8 @@ export function TenantsTable() {
         </Button>
       </div>
 
-      <div className="mt-6 rounded-lg border border-border/40 bg-card p-4">
+      {/* No filters over an empty list - nothing to narrow down yet. */}
+      <div className="mt-6 rounded-lg border border-border/40 bg-card p-4" hidden={!filtered && data?.total === 0}>
         <div className="flex flex-wrap items-center gap-3">
           <input
             type="search"
