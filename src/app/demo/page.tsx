@@ -79,6 +79,14 @@ const SURFACES: Surface[] = [
     cta: "Enrol this browser",
     creds: [{ label: "Access", value: "Generate a code in the ops or admin console" }],
   },
+  {
+    name: "Simulator",
+    who: "Tester",
+    blurb: "An infinite canvas of real RESTIQ screens side by side, each its own device.",
+    href: "/simulator",
+    cta: "Open the simulator",
+    creds: [{ label: "Access", value: "No login" }],
+  },
 ];
 
 export const metadata = {

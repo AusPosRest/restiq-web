@@ -21,6 +21,7 @@ with the payments epic.
   - **Ops console ▸ Catalog** (`/ops/catalog`): operators curate a platform-wide list of products (name, short name, Hindi name, veg marker, photo URL, category, suggested price, market, tags) with search, tag chips and a market filter. Deletes go through the reason dialog and land in the control-plane audit trail.
   - **Owner console ▸ Menu ▸ Browse directory**: a dialog that searches the directory (scoped to the tenant's market), filters by tag, and imports the ticked products as copies into the tenant's own menu. Imported items are ordinary menu items from then on; nothing links back to the directory.
 - Windows POS app support (#292): inside the RESTIQ Windows app (AusPosRest/restiq-desktop), invoice **Print** prints silently on the device's receipt printer, and finalising a bill with a cash tender opens the cash drawer (counter and table settle). Browsers are unchanged. Bridge: `src/lib/desktop.ts`.
+- Simulator (#294): `/simulator` infinite pan/zoom canvas of draggable, resizable device frames (POS, KDS, kiosk, printer, card terminal, guest QR, owner, ops, custom same-origin path); each frame is its own tab-scoped device. Layout persists in localStorage.
 
 ### Fixed
 - Web half of the POS security fixes (#290; restiq-backend#169/#170/#171):

@@ -77,6 +77,8 @@
   restiq-backend#146): `external` tender with a required reference in `tender-keypad.tsx`;
   `print-bill-button.tsx` replaces the new-tab invoice link on settle and counter and posts
   `bills/:id/print`. Tests in `bill-settle-view.test.tsx` / `counter-view.test.tsx`.
+- **2026-10-07** - Simulator page (issue #294): `src/app/simulator/` - pure `simulator-state.ts` (presets, camera/zoom/fit math, validation, persistence) + `simulator-canvas.tsx`. Iframes give each frame its own sessionStorage device identity; new frames place to the right of existing ones.
+
 - **2026-09-15** - Fix: POS text overflow (issue #240). `tender-keypad.tsx`'s method grid is
   `repeat(auto-fit,minmax(6.5rem,1fr))` (two per row in the counter's w-80 column); `bill-summary.tsx`
   lines get `pr-3` column padding and a no-wrap amount so long names wrap.
