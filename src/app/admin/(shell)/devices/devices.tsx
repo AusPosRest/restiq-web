@@ -93,6 +93,16 @@ function OutletDevices({ outletId }: Readonly<{ outletId: string }>) {
 // The topology's online dots follow the devices' 30 s heartbeat (issue #210).
 const DEVICES_REFRESH_MS = 30_000;
 
+// Devices (table, enrolment code, printer config) and Topology (the map) as
+// two tabs (issue #212) - all state lives in DevicesEditor so switching is
+// instant and never drops an active code or an in-flight link. Same
+// role=tablist idiom as /ops's Tenant Detail; ponytail: no URL param.
+const VIEWS = [
+  { key: "devices", label: "Devices" },
+  { key: "topology", label: "Topology" },
+] as const;
+type ViewKey = (typeof VIEWS)[number]["key"];
+
 function DevicesEditor({ outletId, initial }: Readonly<{ outletId: string; initial: DevicesData }>) {
   const [devices, setDevices] = useState<AdminDeviceView[]>(initial.devices);
   const [now, setNow] = useState(() => Date.now());
@@ -100,6 +110,7 @@ function DevicesEditor({ outletId, initial }: Readonly<{ outletId: string; initi
   const [stations, setStations] = useState<StationView[]>(initial.stations);
   const [activeCode, setActiveCode] = useState<EnrolmentCodeResult | null>(null);
   const [generateOpen, setGenerateOpen] = useState(false);
+  const [view, setView] = useState<ViewKey>("devices");
 
   useEffect(() => {
     const id = setInterval(() => {
@@ -126,31 +137,55 @@ function DevicesEditor({ outletId, initial }: Readonly<{ outletId: string; initi
         </Button>
       </div>
 
-      <Topology
-        outletId={outletId}
-        devices={devices}
-        now={now}
-        onLinked={(deviceId, posDeviceId) => setDevices((current) => current.map((d) => (d.id === deviceId ? { ...d, pairedPosId: posDeviceId } : d)))}
-      />
-
-      <div className="grid grid-cols-1 gap-6 2xl:grid-cols-[minmax(0,1fr)_320px]">
-        <DevicesTable devices={devices} />
-        {activeCode ? (
-          <CodeChip key={activeCode.code} code={activeCode.code} expiresAt={activeCode.expiresAt} onRegenerate={() => setGenerateOpen(true)} />
-        ) : (
-          <div data-testid="devices-no-active-code" className="flex flex-col items-center justify-center gap-2 rounded-lg border border-dashed border-border/60 bg-card/50 p-5 text-center text-sm text-muted-foreground">
-            No active enrolment code. Enrol a device to generate one.
-          </div>
-        )}
+      <div role="tablist" aria-label="Device views" className="flex gap-1 border-b border-border/40">
+        {VIEWS.map(({ key, label }) => (
+          <button
+            key={key}
+            type="button"
+            role="tab"
+            aria-selected={view === key}
+            data-testid={`devices-tab-${key}`}
+            onClick={() => setView(key)}
+            className={`-mb-px border-b-2 px-4 py-2.5 text-sm transition-colors focus:outline-none focus-visible:ring-2 focus-visible:ring-ring ${
+              view === key ? "border-primary font-semibold text-primary" : "border-transparent text-muted-foreground hover:text-foreground"
+            }`}
+          >
+            {label}
+          </button>
+        ))}
       </div>
 
-      <PrinterConfigPanel
-        outletId={outletId}
-        printers={printers}
-        stations={stations}
-        onPrinterUpdated={(saved) => setPrinters((current) => current.map((p) => (p.id === saved.id ? saved : p)))}
-        onStationUpdated={(saved) => setStations((current) => current.map((s) => (s.id === saved.id ? saved : s)))}
-      />
+      {view === "topology" && (
+        <Topology
+          outletId={outletId}
+          devices={devices}
+          now={now}
+          onLinked={(deviceId, posDeviceId) => setDevices((current) => current.map((d) => (d.id === deviceId ? { ...d, pairedPosId: posDeviceId } : d)))}
+        />
+      )}
+
+      {view === "devices" && (
+        <div className="grid grid-cols-1 gap-6 2xl:grid-cols-[minmax(0,1fr)_320px]">
+          <DevicesTable devices={devices} />
+          {activeCode ? (
+            <CodeChip key={activeCode.code} code={activeCode.code} expiresAt={activeCode.expiresAt} onRegenerate={() => setGenerateOpen(true)} />
+          ) : (
+            <div data-testid="devices-no-active-code" className="flex flex-col items-center justify-center gap-2 rounded-lg border border-dashed border-border/60 bg-card/50 p-5 text-center text-sm text-muted-foreground">
+              No active enrolment code. Enrol a device to generate one.
+            </div>
+          )}
+        </div>
+      )}
+
+      {view === "devices" && (
+        <PrinterConfigPanel
+          outletId={outletId}
+          printers={printers}
+          stations={stations}
+          onPrinterUpdated={(saved) => setPrinters((current) => current.map((p) => (p.id === saved.id ? saved : p)))}
+          onStationUpdated={(saved) => setStations((current) => current.map((s) => (s.id === saved.id ? saved : s)))}
+        />
+      )}
 
       <GenerateCodeDialog open={generateOpen} onClose={() => setGenerateOpen(false)} outletId={outletId} onGenerated={setActiveCode} />
     </div>

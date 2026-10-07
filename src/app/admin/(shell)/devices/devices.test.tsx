@@ -77,6 +77,29 @@ describe("Devices", () => {
     expect(screen.getByTestId("devices-no-active-code")).toBeTruthy();
   });
 
+  it("switches between the Devices and Topology tabs without losing the enrolment code (issue #212)", async () => {
+    stubFetch();
+    renderDevices();
+    await screen.findByTestId("devices-row-d1");
+    expect(screen.queryByTestId("topology")).toBeNull();
+    expect(screen.getByTestId("devices-tab-devices").getAttribute("aria-selected")).toBe("true");
+
+    await userEvent.click(screen.getByTestId("devices-generate-code"));
+    await userEvent.click(screen.getByTestId("generate-code-submit"));
+    await userEvent.click(screen.getByTestId("generate-code-done"));
+    expect(screen.getByTestId("device-code-chip-countdown")).toBeTruthy();
+
+    await userEvent.click(screen.getByTestId("devices-tab-topology"));
+    expect(screen.getByTestId("topology")).toBeTruthy();
+    expect(screen.queryByTestId("devices-row-d1")).toBeNull();
+    expect(screen.queryByTestId("printer-row-p1")).toBeNull();
+    expect(screen.getByTestId("devices-tab-topology").getAttribute("aria-selected")).toBe("true");
+
+    await userEvent.click(screen.getByTestId("devices-tab-devices"));
+    expect(screen.getByTestId("devices-row-d1")).toBeTruthy();
+    expect(screen.getByTestId("device-code-chip-countdown")).toBeTruthy();
+  });
+
   it("generates an enrolment code and shows the live code chip in place of the empty state", async () => {
     stubFetch();
     renderDevices();

@@ -91,6 +91,10 @@
   (`animate-paper-feed`, reduced-motion safe). Details in
   [pos-cashier-waiter.md](../features/pos-cashier-waiter.md#print-bill-goes-straight-to-the-printer--thermal-receipt-issue-208).
   4 test files touched, 26 passing; lint/typecheck clean.
+- **2026-09-12** - Owner Devices: Devices / Topology tabs (issue #212). The table,
+  enrolment code and printer config sit on one tab and the topology map on the other;
+  state stays above the tabs so switching is instant and keeps an active code. 1 new test,
+  40 passing in the devices folder; lint/typecheck clean.
 
 - **2026-09-09** - Agreements with versioning + owner digital signature (issue #192, web half
   of restiq-backend#133): `/ops/agreements` (publish through the reason dialog, expand a row
