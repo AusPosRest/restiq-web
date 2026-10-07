@@ -330,7 +330,7 @@ describe("BillSettleView - discount", () => {
 });
 
 describe("BillSettleView - after finalization", () => {
-  it("leaves no mutation UI reachable once the bill is finalized, and links to refund with the bill id", async () => {
+  it("leaves no mutation UI or panel actions once the bill is finalized (issue #226)", async () => {
     stubFetch({
       [`POST orders/${ORDER_ID}/bill`]: () => jsonResponse(makeBill({ status: "finalized", finalizedAt: "2026-08-25T10:05:00.000Z", tenders: [{ id: "t1", method: "cash", amountMinor: 81900, createdAt: "2026-08-25T10:00:00.000Z" }] }), 201),
     });
@@ -340,8 +340,9 @@ describe("BillSettleView - after finalization", () => {
     expect(screen.queryByTestId("tender-keypad")).toBeNull();
     expect(screen.queryByTestId("finalize-bill")).toBeNull();
     expect(screen.queryByTestId("bill-add-discount")).toBeNull();
-    expect(screen.getByTestId("bill-finalised-refund").getAttribute("href")).toBe(`/pos/orders/${ORDER_ID}/refund?billId=bill-1`);
-    expect(screen.getByTestId("print-invoice-link").getAttribute("href")).toBe("/pos/bills/bill-1/invoice");
+    expect(screen.queryByTestId("bill-finalised-back")).toBeNull();
+    expect(screen.queryByTestId("bill-finalised-refund")).toBeNull();
+    expect(screen.queryByTestId("print-invoice-link")).toBeNull();
   });
 });
 

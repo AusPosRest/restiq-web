@@ -70,6 +70,8 @@
   (`src/app/admin/(shell)/menu/directory-dialog.tsx`: search, tag chips, tick-and-import; the
   menu drops its local overrides and refetches after an import). Vitest for both. Backend
   restiq-backend#153 / PR #154.
+- **2026-09-15** - Settle screen: removed Back to table map / Refund… / Print invoice from the
+  Bill finalised panel (issue #226, owner request). Refund lost its only entry point.
 
 - **2026-09-15** - External payment + direct Print bill (issue #224, web half of
   restiq-backend#146): `external` tender with a required reference in `tender-keypad.tsx`;
