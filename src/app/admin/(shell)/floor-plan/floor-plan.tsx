@@ -20,7 +20,7 @@ import { LoadErrorPanel, Skeleton } from "../data-states";
 import { useOutlets } from "../outlet-context";
 import { useToast } from "../toast";
 import { KNOWN_CAPABILITY_KEYS, mergeCapabilities } from "../settings/capability-state";
-import { CANVAS_HEIGHT, CANVAS_WIDTH, FloorPlanCanvas } from "./floor-plan-canvas";
+import { FloorPlanCanvas } from "./floor-plan-canvas";
 import { computeNextTablePosition, findOverlap, groupTablesByFloor, TABLE_SHAPES, sizeForSeats } from "./floor-plan-state";
 import type { DiningTableView, FloorPlanView, FloorView, PrinterView, StationView, TableShape } from "./floor-plan-state";
 import { FloorPlanListView, type EditableTableField } from "./floor-plan-list-view";
@@ -348,7 +348,7 @@ function FloorPlanEditor({ outletId, initial }: Readonly<{ outletId: string; ini
             </div>
 
             <div className="grid flex-1 grid-cols-[1fr_320px] gap-6">
-              <div>
+              <div className="min-w-0">
                 {view === "canvas" ? (
                   <FloorPlanCanvas tables={tables} selectedFloorId={selectedFloorId} onTableMoved={handleTableMoved} onQrRequested={handleQrRequested} />
                 ) : (
@@ -672,7 +672,9 @@ function AddTableControl({ outletId, floorId, tables, onOptimisticAdd, onSettled
   const floorTables = tables.filter((table) => table.floorId === floorId && !table.id.startsWith("temp-table-"));
   const seatsForSize = Number.parseInt(capacity, 10);
   const size = sizeForSeats(Number.isFinite(seatsForSize) && seatsForSize > 0 ? seatsForSize : 4, shape);
-  const canvasBounds = { width: CANVAS_WIDTH, height: CANVAS_HEIGHT };
+  // ponytail: the canvas is unbounded, so new tables fill 640-wide rows downward
+  // (the old fixed canvas's width) and a free spot always exists within the height.
+  const canvasBounds = { width: 640, height: 20_000 };
 
   function openForm() {
     setPosition(computeNextTablePosition(floorTables, size, canvasBounds));
