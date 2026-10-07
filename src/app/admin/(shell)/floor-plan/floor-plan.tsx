@@ -110,10 +110,10 @@ function OutletFloorPlan({ outletId }: Readonly<{ outletId: string }>) {
   if (failed) return <LoadErrorPanel testId="floor-plan-load-error" message="The floor plan couldn't be loaded." onRetry={retry} />;
   if (!data) return null;
 
-  return <FloorPlanEditor outletId={outletId} initial={data} />;
+  return <FloorPlanEditor outletId={outletId} initial={data} onReload={retry} />;
 }
 
-function FloorPlanEditor({ outletId, initial }: Readonly<{ outletId: string; initial: FloorPlanView }>) {
+function FloorPlanEditor({ outletId, initial, onReload }: Readonly<{ outletId: string; initial: FloorPlanView; onReload: () => void }>) {
   const pushToast = useToast();
   const { outlets } = useOutlets();
   const outletName = outlets.find((outlet) => outlet.id === outletId)?.name ?? outletId;
@@ -367,6 +367,8 @@ function FloorPlanEditor({ outletId, initial }: Readonly<{ outletId: string; ini
                 printers={printers}
                 onStationUpdated={(saved) => setStations((current) => current.map((s) => (s.id === saved.id ? saved : s)))}
                 onStationCreated={(created) => setStations((current) => [...current, created])}
+                onStationDeleted={(stationId) => setStations((current) => current.filter((s) => s.id !== stationId))}
+                onStarterApplied={onReload}
                 onPrinterCreated={(created) => setPrinters((current) => [...current, created])}
               />
             </div>

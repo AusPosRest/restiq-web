@@ -431,6 +431,22 @@ export function updateStation(outletId: string, stationId: string, input: Update
   });
 }
 
+export function deleteStation(outletId: string, stationId: string): Promise<void> {
+  return adminApi<void>(`outlets/${outletId}/floor-plan/stations/${stationId}`, { method: "DELETE" });
+}
+
+export interface StarterSetupResult {
+  type: string;
+  stationsCreated: string[];
+  tablesCreated: number;
+  capabilitiesSet: string[];
+}
+
+/** Builds the outlet type's starting stations, tables and switches; safe to repeat - it only adds what is missing. */
+export function applyStarterSetup(outletId: string): Promise<StarterSetupResult> {
+  return adminApi<StarterSetupResult>(`outlets/${outletId}/starter-setup`, { method: "POST" });
+}
+
 export function updatePrinter(outletId: string, printerId: string, renderMode: PrinterRenderMode): Promise<PrinterView> {
   return adminApi<PrinterView>(`outlets/${outletId}/floor-plan/printers/${printerId}`, {
     method: "PATCH",

@@ -15,7 +15,7 @@
 import { useState } from "react";
 import type { FormEvent } from "react";
 import { Button } from "@/components/ui/button";
-import { createPrinter, createStation, updateStation } from "../../api";
+import { applyStarterSetup, createPrinter, createStation, deleteStation, updateStation } from "../../api";
 import { useToast } from "../toast";
 import {
   validateAgeingThresholdMinutes,
@@ -37,21 +37,25 @@ export interface StationsPanelProps {
   printers: readonly PrinterView[];
   onStationUpdated: (station: StationView) => void;
   onStationCreated: (station: StationView) => void;
+  onStationDeleted: (stationId: string) => void;
+  /** The outlet type's starter setup landed: reload the whole plan (it adds tables and switches too). */
+  onStarterApplied: () => void;
   onPrinterCreated: (printer: PrinterView) => void;
 }
 
-export function StationsPanel({ outletId, stations, printers, onStationUpdated, onStationCreated, onPrinterCreated }: Readonly<StationsPanelProps>) {
+export function StationsPanel({ outletId, stations, printers, onStationUpdated, onStationCreated, onStationDeleted, onStarterApplied, onPrinterCreated }: Readonly<StationsPanelProps>) {
   return (
     <div data-testid="stations-panel" className="flex flex-col gap-4">
       <h2 className="font-headline text-sm font-semibold uppercase tracking-wider text-muted-foreground">Kitchen Routing</h2>
       {stations.length === 0 ? (
-        <p data-testid="stations-empty" className="text-sm text-muted-foreground">
-          No stations set up for this outlet yet.
-        </p>
+        <div data-testid="stations-empty" className="flex flex-col gap-3 rounded-lg border border-dashed border-border/60 p-4 text-sm text-muted-foreground">
+          <p>No stations set up for this outlet yet.</p>
+          <StarterSetupButton outletId={outletId} onApplied={onStarterApplied} />
+        </div>
       ) : (
         <ul className="flex flex-col gap-4">
           {stations.map((station) => (
-            <StationRow key={station.id} outletId={outletId} station={station} printers={printers} onUpdated={onStationUpdated} />
+            <StationRow key={station.id} outletId={outletId} station={station} printers={printers} onUpdated={onStationUpdated} onDeleted={onStationDeleted} />
           ))}
         </ul>
       )}
@@ -61,18 +65,49 @@ export function StationsPanel({ outletId, stations, printers, onStationUpdated, 
   );
 }
 
+// Creates the stations, tables and switches that suit this outlet's type (restaurant, counter,
+// cloud kitchen, food-court stall). Everything it makes is editable and removable below.
+function StarterSetupButton({ outletId, onApplied }: Readonly<{ outletId: string; onApplied: () => void }>) {
+  const pushToast = useToast();
+  const [busy, setBusy] = useState(false);
+
+  async function apply() {
+    setBusy(true);
+    try {
+      const result = await applyStarterSetup(outletId);
+      const parts = [
+        result.stationsCreated.length > 0 ? `${result.stationsCreated.length} station${result.stationsCreated.length === 1 ? "" : "s"}` : null,
+        result.tablesCreated > 0 ? `${result.tablesCreated} tables` : null,
+      ].filter(Boolean);
+      pushToast({ kind: "success", message: parts.length > 0 ? `Added ${parts.join(" and ")}. Edit or remove anything you don't need.` : "Everything for this outlet type is already set up." });
+      onApplied();
+    } catch {
+      pushToast({ kind: "error", message: "Couldn't set up this outlet. Try again." });
+      setBusy(false);
+    }
+  }
+
+  return (
+    <Button size="sm" data-testid="stations-starter-setup" disabled={busy} onClick={() => void apply()}>
+      {busy ? "Setting up…" : "Set up for my outlet type"}
+    </Button>
+  );
+}
+
 function StationRow({
   outletId,
   station,
   printers,
   onUpdated,
-}: Readonly<{ outletId: string; station: StationView; printers: readonly PrinterView[]; onUpdated: (station: StationView) => void }>) {
+  onDeleted,
+}: Readonly<{ outletId: string; station: StationView; printers: readonly PrinterView[]; onUpdated: (station: StationView) => void; onDeleted: (stationId: string) => void }>) {
   const pushToast = useToast();
   const [ageingDraft, setAgeingDraft] = useState(String(station.ageingThresholdMinutes));
   const [ageingError, setAgeingError] = useState<string | undefined>();
   const [printerId, setPrinterId] = useState(station.primaryPrinterId ?? NO_PRINTER);
   const [noPrinterAck, setNoPrinterAck] = useState(station.primaryPrinterId === null);
   const [saving, setSaving] = useState(false);
+  const [confirmingRemove, setConfirmingRemove] = useState(false);
 
   const printerErrors = validateStationPrinter({ primaryPrinterId: printerId || null, noPrinterAcknowledged: noPrinterAck });
 
@@ -86,6 +121,18 @@ function StationRow({
       pushToast({ kind: "error", message: `Couldn't update ${station.name}. Try again.` });
     } finally {
       setSaving(false);
+    }
+  }
+
+  async function remove() {
+    setSaving(true);
+    try {
+      await deleteStation(outletId, station.id);
+      onDeleted(station.id);
+    } catch {
+      pushToast({ kind: "error", message: `Couldn't remove ${station.name}. Try again.` });
+      setSaving(false);
+      setConfirmingRemove(false);
     }
   }
 
@@ -113,7 +160,24 @@ function StationRow({
 
   return (
     <li data-testid={`station-row-${station.id}`} className="flex flex-col gap-3 rounded-lg border border-border/40 bg-card px-4 py-3">
-      <p className="text-sm font-medium">{station.name}</p>
+      <div className="flex items-center justify-between gap-2">
+        <p className="text-sm font-medium">{station.name}</p>
+        {confirmingRemove ? (
+          <div className="flex items-center gap-2 text-xs">
+            <span className="text-muted-foreground">Menu items on it go back to no station.</span>
+            <Button type="button" size="sm" variant="destructive" data-testid={`station-remove-confirm-${station.id}`} disabled={saving} onClick={() => void remove()}>
+              Remove
+            </Button>
+            <Button type="button" size="sm" variant="ghost" data-testid={`station-remove-cancel-${station.id}`} disabled={saving} onClick={() => setConfirmingRemove(false)}>
+              Keep
+            </Button>
+          </div>
+        ) : (
+          <Button type="button" size="sm" variant="ghost" data-testid={`station-remove-${station.id}`} disabled={saving} onClick={() => setConfirmingRemove(true)}>
+            Remove
+          </Button>
+        )}
+      </div>
 
       <div className="grid grid-cols-2 gap-3">
         <div>
