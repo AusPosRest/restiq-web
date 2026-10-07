@@ -702,14 +702,18 @@ export interface AgreementSignatureView {
 }
 
 export interface OwnerAgreementView {
-  current: { id: string; version: number; title: string; body: string; publishedAt: string } | null;
+  /** The agreement is a PDF: read it at /admin/api/agreement/{id}/file. hasFile is false for a version published as text. */
+  current: { id: string; version: number; title: string; hasFile: boolean; fileName: string | null; sizeBytes: number | null; fileSha256: string; publishedAt: string } | null;
   signature: AgreementSignatureView | null;
   history: AgreementSignatureView[];
 }
 
-export function signAgreement(versionId: string, signerName: string): Promise<{ signature: AgreementSignatureView }> {
-  return adminApi(`agreement/${versionId}/sign`, { method: "POST", body: JSON.stringify({ signerName, accepted: true }) });
+/** fileSha256 is the hash of the file the owner was shown; the server refuses if the current file has changed. */
+export function signAgreement(versionId: string, signerName: string, fileSha256: string): Promise<{ signature: AgreementSignatureView }> {
+  return adminApi(`agreement/${versionId}/sign`, { method: "POST", body: JSON.stringify({ signerName, accepted: true, fileSha256 }) });
 }
+
+export const agreementFileUrl = (versionId: string): string => `/admin/api/agreement/${versionId}/file`;
 
 // --- Product directory (issue #245): the platform catalog, scoped by the
 // backend to this tenant's currency. Import copies the chosen products into

@@ -1,5 +1,5 @@
-// Settings ▸ Agreement (issue #192): the owner reads the current version and
-// signs it with a typed name + consent; Sign stays disabled until both are
+// Settings ▸ Agreement (issue #192, PDF rework #298): the owner reads the current version in
+// a PDF viewer and signs it with a typed name + consent, naming the file hash they were shown; Sign stays disabled until both are
 // present; a 201 replaces the form with the signed record; an already-signed
 // version shows the record straight away; earlier signatures stay listed.
 import { cleanup, render, screen, waitFor } from "@testing-library/react";
@@ -9,7 +9,7 @@ import type { OwnerAgreementView } from "../../api";
 import { ToastProvider } from "../toast";
 import { AgreementSigner } from "./agreement-signer";
 
-const CURRENT = { id: "0192aaaa-0000-7000-8000-000000000002", version: 2, title: "Platform Services Agreement (2026)", body: "1. Scope\nYou agree...", publishedAt: "2026-09-01T10:00:00.000Z" };
+const CURRENT = { id: "0192aaaa-0000-7000-8000-000000000002", version: 2, title: "Platform Services Agreement (2026)", hasFile: true, fileName: "psa.pdf", sizeBytes: 20480, fileSha256: "b".repeat(64), publishedAt: "2026-09-01T10:00:00.000Z" };
 const V1_SIGNATURE = {
   agreementVersionId: "0192aaaa-0000-7000-8000-000000000001",
   version: 1,
@@ -62,7 +62,9 @@ describe("AgreementSigner", () => {
     await screen.findByTestId("agreement-view");
     expect(screen.getByTestId("agreement-title").textContent).toBe(CURRENT.title);
     expect(screen.getByTestId("agreement-version").textContent).toContain("Version 2");
-    expect(screen.getByTestId("agreement-body").textContent).toBe(CURRENT.body);
+    // The agreement is a PDF shown in the browser's viewer, with a link to open it on its own.
+    expect(screen.getByTestId("agreement-viewer").getAttribute("src")).toBe(`/admin/api/agreement/${CURRENT.id}/file`);
+    expect(screen.getByTestId("agreement-open").getAttribute("href")).toBe(`/admin/api/agreement/${CURRENT.id}/file`);
     expect(screen.getByTestId("agreement-history-1").textContent).toContain("Asha Rao");
     expect(screen.queryByTestId("agreement-signed")).toBeNull();
 
@@ -76,7 +78,7 @@ describe("AgreementSigner", () => {
     await userEvent.click(sign);
     await screen.findByTestId("agreement-signed");
     const post = fetchMock.mock.calls.find(([, init]) => init?.method === "POST");
-    expect(JSON.parse(String(post?.[1]?.body))).toEqual({ signerName: "Asha Rao", accepted: true });
+    expect(JSON.parse(String(post?.[1]?.body))).toEqual({ signerName: "Asha Rao", accepted: true, fileSha256: CURRENT.fileSha256 });
     expect(screen.getByTestId("agreement-signed").textContent).toContain("Signed by Asha Rao");
     expect(screen.getByTestId("agreement-signed").textContent).toContain(V2_SIGNATURE.evidenceSha256);
     expect(screen.queryByTestId("agreement-sign-form")).toBeNull();
@@ -104,6 +106,14 @@ describe("AgreementSigner", () => {
     expect((await screen.findByTestId("toast-error")).textContent).toContain("Only the current agreement (v3) can be signed");
     await waitFor(() => expect(fetchMock.mock.calls.filter(([, init]) => (init?.method ?? "GET") === "GET").length).toBe(2));
     expect(screen.queryByTestId("agreement-history")).toBeNull();
+  });
+
+  it("shows no viewer and no sign form for a version published as text before PDFs", async () => {
+    stubFetch({ current: { ...CURRENT, hasFile: false, fileName: null, sizeBytes: null }, signature: null, history: [] });
+    renderSigner();
+    await screen.findByTestId("agreement-no-file");
+    expect(screen.queryByTestId("agreement-viewer")).toBeNull();
+    expect(screen.queryByTestId("agreement-sign-form")).toBeNull();
   });
 
   it("shows the empty state when nothing is published, and the error panel when the load fails", async () => {
