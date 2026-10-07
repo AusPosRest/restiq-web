@@ -29,7 +29,9 @@ describe("CapabilitiesTab (restiq-backend#191)", () => {
 
     expect(screen.getByTestId("capability-o1-qr_ordering").textContent).toBe("QR orderingOn");
     expect(screen.getByTestId("capability-o1-kiosk").textContent).toBe("KioskOff");
-    expect(screen.getByTestId("capabilities-outlet-o2").textContent).toContain("Nothing switched on yet.");
+    // No rows: the owner's defaults - everything off except menu photos (opt-out).
+    expect(screen.getByTestId("capability-o2-qr_ordering").textContent).toBe("QR orderingOff");
+    expect(screen.getByTestId("capability-o2-menu_photos").textContent).toBe("Menu photosOn");
     expect(screen.queryByRole("button")).toBeNull();
   });
 });

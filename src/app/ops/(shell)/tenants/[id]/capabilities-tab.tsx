@@ -13,6 +13,17 @@ export const CAPABILITY_LABELS: Record<string, string> = {
   menu_photos: "Menu photos",
 };
 
+// Same keys and defaults the owner's Settings > Capabilities shows (copied, not
+// imported - AD-4): a missing row is off, except menu_photos, which is opt-out.
+const KNOWN_KEYS = ["qr_ordering", "kiosk", "token_queue", "menu_photos"] as const;
+const DEFAULT_ON = new Set<string>(["menu_photos"]);
+
+export function withDefaults(rows: ReadonlyArray<{ key: string; enabled: boolean }>): Array<{ key: string; enabled: boolean }> {
+  const stored = new Map(rows.map((row) => [row.key, row.enabled]));
+  const known = KNOWN_KEYS.map((key) => ({ key, enabled: stored.get(key) ?? DEFAULT_ON.has(key) }));
+  return [...known, ...rows.filter((row) => !(KNOWN_KEYS as readonly string[]).includes(row.key))];
+}
+
 export function CapabilitiesTab({ outlets }: Readonly<{ outlets: TenantDetail["outlets"] }>) {
   return (
     <div className="grid max-w-2xl gap-4" data-testid="capabilities-list">
@@ -20,18 +31,14 @@ export function CapabilitiesTab({ outlets }: Readonly<{ outlets: TenantDetail["o
       {outlets.map((outlet) => (
         <section key={outlet.id} className="rounded-lg border border-border/40 bg-card" data-testid={`capabilities-outlet-${outlet.id}`}>
           <h2 className="border-b border-border/40 px-5 py-3 text-sm font-semibold">{outlet.name}</h2>
-          {outlet.capabilities.length === 0 ? (
-            <p className="px-5 py-4 text-sm text-muted-foreground">Nothing switched on yet.</p>
-          ) : (
-            <ul className="divide-y divide-border/40">
-              {outlet.capabilities.map(({ key, enabled }) => (
+          <ul className="divide-y divide-border/40">
+              {withDefaults(outlet.capabilities).map(({ key, enabled }) => (
                 <li key={key} className="flex items-center justify-between gap-4 px-5 py-3" data-testid={`capability-${outlet.id}-${key}`}>
                   <span className="text-sm">{CAPABILITY_LABELS[key] ?? key}</span>
                   <span className={`text-xs font-semibold ${enabled ? "text-status-healthy" : "text-muted-foreground"}`}>{enabled ? "On" : "Off"}</span>
                 </li>
               ))}
-            </ul>
-          )}
+          </ul>
         </section>
       ))}
     </div>
