@@ -104,8 +104,7 @@ describe("Dashboard", () => {
     expect(screen.queryByTestId("outlet-kpi-o1-sales-empty")).toBeNull();
 
     const noDataTile = screen.getByTestId("outlet-kpi-o2-sales-empty");
-    expect(noDataTile.textContent).toContain("No sales data yet.");
-    expect(noDataTile.textContent).toContain("Connect POS to see live figures.");
+    expect(noDataTile.textContent).toBe("No sales yet today.");
     expect(screen.queryByTestId("outlet-kpi-o2-margin-empty")).toBeNull();
     expect(screen.queryByTestId("outlet-kpi-o2-sales-value")).toBeNull();
   });
