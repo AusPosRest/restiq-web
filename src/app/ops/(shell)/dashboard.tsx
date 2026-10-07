@@ -20,8 +20,8 @@ interface TileConfig {
 const TILES: TileConfig[] = [
   { key: "active_tenants", label: "Active tenants" },
   { key: "outlets", label: "Outlets" },
-  { key: "devices_online", label: "Devices online", note: "Fleet telemetry pending", href: "/ops/sync-health?filter=silent" },
-  { key: "open_dlq", label: "Open DLQ", note: "DLQ browsing pending", href: "/ops/sync-health?filter=rejections" },
+  { key: "devices_online", label: "Devices online", note: "Heard from in the last hour", href: "/ops/sync-health" },
+  { key: "open_dlq", label: "Failed syncs", note: "Waiting for a look", href: "/ops/dlq" },
 ];
 
 function KpiTile({ tile }: Readonly<{ tile: TileConfig }>) {
@@ -105,9 +105,16 @@ function RecentOnboardings() {
         )}
         {data &&
           (data.tenants.length === 0 ? (
-            <p className="p-6 text-center text-sm text-muted-foreground" data-testid="recent-onboardings-empty">
-              No tenants yet - the first onboarding will appear here.
-            </p>
+            <div className="flex flex-col items-center gap-3 p-6 text-center" data-testid="recent-onboardings-empty">
+              <p className="text-sm text-muted-foreground">No tenants yet. Publish the platform agreement first, then onboard your first restaurant.</p>
+              <Link
+                href="/ops/tenants/new"
+                data-testid="dashboard-onboard-first"
+                className="rounded-md bg-primary px-4 py-2 text-sm font-semibold text-primary-foreground hover:bg-primary/90 focus:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+              >
+                Onboard your first tenant
+              </Link>
+            </div>
           ) : (
             <ul className="divide-y divide-border/40" data-testid="recent-onboardings">
               {data.tenants.map((tenant) => (

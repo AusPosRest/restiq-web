@@ -102,7 +102,7 @@ function DlqResults({ view, onBack }: Readonly<{ view: ResultsView; onBack: () =
     <section className="flex flex-1 flex-col" data-testid="dlq-results">
       <div className="flex items-start justify-between gap-4">
         <div>
-          <h1 className="font-headline text-2xl font-semibold">Dead-Letter Queue</h1>
+          <h1 className="font-headline text-2xl font-semibold">Failed syncs</h1>
           <p className="mt-1 text-sm text-muted-foreground">Replay results</p>
         </div>
         <Button variant="secondary" data-testid="dlq-results-back" onClick={onBack}>
@@ -248,7 +248,7 @@ export function DlqTable() {
     <section className="flex flex-1 flex-col">
       <div className="flex items-start justify-between gap-4">
         <div>
-          <h1 className="font-headline text-2xl font-semibold">Dead-Letter Queue</h1>
+          <h1 className="font-headline text-2xl font-semibold">Failed syncs</h1>
           {data && (
             <p className="mt-1 text-sm text-muted-foreground" data-testid="dlq-count">
               {data.total} operation{data.total === 1 ? "" : "s"} awaiting review

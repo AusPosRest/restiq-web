@@ -93,7 +93,6 @@ export function LoginForm({ nextPath, sessionExpired }: { nextPath: string; sess
         {pending ? "Signing in..." : "Sign in"}
       </Button>
 
-      <p className="text-center text-xs text-muted-foreground">Internal RESTIQ staff only</p>
     </form>
   );
 }

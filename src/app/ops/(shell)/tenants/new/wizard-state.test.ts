@@ -1,12 +1,5 @@
 import { describe, expect, it } from "vitest";
-import {
-  DEFAULT_GST_RATE,
-  dataFromDraft,
-  emptyWizardData,
-  firstIncompleteStep,
-  toSubmitPayload,
-  validateStep,
-} from "./wizard-state";
+import { DEFAULT_GST_RATE, dataFromDraft, emptyWizardData, firstIncompleteStep, toSubmitPayload, validateStep, planPrice, recommendedPlan, prefillOwner, keepUnfixedErrors } from "./wizard-state";
 
 function completeData() {
   const data = emptyWizardData();
@@ -197,5 +190,30 @@ describe("toSubmitPayload", () => {
     const payload = toSubmitPayload(data) as { tax: Record<string, unknown> };
     expect(payload.tax.gstRegistered).toBe(false);
     expect(payload.tax).not.toHaveProperty("gstRatePercent");
+  });
+});
+
+describe("walkthrough fixes (Binflow, 2026-10-08)", () => {
+  it("prices plans in the tenant's market: A$ for AU, on quote (null) for India", () => {
+    expect(planPrice("standard", "AU", false)).toBe(49);
+    expect(planPrice("enterprise", "AU", true)).toBe(103);
+    expect(planPrice("standard", "IN", false)).toBeNull();
+  });
+
+  it("recommends Standard for one outlet and Enterprise for more", () => {
+    expect(recommendedPlan(1)).toBe("standard");
+    expect(recommendedPlan(2)).toBe("enterprise");
+  });
+
+  it("prefills the owner from the primary contact without overwriting what was typed", () => {
+    const business = { contactName: "Ravi Kumar Rao", contactEmail: "owner@binflow.test " };
+    expect(prefillOwner({ email: "", firstName: "", lastName: "" }, business)).toEqual({ email: "owner@binflow.test", firstName: "Ravi", lastName: "Kumar Rao" });
+    expect(prefillOwner({ email: "x@y.test", firstName: "", lastName: "" }, business).email).toBe("x@y.test");
+  });
+
+  it("drops errors that have been fixed and never adds new ones", () => {
+    expect(keepUnfixedErrors({ contactPhone: "Phone number is required", contactName: "required" }, { contactName: "required", contactEmail: "bad" })).toEqual({
+      contactName: "required",
+    });
   });
 });
