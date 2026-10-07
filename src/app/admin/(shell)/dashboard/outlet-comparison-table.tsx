@@ -5,7 +5,7 @@
 import { formatPriceMinor } from "../menu/menu-state";
 import type { FinancialMetric, OutletKpis } from "./dashboard-state";
 
-const NO_DATA = "No data yet";
+const NO_DATA = "No sales yet today";
 
 function cell(metric: FinancialMetric): string {
   return metric.hasData ? formatPriceMinor(metric.amountMinor, metric.currency) : NO_DATA;
@@ -18,10 +18,7 @@ export function OutletComparisonTable({ outlets }: Readonly<{ outlets: readonly 
         <thead>
           <tr className="h-12 border-b border-border/40">
             <th className="font-label px-4 text-left text-xs font-semibold uppercase tracking-wider text-muted-foreground">Outlet</th>
-            <th className="font-label px-4 text-left text-xs font-semibold uppercase tracking-wider text-muted-foreground">Sales</th>
-            <th className="font-label px-4 text-left text-xs font-semibold uppercase tracking-wider text-muted-foreground">Margin</th>
-            <th className="font-label px-4 text-left text-xs font-semibold uppercase tracking-wider text-muted-foreground">Labour</th>
-            <th className="font-label px-4 text-left text-xs font-semibold uppercase tracking-wider text-muted-foreground">Waste</th>
+            <th className="font-label px-4 text-left text-xs font-semibold uppercase tracking-wider text-muted-foreground">Sales today</th>
           </tr>
         </thead>
         <tbody>
@@ -30,15 +27,6 @@ export function OutletComparisonTable({ outlets }: Readonly<{ outlets: readonly 
               <td className="px-4 font-medium">{outlet.outletName}</td>
               <td className="px-4 tabular-nums text-muted-foreground" data-testid={`dashboard-comparison-${outlet.outletId}-sales`}>
                 {cell(outlet.sales)}
-              </td>
-              <td className="px-4 tabular-nums text-muted-foreground" data-testid={`dashboard-comparison-${outlet.outletId}-margin`}>
-                {cell(outlet.margin)}
-              </td>
-              <td className="px-4 tabular-nums text-muted-foreground" data-testid={`dashboard-comparison-${outlet.outletId}-labour`}>
-                {cell(outlet.labourCost)}
-              </td>
-              <td className="px-4 tabular-nums text-muted-foreground" data-testid={`dashboard-comparison-${outlet.outletId}-waste`}>
-                {cell(outlet.waste)}
               </td>
             </tr>
           ))}

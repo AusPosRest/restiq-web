@@ -96,8 +96,12 @@ export function AcceptInviteForm({ token }: { token: string }) {
           autoComplete="new-password"
           required
           aria-invalid={fieldError !== null || undefined}
+          aria-describedby="admin-invite-password-rule"
           className="w-full rounded-lg border border-border bg-input px-4 py-3 text-sm text-foreground focus:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 focus-visible:ring-offset-card"
         />
+        <p id="admin-invite-password-rule" className="text-xs text-muted-foreground">
+          At least 10 characters.
+        </p>
       </div>
 
       <div className="space-y-2">

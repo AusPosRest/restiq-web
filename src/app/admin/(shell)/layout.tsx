@@ -1,5 +1,6 @@
 import { LogOut } from "lucide-react";
 import { MobileNav } from "@/components/mobile-nav";
+import { AgreementBanner } from "./agreement-banner";
 import { OutletProvider } from "./outlet-context";
 import { OutletSwitcher } from "./outlet-switcher";
 import { SidebarNav } from "./sidebar-nav";
@@ -48,6 +49,7 @@ export default function AdminShellLayout({
               </MobileNav>
               <OutletSwitcher />
             </header>
+            <AgreementBanner />
             <main className="flex-1 p-4 sm:p-6 lg:p-8">{children}</main>
           </ToastProvider>
         </div>

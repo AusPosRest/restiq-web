@@ -32,9 +32,7 @@ export function CountValue({ testId, value }: Readonly<{ testId: string; value: 
 export function NoFinancialData({ testId }: Readonly<{ testId: string }>) {
   return (
     <p data-testid={testId} className="text-sm text-muted-foreground">
-      No sales data yet.
-      <br />
-      <span className="text-xs">Connect POS to see live figures.</span>
+      No sales yet today.
     </p>
   );
 }

@@ -95,7 +95,8 @@ export function GoLiveChecklist() {
     );
   }
 
-  if (goLiveOutcome?.ok) {
+  // Already live (Go live, ops, or the first sale - restiq-backend#189): no checklist to gate anything.
+  if (goLiveOutcome?.ok || checklist.tenantStatus === "active") {
     return (
       <div
         data-testid="admin-checklist-go-live-success"
@@ -104,6 +105,9 @@ export function GoLiveChecklist() {
         <PartyPopper className="size-8 text-status-active" aria-hidden="true" />
         <h2 className="font-headline text-xl font-semibold">You&apos;re live!</h2>
         <p className="text-sm text-muted-foreground">RESTIQ is ready to take orders for your outlet.</p>
+        <Button asChild size="sm" data-testid="admin-checklist-to-dashboard">
+          <Link href="/admin">Go to your dashboard</Link>
+        </Button>
       </div>
     );
   }
@@ -121,6 +125,9 @@ export function GoLiveChecklist() {
             {complete}/{checklist.steps.length}
           </p>
         </div>
+        <Link href="/admin" data-testid="admin-checklist-skip" className="ml-auto text-sm text-primary underline-offset-4 hover:underline">
+          Open the console
+        </Link>
       </div>
 
       <ul data-testid="admin-checklist-steps" className="mt-8 space-y-3">
@@ -156,13 +163,27 @@ export function GoLiveChecklist() {
                       disabled={stepPending === step.step}
                       onClick={() => void handleCompleteStep(step.step)}
                     >
-                      {stepPending === step.step ? "Saving..." : "Mark as complete"}
+                      {stepPending === step.step ? "Saving..." : "Mark as done"}
                     </Button>
                   )
                 : (
-                    <Button asChild size="sm" variant={done ? "outline" : "default"} data-testid={`admin-checklist-step-${step.step}-action`}>
-                      <Link href={meta.href ?? "#"}>{done ? "Review" : "Start"}</Link>
-                    </Button>
+                    <span className="flex shrink-0 items-center gap-2">
+                      <Button asChild size="sm" variant={done ? "outline" : "default"} data-testid={`admin-checklist-step-${step.step}-action`}>
+                        <Link href={meta.href ?? "#"}>{done ? "Review" : "Start"}</Link>
+                      </Button>
+                      {/* Floor plan and menu have no automatic "done" signal (only devices and staff do), so the owner says when they're happy. */}
+                      {!done && (
+                        <Button
+                          size="sm"
+                          variant="secondary"
+                          data-testid={`admin-checklist-step-${step.step}-done`}
+                          disabled={stepPending === step.step}
+                          onClick={() => void handleCompleteStep(step.step)}
+                        >
+                          {stepPending === step.step ? "Saving..." : "Mark as done"}
+                        </Button>
+                      )}
+                    </span>
                   )}
             </li>
           );

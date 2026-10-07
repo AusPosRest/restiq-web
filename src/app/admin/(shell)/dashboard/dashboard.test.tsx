@@ -2,7 +2,7 @@ import { cleanup, render, screen, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { Dashboard } from "./dashboard";
-import type { DashboardView } from "./dashboard-state";
+import { formatAsOf, type DashboardView } from "./dashboard-state";
 
 const NO_DATA = { amountMinor: 0, currency: "INR", hasData: false, message: "No sales data yet - connect POS to see live figures" };
 
@@ -99,17 +99,13 @@ describe("Dashboard", () => {
     await screen.findByTestId("dashboard-count-outlets-value");
 
     expect(screen.getByTestId("outlet-kpi-o1-sales-value").textContent).toBe("₹84320");
-    expect(screen.getByTestId("outlet-kpi-o1-margin-value").textContent).toBe("₹23963");
-    expect(screen.getByTestId("outlet-kpi-o1-labour-value").textContent).toBe("₹12000");
-    expect(screen.getByTestId("outlet-kpi-o1-waste-value").textContent).toBe("₹1240");
+    // Only Sales has a data source; margin/labour/waste tiles are not shown (walkthrough fix).
+    expect(screen.queryByTestId("outlet-kpi-o1-margin-value")).toBeNull();
     expect(screen.queryByTestId("outlet-kpi-o1-sales-empty")).toBeNull();
 
     const noDataTile = screen.getByTestId("outlet-kpi-o2-sales-empty");
-    expect(noDataTile.textContent).toContain("No sales data yet.");
-    expect(noDataTile.textContent).toContain("Connect POS to see live figures.");
-    expect(screen.getByTestId("outlet-kpi-o2-margin-empty")).toBeTruthy();
-    expect(screen.getByTestId("outlet-kpi-o2-labour-empty")).toBeTruthy();
-    expect(screen.getByTestId("outlet-kpi-o2-waste-empty")).toBeTruthy();
+    expect(noDataTile.textContent).toBe("No sales yet today.");
+    expect(screen.queryByTestId("outlet-kpi-o2-margin-empty")).toBeNull();
     expect(screen.queryByTestId("outlet-kpi-o2-sales-value")).toBeNull();
   });
 
@@ -121,7 +117,7 @@ describe("Dashboard", () => {
     const row1 = within(table).getByTestId("dashboard-comparison-row-o1");
     expect(within(row1).getByTestId("dashboard-comparison-o1-sales").textContent).toBe("₹84320");
     const row2 = within(table).getByTestId("dashboard-comparison-row-o2");
-    expect(within(row2).getByTestId("dashboard-comparison-o2-sales").textContent).toBe("No data yet");
+    expect(within(row2).getByTestId("dashboard-comparison-o2-sales").textContent).toBe("No sales yet today");
   });
 
   it("does not render the comparison table for a single-outlet tenant", async () => {
@@ -145,7 +141,8 @@ describe("Dashboard", () => {
       render(<Dashboard />);
 
       const badge = await screen.findByTestId("dashboard-freshness-badge");
-      expect(badge.textContent).toContain("As of 9:05am");
+      // The viewer's own clock, so the expected text follows the runner's zone.
+      expect(badge.textContent).toContain(`As of ${formatAsOf("2026-08-24T09:05:00.000Z")}`);
       expect(badge.getAttribute("data-stale")).toBe("false");
     } finally {
       vi.useRealTimers();

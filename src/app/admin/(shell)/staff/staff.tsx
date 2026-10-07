@@ -92,7 +92,16 @@ function StaffEditor({ initial }: Readonly<{ initial: StaffData }>) {
       const created = await createStaff(form);
       setStaff((current) => [...current, created]);
       setAddOpen(false);
-      toast({ kind: "success", message: `${staffFullName(created)} was added.` });
+      // Walkthrough fix: a new staff member needs a PIN to use the till, so issue it
+      // with the add instead of leaving "No PIN" for the owner to spot.
+      try {
+        const issued = await issueStaffPin(created.id);
+        setStaff((current) => current.map((m) => (m.id === created.id ? { ...m, pinStatus: "active" } : m)));
+        setIssuedPin({ staffId: created.id, name: staffFullName(created), pin: issued.pin });
+        toast({ kind: "success", message: `${staffFullName(created)} was added. Copy their PIN now.` });
+      } catch {
+        toast({ kind: "success", message: `${staffFullName(created)} was added. Issue their PIN from the list.` });
+      }
     } catch (error) {
       setAddError(error instanceof AdminApiError ? error.message : "Couldn't add this staff member.");
     } finally {

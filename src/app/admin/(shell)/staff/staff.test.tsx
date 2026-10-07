@@ -47,6 +47,9 @@ function stubFetch(overrides: { staff?: StaffView[]; onPatchRole?: (body: unknow
     if (url.includes("/staff/s1/pin") && method === "POST") {
       return Promise.resolve(jsonResponse({ pin: "4821" }));
     }
+    if (url.includes("/staff/s2/pin") && method === "POST") {
+      return Promise.resolve(jsonResponse({ pin: "9103" }));
+    }
     return Promise.resolve(jsonResponse({ error: { code: "not_found", message: "unhandled" } }, 404));
   });
   vi.stubGlobal("fetch", fetchMock);
@@ -99,7 +102,9 @@ describe("Staff", () => {
     await userEvent.click(screen.getByTestId("add-staff-submit"));
 
     expect(await screen.findByTestId("staff-row-s2")).toBeTruthy();
-    expect((await screen.findByTestId("toast-success")).textContent).toContain("Arjun Rao was added.");
+    // Walkthrough fix: the PIN is issued with the add, shown once.
+    expect((await screen.findByTestId("toast-success")).textContent).toContain("Arjun Rao was added. Copy their PIN now.");
+    expect(screen.getByText("9103")).toBeTruthy();
   });
 
   it("changing a row's role opens a confirm dialog and persists on confirm", async () => {

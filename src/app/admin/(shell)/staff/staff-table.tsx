@@ -116,8 +116,9 @@ export function StaffTable({
                           <KeyRound aria-hidden="true" /> Reset PIN
                         </Button>
                         <Button
-                          variant="destructive"
+                          variant="ghost"
                           size="sm"
+                          className="text-status-error hover:text-status-error"
                           data-testid={`staff-revoke-pin-${member.id}`}
                           disabled={busy}
                           onClick={() => onRevokeRequested(member.id)}

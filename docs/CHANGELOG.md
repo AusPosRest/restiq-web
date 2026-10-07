@@ -29,6 +29,16 @@ with the payments epic.
   - The tenant Capabilities tab shows each outlet's real (owner) switches, read-only. The unused tenant toggles and the ops Branding tab are gone.
   - Delete tenant moves to a danger zone.
   - The wizard prices plans per market (India: on quote) and recommends a plan from the outlet count. It clears fixed errors as you type, pre-fills the owner from the primary contact, and keeps the invite link inside its card.
+- **Owner console first run** (#312, with restiq-backend#193):
+  - **Go live can be reached.** Floor plan and menu get "Mark as done", the checklist shows "You're live" for a tenant that is already live, and a **Setup** sidebar link leads back to it.
+  - The invite page names the restaurant and email and states the password rule.
+  - A banner asks the owner to sign the current platform agreement.
+  - The dashboard shows times in the viewer's clock (it showed UTC) and only today's Sales, since nothing records margin, labour or waste.
+  - Unbuilt reports are hidden.
+  - Branding offers the logo URL only (the upload could never be saved) and the preview says "Your restaurant".
+  - Adding staff issues their PIN straight away. Revoke access is a quieter button.
+  - The enrol drawer names the outlet.
+  - Stations read "Screen only - no printer for this station".
 
 ### Added
 - **Restaurant addresses** (#302, web half of restiq-backend#183). Each restaurant lives at its own subdomain. The sign-in pages name the restaurant at its address, POS sign-in finds the restaurant from the address when no terminal binding or POS_TENANT_ID is set, and the new-tenant wizard has a Subdomain field that checks the name is free. Our server forwards the address to the API, which refuses a session from another restaurant.

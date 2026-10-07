@@ -94,6 +94,30 @@ describe("GoLiveChecklist", () => {
     expect(JSON.parse(patchInit.body as string)).toEqual({ completed: true });
   });
 
+  it("lets the owner mark the floor plan done - nothing else ever completes it (walkthrough fix)", async () => {
+    const fetchMock = vi
+      .fn()
+      .mockResolvedValueOnce(jsonResponse({ steps: checklistSteps(), canGoLive: false, tenantStatus: "provisioning" }))
+      .mockResolvedValueOnce(jsonResponse({ steps: checklistSteps({ floor_plan: true }), canGoLive: false, tenantStatus: "provisioning" }));
+    vi.stubGlobal("fetch", fetchMock);
+    render(<GoLiveChecklist />);
+
+    expect((await screen.findByTestId("admin-checklist-step-floor_plan-action")).textContent).toBe("Start");
+    await userEvent.click(screen.getByTestId("admin-checklist-step-floor_plan-done"));
+
+    await waitFor(() => expect(screen.getByTestId("admin-checklist-step-floor_plan-status").textContent).toBe("Done"));
+    expect(screen.queryByTestId("admin-checklist-step-floor_plan-done")).toBeNull();
+    expect((fetchMock.mock.calls[1] as [string])[0]).toBe("/admin/api/checklist/floor_plan");
+  });
+
+  it("shows the live state for a tenant that already went live (e.g. on its first sale)", async () => {
+    vi.stubGlobal("fetch", vi.fn().mockResolvedValue(jsonResponse({ steps: checklistSteps(), canGoLive: false, tenantStatus: "active" })));
+    render(<GoLiveChecklist />);
+
+    expect(await screen.findByTestId("admin-checklist-go-live-success")).toBeTruthy();
+    expect(screen.getByTestId("admin-checklist-to-dashboard").getAttribute("href")).toBe("/admin");
+  });
+
   it("enables Go Live and shows a celebratory success state once it succeeds", async () => {
     const fetchMock = vi
       .fn()
