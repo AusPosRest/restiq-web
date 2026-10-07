@@ -32,6 +32,8 @@ export const PRESETS: readonly FramePreset[] = [
   },
   { key: "owner-console", label: "Owner console", path: "/admin/login", width: 1280, height: 800 },
   { key: "platform-console", label: "Platform console", path: "/ops/login", width: 1280, height: 800 },
+  // #318: emails the mail simulator kept (needs restiq-backend MAIL_PROVIDER=simulator).
+  { key: "mail-inbox", label: "Mail inbox", path: "/simulator/inbox", width: 480, height: 800 },
 ];
 
 export const CUSTOM_FRAME_SIZE = { width: 480, height: 640 };
