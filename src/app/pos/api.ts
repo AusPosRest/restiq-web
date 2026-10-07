@@ -435,6 +435,8 @@ export interface InvoiceTaxBreakdownView {
 export interface InvoiceTenderView {
   method: string;
   amountMinor: number;
+  /** An external tender's reference / bill number (restiq-backend#146). */
+  reference?: string | null;
   createdAt: string;
 }
 

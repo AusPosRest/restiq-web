@@ -51,6 +51,7 @@ import {
   type PendingTender,
 } from "../api";
 import { LoadErrorPanel, Skeleton } from "../data-states";
+import { PrintBillButton } from "../print-bill-button";
 import { usePosLoad } from "../use-pos-load";
 import { ModifierSheet, type ModifierSheetConfirmValue } from "../orders/[orderId]/modifier-sheet";
 import { PosComboTile } from "../orders/[orderId]/pos-combo-tile";
@@ -279,8 +280,8 @@ function CounterLoaded({
       .finally(() => setBusyLineId(null));
   }
 
-  function handleAddTender(method: PostableTenderMethod, amountMinor: number) {
-    setPendingTenders((current) => [...current, { method, amountMinor }]);
+  function handleAddTender(method: PostableTenderMethod, amountMinor: number, reference?: string) {
+    setPendingTenders((current) => [...current, { method, amountMinor, ...(reference ? { reference } : {}) }]);
   }
 
   function handleRemoveTender(index: number) {
