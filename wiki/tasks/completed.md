@@ -1434,3 +1434,8 @@ faked.
   to shared, success/error toasts. Tests on the table and the screen flow.
   See [wiki/features/tenant-admin.md](../features/tenant-admin.md)
   (Remove a device).
+- **2026-09-29 - Windows app printer + drawer (#292).** `src/lib/desktop.ts`
+  wraps the restiq-desktop bridge (`window.restiqDesktop`): invoice Print
+  uses `printPage()` (silent print in the app, `window.print()` elsewhere),
+  and both finalise paths call `openDrawerForTenders()` when a cash tender
+  was taken. Tests: `src/lib/desktop.test.ts`.

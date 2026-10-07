@@ -1607,3 +1607,15 @@ exactly this gap:
   state, retry) and the link assertion in `shift-bar.test.tsx`.
 - **Not built (by design):** refunds in the list, a date picker, per-cashier
   filter, drill-down into a bill.
+## Windows app: receipt printer and cash drawer (issue #292)
+
+Inside the RESTIQ Windows app (AusPosRest/restiq-desktop) the page gets
+`window.restiqDesktop` (only on the configured RESTIQ origin). `src/lib/desktop.ts`:
+
+- `printPage()` - invoice **Print** (`invoice-print`) prints silently on the
+  receipt printer chosen in the app's Device settings, using the page's print
+  CSS; in a browser it is `window.print()` as before. A failed app print shows
+  "Couldn't print" on the button.
+- `openDrawerForTenders(tenders)` - after a successful finalise on the counter
+  or table settle screen, opens the drawer when any tender is `cash`. The bill
+  is already final, so a drawer failure is only logged.

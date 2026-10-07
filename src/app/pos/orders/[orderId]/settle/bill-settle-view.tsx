@@ -39,6 +39,7 @@ import { billTotalMinor, isBillReadOnly, type BillView } from "./bill-state";
 import { canFinalizeWithElectronic, isElectronicMethod, remainingToTenderMinor } from "./electronic-tender-state";
 import { TerminalIntentPanel } from "./terminal-intent-panel";
 import { useTerminalIntent } from "./use-terminal-intent";
+import { openDrawerForTenders } from "@/lib/desktop";
 
 interface BillLanded {
   attempt: number;
@@ -141,7 +142,10 @@ function BillSettleLoaded({
       managerPin: pendingDiscount?.managerPin,
       tenders: pendingTenders,
     })
-      .then(setBill)
+      .then((finalised) => {
+        setBill(finalised);
+        openDrawerForTenders(pendingTenders);
+      })
       .catch((error: unknown) => setFinalizeError(errorMessage(error, "Couldn't finalise this bill.")))
       .finally(() => setFinalizeBusy(false));
   }
