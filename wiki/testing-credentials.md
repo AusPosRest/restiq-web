@@ -35,12 +35,19 @@ for testing each one. All values are **local demo data only** (database
 | Field | Value |
 |---|---|
 | URL | http://localhost:3100/ops/login |
-| Email | `admin@restiq.example` |
-| Password | `OpsDemo2026!` |
+| Email | `OPERATOR_EMAIL` in restiq-backend `.env` |
+| Password | `OPERATOR_PASSWORD` in restiq-backend `.env` |
+
+The operator account is created by restiq-backend's `scripts/seed-operator.ts`
+from those two env vars — sign in with whatever values are set there, not a
+hard-coded demo login. The landing page's live Devices section also needs
+`DEMO_OPS_EMAIL` / `DEMO_OPS_PASSWORD` in restiq-web's `.env.local` set to the
+same pair, so it can fetch the device list server-side.
 
 Rules: this is the cross-tenant operator surface — tenant onboarding, plans,
-device enrolment. It is a separate auth realm (`ops` JWT audience); an ops
-session never works on admin/pos/guest routes and vice versa.
+device enrolment, the mail inbox (`/ops/inbox`). It is a separate auth realm
+(`ops` JWT audience); an ops session never works on admin/pos/guest routes and
+vice versa.
 
 ## 2. Tenant Admin (owner console) — `/admin`
 
