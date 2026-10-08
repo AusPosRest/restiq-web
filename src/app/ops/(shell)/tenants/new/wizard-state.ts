@@ -1,5 +1,6 @@
 // Pure wizard state: the five O4 steps, their field sets and validation
 // rules. No React, no fetch - unit-testable on its own.
+import type { PlanPriceView } from "../../api";
 
 export const STEP_COUNT = 5;
 
@@ -270,18 +271,19 @@ export function toSubmitPayload(data: WizardData): Record<string, unknown> {
 
 // --- Walkthrough fixes (Binflow, 2026-10-08).
 
-/** Monthly price per outlet in the tenant's own currency, or null for a market with no list price (shown "on quote"). */
-const PLAN_MONTHLY_PRICE: Record<CountryCode, Record<"standard" | "enterprise", number | null>> = {
-  AU: { standard: 49, enterprise: 129 },
-  IN: { standard: 499, enterprise: 999 },
-};
 export const PLAN_CURRENCY_SYMBOL: Record<CountryCode, string> = { AU: "A$", IN: "₹" };
-export const ANNUAL_DISCOUNT_PERCENT = 20;
 
-export function planPrice(plan: "standard" | "enterprise", country: CountryCode, annual: boolean): number | null {
-  const monthly = PLAN_MONTHLY_PRICE[country][plan];
-  if (monthly === null) return null;
-  return annual ? Math.round((monthly * (100 - ANNUAL_DISCOUNT_PERCENT)) / 100) : monthly;
+/** Monthly (or annual-discounted) price per outlet in whole currency units, from the Plans page's list (restiq-backend#201); null = on quote or not loaded. */
+export function planPrice(prices: readonly PlanPriceView[], plan: "standard" | "enterprise", country: CountryCode, annual: boolean): number | null {
+  const row = prices.find((p) => p.country === country && p.plan === plan);
+  if (!row || row.monthlyPriceMinor === null) return null;
+  const monthly = row.monthlyPriceMinor / 100;
+  return annual ? Math.round((monthly * (100 - row.annualDiscountPercent)) / 100) : monthly;
+}
+
+/** The best annual saving in this market, for the billing toggle's label (0 = no annual discount). */
+export function annualDiscountPercent(prices: readonly PlanPriceView[], country: CountryCode): number {
+  return Math.max(0, ...prices.filter((p) => p.country === country).map((p) => p.annualDiscountPercent));
 }
 
 /** Standard is for one outlet; anything more is Enterprise. */
