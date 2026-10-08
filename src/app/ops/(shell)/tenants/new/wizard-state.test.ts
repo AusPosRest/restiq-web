@@ -194,10 +194,13 @@ describe("toSubmitPayload", () => {
 });
 
 describe("walkthrough fixes (Binflow, 2026-10-08)", () => {
-  it("prices plans in the tenant's market: A$ for AU, on quote (null) for India", () => {
+  it("prices plans in the tenant's market: A$ for AU, rupees for India", () => {
     expect(planPrice("standard", "AU", false)).toBe(49);
     expect(planPrice("enterprise", "AU", true)).toBe(103);
-    expect(planPrice("standard", "IN", false)).toBeNull();
+    expect(planPrice("standard", "IN", false)).toBe(499);
+    expect(planPrice("enterprise", "IN", false)).toBe(999);
+    expect(planPrice("standard", "IN", true)).toBe(399);
+    expect(planPrice("enterprise", "IN", true)).toBe(799);
   });
 
   it("recommends Standard for one outlet and Enterprise for more", () => {

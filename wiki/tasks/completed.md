@@ -1,5 +1,6 @@
 # Completed
 
+- **2026-10-08** - India plan prices (issue #321): `PLAN_MONTHLY_PRICE.IN` is ₹499 / ₹999 and `PLAN_CURRENCY_SYMBOL` picks A$ or ₹ in `steps.tsx`.
 - **2026-10-08** - Mail inbox simulator (issue #318): `src/app/simulator/inbox/` (server-rendered `page.tsx` reading `GET /dev/v1/inbox`, `auto-refresh.tsx`, `linkify` in `inbox-state.ts`). Shows "simulator is off" on a 404.
 - **2026-10-08** - Staff outlets (issue #316): `outlet-picker.tsx` (`OutletPicker`, `StaffOutletsDialog`), an Outlets column and the Add staff picker (only with more than one outlet), `updateStaffOutlets` in `api.ts`, `outletsLabel` in `staff-state.ts`. The PIN pad shows the API's `outlet_not_assigned` message as is.
 - **2026-10-08** - Owner console first-run fixes (issue #312):
