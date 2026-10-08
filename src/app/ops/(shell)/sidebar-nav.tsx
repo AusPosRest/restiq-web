@@ -1,6 +1,6 @@
 "use client";
 
-import { Activity, CreditCard, FilePenLine, Inbox, LayoutDashboard, MonitorSmartphone, Package, Store } from "lucide-react";
+import { Activity, CreditCard, FilePenLine, Inbox, LayoutDashboard, Mail, MonitorSmartphone, Package, Store } from "lucide-react";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 
@@ -16,6 +16,7 @@ const navItems = [
   { href: "/ops/agreements", label: "Agreements", icon: FilePenLine, testId: "ops-nav-agreements" },
   { href: "/ops/catalog", label: "Catalog", icon: Package, testId: "ops-nav-catalog" },
   { href: "/ops/plans", label: "Plans", icon: CreditCard, testId: "ops-nav-plans" },
+  { href: "/ops/inbox", label: "Mail inbox", icon: Mail, testId: "ops-nav-inbox" },
 ];
 
 export function SidebarNav() {

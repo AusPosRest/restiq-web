@@ -10,6 +10,7 @@ with the payments epic.
 - **Plans page** (#323, needs restiq-backend#201): Platform Console > Plans lets operators set each country's Standard and Enterprise price per outlet per month (blank = on quote) and the annual discount, with an audited reason. The onboarding wizard reads these prices; nothing is hard-coded any more.
 - **India plan prices** (#321): the onboarding wizard prices Indian tenants in rupees: Standard ₹499 and Enterprise ₹999 per outlet per month (₹399 / ₹799 billed annually), instead of "Price on quote".
 - **Mail inbox simulator** (#318, needs restiq-backend#198): `/simulator/inbox` lists every email the backend would have sent (owner invites, password resets) when it runs with `MAIL_PROVIDER=simulator`. Newest first, filter by address, clickable links, refreshes every 5 seconds.
+- **Mail inbox moved into the ops console** (#325): the inbox is now `/ops/inbox` in the Platform Console, reading the backend's authenticated `GET /ops/v1/dev-inbox` instead of the public `/dev/v1/inbox`. `/simulator/inbox` redirects there.
 - **Staff work at chosen outlets** (#316, needs restiq-backend#197): Add staff and the staff list let the owner pick the outlets each person works at ("Every outlet" by default). Their PIN only signs in there; a till of another outlet says they aren't set up to work there.
 
 ### Fixed (Binflow first-run walkthrough, 2026-10-08)
