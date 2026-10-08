@@ -6,9 +6,10 @@
 import { Check, Plus, Trash2 } from "lucide-react";
 import { useState } from "react";
 import { Button } from "@/components/ui/button";
-import { opsApi } from "../../api";
+import { opsApi, type PlanPriceView } from "../../api";
+import { useOpsLoad } from "../../use-ops-load";
 import { FieldError, SelectField, TextAreaField, TextField, ToggleField } from "./fields";
-import { BrandsOutletsData, BusinessData, CountryCode, DEFAULT_GST_RATE, OUTLET_TYPES, OwnerInviteData, StepErrors, SubscriptionData, TAX_PROFILES, TaxData, SLUG_PATTERN, TIMEZONES, emptyOutlet, ANNUAL_DISCOUNT_PERCENT, PLAN_CURRENCY_SYMBOL, planPrice, recommendedPlan } from "./wizard-state";
+import { BrandsOutletsData, BusinessData, CountryCode, DEFAULT_GST_RATE, OUTLET_TYPES, OwnerInviteData, StepErrors, SubscriptionData, TAX_PROFILES, TaxData, SLUG_PATTERN, TIMEZONES, emptyOutlet, PLAN_CURRENCY_SYMBOL, annualDiscountPercent, planPrice, recommendedPlan } from "./wizard-state";
 
 interface StepProps<T> {
   data: T;
@@ -391,13 +392,16 @@ export function SubscriptionStep({
 }: Omit<StepProps<SubscriptionData>, "onFieldBlur"> & { country: CountryCode; outletCount: number }) {
   const annual = data.billingPeriod === "annual";
   const recommended = recommendedPlan(outletCount);
+  // Plan prices are edited on the Plans page (restiq-backend#201); until they load, cards read "Price on quote".
+  const prices = useOpsLoad<{ prices: PlanPriceView[] }>("plan-prices").data?.prices ?? [];
+  const discount = annualDiscountPercent(prices, country);
   return (
     <div className="space-y-6">
       <div role="radiogroup" aria-label="Billing period" className="inline-flex rounded-lg border border-border bg-muted p-1">
         {(
           [
             { value: "monthly", label: "Monthly billing" },
-            { value: "annual", label: `Annual billing (save ${ANNUAL_DISCOUNT_PERCENT}%)` },
+            { value: "annual", label: discount > 0 ? `Annual billing (save ${discount}%)` : "Annual billing" },
           ] as const
         ).map(({ value, label }) => (
           <button
@@ -419,7 +423,7 @@ export function SubscriptionStep({
       <div className="grid gap-5 lg:grid-cols-2">
         {PLANS.map((plan) => {
           const selected = data.plan === plan.value;
-          const price = planPrice(plan.value, country, annual);
+          const price = planPrice(prices, plan.value, country, annual);
           return (
             <button
               key={plan.value}
@@ -444,7 +448,7 @@ export function SubscriptionStep({
                   <span data-testid={`onb-plan-${plan.value}-price`}>Price on quote</span>
                 ) : (
                   <>
-                    <span data-testid={`onb-plan-${plan.value}-price`}>{PLAN_CURRENCY_SYMBOL[country]}{price}</span>
+                    <span data-testid={`onb-plan-${plan.value}-price`}>{PLAN_CURRENCY_SYMBOL[country]}{Number.isInteger(price) ? price : price.toFixed(2)}</span>
                     <span className="font-sans text-sm font-normal text-muted-foreground"> / outlet / month</span>
                   </>
                 )}

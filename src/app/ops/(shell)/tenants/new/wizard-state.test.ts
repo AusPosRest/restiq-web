@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { DEFAULT_GST_RATE, dataFromDraft, emptyWizardData, firstIncompleteStep, toSubmitPayload, validateStep, planPrice, recommendedPlan, prefillOwner, keepUnfixedErrors } from "./wizard-state";
+import { DEFAULT_GST_RATE, dataFromDraft, emptyWizardData, firstIncompleteStep, toSubmitPayload, validateStep, planPrice, annualDiscountPercent, recommendedPlan, prefillOwner, keepUnfixedErrors } from "./wizard-state";
 
 function completeData() {
   const data = emptyWizardData();
@@ -194,13 +194,17 @@ describe("toSubmitPayload", () => {
 });
 
 describe("walkthrough fixes (Binflow, 2026-10-08)", () => {
-  it("prices plans in the tenant's market: A$ for AU, rupees for India", () => {
-    expect(planPrice("standard", "AU", false)).toBe(49);
-    expect(planPrice("enterprise", "AU", true)).toBe(103);
-    expect(planPrice("standard", "IN", false)).toBe(499);
-    expect(planPrice("enterprise", "IN", false)).toBe(999);
-    expect(planPrice("standard", "IN", true)).toBe(399);
-    expect(planPrice("enterprise", "IN", true)).toBe(799);
+  it("prices plans from the Plans page list, in the tenant's market", () => {
+    const row = (country: "AU" | "IN", plan: "standard" | "enterprise", monthlyPriceMinor: number | null, annualDiscountPercent = 20) =>
+      ({ country, plan, monthlyPriceMinor, annualDiscountPercent, currency: country === "AU" ? "AUD" : "INR", updatedAt: "" }) as const;
+    const prices = [row("AU", "standard", 4900), row("AU", "enterprise", 12900), row("IN", "standard", 49900), row("IN", "enterprise", null, 10)];
+    expect(planPrice(prices, "standard", "AU", false)).toBe(49);
+    expect(planPrice(prices, "enterprise", "AU", true)).toBe(103);
+    expect(planPrice(prices, "standard", "IN", true)).toBe(399);
+    expect(planPrice(prices, "enterprise", "IN", false)).toBeNull();
+    expect(planPrice([], "standard", "IN", false)).toBeNull();
+    expect(annualDiscountPercent(prices, "IN")).toBe(20);
+    expect(annualDiscountPercent([], "IN")).toBe(0);
   });
 
   it("recommends Standard for one outlet and Enterprise for more", () => {

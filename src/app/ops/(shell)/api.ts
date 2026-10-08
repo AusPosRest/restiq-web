@@ -239,3 +239,15 @@ export interface TenantAgreementsView {
   status: TenantAgreementStatus;
   signatures: AgreementSignatureView[];
 }
+
+// --- Plan prices (restiq-backend#201): list prices per country, edited on the Plans page.
+
+export interface PlanPriceView {
+  country: "AU" | "IN";
+  plan: "standard" | "enterprise";
+  /** Per outlet per month in minor units; null = on quote. */
+  monthlyPriceMinor: number | null;
+  annualDiscountPercent: number;
+  currency: "AUD" | "INR";
+  updatedAt: string;
+}

@@ -15,6 +15,7 @@ const navItems = [
   { href: "/ops/dlq", label: "Failed syncs", icon: Inbox, testId: "ops-nav-dlq" },
   { href: "/ops/agreements", label: "Agreements", icon: FilePenLine, testId: "ops-nav-agreements" },
   { href: "/ops/catalog", label: "Catalog", icon: Package, testId: "ops-nav-catalog" },
+  { href: "/ops/plans", label: "Plans", icon: CreditCard, testId: "ops-nav-plans" },
 ];
 
 export function SidebarNav() {
