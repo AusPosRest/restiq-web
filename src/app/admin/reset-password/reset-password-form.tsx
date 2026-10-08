@@ -4,6 +4,7 @@ import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useState } from "react";
 import { Button } from "@/components/ui/button";
+import { PasswordInput } from "@/components/password-input";
 
 const MIN_PASSWORD_LENGTH = 10;
 const FIELD_ERROR_LENGTH = "Password must be at least 10 characters.";
@@ -71,11 +72,11 @@ export function ResetPasswordForm({ token }: { token: string }) {
         <label htmlFor="admin-reset-password" className="font-label text-xs font-semibold uppercase tracking-wider text-muted-foreground">
           New password
         </label>
-        <input
+        <PasswordInput
           id="admin-reset-password"
           data-testid="admin-reset-password"
+          toggleTestId="admin-reset-password-toggle"
           name="password"
-          type="password"
           autoComplete="new-password"
           required
           aria-invalid={fieldError !== null || undefined}
@@ -86,11 +87,11 @@ export function ResetPasswordForm({ token }: { token: string }) {
         <label htmlFor="admin-reset-confirm" className="font-label text-xs font-semibold uppercase tracking-wider text-muted-foreground">
           Confirm password
         </label>
-        <input
+        <PasswordInput
           id="admin-reset-confirm"
           data-testid="admin-reset-confirm"
+          toggleTestId="admin-reset-confirm-toggle"
           name="confirm-password"
-          type="password"
           autoComplete="new-password"
           required
           aria-invalid={fieldError !== null || undefined}
