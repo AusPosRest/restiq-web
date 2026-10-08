@@ -8,7 +8,7 @@ import { useState } from "react";
 import { Button } from "@/components/ui/button";
 import { opsApi } from "../../api";
 import { FieldError, SelectField, TextAreaField, TextField, ToggleField } from "./fields";
-import { BrandsOutletsData, BusinessData, CountryCode, DEFAULT_GST_RATE, OUTLET_TYPES, OwnerInviteData, StepErrors, SubscriptionData, TAX_PROFILES, TaxData, SLUG_PATTERN, TIMEZONES, emptyOutlet, ANNUAL_DISCOUNT_PERCENT, planPrice, recommendedPlan } from "./wizard-state";
+import { BrandsOutletsData, BusinessData, CountryCode, DEFAULT_GST_RATE, OUTLET_TYPES, OwnerInviteData, StepErrors, SubscriptionData, TAX_PROFILES, TaxData, SLUG_PATTERN, TIMEZONES, emptyOutlet, ANNUAL_DISCOUNT_PERCENT, PLAN_CURRENCY_SYMBOL, planPrice, recommendedPlan } from "./wizard-state";
 
 interface StepProps<T> {
   data: T;
@@ -444,7 +444,7 @@ export function SubscriptionStep({
                   <span data-testid={`onb-plan-${plan.value}-price`}>Price on quote</span>
                 ) : (
                   <>
-                    <span data-testid={`onb-plan-${plan.value}-price`}>A${price}</span>
+                    <span data-testid={`onb-plan-${plan.value}-price`}>{PLAN_CURRENCY_SYMBOL[country]}{price}</span>
                     <span className="font-sans text-sm font-normal text-muted-foreground"> / outlet / month</span>
                   </>
                 )}

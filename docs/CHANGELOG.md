@@ -7,6 +7,7 @@ with the payments epic.
 ## [Unreleased]
 
 ### Added
+- **India plan prices** (#321): the onboarding wizard prices Indian tenants in rupees: Standard ₹499 and Enterprise ₹999 per outlet per month (₹399 / ₹799 billed annually), instead of "Price on quote".
 - **Mail inbox simulator** (#318, needs restiq-backend#198): `/simulator/inbox` lists every email the backend would have sent (owner invites, password resets) when it runs with `MAIL_PROVIDER=simulator`. Newest first, filter by address, clickable links, refreshes every 5 seconds.
 - **Staff work at chosen outlets** (#316, needs restiq-backend#197): Add staff and the staff list let the owner pick the outlets each person works at ("Every outlet" by default). Their PIN only signs in there; a till of another outlet says they aren't set up to work there.
 

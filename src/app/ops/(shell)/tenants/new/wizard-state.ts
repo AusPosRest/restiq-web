@@ -270,11 +270,12 @@ export function toSubmitPayload(data: WizardData): Record<string, unknown> {
 
 // --- Walkthrough fixes (Binflow, 2026-10-08).
 
-/** Monthly price per outlet in the tenant's own currency, or null when no price is set for that market (India: no ₹ prices yet - shown "on quote"). */
+/** Monthly price per outlet in the tenant's own currency, or null for a market with no list price (shown "on quote"). */
 const PLAN_MONTHLY_PRICE: Record<CountryCode, Record<"standard" | "enterprise", number | null>> = {
   AU: { standard: 49, enterprise: 129 },
-  IN: { standard: null, enterprise: null },
+  IN: { standard: 499, enterprise: 999 },
 };
+export const PLAN_CURRENCY_SYMBOL: Record<CountryCode, string> = { AU: "A$", IN: "₹" };
 export const ANNUAL_DISCOUNT_PERCENT = 20;
 
 export function planPrice(plan: "standard" | "enterprise", country: CountryCode, annual: boolean): number | null {
