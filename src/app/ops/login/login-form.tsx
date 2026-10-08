@@ -3,6 +3,7 @@
 import { useRouter } from "next/navigation";
 import { useState } from "react";
 import { Button } from "@/components/ui/button";
+import { PasswordInput } from "@/components/password-input";
 
 const GENERIC_ERROR = "Incorrect email or password";
 const FAILURE_ERROR = "Sign-in failed. Check your connection and try again.";
@@ -67,11 +68,11 @@ export function LoginForm({ nextPath, sessionExpired }: { nextPath: string; sess
         <label htmlFor="ops-login-password" className="font-label text-xs font-semibold uppercase tracking-wider text-muted-foreground">
           Password
         </label>
-        <input
+        <PasswordInput
           id="ops-login-password"
           data-testid="ops-login-password"
+          toggleTestId="ops-login-password-toggle"
           name="password"
-          type="password"
           autoComplete="current-password"
           required
           aria-invalid={error === GENERIC_ERROR || undefined}
