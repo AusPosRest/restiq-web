@@ -1490,6 +1490,11 @@ faked.
   wizard has an optional Subdomain field that checks availability on blur and sends
   `slug` at the top level of the submit. Tests: tenant-by-host, tenant-host-headers,
   login-form, POS login route, wizard-state, wizard.
+- **2026-10-09 - Item drawer closing and directory flicker (#333).** Inline
+  drawer edits (variants, photo) call onSaved, which the menu page used to
+  close the drawer on; the drawer now closes itself only after the main Save.
+  The product directory keeps its last results visible while a new search
+  loads. Tests: item-drawer, directory-dialog.
 - **2026-10-09 - Owner console walkthrough bugs (#330).** Add Item requires a
   price and posts it through the same client the price-change dialog uses
   (base price, dine-in, reason "Initial price") right after the item is

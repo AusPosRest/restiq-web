@@ -250,10 +250,7 @@ export function MenuManagement() {
         defaultCategoryId={category !== ALL_CATEGORY ? category : (effectiveCategories[0]?.id ?? "")}
         currency={CURRENCY}
         onClose={() => setDrawerItem("closed")}
-        onSaved={(saved) => {
-          upsertItem(saved);
-          setDrawerItem("closed");
-        }}
+        onSaved={upsertItem}
         onDeleted={(deleted) => {
           setItems((current) => (current ?? effectiveItems).filter((i) => i.id !== deleted.id));
           setCategories(effectiveCategories.map((c) => (c.id === deleted.categoryId ? { ...c, itemCount: Math.max(0, c.itemCount - 1) } : c)));

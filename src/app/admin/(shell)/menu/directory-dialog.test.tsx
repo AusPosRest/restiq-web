@@ -64,6 +64,29 @@ afterEach(() => {
 });
 
 describe("DirectoryDialog", () => {
+  it("keeps the current results on screen while the next search loads (issue #333)", async () => {
+    const fetchMock = stubFetch();
+    const base = fetchMock.getMockImplementation()!;
+    renderDialog();
+    expect(await screen.findByTestId("directory-row-p-paneer")).toBeTruthy();
+
+    let release: () => void = () => undefined;
+    fetchMock.mockImplementation((input, init) => {
+      if (new URL(String(input), "http://localhost").searchParams.get("q")) {
+        return new Promise((resolve) => {
+          release = () => resolve(base(input, init));
+        });
+      }
+      return base(input, init);
+    });
+    await userEvent.type(screen.getByTestId("directory-search"), "c");
+
+    expect(screen.queryByTestId("directory-loading")).toBeNull();
+    expect(screen.getByTestId("directory-row-p-paneer")).toBeTruthy();
+    release();
+    await waitFor(() => expect(screen.queryByTestId("directory-row-p-paneer")).toBeNull());
+  });
+
   it("filters by search and tag, and imports the ticked products", async () => {
     const fetchMock = stubFetch();
     const { onImported } = renderDialog();

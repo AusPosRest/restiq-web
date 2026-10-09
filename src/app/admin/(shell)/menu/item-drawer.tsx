@@ -80,6 +80,7 @@ export interface ItemDrawerProps {
   defaultCategoryId: string;
   currency: string;
   onClose: () => void;
+  /** Called after the main Save and after every inline edit; the drawer stays open for inline edits. */
   onSaved: (item: ItemView) => void;
   /** Issue #248: called after the item is deleted (archived on the backend). */
   onDeleted?: (item: ItemView) => void;
@@ -194,6 +195,9 @@ function DrawerBody({
         setLiveItem(updated);
         onSaved(updated);
       }
+      // Issue #333: only the main Save closes the drawer - inline edits (variants,
+      // photo, ...) also call onSaved to refresh the list but keep it open.
+      onClose();
     } catch (error) {
       setSaveError(error instanceof Error ? error.message : "That didn't save. Try again.");
     } finally {
