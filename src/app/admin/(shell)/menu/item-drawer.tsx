@@ -85,6 +85,8 @@ export interface ItemDrawerProps {
   onDeleted?: (item: ItemView) => void;
   onModifierGroupCreated: (group: ModifierGroupView) => void;
   onAllergenCreated: (allergen: AllergenView) => void;
+  /** Issue #330: so the list row's price isn't stale until reload. */
+  onPriceChanged?: (itemId: string, priceMinor: number) => void;
 }
 
 export function ItemDrawer(props: Readonly<ItemDrawerProps>) {
@@ -105,9 +107,11 @@ function DrawerBody({
   onDeleted,
   onModifierGroupCreated,
   onAllergenCreated,
+  onPriceChanged,
 }: Readonly<ItemDrawerProps>) {
   const isCreate = item === null;
   const [draft, setDraft] = useState<ItemDraft>(() => itemDraftFromView(item, defaultCategoryId || categories[0]?.id || ""));
+  const [createPriceMajor, setCreatePriceMajor] = useState("");
   const [liveItem, setLiveItem] = useState<ItemView | null>(item);
   const [selectedGroupIds, setSelectedGroupIds] = useState<string[]>(item?.modifierGroups.map((g) => g.id) ?? []);
   const [selectedAllergenIds, setSelectedAllergenIds] = useState<string[]>(item?.allergens.map((a) => a.id) ?? []);
@@ -124,7 +128,8 @@ function DrawerBody({
   const [currentPrices, setCurrentPrices] = useState<Record<string, number>>({});
 
   const errors = validateItemDraft(draft);
-  const canSave = Object.keys(errors).length === 0;
+  const createPriceMinor = isCreate ? majorStringToPriceMinor(createPriceMajor) : null;
+  const canSave = Object.keys(errors).length === 0 && (!isCreate || createPriceMinor !== null);
 
   async function handleDelete() {
     if (!liveItem) return;
@@ -176,6 +181,13 @@ function DrawerBody({
           allergenIds: selectedAllergenIds,
         };
         const created = await createMenuItem(input);
+        try {
+          // Same client the price-change dialog uses (handlePriceSubmit below): no
+          // variantId (base price), no channel (every channel), effective now.
+          await createItemPrice(created.id, { priceMinor: createPriceMinor ?? 0, currency, reason: "Initial price" });
+        } catch (error) {
+          setSaveError(error instanceof Error ? error.message : "The item saved, but its price didn't - set it from the drawer.");
+        }
         onSaved(created);
       } else {
         const updated = await updateMenuItem(item!.id, { name: draft.name, shortName: draft.shortName, categoryId: draft.categoryId });
@@ -301,6 +313,8 @@ function DrawerBody({
         ]);
       } else {
         setCurrentPrices((current) => ({ ...current, [priceLine.variantId ?? "base"]: priceMinor }));
+        // The list table only ever shows the base (no-variant) price (menu-table.tsx).
+        if (priceLine.variantId === null) onPriceChanged?.(liveItem.id, priceMinor);
       }
       setPriceLine(null);
     } catch (error) {
@@ -389,6 +403,24 @@ function DrawerBody({
                 ))}
               </select>
             </div>
+
+            {isCreate && (
+              <div>
+                <label htmlFor="item-create-price" className={LABEL_CLASS}>
+                  Price ({currency})
+                </label>
+                <input
+                  id="item-create-price"
+                  data-testid="item-create-price"
+                  type="number"
+                  min="0"
+                  step="0.01"
+                  value={createPriceMajor}
+                  onChange={(event) => setCreatePriceMajor(event.target.value)}
+                  className={FIELD_CLASS}
+                />
+              </div>
+            )}
 
             {!isCreate && liveItem && (
               <div data-testid="item-photo-section">

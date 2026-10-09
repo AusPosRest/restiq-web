@@ -232,20 +232,45 @@ describe("ItemDrawer open/close and field editing", () => {
     expect(JSON.parse((patchCall?.[1] as RequestInit).body as string)).toEqual({ name: "Malai Tikka", shortName: "Paneer Tikka", categoryId: "tandoor" });
   });
 
-  it("creates a new item through the create endpoint when there is no item yet", async () => {
+  it("disables Save Changes until a new item has a price", async () => {
+    stubFetch();
+    renderDrawer({ item: null });
+    await userEvent.type(screen.getByTestId("item-name-input"), "Malai Tikka");
+    await userEvent.type(screen.getByTestId("item-short-name-input"), "Malai Tikka");
+    expect(screen.getByTestId("item-save")).toHaveProperty("disabled", true);
+
+    await userEvent.type(screen.getByTestId("item-create-price"), "250");
+    expect(screen.getByTestId("item-save")).toHaveProperty("disabled", false);
+  });
+
+  it("creates a new item through the create endpoint, then posts its price with the price-change dialog's client (issue #330)", async () => {
     const created = item({ id: "item-2", name: "Malai Tikka" });
-    const fetchMock = vi.fn().mockResolvedValue(jsonResponse(created, 201));
+    const fetchMock = vi.fn((input: RequestInfo | URL, init?: RequestInit) => {
+      const url = String(input);
+      const method = init?.method ?? "GET";
+      if (method === "POST" && url === "/admin/api/menu/items") return Promise.resolve(jsonResponse(created, 201));
+      if (method === "POST" && url === "/admin/api/menu/items/item-2/prices") {
+        const body = JSON.parse(init?.body as string);
+        return Promise.resolve(
+          jsonResponse({ id: "p1", itemId: "item-2", variantId: null, channel: "dine_in", outletId: null, currency: "INR", createdAt: "2026-08-24T00:00:00.000Z", ...body }, 201),
+        );
+      }
+      return Promise.resolve(jsonResponse({ error: { code: "not_found", message: "unhandled: " + method + " " + url } }, 404));
+    });
     vi.stubGlobal("fetch", fetchMock);
     const { onSaved } = renderDrawer({ item: null });
 
     await userEvent.type(screen.getByTestId("item-name-input"), "Malai Tikka");
     await userEvent.type(screen.getByTestId("item-short-name-input"), "Malai Tikka");
+    await userEvent.type(screen.getByTestId("item-create-price"), "250");
     await userEvent.click(screen.getByTestId("item-save"));
 
     await waitFor(() => expect(onSaved).toHaveBeenCalledWith(created));
-    const [url, init] = fetchMock.mock.calls[0] as [string, RequestInit];
-    expect(url).toBe("/admin/api/menu/items");
-    expect(init.method).toBe("POST");
+    const [itemCall, priceCall] = fetchMock.mock.calls as [string, RequestInit][];
+    expect(itemCall[0]).toBe("/admin/api/menu/items");
+    expect(itemCall[1].method).toBe("POST");
+    expect(priceCall[0]).toBe("/admin/api/menu/items/item-2/prices");
+    expect(JSON.parse(priceCall[1].body as string)).toEqual({ priceMinor: 25000, currency: "INR", reason: "Initial price" });
   });
 });
 

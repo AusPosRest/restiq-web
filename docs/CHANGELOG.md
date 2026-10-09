@@ -14,6 +14,12 @@ with the payments epic.
 - **Show password toggle** (#327): the six password fields (ops login, admin login, accept invite, reset password) have an eye icon to reveal the typed password.
 - **Staff work at chosen outlets** (#316, needs restiq-backend#197): Add staff and the staff list let the owner pick the outlets each person works at ("Every outlet" by default). Their PIN only signs in there; a till of another outlet says they aren't set up to work there.
 
+### Fixed
+- Owner console walkthrough bugs (#330):
+  - **Add Item has a price.** Creating a menu item now asks for its price and posts it (dine-in, reason "Initial price") right after the item is created, the same way a price change saves; before, a new item had no price until someone opened it again and changed one.
+  - **Menu list stays in sync.** A category's item count now goes up when an item is created in it (and moves with the item between categories), and the list's price column updates as soon as a price change saves, instead of waiting for a reload.
+  - **Invite link copy.** The ops invite link no longer says "No email is sent in this prototype" - it now says the link was emailed and this copy is a backup, matching the mail inbox simulator that actually sends it.
+
 ### Fixed (Binflow first-run walkthrough, 2026-10-08)
 - **POS money** (#306):
   - Cash above the total now gives change: the screen shows "Change due ₹43.70", Finalise works, and the cash is posted net of change so the bill sums exactly.
