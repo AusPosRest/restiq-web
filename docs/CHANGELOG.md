@@ -7,6 +7,7 @@ with the payments epic.
 ## [Unreleased]
 
 ### Added
+- **Outlet tab** (#329, needs restiq-backend outlets PATCH): Settings > Outlet (now the default settings tab) lets the owner edit the selected outlet's name, address and timezone; outlet type stays read-only. The go-live checklist's "Outlet details" step links here instead of just "Mark as done".
 - **Plans page** (#323, needs restiq-backend#201): Platform Console > Plans lets operators set each country's Standard and Enterprise price per outlet per month (blank = on quote) and the annual discount, with an audited reason. The onboarding wizard reads these prices; nothing is hard-coded any more.
 - **India plan prices** (#321): the onboarding wizard prices Indian tenants in rupees: Standard ₹499 and Enterprise ₹999 per outlet per month (₹399 / ₹799 billed annually), instead of "Price on quote".
 - **Mail inbox simulator** (#318, needs restiq-backend#198): `/simulator/inbox` lists every email the backend would have sent (owner invites, password resets) when it runs with `MAIL_PROVIDER=simulator`. Newest first, filter by address, clickable links, refreshes every 5 seconds.
