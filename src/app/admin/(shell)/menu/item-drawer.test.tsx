@@ -219,7 +219,7 @@ describe("ItemDrawer open/close and field editing", () => {
       if (method === "GET" && url.includes("/price?")) return Promise.resolve(currentPriceResponse("item-1", "dine_in", 18000));
       return Promise.resolve(jsonResponse({}, 404));
     });
-    const { onSaved } = renderDrawer();
+    const { onSaved, onClose } = renderDrawer();
 
     const input = screen.getByTestId("item-name-input");
     await userEvent.clear(input);
@@ -227,6 +227,7 @@ describe("ItemDrawer open/close and field editing", () => {
     await userEvent.click(screen.getByTestId("item-save"));
 
     await waitFor(() => expect(onSaved).toHaveBeenCalledWith(updated));
+    expect(onClose).toHaveBeenCalled();
     const patchCall = fetchMock.mock.calls.find(([, init]) => (init as RequestInit | undefined)?.method === "PATCH");
     expect(patchCall?.[0]).toBe("/admin/api/menu/items/item-1");
     expect(JSON.parse((patchCall?.[1] as RequestInit).body as string)).toEqual({ name: "Malai Tikka", shortName: "Paneer Tikka", categoryId: "tandoor" });
@@ -412,12 +413,12 @@ describe("ItemDrawer variants", () => {
   beforeEach(() => vi.unstubAllGlobals());
   afterEach(cleanup);
 
-  it("adds a variant through the dedicated variant endpoint", async () => {
+  it("adds a variant through the dedicated variant endpoint, keeping the drawer open (issue #333)", async () => {
     const updated = item({ variants: [{ id: "v1", name: "Half", sortOrder: 0 }] });
     const fetchMock = stubFetch({
       onPost: (url, body) => (url === "/admin/api/menu/items/item-1/variants" && (body as { name: string }).name === "Half" ? jsonResponse(updated, 201) : undefined),
     });
-    const { onSaved } = renderDrawer();
+    const { onSaved, onClose } = renderDrawer();
     await waitFor(() => screen.getByTestId("item-base-price-current"));
 
     await userEvent.type(screen.getByTestId("item-new-variant-name"), "Half");
@@ -426,5 +427,6 @@ describe("ItemDrawer variants", () => {
     await waitFor(() => expect(onSaved).toHaveBeenCalledWith(updated));
     const postCall = fetchMock.mock.calls.find(([url]) => url === "/admin/api/menu/items/item-1/variants");
     expect(postCall).toBeTruthy();
+    expect(onClose).not.toHaveBeenCalled();
   });
 });

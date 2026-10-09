@@ -15,6 +15,8 @@ with the payments epic.
 - **Staff work at chosen outlets** (#316, needs restiq-backend#197): Add staff and the staff list let the owner pick the outlets each person works at ("Every outlet" by default). Their PIN only signs in there; a till of another outlet says they aren't set up to work there.
 
 ### Fixed
+- **Item drawer stays open on inline edits (#333).** Adding or removing a variant, or changing the photo, no longer closes the drawer; only Save closes it.
+- **Directory search no longer flickers (#333).** The current results stay on screen while the next search loads, instead of flashing the loading skeleton on every keystroke.
 - Owner console walkthrough bugs (#330):
   - **Add Item has a price.** Creating a menu item now asks for its price and posts it (dine-in, reason "Initial price") right after the item is created, the same way a price change saves; before, a new item had no price until someone opened it again and changed one.
   - **Menu list stays in sync.** A category's item count now goes up when an item is created in it (and moves with the item between categories), and the list's price column updates as soon as a price change saves, instead of waiting for a reload.
