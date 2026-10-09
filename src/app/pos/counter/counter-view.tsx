@@ -75,6 +75,7 @@ import { billTotalMinor, isBillReadOnly } from "../orders/[orderId]/settle/bill-
 import { canFinalizeWithElectronic, cashChangeMinor, isElectronicMethod, remainingToTenderMinor, tendersNetOfChange } from "../orders/[orderId]/settle/electronic-tender-state";
 import { TerminalIntentPanel } from "../orders/[orderId]/settle/terminal-intent-panel";
 import { useTerminalIntent } from "../orders/[orderId]/settle/use-terminal-intent";
+import { PosHeader } from "../components/pos-header";
 import { TokenBadge } from "./token-badge";
 import { openDrawerForTenders } from "@/lib/desktop";
 
@@ -323,16 +324,9 @@ function CounterLoaded({
 
   return (
     <div data-testid="counter-view" className="flex h-dvh flex-col overflow-hidden">
-      <header className="flex flex-wrap items-center gap-x-4 gap-y-2 border-b border-border/60 px-4 py-3 sm:px-6">
-        <div>
-          <p className="font-headline text-lg font-bold text-primary">RESTIQ POS</p>
-          <p className="font-label text-xs font-semibold uppercase tracking-wider text-muted-foreground">QSR Counter</p>
-        </div>
-        <Link href="/pos/table-map" data-testid="switch-to-table-mode" className="text-sm text-primary underline-offset-4 hover:underline">
-          Switch to Table Mode
-        </Link>
+      <PosHeader subtitle="QSR Counter" mode="counter">
         {!readOnly && (
-          <div className="relative ml-auto w-80 max-w-full">
+          <div className="relative w-80 max-w-full">
             <Search className="pointer-events-none absolute left-3 top-1/2 size-4 -translate-y-1/2 text-muted-foreground" aria-hidden="true" />
             <input
               type="search"
@@ -344,13 +338,13 @@ function CounterLoaded({
             />
           </div>
         )}
-        <div className={`flex items-center gap-3 ${readOnly ? "ml-auto" : ""}`}>
+        <div className="flex items-center gap-3">
           <p data-testid="counter-cashier" className="text-sm text-muted-foreground">
             Cashier <span className="font-semibold text-foreground">{order.ownerStaffName === currentStaffId ? "You" : order.ownerStaffName}</span>
           </p>
           {typeof order.tokenNumber === "number" && <TokenBadge tokenNumber={order.tokenNumber} />}
         </div>
-      </header>
+      </PosHeader>
 
       {actionError && (
         <div role="alert" data-testid="counter-action-error" className="mx-6 mt-4 rounded-lg border border-status-alert/40 bg-card px-4 py-3 text-sm text-status-alert">
