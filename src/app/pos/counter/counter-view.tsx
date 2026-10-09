@@ -75,6 +75,7 @@ import { billTotalMinor, isBillReadOnly } from "../orders/[orderId]/settle/bill-
 import { canFinalizeWithElectronic, cashChangeMinor, isElectronicMethod, remainingToTenderMinor, tendersNetOfChange } from "../orders/[orderId]/settle/electronic-tender-state";
 import { TerminalIntentPanel } from "../orders/[orderId]/settle/terminal-intent-panel";
 import { useTerminalIntent } from "../orders/[orderId]/settle/use-terminal-intent";
+import { ModeToggle } from "../components/mode-toggle";
 import { TokenBadge } from "./token-badge";
 import { openDrawerForTenders } from "@/lib/desktop";
 
@@ -328,9 +329,7 @@ function CounterLoaded({
           <p className="font-headline text-lg font-bold text-primary">RESTIQ POS</p>
           <p className="font-label text-xs font-semibold uppercase tracking-wider text-muted-foreground">QSR Counter</p>
         </div>
-        <Link href="/pos/table-map" data-testid="switch-to-table-mode" className="text-sm text-primary underline-offset-4 hover:underline">
-          Switch to Table Mode
-        </Link>
+        <ModeToggle current="counter" />
         {!readOnly && (
           <div className="relative ml-auto w-80 max-w-full">
             <Search className="pointer-events-none absolute left-3 top-1/2 size-4 -translate-y-1/2 text-muted-foreground" aria-hidden="true" />

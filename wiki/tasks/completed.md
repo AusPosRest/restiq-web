@@ -1490,6 +1490,9 @@ faked.
   wizard has an optional Subdomain field that checks availability on blur and sends
   `slug` at the top level of the submit. Tests: tenant-by-host, tenant-host-headers,
   login-form, POS login route, wizard-state, wizard.
+- **2026-10-09 - POS mode toggle (#335).** Shared `ModeToggle` (pos/components)
+  replaces the counter's and table map's switch links; testids pos-mode-counter,
+  pos-mode-tables. Tests: mode-toggle.
 - **2026-10-09 - Item drawer closing and directory flicker (#333).** Inline
   drawer edits (variants, photo) call onSaved, which the menu page used to
   close the drawer on; the drawer now closes itself only after the main Save.

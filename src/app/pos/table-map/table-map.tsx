@@ -33,6 +33,7 @@ import {
   type RawTableMapEntry,
   type TableMapEntry,
 } from "./table-map-state";
+import { ModeToggle } from "../components/mode-toggle";
 import { TableTile } from "./table-shape";
 import { TransferOwnershipDialog } from "./transfer-ownership-dialog";
 
@@ -134,13 +135,7 @@ function TableMapLoaded({
           >
             Open orders
           </Link>
-          <Link
-            href="/pos/counter"
-            data-testid="table-map-counter-link"
-            className="whitespace-nowrap rounded-md border border-border px-3 py-1.5 text-xs font-semibold uppercase tracking-wider text-muted-foreground hover:bg-accent hover:text-accent-foreground"
-          >
-            Switch to Counter Mode
-          </Link>
+          <ModeToggle current="tables" />
           <button
             type="button"
             data-testid="table-map-refresh"
