@@ -1,4 +1,4 @@
-import { cleanup, render, screen, waitFor } from "@testing-library/react";
+import { cleanup, render, screen, waitFor, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import type { PlanPriceView } from "../api";
@@ -8,6 +8,11 @@ import { PlansIndex } from "./plans-index";
 const PRICES: PlanPriceView[] = [
   { country: "IN", plan: "standard", monthlyPriceMinor: 49900, annualDiscountPercent: 20, currency: "INR", updatedAt: "" },
   { country: "IN", plan: "enterprise", monthlyPriceMinor: 99900, annualDiscountPercent: 20, currency: "INR", updatedAt: "" },
+];
+
+const PRICES_WITH_AU: PlanPriceView[] = [
+  ...PRICES,
+  { country: "AU", plan: "standard", monthlyPriceMinor: 4900, annualDiscountPercent: 20, currency: "AUD", updatedAt: "" },
 ];
 
 function json(body: unknown, status = 200): Response {
@@ -65,5 +70,24 @@ describe("PlansIndex", () => {
     await user.type(price, "-5");
     expect(screen.getByTestId("plan-error-IN-enterprise")).toBeTruthy();
     expect((screen.getByTestId("plan-save-IN-enterprise") as HTMLButtonElement).disabled).toBe(true);
+  });
+
+  it("splits countries into their own sections", async () => {
+    vi.stubGlobal("fetch", vi.fn(() => Promise.resolve(json({ prices: PRICES_WITH_AU }))));
+    render(
+      <ToastProvider>
+        <PlansIndex />
+      </ToastProvider>,
+    );
+    const inSection = await screen.findByTestId("plans-country-IN");
+    const auSection = screen.getByTestId("plans-country-AU");
+
+    expect(within(inSection).getByTestId("plan-row-IN-standard")).toBeTruthy();
+    expect(within(inSection).queryByTestId("plan-row-AU-standard")).toBeNull();
+    expect(within(auSection).getByTestId("plan-row-AU-standard")).toBeTruthy();
+
+    expect(within(inSection).getByText("India")).toBeTruthy();
+    expect(within(auSection).getByText("Australia")).toBeTruthy();
+    expect(within(auSection).getByText("Prices in AUD (A$)")).toBeTruthy();
   });
 });

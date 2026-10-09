@@ -16,6 +16,8 @@ const INPUT = "h-9 w-28 rounded-lg border border-border bg-input px-2.5 text-sm 
 
 const keyOf = (row: Pick<PlanPriceView, "country" | "plan">) => `${row.country}-${row.plan}`;
 
+const COUNTRIES: PlanPriceView["country"][] = ["IN", "AU"];
+
 export function PlansIndex() {
   const load = useOpsLoad<{ prices: PlanPriceView[] }>("plan-prices");
   return (
@@ -69,69 +71,86 @@ function PlansTable({ initial }: Readonly<{ initial: PlanPriceView[] }>) {
 
   return (
     <>
-      <div className="overflow-x-auto rounded-lg border border-border/40 bg-card">
-        <table className="w-full text-sm" data-testid="plans-table">
-          <thead>
-            <tr className="h-12 border-b border-border/40 text-left">
-              <th className="px-4 font-semibold text-muted-foreground">Country</th>
-              <th className="px-4 font-semibold text-muted-foreground">Plan</th>
-              <th className="px-4 font-semibold text-muted-foreground">Price / outlet / month</th>
-              <th className="px-4 font-semibold text-muted-foreground">Annual discount</th>
-              <th className="px-4" />
-            </tr>
-          </thead>
-          <tbody>
-            {rows.map((row) => {
-              const key = keyOf(row);
-              const form = forms[key];
-              const checked = validatePlanPriceForm(form);
-              const error = "error" in checked ? checked.error : null;
-              return (
-                <tr key={key} data-testid={`plan-row-${key}`} className="border-b border-border/20 last:border-b-0 align-top">
-                  <td className="px-4 py-3">{COUNTRY_LABEL[row.country]}</td>
-                  <td className="px-4 py-3 font-medium">{PLAN_LABEL[row.plan]}</td>
-                  <td className="px-4 py-3">
-                    <label className="flex items-center gap-1.5">
-                      <span className="text-muted-foreground">{CURRENCY_SYMBOL[row.currency]}</span>
-                      <span className="sr-only">{`${COUNTRY_LABEL[row.country]} ${PLAN_LABEL[row.plan]} monthly price`}</span>
-                      <input
-                        inputMode="decimal"
-                        placeholder="On quote"
-                        data-testid={`plan-price-${key}`}
-                        value={form.price}
-                        onChange={(event) => edit(row, { price: event.target.value })}
-                        className={INPUT}
-                      />
-                    </label>
-                    {error && (
-                      <p role="alert" data-testid={`plan-error-${key}`} className="mt-1 text-xs text-status-critical">
-                        {error}
-                      </p>
-                    )}
-                  </td>
-                  <td className="px-4 py-3">
-                    <label className="flex items-center gap-1.5">
-                      <span className="sr-only">{`${COUNTRY_LABEL[row.country]} ${PLAN_LABEL[row.plan]} annual discount`}</span>
-                      <input
-                        inputMode="numeric"
-                        data-testid={`plan-discount-${key}`}
-                        value={form.discount}
-                        onChange={(event) => edit(row, { discount: event.target.value })}
-                        className={`${INPUT} w-16`}
-                      />
-                      <span className="text-muted-foreground">%</span>
-                    </label>
-                  </td>
-                  <td className="px-4 py-3 text-right">
-                    <Button size="sm" data-testid={`plan-save-${key}`} disabled={!isDirty(form, row) || error !== null || busy} onClick={() => setConfirming(row)}>
-                      Save
-                    </Button>
-                  </td>
-                </tr>
-              );
-            })}
-          </tbody>
-        </table>
+      <div className="flex flex-col gap-6">
+        {COUNTRIES.map((country) => [country, rows.filter((row) => row.country === country)] as const)
+          .filter(([, countryRows]) => countryRows.length > 0)
+          .map(([country, countryRows]) => (
+          <section
+            key={country}
+            data-testid={`plans-country-${country}`}
+            aria-labelledby={`plans-country-${country}-heading`}
+            className="rounded-lg border border-border/40 bg-card"
+          >
+            <div className="border-b border-border/40 px-4 py-3">
+              <h2 id={`plans-country-${country}-heading`} className="font-headline text-lg font-semibold">
+                {COUNTRY_LABEL[country]}
+              </h2>
+              <p className="text-sm text-muted-foreground">{`Prices in ${countryRows[0].currency} (${CURRENCY_SYMBOL[countryRows[0].currency]})`}</p>
+            </div>
+            <div className="overflow-x-auto">
+              <table className="w-full text-sm" data-testid={`plans-table-${country}`}>
+                <thead>
+                  <tr className="h-12 border-b border-border/40 text-left">
+                    <th className="px-4 font-semibold text-muted-foreground">Plan</th>
+                    <th className="px-4 font-semibold text-muted-foreground">Price / outlet / month</th>
+                    <th className="px-4 font-semibold text-muted-foreground">Annual discount</th>
+                    <th className="px-4" />
+                  </tr>
+                </thead>
+                <tbody>
+                  {countryRows.map((row) => {
+                    const key = keyOf(row);
+                    const form = forms[key];
+                    const checked = validatePlanPriceForm(form);
+                    const error = "error" in checked ? checked.error : null;
+                    return (
+                      <tr key={key} data-testid={`plan-row-${key}`} className="border-b border-border/20 last:border-b-0 align-top">
+                        <td className="px-4 py-3 font-medium">{PLAN_LABEL[row.plan]}</td>
+                        <td className="px-4 py-3">
+                          <label className="flex items-center gap-1.5">
+                            <span className="text-muted-foreground">{CURRENCY_SYMBOL[row.currency]}</span>
+                            <span className="sr-only">{`${COUNTRY_LABEL[row.country]} ${PLAN_LABEL[row.plan]} monthly price`}</span>
+                            <input
+                              inputMode="decimal"
+                              placeholder="On quote"
+                              data-testid={`plan-price-${key}`}
+                              value={form.price}
+                              onChange={(event) => edit(row, { price: event.target.value })}
+                              className={INPUT}
+                            />
+                          </label>
+                          {error && (
+                            <p role="alert" data-testid={`plan-error-${key}`} className="mt-1 text-xs text-status-critical">
+                              {error}
+                            </p>
+                          )}
+                        </td>
+                        <td className="px-4 py-3">
+                          <label className="flex items-center gap-1.5">
+                            <span className="sr-only">{`${COUNTRY_LABEL[row.country]} ${PLAN_LABEL[row.plan]} annual discount`}</span>
+                            <input
+                              inputMode="numeric"
+                              data-testid={`plan-discount-${key}`}
+                              value={form.discount}
+                              onChange={(event) => edit(row, { discount: event.target.value })}
+                              className={`${INPUT} w-16`}
+                            />
+                            <span className="text-muted-foreground">%</span>
+                          </label>
+                        </td>
+                        <td className="px-4 py-3 text-right">
+                          <Button size="sm" data-testid={`plan-save-${key}`} disabled={!isDirty(form, row) || error !== null || busy} onClick={() => setConfirming(row)}>
+                            Save
+                          </Button>
+                        </td>
+                      </tr>
+                    );
+                  })}
+                </tbody>
+              </table>
+            </div>
+          </section>
+        ))}
       </div>
       <ConfirmReasonDialog
         open={confirming !== null}
