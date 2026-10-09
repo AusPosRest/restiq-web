@@ -16,6 +16,7 @@ export function MenuTable({
   items,
   currency,
   filterKey,
+  priceOverrides,
   onSelect,
   onAvailabilityChanged,
 }: Readonly<{
@@ -23,6 +24,8 @@ export function MenuTable({
   currency: string;
   /** Changes whenever the category/search filter changes, so the pager returns to page 1 (issue #255). */
   filterKey?: string;
+  /** Issue #330: a price the drawer just changed in this session, keyed by item id. */
+  priceOverrides?: Record<string, number>;
   onSelect: (item: ItemView) => void;
   onAvailabilityChanged: (itemId: string, available: boolean) => void;
 }>) {
@@ -41,7 +44,7 @@ export function MenuTable({
       </thead>
       <tbody>
         {pager.items.map((item) => (
-          <MenuTableRow key={item.id} item={item} currency={currency} onSelect={onSelect} onAvailabilityChanged={onAvailabilityChanged} />
+          <MenuTableRow key={item.id} item={item} currency={currency} priceOverride={priceOverrides?.[item.id]} onSelect={onSelect} onAvailabilityChanged={onAvailabilityChanged} />
         ))}
       </tbody>
     </table>
@@ -53,18 +56,26 @@ export function MenuTable({
 function MenuTableRow({
   item,
   currency,
+  priceOverride,
   onSelect,
   onAvailabilityChanged,
-}: Readonly<{ item: ItemView; currency: string; onSelect: (item: ItemView) => void; onAvailabilityChanged: (itemId: string, available: boolean) => void }>) {
+}: Readonly<{
+  item: ItemView;
+  currency: string;
+  priceOverride?: number;
+  onSelect: (item: ItemView) => void;
+  onAvailabilityChanged: (itemId: string, available: boolean) => void;
+}>) {
   const hasVariants = item.variants.length > 0;
-  const [priceMinor, setPriceMinor] = useState<number | null>(null);
+  const [fetchedPriceMinor, setFetchedPriceMinor] = useState<number | null>(null);
+  const priceMinor = priceOverride ?? fetchedPriceMinor;
 
   useEffect(() => {
     if (hasVariants) return;
     let cancelled = false;
     fetchCurrentPrice(item.id, { channel: "dine_in" })
       .then((price) => {
-        if (!cancelled) setPriceMinor(price?.priceMinor ?? null);
+        if (!cancelled) setFetchedPriceMinor(price?.priceMinor ?? null);
       })
       .catch(() => undefined);
     return () => {

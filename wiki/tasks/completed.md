@@ -1490,3 +1490,11 @@ faked.
   wizard has an optional Subdomain field that checks availability on blur and sends
   `slug` at the top level of the submit. Tests: tenant-by-host, tenant-host-headers,
   login-form, POS login route, wizard-state, wizard.
+- **2026-10-09 - Owner console walkthrough bugs (#330).** Add Item requires a
+  price and posts it through the same client the price-change dialog uses
+  (base price, dine-in, reason "Initial price") right after the item is
+  created. The Menu list's category counts now adjust on create and on a
+  category move, and a price change updates the list row instead of waiting
+  for a reload. The ops invite link's "No email is sent in this prototype"
+  line is replaced with copy that matches the mail simulator actually
+  sending it. Tests: item-drawer, menu-management.

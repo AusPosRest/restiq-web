@@ -83,9 +83,12 @@ export function MenuManagement() {
   const [importOpen, setImportOpen] = useState(false);
   const pushToast = useToast();
   const [directoryOpen, setDirectoryOpen] = useState(false);
+  // Issue #330: the list only ever fetches an item's price once, on mount - an
+  // override here keeps the row in sync right after the drawer changes it.
+  const [priceOverrides, setPriceOverrides] = useState<Record<string, number>>({});
 
   const effectiveItems = useMemo(() => items ?? data?.items ?? [], [items, data]);
-  const effectiveCategories = categories ?? data?.categories ?? [];
+  const effectiveCategories = useMemo(() => categories ?? data?.categories ?? [], [categories, data]);
   const effectiveModifierGroups = modifierGroups ?? data?.modifierGroups ?? [];
   const effectiveAllergens = allergens ?? data?.allergens ?? [];
   const effectiveCombos = combos ?? data?.combos ?? [];
@@ -94,13 +97,26 @@ export function MenuManagement() {
 
   const upsertItem = useCallback(
     (updated: ItemView) => {
+      const previous = effectiveItems.find((item) => item.id === updated.id);
       setItems((current) => {
         const base = current ?? effectiveItems;
         const exists = base.some((item) => item.id === updated.id);
         return exists ? base.map((item) => (item.id === updated.id ? updated : item)) : [...base, updated];
       });
+      if (!previous) {
+        // A new item: its category's count was never incremented for it.
+        setCategories(effectiveCategories.map((c) => (c.id === updated.categoryId ? { ...c, itemCount: c.itemCount + 1 } : c)));
+      } else if (previous.categoryId !== updated.categoryId) {
+        setCategories(
+          effectiveCategories.map((c) => {
+            if (c.id === previous.categoryId) return { ...c, itemCount: Math.max(0, c.itemCount - 1) };
+            if (c.id === updated.categoryId) return { ...c, itemCount: c.itemCount + 1 };
+            return c;
+          }),
+        );
+      }
     },
-    [effectiveItems],
+    [effectiveItems, effectiveCategories],
   );
 
   function handleAvailabilityChanged(itemId: string, available: boolean) {
@@ -207,7 +223,14 @@ export function MenuManagement() {
               {filtered.length === 0 ? (
                 <EmptyState filtered={filteredOrSearched} onClearFilters={() => { setCategory(ALL_CATEGORY); setSearch(""); }} onImport={() => setImportOpen(true)} onAddItem={() => setDrawerItem(null)} onBrowseDirectory={() => setDirectoryOpen(true)} />
               ) : (
-                <MenuTable items={filtered} currency={CURRENCY} filterKey={`${category}|${search}`} onSelect={setDrawerItem} onAvailabilityChanged={handleAvailabilityChanged} />
+                <MenuTable
+                  items={filtered}
+                  currency={CURRENCY}
+                  filterKey={`${category}|${search}`}
+                  priceOverrides={priceOverrides}
+                  onSelect={setDrawerItem}
+                  onAvailabilityChanged={handleAvailabilityChanged}
+                />
               )}
             </div>
           </div>
@@ -239,6 +262,7 @@ export function MenuManagement() {
         }}
         onModifierGroupCreated={(group) => setModifierGroups([...effectiveModifierGroups, group])}
         onAllergenCreated={(allergen) => setAllergens([...effectiveAllergens, allergen])}
+        onPriceChanged={(itemId, priceMinor) => setPriceOverrides((current) => ({ ...current, [itemId]: priceMinor }))}
       />
 
       <ImportDialog open={importOpen} onClose={() => setImportOpen(false)} onCommitted={handleImported} />

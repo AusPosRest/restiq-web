@@ -15,8 +15,8 @@ export function InviteLinkChip({ token }: Readonly<{ token: string }>) {
     <div data-testid="invite-link-chip" className="mt-3 rounded-lg border border-primary/40 bg-primary/5 p-3 text-left">
       <p className="text-xs font-semibold">Invite link - shown once, copy it now</p>
       <p className="mt-1 text-xs text-muted-foreground">
-        No email is sent in this prototype. Share this link with the owner; it stops working if the invite is
-        regenerated.
+        We emailed this link to the owner. Copy it here too in case the email does not arrive; it stops working if
+        the invite is regenerated.
       </p>
       <div className="mt-2 flex items-center gap-2">
         <code data-testid="invite-link-url" className="min-w-0 flex-1 truncate rounded bg-muted px-2 py-1 text-xs">

@@ -218,6 +218,41 @@ describe("MenuManagement list", () => {
     expect(within(screen.getByTestId("item-drawer")).getByText("Add Item")).toBeTruthy();
   });
 
+  it("bumps the category's item count when a new item is created in it (issue #330)", async () => {
+    const created = item({ id: "3", name: "Chicken Tikka", shortName: "Chicken Tikka", categoryId: "tandoor" });
+    const fetchMock = vi.fn((input: RequestInfo | URL, init?: RequestInit) => {
+      const url = String(input);
+      const method = init?.method ?? "GET";
+      if (method === "POST" && url === "/admin/api/menu/items") return Promise.resolve(jsonResponse(created, 201));
+      if (method === "POST" && url === "/admin/api/menu/items/3/prices") return Promise.resolve(jsonResponse({ id: "p1" }, 201));
+      if (url.includes("/admin/api/outlets")) return Promise.resolve(jsonResponse([]));
+      if (url.includes("/admin/api/menu/items") && url.includes("price?")) {
+        return Promise.resolve(
+          jsonResponse({ itemId: "1", variantId: null, channel: "dine_in", outletId: null, priceMinor: 18000, currency: "INR", effectiveAt: "2026-08-01T00:00:00.000Z" }),
+        );
+      }
+      if (url.includes("/admin/api/menu/items")) return Promise.resolve(jsonResponse(ITEMS));
+      if (url.includes("/admin/api/menu/categories")) return Promise.resolve(jsonResponse(CATEGORIES));
+      if (url.includes("/admin/api/menu/modifier-groups")) return Promise.resolve(jsonResponse([]));
+      if (url.includes("/admin/api/menu/allergens")) return Promise.resolve(jsonResponse([]));
+      if (url.includes("/admin/api/menu/combos")) return Promise.resolve(jsonResponse([]));
+      return Promise.resolve(jsonResponse({ error: { code: "not_found", message: "unhandled" } }, 404));
+    });
+    vi.stubGlobal("fetch", fetchMock);
+    renderMenu();
+    await screen.findByTestId("menu-table");
+    expect(within(screen.getByTestId("menu-category-tandoor")).getByText("1")).toBeTruthy();
+
+    await userEvent.click(screen.getByTestId("menu-add-item"));
+    await userEvent.type(screen.getByTestId("item-name-input"), "Chicken Tikka");
+    await userEvent.type(screen.getByTestId("item-short-name-input"), "Chicken Tikka");
+    await userEvent.type(screen.getByTestId("item-create-price"), "200");
+    await userEvent.click(screen.getByTestId("item-save"));
+
+    expect(await screen.findByTestId("menu-item-row-3")).toBeTruthy();
+    expect(within(screen.getByTestId("menu-category-tandoor")).getByText("2")).toBeTruthy();
+  });
+
   it("pages the item table 20 at a time and returns to page 1 when the search changes (issue #255)", async () => {
     const many = Array.from({ length: 25 }, (_, i) => item({ id: `m${i + 1}`, name: `Dish ${String(i + 1).padStart(2, "0")}`, categoryId: "mains" }));
     stubFetch({ items: many });
