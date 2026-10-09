@@ -15,6 +15,8 @@ interface OutletContextValue {
   loading: boolean;
   selectedOutletId: string | null;
   selectOutlet: (id: string) => void;
+  /** Applies a just-saved patch locally so e.g. the outlet switcher reflects a renamed outlet without a refetch. */
+  updateOutlet: (id: string, patch: Partial<Pick<OutletView, "name" | "address" | "timezone">>) => void;
 }
 
 const OutletContext = createContext<OutletContextValue | null>(null);
@@ -48,7 +50,11 @@ export function OutletProvider({ children }: Readonly<{ children: React.ReactNod
     sessionStorage.setItem(STORAGE_KEY, id);
   }, []);
 
-  return <OutletContext.Provider value={{ outlets, loading, selectedOutletId, selectOutlet }}>{children}</OutletContext.Provider>;
+  const updateOutlet = useCallback((id: string, patch: Partial<Pick<OutletView, "name" | "address" | "timezone">>) => {
+    setOutlets((current) => current.map((outlet) => (outlet.id === id ? { ...outlet, ...patch } : outlet)));
+  }, []);
+
+  return <OutletContext.Provider value={{ outlets, loading, selectedOutletId, selectOutlet, updateOutlet }}>{children}</OutletContext.Provider>;
 }
 
 export function useOutlets(): OutletContextValue {

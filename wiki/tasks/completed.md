@@ -1,5 +1,6 @@
 # Completed
 
+- **2026-10-09** - Outlet tab (issue #329): `(shell)/settings/outlet-details-editor.tsx` + `settings/outlet/page.tsx`, now the default settings tab (`settings-tabs.tsx`, `settings/page.tsx`). `updateOutlet` in `api.ts` PATCHes only the changed fields; `OutletContext` gained a small `updateOutlet` to apply the save locally. The checklist's `outlet_details` step is now a link step pointing here.
 - **2026-10-08** - Plans page (issue #323): `ops/(shell)/plans/` (`plans-index.tsx`, `plans-state.ts`), nav item, `PlanPriceView` in `api.ts`. The wizard's `planPrice(prices, ...)` and `annualDiscountPercent` read `GET /ops/v1/plan-prices`; the hard-coded `PLAN_MONTHLY_PRICE` and `ANNUAL_DISCOUNT_PERCENT` are gone.
 - **2026-10-08** - India plan prices (issue #321): `PLAN_MONTHLY_PRICE.IN` is ₹499 / ₹999 and `PLAN_CURRENCY_SYMBOL` picks A$ or ₹ in `steps.tsx`.
 - **2026-10-08** - Mail inbox simulator (issue #318): `src/app/simulator/inbox/` (server-rendered `page.tsx` reading `GET /dev/v1/inbox`, `auto-refresh.tsx`, `linkify` in `inbox-state.ts`). Shows "simulator is off" on a 404.

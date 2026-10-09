@@ -53,7 +53,7 @@ describe("GoLiveChecklist", () => {
     expect(await screen.findByTestId("admin-checklist-progress")).toHaveProperty("textContent", "2/5");
     expect(screen.getByTestId("admin-checklist-step-outlet_details-status").textContent).toBe("Done");
     expect(screen.getByTestId("admin-checklist-step-floor_plan-status").textContent).toBe("Not started");
-    expect(screen.queryByTestId("admin-checklist-step-outlet_details-action")).toBeNull();
+    expect(screen.getByTestId("admin-checklist-step-outlet_details-action").textContent).toBe("Review");
     expect(screen.getByTestId("admin-checklist-step-floor_plan-action")).toHaveProperty(
       "href",
       expect.stringContaining("/admin/floor-plan"),
@@ -74,7 +74,7 @@ describe("GoLiveChecklist", () => {
     expect(screen.getByTestId("admin-checklist-go-live-reason").textContent).toBe('Complete "Import your menu" to go live.');
   });
 
-  it("marks outlet details complete from the PATCH response, no extra fetch needed", async () => {
+  it("links outlet details to the Outlet settings tab and marks it done from the PATCH response", async () => {
     const fetchMock = vi
       .fn()
       .mockResolvedValueOnce(jsonResponse({ steps: checklistSteps(), canGoLive: false, tenantStatus: "provisioning" }))
@@ -84,7 +84,12 @@ describe("GoLiveChecklist", () => {
     vi.stubGlobal("fetch", fetchMock);
     render(<GoLiveChecklist />);
 
-    await userEvent.click(await screen.findByTestId("admin-checklist-step-outlet_details-action"));
+    expect((await screen.findByTestId("admin-checklist-step-outlet_details-action")).textContent).toBe("Start");
+    expect(screen.getByTestId("admin-checklist-step-outlet_details-action")).toHaveProperty(
+      "href",
+      expect.stringContaining("/admin/settings/outlet?from=setup"),
+    );
+    await userEvent.click(screen.getByTestId("admin-checklist-step-outlet_details-done"));
 
     await waitFor(() => expect(screen.getByTestId("admin-checklist-step-outlet_details-status").textContent).toBe("Done"));
     expect(fetchMock).toHaveBeenCalledTimes(2);
