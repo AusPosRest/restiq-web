@@ -15,7 +15,7 @@ with the payments epic.
 - **Staff work at chosen outlets** (#316, needs restiq-backend#197): Add staff and the staff list let the owner pick the outlets each person works at ("Every outlet" by default). Their PIN only signs in there; a till of another outlet says they aren't set up to work there.
 
 ### Fixed
-- **POS mode toggle (#335).** The QSR counter and the table map now share one header (same title, toggle position and padding) with a Counter | Tables toggle that shows the current mode, replacing the "Switch to Table Mode" / "Switch to Counter Mode" links.
+- **POS mode toggle (#335).** The QSR counter and the table map now share one header (same title, toggle position and padding) with a Counter ⇄ Tables switch (knob on the current mode, one tap flips it), replacing the "Switch to Table Mode" / "Switch to Counter Mode" links.
 - **Item drawer stays open on inline edits (#333).** Adding or removing a variant, or changing the photo, no longer closes the drawer; only Save closes it.
 - **Directory search no longer flickers (#333).** The current results stay on screen while the next search loads, instead of flashing the loading skeleton on every keystroke.
 - Owner console walkthrough bugs (#330):
