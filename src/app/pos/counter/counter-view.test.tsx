@@ -80,6 +80,7 @@ function stubFetch(handlers: Partial<Record<string, (init?: RequestInit) => Resp
     const method = init?.method ?? "GET";
     const key = `${method} ${url.replace(/^.*\/pos\/api\//, "")}`;
     if (handlers[key]) return Promise.resolve(handlers[key]!(init));
+    if (key.startsWith("GET shifts/current")) return Promise.resolve(jsonResponse({ id: "shift-1" }));
     return Promise.resolve(jsonResponse({ error: { code: "not_found", message: `unhandled ${key}` } }, 404));
   });
   vi.stubGlobal("fetch", fetchMock);
@@ -109,6 +110,23 @@ const NAAN_LINE = {
 function resumeOrder47() {
   sessionStorage.setItem(`pos:counter-order:${CURRENT_STAFF_ID}`, "order-47");
 }
+
+describe("CounterView - no shift open (restiq-web#341)", () => {
+  it("asks the cashier to open a shift before taking cash", async () => {
+    resumeOrder47();
+    stubFetch({
+      "GET menu": () => jsonResponse(MENU),
+      "GET orders/order-47": () => jsonResponse(counterOrder({ lines: [NAAN_LINE] })),
+      "POST orders/order-47/bill": () => jsonResponse(bill("order-47", { subtotalMinor: 6000, totalMinor: 6300 }), 201),
+      [`GET shifts/current?outletId=${OUTLET_ID}`]: () => jsonResponse({ error: { code: "not_found", message: "No open shift for this outlet" } }, 404),
+    });
+    render(<CounterView outletId={OUTLET_ID} currentStaffId={CURRENT_STAFF_ID} currentStaffName="Priya" />);
+
+    await screen.findByTestId("tender-shift-required");
+    expect(screen.getByTestId("tender-open-shift").getAttribute("href")).toBe("/pos/shift");
+    expect(screen.getByTestId("tender-fill-remaining")).toHaveProperty("disabled", true);
+  });
+});
 
 describe("CounterView - starting a counter order (restiq-web#343)", () => {
   it("creates nothing on open - no order, no token - and shows the cashier's name (PE-16, PE-19)", async () => {

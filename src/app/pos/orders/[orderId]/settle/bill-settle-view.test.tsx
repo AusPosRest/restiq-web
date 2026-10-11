@@ -90,6 +90,7 @@ function stubFetch(handlers: Partial<Record<string, (init?: RequestInit) => Resp
     if (handlers[key]) return Promise.resolve(handlers[key]!(init));
     if (key === `GET orders/${ORDER_ID}`) return Promise.resolve(jsonResponse(rawOrder()));
     if (key === "GET menu") return Promise.resolve(jsonResponse(MENU));
+    if (key.startsWith("GET shifts/current")) return Promise.resolve(jsonResponse({ id: "shift-1" }));
     if (key === `POST orders/${ORDER_ID}/bill`) return Promise.resolve(jsonResponse(makeBill(), 201));
     return Promise.resolve(jsonResponse({ error: { code: "not_found", message: `unhandled ${key}` } }, 404));
   });
@@ -226,6 +227,26 @@ describe("BillSettleView - print bill (issues #160, #224)", () => {
     await screen.findByTestId("bill-summary");
     await userEvent.click(screen.getByTestId("print-bill"));
     await waitFor(() => expect(screen.getByTestId("print-bill").textContent).toBe("Couldn't send"));
+  });
+});
+
+describe("BillSettleView - no shift open (restiq-web#341)", () => {
+  it("asks the cashier to open a shift before taking cash, but still takes an external payment", async () => {
+    const fetchMock = stubFetch({
+      [`GET shifts/current?outletId=${encodeURIComponent(rawOrder().outletId)}`]: () => jsonResponse({ error: { code: "not_found", message: "No open shift for this outlet" } }, 404),
+    });
+    render(<BillSettleView orderId={ORDER_ID} />);
+
+    await screen.findByTestId("tender-shift-required");
+    expect(screen.getByTestId("tender-open-shift").getAttribute("href")).toBe("/pos/shift");
+    expect(screen.getByTestId("tender-fill-remaining")).toHaveProperty("disabled", true);
+    expect(screen.getByTestId("tender-add")).toHaveProperty("disabled", true);
+
+    await userEvent.click(screen.getByTestId("tender-method-external"));
+    expect(screen.queryByTestId("tender-shift-required")).toBeNull();
+    await userEvent.type(screen.getByTestId("tender-external-reference"), "EFT-1");
+    expect(screen.getByTestId("tender-fill-remaining")).toHaveProperty("disabled", false);
+    expect(fetchMock.mock.calls.some(([input]) => String(input).includes("/finalize"))).toBe(false);
   });
 });
 

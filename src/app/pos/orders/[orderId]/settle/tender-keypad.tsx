@@ -24,6 +24,7 @@
 // terminal approves, the server-written tender arrives in `bill.tenders` and
 // is listed here as captured (`capturedTenders`) - never removable, since
 // the money already moved.
+import Link from "next/link";
 import { useState } from "react";
 import { X } from "lucide-react";
 import { Button } from "@/components/ui/button";
@@ -47,6 +48,8 @@ export interface TenderKeypadProps {
   terminalBusy?: boolean;
   /** Cash over the total, to hand back (issue #306). */
   changeMinor?: number;
+  /** No shift is open at this outlet - cash can't be taken until one is (restiq-web#341). */
+  cashLocked?: boolean;
 }
 
 // External (issue #224): paid outside RESTIQ - a standalone EFTPOS machine, a
@@ -63,6 +66,7 @@ export function TenderKeypad({
   onSendToTerminal,
   terminalBusy = false,
   changeMinor = 0,
+  cashLocked = false,
 }: Readonly<TenderKeypadProps>) {
   const [method, setMethod] = useState<KeypadMethod>("cash");
   const [digits, setDigits] = useState("");
@@ -72,11 +76,12 @@ export function TenderKeypad({
   const isTerminal = method === "card_terminal";
   const isExternal = method === "external";
   const referenceReady = !isExternal || reference.trim() !== "";
-  const canAdd = amountMinor > 0 && referenceReady && (!isTerminal || (amountMinor <= remainingMinor && !terminalBusy));
+  const blocked = cashLocked && method === "cash";
+  const canAdd = !blocked && amountMinor > 0 && referenceReady && (!isTerminal || (amountMinor <= remainingMinor && !terminalBusy));
   const methods: KeypadMethod[] = onSendToTerminal ? [...METHODS, "card_terminal"] : METHODS;
 
   function submit(minor: number) {
-    if (minor <= 0 || !referenceReady) return;
+    if (blocked || minor <= 0 || !referenceReady) return;
     if (isTerminal) onSendToTerminal?.(minor);
     else onAddTender(method, minor, isExternal ? reference.trim() : undefined);
     setDigits("");
@@ -189,12 +194,21 @@ export function TenderKeypad({
           variant="outline"
           size="sm"
           data-testid="tender-fill-remaining"
-          disabled={remainingMinor <= 0 || !referenceReady || (isTerminal && terminalBusy)}
+          disabled={blocked || remainingMinor <= 0 || !referenceReady || (isTerminal && terminalBusy)}
           onClick={() => submit(remainingMinor)}
         >
           {isTerminal ? "Send exact remaining" : "Exact remaining"} · {formatMinor(remainingMinor, currency)}
         </Button>
       </div>
+
+      {blocked && (
+        <div role="alert" data-testid="tender-shift-required" className="rounded-lg border border-status-alert/40 px-3 py-2 text-sm text-status-alert">
+          Open your shift with the starting cash float before taking cash.{" "}
+          <Link href="/pos/shift" data-testid="tender-open-shift" className="font-semibold underline underline-offset-4">
+            Open shift
+          </Link>
+        </div>
+      )}
 
       <Button size="lg" data-testid={isTerminal ? "tender-send-terminal" : "tender-add"} disabled={!canAdd} onClick={() => submit(amountMinor)}>
         {isTerminal ? (terminalBusy ? "Sending…" : "Send to terminal") : `Add ${TENDER_METHOD_LABEL[method]} tender`}

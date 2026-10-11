@@ -87,6 +87,7 @@ import { PosHeader } from "../components/pos-header";
 import { TokenBadge } from "./token-badge";
 import { clearCounterOrderId, readCounterOrderId, saveCounterOrderId } from "./counter-session";
 import { openDrawerForTenders } from "@/lib/desktop";
+import { useShiftOpen } from "../(shell)/shift/use-shift-open";
 
 export function CounterView({
   outletId,
@@ -94,6 +95,7 @@ export function CounterView({
   currentStaffName,
 }: Readonly<{ outletId: string; currentStaffId: string; currentStaffName: string }>) {
   const menuLoad = usePosLoad<PosMenuView>("menu");
+  const shiftOpen = useShiftOpen(outletId);
   // undefined = still checking this tab for an order in progress; null = none (a fresh, not-yet-created order).
   const [resumed, setResumed] = useState<OrderView | null | undefined>(undefined);
   // Bumped by "Start next order" / discard so CounterLoaded remounts empty.
@@ -139,6 +141,7 @@ export function CounterView({
       initialOrder={resumed}
       currentStaffId={currentStaffId}
       currentStaffName={currentStaffName}
+      shiftOpen={shiftOpen}
       onStartNextOrder={startNextOrder}
     />
   );
@@ -150,6 +153,7 @@ function CounterLoaded({
   initialOrder,
   currentStaffId,
   currentStaffName,
+  shiftOpen,
   onStartNextOrder,
 }: Readonly<{
   outletId: string;
@@ -157,6 +161,7 @@ function CounterLoaded({
   initialOrder: OrderView | null;
   currentStaffId: string;
   currentStaffName: string;
+  shiftOpen: boolean | null;
   onStartNextOrder: () => void;
 }>) {
   // null until the first item is rung up - opening the screen creates nothing (PE-16).
@@ -527,6 +532,7 @@ function CounterLoaded({
                   onSendToTerminal={terminal.send}
                   terminalBusy={terminal.busy}
                   changeMinor={cashChangeMinor(totalMinor, bill, pendingTenders)}
+                  cashLocked={shiftOpen === false}
                 />
               )}
             </div>
