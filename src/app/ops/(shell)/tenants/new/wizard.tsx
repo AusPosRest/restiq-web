@@ -10,7 +10,7 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import { Button } from "@/components/ui/button";
 import { InviteLinkChip } from "../invite-link";
 import { BusinessStep, OutletsStep, OwnerInviteStep, SubscriptionStep, TaxStep } from "./steps";
-import { STEP_COUNT, STEPS, StepErrors, StepKey, WizardData, dataFromDraft, emptyWizardData, firstIncompleteStep, toSubmitPayload, validateStep, keepUnfixedErrors, prefillOwner } from "./wizard-state";
+import { STEP_COUNT, STEPS, StepErrors, StepKey, TaxData, WizardData, dataFromDraft, normalizedTaxNumber, emptyWizardData, firstIncompleteStep, toSubmitPayload, validateStep, keepUnfixedErrors, prefillOwner } from "./wizard-state";
 
 const AUTOSAVE_DEBOUNCE_MS = 800;
 
@@ -34,6 +34,23 @@ function stepPayload(data: WizardData, step: number): object {
   return data[STEPS[step - 1].key];
 }
 
+// PE-6: a GSTIN / ABN another tenant already uses is caught on step 2, not
+// only at submit. A failed check lets the operator carry on; submit checks again.
+async function taxNumberTaken(tax: TaxData): Promise<boolean> {
+  try {
+    const query = new URLSearchParams({ country: tax.country, number: normalizedTaxNumber(tax.registrationNumber) });
+    const res = await api(`tenants/tax-number-available?${query}`);
+    if (!res.ok) return false;
+    return ((await res.json()) as { reason: string | null }).reason === "taken";
+  } catch {
+    return false;
+  }
+}
+
+function taxNumberTakenMessage(tax: TaxData): string {
+  return `Another restaurant on RESTIQ already uses this ${tax.country === "IN" ? "GSTIN" : "ABN"}.`;
+}
+
 export function OnboardingWizard() {
   const [phase, setPhase] = useState<Phase>({ name: "loading" });
   const [data, setData] = useState<WizardData>(emptyWizardData);
@@ -41,6 +58,7 @@ export function OnboardingWizard() {
   const [errors, setErrors] = useState<StepErrors>({});
   const [draftStatus, setDraftStatus] = useState<DraftStatus>({ state: "idle" });
   const [submitting, setSubmitting] = useState(false);
+  const [checkingTax, setCheckingTax] = useState(false);
   const [submitError, setSubmitError] = useState<string | null>(null);
   const debounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const dataRef = useRef(data);
@@ -115,6 +133,15 @@ export function OnboardingWizard() {
       else delete next[field];
       return next;
     });
+    if (step === 2 && field === "registrationNumber" && !stepErrors.registrationNumber) {
+      const tax = dataRef.current.tax;
+      void taxNumberTaken(tax).then((taken) => {
+        // Ignore an answer for a number that has since been edited.
+        if (taken && dataRef.current.tax.registrationNumber === tax.registrationNumber) {
+          setErrors((current) => ({ ...current, registrationNumber: taxNumberTakenMessage(tax) }));
+        }
+      });
+    }
   }
 
   function goToStep(target: number): void {
@@ -127,10 +154,19 @@ export function OnboardingWizard() {
     setStep(target);
   }
 
-  function onNext(): void {
+  async function onNext(): Promise<void> {
     const stepErrors = validateStep(step, data);
     setErrors(stepErrors);
     if (Object.keys(stepErrors).length > 0) return;
+    if (step === 2) {
+      setCheckingTax(true);
+      const taken = await taxNumberTaken(data.tax);
+      setCheckingTax(false);
+      if (taken) {
+        setErrors({ registrationNumber: taxNumberTakenMessage(data.tax) });
+        return;
+      }
+    }
     goToStep(step + 1);
   }
 
@@ -393,7 +429,7 @@ export function OnboardingWizard() {
           </div>
           <div className="flex items-center gap-4">
             {step < STEP_COUNT ? (
-              <Button type="button" data-testid="onb-next" onClick={onNext}>
+              <Button type="button" data-testid="onb-next" disabled={checkingTax} onClick={() => void onNext()}>
                 {step === 1 ? "Next Step" : `Continue to ${STEPS[step].title}`}
               </Button>
             ) : (

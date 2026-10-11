@@ -19,6 +19,7 @@ let fetchCalls: FetchCall[] = [];
 // PE-6: the API answers { draft: null } when there is no draft (it used to 404).
 let draftResponse: { status: number; body: unknown } = { status: 200, body: { draft: null } };
 let slugAnswer: (slug: string) => unknown = (slug) => ({ slug, available: true, reason: null });
+let taxAnswer: { status: number; body: unknown } = { status: 200, body: { available: true, reason: null } };
 let submitResponse: { status: number; body: unknown } = { status: 201, body: null };
 
 function jsonResponse(status: number, body: unknown): Response {
@@ -38,6 +39,7 @@ beforeEach(() => {
       if (path.startsWith("/ops/api/tenants/draft/steps/") && method === "PUT") {
         return jsonResponse(200, { updatedAt: new Date().toISOString() });
       }
+      if (path.startsWith("/ops/api/tenants/tax-number-available?")) return jsonResponse(taxAnswer.status, taxAnswer.body);
       if (path.startsWith("/ops/api/tenant-slugs/")) return jsonResponse(200, slugAnswer(path.split("/").pop() ?? ""));
       if (path === "/ops/api/tenants" && method === "POST") return jsonResponse(submitResponse.status, submitResponse.body);
       throw new Error(`Unexpected fetch: ${method} ${path}`);
@@ -49,6 +51,7 @@ afterEach(() => {
   cleanup();
   vi.unstubAllGlobals();
   draftResponse = { status: 200, body: { draft: null } };
+  taxAnswer = { status: 200, body: { available: true, reason: null } };
 });
 
 async function renderFresh() {
@@ -63,6 +66,56 @@ async function fillStep1(user: ReturnType<typeof userEvent.setup>) {
   await user.type(screen.getByTestId("onb-contact-email"), "arjun@spiceroute.example");
   await user.type(screen.getByTestId("onb-contact-phone"), "+91 98765 43210");
 }
+
+async function reachStep2WithGstin(user: ReturnType<typeof userEvent.setup>, gstin: string) {
+  await fillStep1(user);
+  await user.click(screen.getByTestId("onb-next"));
+  await screen.findByRole("heading", { name: "Tax & Compliance" });
+  await user.type(screen.getByTestId("onb-registration-number"), gstin);
+  await user.type(screen.getByTestId("onb-legal-entity-name"), "Spice Route Pvt Ltd");
+}
+
+describe("OnboardingWizard tax number check (PE-6)", () => {
+  it("stops on step 2 when another tenant already uses the GSTIN, without naming it", async () => {
+    taxAnswer = { status: 200, body: { available: false, reason: "taken" } };
+    const user = userEvent.setup();
+    await renderFresh();
+    await reachStep2WithGstin(user, "29abcde1234f1z5");
+    await user.click(screen.getByTestId("onb-next"));
+
+    expect((await screen.findByTestId("onb-registration-number-error")).textContent).toBe("Another restaurant on RESTIQ already uses this GSTIN.");
+    expect(screen.getByRole("heading", { name: "Tax & Compliance" })).toBeDefined();
+    const check = fetchCalls.find((call) => call.path.startsWith("/ops/api/tenants/tax-number-available?"));
+    expect(check?.path).toBe("/ops/api/tenants/tax-number-available?country=IN&number=29ABCDE1234F1Z5");
+  });
+
+  it("flags a taken number as soon as the field is left", async () => {
+    taxAnswer = { status: 200, body: { available: false, reason: "taken" } };
+    const user = userEvent.setup();
+    await renderFresh();
+    await fillStep1(user);
+    await user.click(screen.getByTestId("onb-next"));
+    await screen.findByRole("heading", { name: "Tax & Compliance" });
+    await user.type(screen.getByTestId("onb-registration-number"), "29ABCDE1234F1Z5");
+    await user.tab();
+    expect((await screen.findByTestId("onb-registration-number-error")).textContent).toContain("already uses this GSTIN");
+  });
+
+  it("moves on to step 3 when the number is free, or when the check cannot be made", async () => {
+    const user = userEvent.setup();
+    await renderFresh();
+    await reachStep2WithGstin(user, "29ABCDE1234F1Z5");
+    await user.click(screen.getByTestId("onb-next"));
+    await screen.findByRole("heading", { name: "Brands & Outlets" });
+    cleanup();
+
+    taxAnswer = { status: 500, body: { error: { code: "error", message: "down" } } };
+    await renderFresh();
+    await reachStep2WithGstin(user, "29ABCDE1234F1Z5");
+    await user.click(screen.getByTestId("onb-next"));
+    await screen.findByRole("heading", { name: "Brands & Outlets" });
+  });
+});
 
 describe("OnboardingWizard", () => {
   it("checks the subdomain on blur and says whether it is free, taken or not allowed (D14)", async () => {
