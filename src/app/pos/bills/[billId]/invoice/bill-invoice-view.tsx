@@ -244,7 +244,8 @@ export function InvoiceReceipt({ invoice }: Readonly<{ invoice: InvoiceView }>) 
             {invoice.creditNotes.map((note) => (
               <li key={note.id} data-testid={`invoice-credit-note-${note.id}`} className="flex items-center justify-between">
                 <span>
-                  {note.reason} · {formatIssuedAt(note.createdAt)}
+                  {note.reason}
+                  {note.method && ` · refunded by ${TENDER_METHOD_LABEL[note.method]}`} · {formatIssuedAt(note.createdAt)}
                 </span>
                 <span className="tabular-nums">-{formatMinor(note.amountMinor, invoice.currency)}</span>
               </li>

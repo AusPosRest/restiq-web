@@ -132,7 +132,7 @@ function RefundLoaded({
         // Below md (issue #229) the bill stacks above the refund panel and the column scrolls.
         <div className="flex min-h-0 flex-1 flex-col overflow-y-auto md:flex-row md:overflow-hidden">
           <BillSummary bill={bill} lines={order.lines} currency={menu.currency} originLabel={orderOriginLabel(order)} />
-          <RefundConfigPanel billId={billId} lines={order.lines} currency={menu.currency} onRefunded={setCreditNote} />
+          <RefundConfigPanel billId={billId} lines={order.lines} bill={bill} currency={menu.currency} onRefunded={setCreditNote} />
         </div>
       )}
     </div>

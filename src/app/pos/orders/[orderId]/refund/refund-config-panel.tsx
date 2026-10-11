@@ -8,11 +8,10 @@
 // called from ManagerPinDialog's onApprove, so there is no code path that
 // issues a refund without a valid PIN + reason.
 //
-// RECONCILED (2026-09-02, restiq-web#98): the real `RefundBillDto`
-// (bills.dtos.ts, read directly) has no `refundMethod` field at all - a
-// refund only ever produces a credit note, it doesn't choose how the money
-// physically moves - so the old "Issue refund to Cash/UPI" picker is
-// dropped. It also has a single required `reason: string`, not a
+// restiq-web#353: "Refund to" asks how the money went back (cash / card /
+// UPI / external), defaulting to how the bill was paid; shift close only
+// takes cash refunds out of the drawer. `RefundBillDto` has a single
+// required `reason: string`, not a
 // `reasonCode` + separate `notes` pair - composed here from the reused
 // ManagerPinDialog's picked reason label plus any free-text notes. The call
 // itself now targets `billId` (the real endpoint is `POST
@@ -24,13 +23,18 @@ import { createRefund, PosApiError } from "../../../api";
 import { formatMinor } from "../../../(shell)/shift/shift-state";
 import { ManagerPinDialog, type ManagerApprovalResult, type ManagerPinDialogReasonCode } from "../../../components/manager-pin-dialog";
 import type { OrderLineView } from "../order-taking-state";
+import type { BillView } from "../settle/bill-state";
 import {
+  REFUND_CHOICES,
   computeRefundTotals,
+  defaultRefundChoice,
+  refundMethodFor,
   hasRefundSelection,
   setLineQuantity,
   toRefundLineInputs,
   toggleLineSelected,
   type CreditNoteView,
+  type RefundChoice,
   type RefundSelection,
 } from "./refund-state";
 
@@ -45,16 +49,19 @@ const REFUND_REASON_OPTIONS: ManagerPinDialogReasonCode[] = [
 export interface RefundConfigPanelProps {
   billId: string;
   lines: OrderLineView[];
+  /** The finalized bill: the refund defaults to how it was paid, and the preview is pro-rated by its discount. */
+  bill: BillView;
   currency: string;
   onRefunded: (creditNote: CreditNoteView) => void;
 }
 
-export function RefundConfigPanel({ billId, lines, currency, onRefunded }: Readonly<RefundConfigPanelProps>) {
+export function RefundConfigPanel({ billId, lines, bill, currency, onRefunded }: Readonly<RefundConfigPanelProps>) {
   const [selection, setSelection] = useState<RefundSelection>({});
+  const [choice, setChoice] = useState<RefundChoice>(() => defaultRefundChoice(bill.tenders));
   const [notes, setNotes] = useState("");
   const [pinDialogOpen, setPinDialogOpen] = useState(false);
 
-  const totals = computeRefundTotals(lines, selection);
+  const totals = computeRefundTotals(lines, selection, bill);
   const canSubmit = hasRefundSelection(selection);
 
   async function handleApprove(pin: string, reasonCode: string): Promise<ManagerApprovalResult> {
@@ -65,6 +72,7 @@ export function RefundConfigPanel({ billId, lines, currency, onRefunded }: Reado
         lines: toRefundLineInputs(selection),
         reason,
         managerPin: pin,
+        method: refundMethodFor(choice, bill.tenders),
       });
       onRefunded(creditNote);
       return { ok: true };
@@ -138,6 +146,26 @@ export function RefundConfigPanel({ billId, lines, currency, onRefunded }: Reado
           </dd>
         </div>
       </dl>
+
+      <fieldset data-testid="refund-method">
+        <legend className="font-label mb-1.5 block text-xs font-semibold uppercase tracking-wider text-muted-foreground">Refund to</legend>
+        <div className="flex flex-wrap gap-4 text-sm">
+          {REFUND_CHOICES.map((option) => (
+            <label key={option.value} className="flex items-center gap-1.5">
+              <input
+                type="radio"
+                name="refund-method"
+                value={option.value}
+                data-testid={`refund-method-${option.value}`}
+                checked={choice === option.value}
+                onChange={() => setChoice(option.value)}
+                className="accent-primary"
+              />
+              {option.label}
+            </label>
+          ))}
+        </div>
+      </fieldset>
 
       <div>
         <label htmlFor="refund-notes" className="font-label mb-1.5 block text-xs font-semibold uppercase tracking-wider text-muted-foreground">

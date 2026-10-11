@@ -41,7 +41,7 @@ function paymentRow(overrides: Partial<PaymentRow> = {}): PaymentRow {
       { method: "cash", amountMinor: 60000, createdAt: "2026-09-03T08:05:00.000Z" },
       { method: "card", amountMinor: 40000, createdAt: "2026-09-03T08:05:00.000Z" },
     ],
-    creditNotes: [{ id: "cn-1", amountMinor: 1000, reason: "Wrong item", createdAt: "2026-09-03T08:10:00.000Z" }],
+    creditNotes: [{ id: "cn-1", amountMinor: 1000, method: "upi_manual", reason: "Wrong item", createdAt: "2026-09-03T08:10:00.000Z" }],
     ...overrides,
   };
 }
@@ -157,6 +157,7 @@ describe("Payments", () => {
     expect(row.textContent).toContain("SGST (2.5%)");
     expect(row.textContent).toContain("cash=");
     expect(row.textContent).toContain("card=");
+    expect(within(row).getByTestId("payments-row-bill-1-refund-methods").textContent).toBe("upi_manual");
 
     const tokenRow = screen.getByTestId("payments-row-bill-2");
     expect(tokenRow.textContent).toContain("Token #7");

@@ -20,6 +20,8 @@ export interface PaymentTender {
 export interface PaymentCreditNote {
   id: string;
   amountMinor: number;
+  /** How the money went back (a tender method); null on a note issued before this was recorded (restiq-backend#221). */
+  method: string | null;
   reason: string;
   createdAt: string;
 }

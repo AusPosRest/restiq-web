@@ -136,8 +136,8 @@ describe("refundedMinorFor", () => {
   it("sums credit note amounts", () => {
     const row = paymentRow({
       creditNotes: [
-        { id: "cn-1", amountMinor: 100, reason: "Wrong item", createdAt: "2026-09-03T09:00:00.000Z" },
-        { id: "cn-2", amountMinor: 50, reason: "Goodwill", createdAt: "2026-09-03T09:05:00.000Z" },
+        { id: "cn-1", amountMinor: 100, method: "cash", reason: "Wrong item", createdAt: "2026-09-03T09:00:00.000Z" },
+        { id: "cn-2", amountMinor: 50, method: null, reason: "Goodwill", createdAt: "2026-09-03T09:05:00.000Z" },
       ],
     });
     expect(refundedMinorFor(row)).toBe(150);

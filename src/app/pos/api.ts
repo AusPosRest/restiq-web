@@ -370,7 +370,7 @@ export type {
   PendingTender,
   PostableTenderMethod,
 } from "./orders/[orderId]/settle/bill-state";
-import type { FinalizeBillInput, BillView } from "./orders/[orderId]/settle/bill-state";
+import type { BillTenderMethod, FinalizeBillInput, BillView } from "./orders/[orderId]/settle/bill-state";
 
 /**
  * Create-or-fetch the Bill for an order. `POST orders/:orderId/bill`
@@ -464,6 +464,8 @@ export interface InvoiceTenderView {
 export interface InvoiceCreditNoteView {
   id: string;
   amountMinor: number;
+  /** How the money went back; null on a note issued before this was recorded (restiq-backend#221). */
+  method: BillTenderMethod | null;
   reason: string;
   createdAt: string;
 }
