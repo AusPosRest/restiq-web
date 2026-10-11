@@ -133,7 +133,14 @@ export function StaffTable({
                     {member.pinStatus === "active" ? (
                       <div className="flex items-center gap-2">
                         {/* PINs are stored hashed, so an existing one can't be shown - Reset issues a new one, shown once (#204). */}
-                        <Button variant="secondary" size="sm" data-testid={`staff-reset-pin-${member.id}`} disabled={busy} onClick={() => onIssuePin(member.id)}>
+                        <Button
+                          variant="secondary"
+                          size="sm"
+                          data-testid={`staff-reset-pin-${member.id}`}
+                          disabled={busy}
+                          // PE-19: resetting stops the current PIN working at once - ask first.
+                          onClick={() => window.confirm(`Reset ${member.name}'s PIN? Their current PIN stops working straight away.`) && onIssuePin(member.id)}
+                        >
                           <KeyRound aria-hidden="true" /> Reset PIN
                         </Button>
                         <Button
