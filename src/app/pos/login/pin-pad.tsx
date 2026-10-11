@@ -119,6 +119,7 @@ function submitOutletSelection(pendingToken: string, outletId: string): Promise<
 }
 
 export function PinPad({ nextPath }: { nextPath: string }) {
+  const deviceNoun = nextPath.startsWith("/kds") ? "kitchen display" : "till";
   const router = useRouter();
   const searchParams = useSearchParams();
   const [state, setState] = useState<PinScreenState>(INITIAL_PIN_STATE);
@@ -307,7 +308,8 @@ export function PinPad({ nextPath }: { nextPath: string }) {
       {binding ? (
         <div className="mt-6 flex flex-col items-center gap-1">
           <p data-testid="pos-terminal-binding" className="text-xs text-muted-foreground">
-            {binding.tenantName ? `This till belongs to ${binding.tenantName}` : "This till is linked to a restaurant"}
+            {/* PE-21: a kitchen display signs in through this same PIN pad. */}
+            {binding.tenantName ? `This ${deviceNoun} belongs to ${binding.tenantName}` : `This ${deviceNoun} is linked to a restaurant`}
           </p>
           <button
             type="button"

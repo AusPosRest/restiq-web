@@ -62,6 +62,13 @@ describe("PinPad", () => {
     expect(JSON.parse(init.body as string)).toEqual({ pin: "1234", tenantId: "tenant-9", deviceId: "dev-1" });
   });
 
+  it("calls itself a kitchen display, not a till, when signing a KDS in (PE-21)", async () => {
+    window.localStorage.setItem("pos:terminal-binding", JSON.stringify({ tenantId: "tenant-5", deviceId: "dev-5", tenantName: "Spice Route" }));
+    vi.stubGlobal("fetch", vi.fn());
+    render(<PinPad nextPath="/kds" />);
+    expect(await screen.findByTestId("pos-terminal-binding")).toHaveProperty("textContent", "This kitchen display belongs to Spice Route");
+  });
+
   it("reuses a previously saved binding with no query string, and clears it on Re-enrol", async () => {
     window.localStorage.setItem("pos:terminal-binding", JSON.stringify({ tenantId: "tenant-5", deviceId: "dev-5" }));
     vi.stubGlobal("fetch", vi.fn());
