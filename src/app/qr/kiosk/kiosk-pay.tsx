@@ -192,6 +192,11 @@ function KioskReceipt({ invoice, tokenNumber }: Readonly<{ invoice: GuestInvoice
       <p className="text-center font-bold">
         {invoice.title} {invoice.invoiceNumber}
       </p>
+      {invoice.testMode && (
+        <p data-testid="kiosk-receipt-test-mode" className="text-center font-bold uppercase">
+          Test mode - not a valid tax invoice
+        </p>
+      )}
       {invoice.issuedAt && <p className="text-center">{new Date(invoice.issuedAt).toLocaleString([], { dateStyle: "short", timeStyle: "short" })}</p>}
       <p data-testid="kiosk-receipt-token" className="my-2 text-center text-[28px] font-bold leading-8">
         #{tokenNumber}

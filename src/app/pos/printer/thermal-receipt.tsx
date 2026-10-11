@@ -48,6 +48,11 @@ export function ThermalReceipt({ invoice, printedAt }: Readonly<{ invoice: Invoi
         {invoice.title}
         {invoice.status === "open" && " (unpaid)"}
       </p>
+      {invoice.testMode && (
+        <p data-testid="thermal-test-mode" className="text-center font-bold uppercase">
+          Test mode - not a valid tax invoice
+        </p>
+      )}
       {invoice.invoiceNumber && <p className="text-center">No. {invoice.invoiceNumber}</p>}
       <p className="text-center">{stamp(invoice.issuedAt ?? printedAt)}</p>
       <Rule />

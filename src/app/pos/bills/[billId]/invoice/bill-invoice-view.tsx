@@ -139,6 +139,11 @@ export function InvoiceReceipt({ invoice }: Readonly<{ invoice: InvoiceView }>) 
             </span>
           )}
         </h1>
+        {invoice.testMode && (
+          <p data-testid="invoice-test-mode" className="mt-1 text-sm font-semibold text-status-warning">
+            Test mode - not a valid tax invoice
+          </p>
+        )}
         <p className="text-sm text-muted-foreground">
           {invoice.invoiceNumber && `Invoice #${invoice.invoiceNumber} · `}
           {invoice.issuedAt ? formatIssuedAt(invoice.issuedAt) : "Not yet issued"}

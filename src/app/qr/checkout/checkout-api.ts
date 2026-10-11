@@ -87,6 +87,8 @@ export function payAll(billId: string, input: SimulatedPaymentInput): Promise<Gu
 // trimmed to what the kiosk receipt prints (AD-4: no import from app/pos).
 export interface GuestInvoiceView {
   invoiceNumber: string | null;
+  /** restiq-backend#213: rung up while the tenant was in Test mode. */
+  testMode?: boolean;
   title: string;
   issuedAt: string | null;
   currency: string;

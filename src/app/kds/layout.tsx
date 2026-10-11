@@ -2,6 +2,7 @@ import type { Metadata } from "next";
 import { Hanken_Grotesk, Inter, Public_Sans } from "next/font/google";
 import { cookies } from "next/headers";
 import { parsePosStaffDisplay, POS_STAFF_COOKIE } from "@/lib/pos-session";
+import { DeviceHeartbeat } from "../pos/device-heartbeat";
 import { KdsOutletProvider } from "./kds-outlet-context";
 import { SignedOutNotice } from "./signed-out-notice";
 
@@ -53,6 +54,8 @@ export default async function KdsLayout({
     <div
       className={`${hankenGrotesk.variable} ${inter.variable} ${publicSans.variable} kds-theme flex min-h-screen flex-1 flex-col bg-background text-foreground antialiased`}
     >
+      {/* PE-25: the kitchen display reports in like the till, so Sync Health stops calling it "Never contacted". */}
+      {display ? <DeviceHeartbeat /> : null}
       {display ? <KdsOutletProvider outlet={display.outlet}>{children}</KdsOutletProvider> : <SignedOutNotice />}
     </div>
   );

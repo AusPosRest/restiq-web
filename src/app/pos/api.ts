@@ -453,6 +453,8 @@ export interface InvoiceCreditNoteView {
 // `tenders`/`creditNotes` are always empty. Finalized bills are unchanged.
 export interface InvoiceView {
   invoiceNumber: string | null;
+  /** restiq-backend#213: rung up while the tenant was in Test mode - print "not a valid tax invoice". */
+  testMode?: boolean;
   status?: "open" | "finalized";
   title: "Tax Invoice" | "Invoice" | "Receipt" | "Bill";
   /** null for an open (pro-forma) bill - it is issued at finalize. */
