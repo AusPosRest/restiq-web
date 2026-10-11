@@ -19,6 +19,7 @@ import type { OutletView } from "../menu/menu-state";
 import { useOutlets } from "../outlet-context";
 import { useToast } from "../toast";
 import { downloadReportExport } from "./reports-state";
+import { TENDER_METHOD_LABEL, type BillTenderMethod } from "../../../pos/orders/[orderId]/settle/bill-state";
 import {
   appendPaymentsPage,
   defaultDateRange,
@@ -347,7 +348,7 @@ function PaymentRowLine({ row, timeZone }: Readonly<{ row: PaymentRow; timeZone:
         {refunded ? formatPriceMinor(refunded, CURRENCY) : "—"}
         {row.creditNotes.some((note) => note.method) && (
           <div data-testid={`payments-row-${row.billId}-refund-methods`} className="text-xs text-muted-foreground">
-            {[...new Set(row.creditNotes.flatMap((note) => (note.method ? [note.method] : [])))].join(", ")}
+            {[...new Set(row.creditNotes.flatMap((note) => (note.method ? [TENDER_METHOD_LABEL[note.method as BillTenderMethod] ?? note.method] : [])))].join(", ")}
           </div>
         )}
       </td>

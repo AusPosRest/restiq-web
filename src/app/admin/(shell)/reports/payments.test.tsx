@@ -157,7 +157,7 @@ describe("Payments", () => {
     expect(row.textContent).toContain("SGST (2.5%)");
     expect(row.textContent).toContain("cash=");
     expect(row.textContent).toContain("card=");
-    expect(within(row).getByTestId("payments-row-bill-1-refund-methods").textContent).toBe("upi_manual");
+    expect(within(row).getByTestId("payments-row-bill-1-refund-methods").textContent).toBe("UPI");
 
     const tokenRow = screen.getByTestId("payments-row-bill-2");
     expect(tokenRow.textContent).toContain("Token #7");
