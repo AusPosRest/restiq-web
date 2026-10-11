@@ -78,7 +78,7 @@ describe("WelcomeFlow", () => {
     await userEvent.click(screen.getByTestId("qr-start-submit"));
 
     expect(await screen.findByTestId("qr-join-form")).toBeTruthy();
-    expect(screen.getByTestId("qr-join-notice").textContent).toMatch(/already has an order going/i);
+    expect(screen.getByTestId("qr-join-notice").textContent).toMatch(/started ordering in the last 30 minutes/i);
     expect(screen.queryByTestId("qr-start-error")).toBeNull();
     // The name carries over into the join form rather than being lost.
     expect((screen.getByLabelText("Your name") as HTMLInputElement).value).toBe("Rahul");
