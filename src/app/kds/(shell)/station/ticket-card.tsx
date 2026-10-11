@@ -46,6 +46,11 @@ function TicketLineRow({ line }: Readonly<{ line: TicketLineView }>) {
           </span>
         )}
       </div>
+      {line.note && (
+        <p data-testid={`kds-line-${line.id}-note`} className="mt-0.5 ml-6 text-sm font-semibold text-ticket-urgent">
+          Note: {line.note}
+        </p>
+      )}
       {line.modifiers.length > 0 && (
         <ul className="mt-0.5 ml-6 space-y-0.5 text-sm text-muted-foreground">
           {line.modifiers.map((modifier) => (
