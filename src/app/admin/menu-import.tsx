@@ -16,6 +16,7 @@ import {
   confidenceLevel,
   DUPLICATE_LABEL,
   DuplicateReason,
+  draftDuplicates,
   duplicateReasons,
   isAcceptedMenuFile,
   majorStringToPriceMinor,
@@ -23,6 +24,7 @@ import {
   MenuImportItem,
   priceMinorToMajorString,
   reviewedCount,
+  showsConfidence,
 } from "./menu-import-state";
 
 const UPLOAD_ERROR = "Upload your menu as a CSV or XLSX spreadsheet. Photos and PDFs can't be read yet - download the sample spreadsheet below to get started.";
@@ -69,7 +71,7 @@ export function MenuImport({ onCommitted, fromSetup = false }: Readonly<{ onComm
       setImportId(draft.importId);
       setItems(draft.items);
       setReviewed(new Set());
-      setDuplicates(new Map());
+      setDuplicates(draftDuplicates(draft.items));
       setPhase("review");
     } catch (error) {
       setUploadError(error instanceof Error ? error.message : GENERIC_FAILURE);
@@ -108,7 +110,7 @@ export function MenuImport({ onCommitted, fromSetup = false }: Readonly<{ onComm
     try {
       const draft = await removeMenuImportItem(importId, itemId);
       setItems(draft.items);
-      clearDuplicate(itemId);
+      setDuplicates(draftDuplicates(draft.items));
     } catch {
       flashToast("That row couldn't be removed. Try again.");
     }
@@ -123,6 +125,7 @@ export function MenuImport({ onCommitted, fromSetup = false }: Readonly<{ onComm
     try {
       const draft = await updateMenuImportItem(importId, itemId, field, value);
       setItems(draft.items);
+      setDuplicates(draftDuplicates(draft.items));
     } catch {
       setItems(previousItems);
       flashToast("That edit didn't save. Try again.");
@@ -253,6 +256,13 @@ export function MenuImport({ onCommitted, fromSetup = false }: Readonly<{ onComm
 
   const reviewedTotal = reviewedCount(reviewed, items);
   const commitEnabled = canCommit(reviewed, items) && phase === "review";
+  const confidenceShown = showsConfidence(items);
+  const onMenu = items.filter((item) => duplicates.get(item.id) === "on_menu");
+
+  // PE-11: one click for the rows already on the menu, instead of one per row.
+  async function removeOnMenu() {
+    for (const item of onMenu) await handleRemove(item.id);
+  }
 
   return (
     <div className="space-y-4">
@@ -263,6 +273,18 @@ export function MenuImport({ onCommitted, fromSetup = false }: Readonly<{ onComm
         </p>
       </div>
 
+      {onMenu.length > 0 && (
+        <div role="status" data-testid="menu-import-duplicates-banner" className="flex flex-wrap items-center justify-between gap-3 rounded-lg border border-status-error/40 bg-status-error/10 px-4 py-3 text-sm">
+          <p>
+            {onMenu.length} item{onMenu.length === 1 ? " is" : "s are"} already on your menu and can&apos;t be added again. Rename {onMenu.length === 1 ? "it" : "them"}, or
+            leave {onMenu.length === 1 ? "it" : "them"} out.
+          </p>
+          <Button variant="secondary" size="sm" data-testid="menu-import-remove-duplicates" disabled={phase === "committing"} onClick={() => void removeOnMenu()}>
+            Leave out {onMenu.length === 1 ? "that item" : `those ${onMenu.length} items`}
+          </Button>
+        </div>
+      )}
+
       <div className="overflow-x-auto rounded-xl border border-border">
         <table data-testid="menu-import-table" className="w-full text-sm">
           <thead className="bg-muted text-left text-xs font-semibold uppercase tracking-wider text-muted-foreground">
@@ -272,7 +294,7 @@ export function MenuImport({ onCommitted, fromSetup = false }: Readonly<{ onComm
               <th className="px-4 py-3">Kitchen name</th>
               <th className="px-4 py-3">Category</th>
               <th className="px-4 py-3">Price</th>
-              <th className="px-4 py-3">Confidence</th>
+              {confidenceShown && <th className="px-4 py-3">Confidence</th>}
               <th className="px-2 py-3">
                 <span className="sr-only">Remove</span>
               </th>
@@ -344,14 +366,16 @@ export function MenuImport({ onCommitted, fromSetup = false }: Readonly<{ onComm
                       <ConfidenceHint testId={`menu-import-row-${item.id}-price-confidence`} score={item.confidence.price} />
                     </div>
                   </td>
-                  <td className="px-4 py-3">
-                    <span
-                      data-testid={`menu-import-row-${item.id}-confidence`}
-                      className={`inline-flex items-center rounded-full border px-2.5 py-0.5 text-xs font-medium ${CONFIDENCE_CLASS[overall]}`}
-                    >
-                      {CONFIDENCE_LABEL[overall]}
-                    </span>
-                  </td>
+                  {confidenceShown && (
+                    <td className="px-4 py-3">
+                      <span
+                        data-testid={`menu-import-row-${item.id}-confidence`}
+                        className={`inline-flex items-center rounded-full border px-2.5 py-0.5 text-xs font-medium ${CONFIDENCE_CLASS[overall]}`}
+                      >
+                        {CONFIDENCE_LABEL[overall]}
+                      </span>
+                    </td>
+                  )}
                   <td className="px-2 py-3">
                     <button
                       type="button"
@@ -378,9 +402,16 @@ export function MenuImport({ onCommitted, fromSetup = false }: Readonly<{ onComm
       )}
 
       <div className="flex items-center justify-between gap-4">
-        <p data-testid="menu-import-reviewed-count" className="text-sm text-muted-foreground">
-          {reviewedTotal}/{items.length} reviewed
-        </p>
+        <div className="flex items-center gap-3">
+          <p data-testid="menu-import-reviewed-count" className="text-sm text-muted-foreground">
+            {reviewedTotal}/{items.length} reviewed
+          </p>
+          {reviewedTotal < items.length && (
+            <Button variant="secondary" size="sm" data-testid="menu-import-mark-all" onClick={() => setReviewed(new Set(items.map((item) => item.id)))}>
+              Mark all reviewed
+            </Button>
+          )}
+        </div>
         <Button
           data-testid="menu-import-commit"
           disabled={!commitEnabled}
@@ -416,7 +447,7 @@ function EditableCell({
         onBlur={(event) => {
           if (event.target.value !== value) onCommit(event.target.value);
         }}
-        className="w-full min-w-32 rounded-md border border-border bg-input px-2 py-1 focus:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+        className="w-full min-w-44 rounded-md border border-border bg-input px-2 py-1 focus:outline-none focus-visible:ring-2 focus-visible:ring-ring"
       />
       <ConfidenceHint testId={`${testId}-confidence`} score={confidence} />
     </div>
