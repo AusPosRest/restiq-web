@@ -7,6 +7,7 @@ with the payments epic.
 ## [Unreleased]
 
 ### Added
+- **Test / Live mode** (#346, needs restiq-backend#213): operators switch a tenant between Test and Live from its page (confirmed and audited); new tenants can start in Test from the wizard. Test tenants are badged TEST in the Platform Console, the owner console, the POS and the KDS, and their invoices and receipts say "Test mode - not a valid tax invoice".
 - **Plans by country** (#337): the Plans page shows India and Australia in separate sections, each with its currency, instead of one mixed table.
 - **Plans page** (#323, needs restiq-backend#201): Platform Console > Plans lets operators set each country's Standard and Enterprise price per outlet per month (blank = on quote) and the annual discount, with an audited reason. The onboarding wizard reads these prices; nothing is hard-coded any more.
 - **India plan prices** (#321): the onboarding wizard prices Indian tenants in rupees: Standard ₹499 and Enterprise ₹999 per outlet per month (₹399 / ₹799 billed annually), instead of "Price on quote".
@@ -16,6 +17,9 @@ with the payments epic.
 - **Staff work at chosen outlets** (#316, needs restiq-backend#197): Add staff and the staff list let the owner pick the outlets each person works at ("Every outlet" by default). Their PIN only signs in there; a till of another outlet says they aren't set up to work there.
 
 ### Fixed
+- **Simulator devices sign in** (#346, PE-26 / CU-25): each simulated device opens in its own window on its own `sim-<id>.localhost` address, so its login cookie is kept; the simulator page lists the devices with Focus, Close and Re-open.
+- **/demo publishes no operator login** (#346, PE-30): `/demo` and `/simulator` answer 404 in production unless `DEMO_PAGES=on`; `/demo` lists only Test-mode tenants' logins.
+- **Console polish** (#346): agreements hint (PE-1), A$ label (PE-3), shipped-only plan features (PE-4), resumed wizard prefills the owner (PE-5), wizard draft/phone/switch/button fixes (PE-6), branding preview in the tenant's name, currency and tax (PE-8), QR sheet layout and PNG text (CU-8 / PE-20), KDS heartbeat (PE-25), owner console at 390 px (PE-27), used/invalid invite links (PE-31), RESTIQ naming and setup page header (PE-32), staff without email (CU-3).
 - **Simulator devices are separate** (#339): on localhost each simulator frame loads from its own `*.localhost` address, so a POS till, KDS and kiosk are separate devices with their own logins. Device frames open the enrolment screen first. The Guest QR preset can be pointed at a real table with `NEXT_PUBLIC_SIMULATOR_GUEST_QR_PATH`.
 - **POS mode toggle (#335).** The QSR counter and the table map now share one header (same title, toggle position and padding) with a Counter ⇄ Tables switch (knob on the current mode, one tap flips it), replacing the "Switch to Table Mode" / "Switch to Counter Mode" links.
 - **Item drawer stays open on inline edits (#333).** Adding or removing a variant, or changing the photo, no longer closes the drawer; only Save closes it.
