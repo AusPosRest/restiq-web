@@ -454,12 +454,17 @@ export interface InvoiceCreditNoteView {
 export interface InvoiceView {
   invoiceNumber: string | null;
   status?: "open" | "finalized";
-  title: "Tax Invoice" | "Invoice" | "Receipt" | "Bill";
+  title: "Tax Invoice" | "Bill of Supply" | "Invoice" | "Receipt" | "Bill";
   /** null for an open (pro-forma) bill - it is issued at finalize. */
   issuedAt: string | null;
   currency: string;
   seller: InvoiceSellerView;
   lines: InvoiceLineView[];
+  /** IN GST invoice only (restiq-backend#212): SAC 996331 and the seller's GSTIN state. Absent on older print-job snapshots. */
+  sacCode?: string | null;
+  placeOfSupply?: string | null;
+  /** The counter token the customer was called by; null for a table order. */
+  tokenNumber?: number | null;
   subtotalMinor: number;
   discountMinor: number | null;
   discountReason: string | null;

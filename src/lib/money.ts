@@ -27,3 +27,13 @@ export function formatMoney(amountMinor: number, currency: string): string {
 export function formatPrice(amountMinor: number, currency: string): string {
   return format(amountMinor, currency, amountMinor % 100 === 0 ? 0 : 2);
 }
+
+/**
+ * CU-11: rupee cash is settled to the nearest rupee (50 paise rounds up) -
+ * the adjustment to add to what is due: -40 for ₹890.40, +40 for ₹890.60.
+ * 0 for any other currency. Display / tender side only: the bill and its
+ * tenders keep the exact total (restiq-backend's finalize requires it).
+ */
+export function cashRoundOffMinor(dueMinor: number, currency: string): number {
+  return currency === "INR" ? Math.round(dueMinor / 100) * 100 - dueMinor : 0;
+}

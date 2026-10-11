@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { formatMoney, formatPrice, localeForCurrency } from "./money";
+import { cashRoundOffMinor, formatMoney, formatPrice, localeForCurrency } from "./money";
 
 describe("money (PE-10, PE-23)", () => {
   it("shows rupees with Indian grouping and paise", () => {
@@ -22,5 +22,13 @@ describe("money (PE-10, PE-23)", () => {
   it("picks the market locale", () => {
     expect(localeForCurrency("AUD")).toBe("en-AU");
     expect(localeForCurrency("INR")).toBe("en-IN");
+  });
+
+  it("rounds rupee cash to the nearest rupee and leaves other currencies alone (CU-11)", () => {
+    expect(cashRoundOffMinor(89040, "INR")).toBe(-40);
+    expect(cashRoundOffMinor(89060, "INR")).toBe(40);
+    expect(cashRoundOffMinor(89050, "INR")).toBe(50);
+    expect(cashRoundOffMinor(89000, "INR")).toBe(0);
+    expect(cashRoundOffMinor(1995, "AUD")).toBe(0);
   });
 });

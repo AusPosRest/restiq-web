@@ -28,6 +28,8 @@ import { LoadErrorPanel, Skeleton } from "../../../data-states";
 import { formatMinor } from "../../../(shell)/shift/shift-state";
 import { TENDER_METHOD_LABEL, type BillTenderMethod } from "../../../orders/[orderId]/settle/bill-state";
 import { printPage } from "@/lib/desktop";
+import { localeForCurrency } from "@/lib/money";
+import { invoiceCashRoundOff } from "../../invoice-round-off";
 
 interface InvoiceLanded {
   attempt: number;
@@ -90,6 +92,15 @@ export function BillInvoiceView({ billId }: Readonly<{ billId: string }>) {
   return <InvoiceLoaded invoice={load.invoice} billId={billId} />;
 }
 
+/** A counter (token) order goes back to the counter, a table order to the table map (PE-18). */
+function BackLink({ toCounter }: Readonly<{ toCounter: boolean }>) {
+  return (
+    <Link href={toCounter ? "/pos/counter" : "/pos/table-map"} data-testid="invoice-back" className="text-sm text-primary underline-offset-4 hover:underline">
+      ← Back to {toCounter ? "counter" : "table map"}
+    </Link>
+  );
+}
+
 function InvoiceLoaded({ invoice, billId }: Readonly<{ invoice: InvoiceView; billId: string }>) {
   const [printFailed, setPrintFailed] = useState(false);
 
@@ -101,9 +112,7 @@ function InvoiceLoaded({ invoice, billId }: Readonly<{ invoice: InvoiceView; bil
   return (
     <div data-testid="bill-invoice-view" className="mx-auto flex max-w-2xl flex-1 flex-col gap-6 p-6 print:max-w-none print:gap-4 print:p-0">
       <div className="flex items-center justify-between gap-2 print:hidden">
-        <Link href="/pos/table-map" data-testid="invoice-back" className="text-sm text-primary underline-offset-4 hover:underline">
-          ← Back to table map
-        </Link>
+        <BackLink toCounter={invoice.tokenNumber != null} />
         <div className="flex items-center gap-2">
           <PrintBillButton billId={billId} label="Send to printer" testId="invoice-send-to-printer" />
           <Button size="sm" data-testid="invoice-print" onClick={print}>
@@ -124,6 +133,8 @@ export function InvoiceReceipt({ invoice }: Readonly<{ invoice: InvoiceView }>) 
   const isReceipt = invoice.title === "Receipt";
   const notRegisteredNote = isReceipt ? invoice.notes.find((note) => note.toLowerCase().includes("not registered for gst")) : undefined;
   const remainingNotes = notRegisteredNote ? invoice.notes.filter((note) => note !== notRegisteredNote) : invoice.notes;
+  const locale = localeForCurrency(invoice.currency);
+  const { roundOffMinor, tenders } = invoiceCashRoundOff(invoice);
 
   return (
     <>
@@ -141,8 +152,13 @@ export function InvoiceReceipt({ invoice }: Readonly<{ invoice: InvoiceView }>) 
         </h1>
         <p className="text-sm text-muted-foreground">
           {invoice.invoiceNumber && `Invoice #${invoice.invoiceNumber} · `}
-          {invoice.issuedAt ? formatIssuedAt(invoice.issuedAt) : "Not yet issued"}
+          {invoice.issuedAt ? formatIssuedAt(invoice.issuedAt, locale) : "Not yet issued"}
         </p>
+        {invoice.tokenNumber != null && (
+          <p data-testid="invoice-token" className="text-sm font-semibold text-foreground">
+            Token #{invoice.tokenNumber}
+          </p>
+        )}
       </header>
 
       <section data-testid="invoice-seller" className="text-sm">
@@ -153,6 +169,12 @@ export function InvoiceReceipt({ invoice }: Readonly<{ invoice: InvoiceView }>) 
           {invoice.seller.registrationLabel}: {invoice.seller.registrationNumber}
         </p>
         {invoice.seller.fssaiLicense && <p className="text-muted-foreground">FSSAI: {invoice.seller.fssaiLicense}</p>}
+        {invoice.sacCode && (
+          <p data-testid="invoice-gst-details" className="text-muted-foreground">
+            SAC {invoice.sacCode}
+            {invoice.placeOfSupply && ` · Place of supply: ${invoice.placeOfSupply}`}
+          </p>
+        )}
         <p className="text-muted-foreground">{invoice.seller.phone}</p>
         <p className="text-muted-foreground">{invoice.seller.email}</p>
       </section>
@@ -162,10 +184,10 @@ export function InvoiceReceipt({ invoice }: Readonly<{ invoice: InvoiceView }>) 
       <table data-testid="invoice-lines" className="w-full text-left text-sm">
         <thead className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">
           <tr>
-            <th className="pb-2">Item</th>
-            <th className="pb-2 text-right">Qty</th>
-            <th className="pb-2 text-right">Unit price</th>
-            <th className="pb-2 text-right">Amount</th>
+            <th className="pb-2 pr-3">Item</th>
+            <th className="whitespace-nowrap pb-2 pl-3 text-right">Qty</th>
+            <th className="whitespace-nowrap pb-2 pl-3 text-right">Unit price</th>
+            <th className="whitespace-nowrap pb-2 pl-3 text-right">Amount</th>
           </tr>
         </thead>
         <tbody>
@@ -207,6 +229,16 @@ export function InvoiceReceipt({ invoice }: Readonly<{ invoice: InvoiceView }>) 
             {formatMinor(invoice.totalMinor, invoice.currency)}
           </span>
         </div>
+        {roundOffMinor !== 0 && (
+          <>
+            <TotalRow
+              label="Round off"
+              value={`${roundOffMinor < 0 ? "-" : "+"}${formatMinor(Math.abs(roundOffMinor), invoice.currency)}`}
+              testId="invoice-round-off"
+            />
+            <TotalRow label="Amount paid" value={formatMinor(invoice.totalMinor + roundOffMinor, invoice.currency)} testId="invoice-amount-paid" />
+          </>
+        )}
         {invoice.pricesIncludeTax && (
           <p data-testid="invoice-prices-include-tax" className="text-xs text-muted-foreground">
             Prices include tax
@@ -220,15 +252,15 @@ export function InvoiceReceipt({ invoice }: Readonly<{ invoice: InvoiceView }>) 
         </section>
       )}
 
-      {invoice.tenders.length > 0 && (
+      {tenders.length > 0 && (
         <section data-testid="invoice-tenders" className="text-sm">
           <h2 className="font-label text-xs font-semibold uppercase tracking-wider text-muted-foreground">Payments</h2>
           <ul className="mt-1 flex flex-col gap-1">
-            {invoice.tenders.map((tender, index) => (
+            {tenders.map((tender, index) => (
               <li key={index} data-testid={`invoice-tender-${index}`} className="flex items-center justify-between">
                 <span>
                   {tenderMethodLabel(tender.method)}
-                  {tender.reference ? ` #${tender.reference}` : ""} · {formatIssuedAt(tender.createdAt)}
+                  {tender.reference ? ` #${tender.reference}` : ""} · {formatIssuedAt(tender.createdAt, locale)}
                 </span>
                 <span className="tabular-nums">{formatMinor(tender.amountMinor, invoice.currency)}</span>
               </li>
@@ -244,7 +276,7 @@ export function InvoiceReceipt({ invoice }: Readonly<{ invoice: InvoiceView }>) 
             {invoice.creditNotes.map((note) => (
               <li key={note.id} data-testid={`invoice-credit-note-${note.id}`} className="flex items-center justify-between">
                 <span>
-                  {note.reason} · {formatIssuedAt(note.createdAt)}
+                  {note.reason} · {formatIssuedAt(note.createdAt, locale)}
                 </span>
                 <span className="tabular-nums">-{formatMinor(note.amountMinor, invoice.currency)}</span>
               </li>
@@ -283,8 +315,9 @@ function tenderMethodLabel(method: string): string {
   return TENDER_METHOD_LABEL[method as BillTenderMethod] ?? method;
 }
 
-function formatIssuedAt(iso: string): string {
-  return new Date(iso).toLocaleString([], { dateStyle: "medium", timeStyle: "short" });
+/** PE-7: day-first in the market's locale ("11 Oct 2026, 6:13 pm"), never the browser's US default. */
+function formatIssuedAt(iso: string, locale: string): string {
+  return new Date(iso).toLocaleString(locale, { dateStyle: "medium", timeStyle: "short" });
 }
 
 function LoadingShell() {

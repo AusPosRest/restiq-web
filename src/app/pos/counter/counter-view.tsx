@@ -72,7 +72,7 @@ import { BillSummary } from "../orders/[orderId]/settle/bill-summary";
 import { formatMinor } from "../(shell)/shift/shift-state";
 import { TenderKeypad } from "../orders/[orderId]/settle/tender-keypad";
 import { billTotalMinor, isBillReadOnly } from "../orders/[orderId]/settle/bill-state";
-import { canFinalizeWithElectronic, cashChangeMinor, isElectronicMethod, remainingToTenderMinor, tendersNetOfChange } from "../orders/[orderId]/settle/electronic-tender-state";
+import { canFinalizeWithElectronic, cashChangeMinor, isElectronicMethod, remainingToTenderMinor, tendersForFinalize } from "../orders/[orderId]/settle/electronic-tender-state";
 import { TerminalIntentPanel } from "../orders/[orderId]/settle/terminal-intent-panel";
 import { useTerminalIntent } from "../orders/[orderId]/settle/use-terminal-intent";
 import { PosHeader } from "../components/pos-header";
@@ -295,14 +295,14 @@ function CounterLoaded({
 
   function handleFinalize() {
     if (!bill) return;
-    const change = cashChangeMinor(billTotalMinor(bill), bill, pendingTenders);
+    const change = cashChangeMinor(billTotalMinor(bill), bill, pendingTenders, menu.currency);
     setFinalizeBusy(true);
     setFinalizeError(null);
     // issue #306: a counter sale has no separate Send step, so Charge fires the
     // unsent lines to the kitchen first - otherwise no ticket is ever made.
     const fired = canSendToKitchen(order) ? sendOrderToKitchen(order.id, menu).then(setOrder) : Promise.resolve();
     fired
-      .then(() => finalizeBill(bill.id, { tenders: tendersNetOfChange(pendingTenders, change) }))
+      .then(() => finalizeBill(bill.id, { tenders: tendersForFinalize(billTotalMinor(bill), bill, pendingTenders) }))
       .then((finalised) => {
         setBill(finalised);
         setChangeGiven(change);
@@ -452,7 +452,7 @@ function CounterLoaded({
                   onRemoveTender={handleRemoveTender}
                   onSendToTerminal={terminal.send}
                   terminalBusy={terminal.busy}
-                  changeMinor={cashChangeMinor(totalMinor, bill, pendingTenders)}
+                  changeMinor={cashChangeMinor(totalMinor, bill, pendingTenders, menu.currency)}
                 />
               )}
             </div>
@@ -472,7 +472,7 @@ function CounterLoaded({
                   size="lg"
                   className="flex-1"
                   data-testid="finalize-bill"
-                  disabled={!canFinalizeWithElectronic(bill, totalMinor, pendingTenders, intents) || finalizeBusy}
+                  disabled={!canFinalizeWithElectronic(bill, totalMinor, pendingTenders, intents, menu.currency) || finalizeBusy}
                   onClick={handleFinalize}
                 >
                   {finalizeBusy ? "Charging…" : "Charge"}
