@@ -34,7 +34,7 @@ describe("SimulatorCanvas", () => {
 
     const iframe = await screen.findByTitle("KDS");
     expect(iframe.tagName).toBe("IFRAME");
-    expect(iframe.getAttribute("src")).toBe("/kds");
+    expect(iframe.getAttribute("src")).toMatch(/^http:\/\/sim-[a-z0-9]+\.localhost:3000\/kds$/);
     expect(screen.queryByText("Add a device to begin")).toBeNull();
   });
 
@@ -84,7 +84,7 @@ describe("SimulatorCanvas", () => {
     await userEvent.click(screen.getByTestId("simulator-custom-url-add"));
 
     const iframe = await screen.findByTitle("Custom");
-    expect(iframe.getAttribute("src")).toBe("/pos/login");
+    expect(iframe.getAttribute("src")).toMatch(/^http:\/\/sim-[a-z0-9]+\.localhost:3000\/pos\/login$/);
   });
 
   it("restores a layout saved in localStorage on mount", async () => {
@@ -98,7 +98,7 @@ describe("SimulatorCanvas", () => {
     render(<SimulatorCanvas />);
 
     const iframe = await screen.findByTitle("POS till");
-    expect(iframe.getAttribute("src")).toBe("/pos/login");
+    expect(iframe.getAttribute("src")).toBe("http://sim-f1.localhost:3000/pos/login");
   });
 
   it("clears every frame", async () => {

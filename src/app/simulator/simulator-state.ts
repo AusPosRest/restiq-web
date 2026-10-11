@@ -1,9 +1,11 @@
 // Pure state/logic for the /simulator infinite canvas (issue #294): a tester
-// drops many real RESTIQ screens (each its own iframe / browsing context, so
-// sessionStorage-scoped device identity - see device/device-state.ts - stays
-// independent per frame) onto one pannable, zoomable canvas. Kept free of
-// React, same pure/UI split as floor-plan-state.ts, so the camera and layout
-// math is unit-testable without a DOM.
+// drops many real RESTIQ screens onto one pannable, zoomable canvas. A plain
+// same-origin iframe shares sessionStorage/localStorage/cookies with every
+// other frame, so a POS till, KDS and kiosk would all be the same enrolled
+// device (see device/device-state.ts) with the same staff login - frameSrc()
+// below fixes that locally by giving each frame its own *.localhost origin.
+// Kept free of React, same pure/UI split as floor-plan-state.ts, so the
+// camera and layout math is unit-testable without a DOM.
 
 export interface FramePreset {
   key: string;
@@ -26,7 +28,11 @@ export const PRESETS: readonly FramePreset[] = [
   {
     key: "guest-qr",
     label: "Guest QR",
-    path: "/qr/t/01a042f2-8e56-733d-ad2e-739163950988/22222222-2222-7222-8222-222222220001",
+    // /qr/t/{outletId}/{tableId}; the outlet needs qr_ordering enabled.
+    // Point this at a real table with NEXT_PUBLIC_SIMULATOR_GUEST_QR_PATH.
+    path:
+      process.env.NEXT_PUBLIC_SIMULATOR_GUEST_QR_PATH ||
+      "/qr/t/01a042f2-8e56-733d-ad2e-739163950988/22222222-2222-7222-8222-222222220001",
     width: 390,
     height: 844,
   },
@@ -161,6 +167,30 @@ export function validateCustomPath(input: string): { ok: true; path: string } | 
     return { ok: false, error: 'Must be a same-origin path starting with "/" (not a full URL).' };
   }
   return { ok: true, path: trimmed };
+}
+
+/** True for hostnames the browser resolves to loopback (localhost, 127.0.0.1, *.localhost). */
+export function isLocalHostname(hostname: string): boolean {
+  return hostname === "localhost" || hostname === "127.0.0.1" || hostname.endsWith(".localhost");
+}
+
+/**
+ * Each *.localhost host is its own origin, so every frame gets its own
+ * storage and cookies - i.e. its own device and login - while browsers
+ * still resolve *.localhost to loopback, no DNS/hosts-file setup needed.
+ * Hosted deployments can't mint subdomains on demand, so there frames stay
+ * same-origin (path unchanged).
+ */
+export function frameSrc(
+  path: string,
+  frameId: string,
+  location: { protocol: string; hostname: string; port: string },
+): string {
+  if (!isLocalHostname(location.hostname)) return path;
+  const sanitized = frameId.slice(0, 8).toLowerCase().replace(/[^a-z0-9]/g, "");
+  const label = sanitized ? `sim-${sanitized}` : "sim-frame";
+  const port = location.port ? `:${location.port}` : "";
+  return `${location.protocol}//${label}.localhost${port}${path}`;
 }
 
 const STORAGE_KEY = "restiq:simulator:v1";

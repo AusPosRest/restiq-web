@@ -11,6 +11,8 @@ import {
   createDefaultLayout,
   CUSTOM_FRAME_SIZE,
   fitAll,
+  frameSrc,
+  isLocalHostname,
   loadLayout,
   moveFrame,
   panCamera,
@@ -26,6 +28,8 @@ import {
   type SimulatorLayout,
 } from "./simulator-state";
 
+type Origin = { protocol: string; hostname: string; port: string };
+
 function viewportSizeOf(el: HTMLDivElement | null): { width: number; height: number } {
   const rect = el?.getBoundingClientRect();
   return rect ? { width: rect.width, height: rect.height } : { width: window.innerWidth, height: window.innerHeight };
@@ -40,6 +44,9 @@ export function SimulatorCanvas() {
   const [customError, setCustomError] = useState<string | null>(null);
   const [interacting, setInteracting] = useState(false);
   const [reloadTokens, setReloadTokens] = useState<Record<string, number>>({});
+  // null until mount, same hydration-safety reason as the deferred layout
+  // load below - window.location doesn't exist during server render.
+  const [origin, setOrigin] = useState<Origin | null>(null);
 
   // Deferred load, not the initial useState, so server-render and first
   // client hydration agree on the same empty shell (device-screen.tsx's
@@ -47,6 +54,7 @@ export function SimulatorCanvas() {
   // overwrites a real stored layout with the default before it's read.
   useEffect(() => {
     const timeout = setTimeout(() => {
+      setOrigin({ protocol: window.location.protocol, hostname: window.location.hostname, port: window.location.port });
       setLayout(loadLayout());
       setLoaded(true);
     }, 0);
@@ -320,6 +328,11 @@ export function SimulatorCanvas() {
         <p className="ml-auto text-xs text-muted-foreground">
           Drag background to pan · Ctrl/⌘+scroll or pinch to zoom · scroll to pan
         </p>
+        {origin && !isLocalHostname(origin.hostname) ? (
+          <p data-testid="simulator-shared-note" className="text-xs text-muted-foreground">
+            Frames share one login here. Run on localhost for separate devices.
+          </p>
+        ) : null}
       </header>
 
       <div
@@ -388,7 +401,7 @@ export function SimulatorCanvas() {
 
               <iframe
                 key={`${frame.id}:${reloadTokens[frame.id] ?? 0}`}
-                src={frame.path}
+                src={origin ? frameSrc(frame.path, frame.id, origin) : frame.path}
                 title={frame.label}
                 className={interacting ? "pointer-events-none" : undefined}
                 style={{ width: "100%", height: `calc(100% - 28px)`, border: "none" }}

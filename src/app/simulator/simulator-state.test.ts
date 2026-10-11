@@ -4,6 +4,7 @@ import {
   clearFrames,
   createDefaultLayout,
   fitAll,
+  frameSrc,
   loadLayout,
   moveFrame,
   panCamera,
@@ -144,6 +145,32 @@ describe("validateCustomPath", () => {
 
   it.each(["https://x", "//evil.com", "javascript:x", "", "   ", "/\\evil.com"])("rejects %s", (input) => {
     expect(validateCustomPath(input).ok).toBe(false);
+  });
+});
+
+describe("frameSrc", () => {
+  const LOCALHOST = { protocol: "http:", hostname: "localhost", port: "3105" };
+
+  it("gives each frame its own *.localhost origin on localhost", () => {
+    expect(frameSrc("/pos/login", "abcdef1234567890", LOCALHOST)).toBe("http://sim-abcdef12.localhost:3105/pos/login");
+  });
+
+  it("does the same for 127.0.0.1", () => {
+    expect(frameSrc("/pos/login", "abcdef1234567890", { protocol: "http:", hostname: "127.0.0.1", port: "3105" })).toBe(
+      "http://sim-abcdef12.localhost:3105/pos/login",
+    );
+  });
+
+  it("leaves the path unchanged on a hosted deployment", () => {
+    expect(frameSrc("/pos/login", "abcdef1234567890", { protocol: "https:", hostname: "restiq-web.vercel.app", port: "" })).toBe(
+      "/pos/login",
+    );
+  });
+
+  it("gives different frame ids different hosts", () => {
+    const a = frameSrc("/pos/login", "id-one-aaaaaaaa", LOCALHOST);
+    const b = frameSrc("/pos/login", "id-two-bbbbbbbb", LOCALHOST);
+    expect(a).not.toBe(b);
   });
 });
 

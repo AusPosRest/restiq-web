@@ -1,5 +1,6 @@
 # Completed
 
+- **2026-10-11** - Simulator frames isolated per device (issue #339): `simulator-state.ts`'s `frameSrc`/`isLocalHostname` put each frame on its own `sim-{frameId}.localhost` origin on localhost (own storage/cookies, own login), unchanged on hosted deployments. `simulator-canvas.tsx` computes this post-mount to avoid a hydration mismatch, and shows a `simulator-shared-note` when frames aren't isolated. Guest QR preset path is now overridable via `NEXT_PUBLIC_SIMULATOR_GUEST_QR_PATH`.
 - **2026-10-09** - Plans by country (issue #337): `plans-index.tsx`'s `PlansTable` splits rows by country (India, then Australia) into one `<section data-testid="plans-country-{country}">` card per country, each with its own heading, currency line, and `plans-table-{country}` without the Country column.
 - **2026-10-08** - Plans page (issue #323): `ops/(shell)/plans/` (`plans-index.tsx`, `plans-state.ts`), nav item, `PlanPriceView` in `api.ts`. The wizard's `planPrice(prices, ...)` and `annualDiscountPercent` read `GET /ops/v1/plan-prices`; the hard-coded `PLAN_MONTHLY_PRICE` and `ANNUAL_DISCOUNT_PERCENT` are gone.
 - **2026-10-08** - India plan prices (issue #321): `PLAN_MONTHLY_PRICE.IN` is ₹499 / ₹999 and `PLAN_CURRENCY_SYMBOL` picks A$ or ₹ in `steps.tsx`.
