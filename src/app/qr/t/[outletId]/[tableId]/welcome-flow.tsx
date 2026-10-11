@@ -41,7 +41,7 @@ function errorMessage(body: ApiErrorBody, fallback: string): string {
   return body.error?.message ?? fallback;
 }
 
-const JOIN_INVITE_NOTICE = "Your table already has an order going - join it with the PIN below.";
+const JOIN_INVITE_NOTICE = "Someone at this table started ordering in the last 30 minutes - join them with their PIN below.";
 const START_INVITE_NOTICE = "This table doesn't have an order started yet - you can start one below.";
 
 export function WelcomeFlow({
@@ -363,7 +363,11 @@ function JoinForm({
   return (
     <div data-testid="qr-join-form">
       <h2 className="font-headline text-2xl font-semibold text-foreground">Join your table.</h2>
-      <p className="mt-1 text-sm text-muted-foreground">A friend already started this table. Ask them for the 4-digit table PIN.</p>
+      {/* CU-26: a stranger's abandoned start must not read as "ask your friend" forever - it frees up after 30 idle minutes. */}
+      <p className="mt-1 text-sm text-muted-foreground">
+        Someone at this table already started ordering. If you&apos;re with them, ask for the 4-digit table PIN. If they left without ordering, the table frees up
+        after 30 minutes - or ask our staff.
+      </p>
 
       {state.notice ? (
         <p data-testid="qr-join-notice" className="mt-4 text-sm text-muted-foreground">

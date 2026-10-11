@@ -17,6 +17,8 @@ function item(overrides: Partial<ItemView> = {}): ItemView {
     shortName: "Paneer Tikka",
     categoryId: "tandoor",
     available: true,
+    priceMinor: 18000,
+    currency: "INR",
     variants: [],
     modifierGroups: [],
     allergens: [],
@@ -74,6 +76,38 @@ describe("MenuManagement list", () => {
     await screen.findByTestId("menu-table");
     expect(screen.getByTestId("menu-item-row-1")).toBeTruthy();
     expect(screen.getByTestId("menu-item-row-2")).toBeTruthy();
+  });
+
+  it("shows prices from the item list itself, a range for portions, and flags what the till can't sell (SE-20, CU-23, PE-12)", async () => {
+    const fetchMock = stubFetch({
+      items: [
+        item({ id: "1", priceMinor: 28950 }),
+        item({
+          id: "2",
+          name: "Biryani",
+          priceMinor: null,
+          variants: [
+            { id: "h", name: "Half", sortOrder: 0, priceMinor: 16900 },
+            { id: "f", name: "Full", sortOrder: 1, priceMinor: 28950 },
+          ],
+        }),
+        item({ id: "3", name: "Garden Salad", priceMinor: null, variants: [{ id: "x", name: "Half", sortOrder: 0, priceMinor: null }] }),
+      ],
+    });
+    renderMenu();
+    await screen.findByTestId("menu-table");
+    expect(screen.getByTestId("menu-item-row-1-price").textContent).toBe("₹289.50");
+    expect(screen.getByTestId("menu-item-row-2-price").textContent).toBe("₹169 – ₹289.50");
+    expect(screen.queryByTestId("menu-item-row-2-unsellable")).toBeNull();
+    expect(screen.getByTestId("menu-item-row-3-unsellable").textContent).toContain("isn't on the till or QR menu");
+    expect(fetchMock.mock.calls.some(([url]) => String(url).includes("/price?"))).toBe(false);
+  });
+
+  it("hides Browse directory while the product directory is empty (PE-13)", async () => {
+    stubFetch({ route: (url) => (url.includes("/admin/api/menu/directory") ? jsonResponse({ products: [] }) : undefined) });
+    renderMenu();
+    await screen.findByTestId("menu-table");
+    await vi.waitFor(() => expect(screen.queryByTestId("menu-browse-directory")).toBeNull());
   });
 
   it("shows a retryable error panel when the menu fails to load", async () => {

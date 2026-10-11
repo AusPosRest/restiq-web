@@ -168,11 +168,22 @@ export function fetchItems(categoryId?: string): Promise<ItemView[]> {
   return adminApi<ItemView[]>(categoryId ? `menu/items?categoryId=${encodeURIComponent(categoryId)}` : "menu/items");
 }
 
+export interface NewVariantInput {
+  name: string;
+  /** restiq-backend#211: the variant is created with its price (every channel). */
+  priceMinor?: number;
+  currency?: string;
+  /** On an item's first variant: the name its existing price is kept under (default "Regular"). */
+  basePortionName?: string;
+}
+
 export interface CreateItemInput {
   categoryId: string;
   name: string;
   shortName: string;
-  variants?: Array<{ name: string; sortOrder?: number }>;
+  vegMarker?: "veg" | "non_veg";
+  stationId?: string;
+  variants?: NewVariantInput[];
   modifierGroupIds?: string[];
   allergenIds?: string[];
 }
@@ -187,6 +198,7 @@ export interface UpdateItemInput {
   categoryId?: string;
   /** null removes the photo (restiq-backend#142). */
   photoUrl?: string | null;
+  vegMarker?: "veg" | "non_veg" | null;
 }
 
 export function updateMenuItem(itemId: string, input: UpdateItemInput): Promise<ItemView> {
@@ -202,8 +214,13 @@ export function deleteMenuItem(itemId: string): Promise<null> {
   return adminApi<null>(`menu/items/${itemId}`, { method: "DELETE" });
 }
 
-export function addVariant(itemId: string, name: string): Promise<ItemView> {
-  return adminApi<ItemView>(`menu/items/${itemId}/variants`, { method: "POST", body: JSON.stringify({ name }) });
+export function addVariant(itemId: string, input: NewVariantInput): Promise<ItemView> {
+  return adminApi<ItemView>(`menu/items/${itemId}/variants`, { method: "POST", body: JSON.stringify(input) });
+}
+
+/** PE-21: which kitchen station gets this item's tickets; null = the outlet's first station. */
+export function setItemStation(itemId: string, stationId: string | null): Promise<ItemView> {
+  return adminApi<ItemView>(`menu/items/${itemId}/station`, { method: "PATCH", body: JSON.stringify(stationId ? { stationId } : {}) });
 }
 
 export function removeVariant(itemId: string, variantId: string): Promise<ItemView> {
@@ -244,21 +261,6 @@ export interface ItemPriceView extends CurrentPriceView {
 
 export function createItemPrice(itemId: string, input: CreatePriceInput): Promise<ItemPriceView> {
   return adminApi<ItemPriceView>(`menu/items/${itemId}/prices`, { method: "POST", body: JSON.stringify(input) });
-}
-
-export function fetchCurrentPrice(
-  itemId: string,
-  params: { channel: PriceChannel; variantId?: string; outletId?: string },
-): Promise<CurrentPriceView> {
-  const search = new URLSearchParams({ channel: params.channel });
-  if (params.variantId) search.set("variantId", params.variantId);
-  if (params.outletId) search.set("outletId", params.outletId);
-  return adminApi<CurrentPriceView>(`menu/items/${itemId}/price?${search.toString()}`).catch((error: unknown) => {
-    // 404 (no_current_price) means this line has never been priced yet -
-    // that's a normal state for a freshly added variant, not a load failure.
-    if (error instanceof AdminApiError && error.status === 404) return null as unknown as CurrentPriceView;
-    throw error;
-  });
 }
 
 export function fetchModifierGroups(): Promise<ModifierGroupView[]> {

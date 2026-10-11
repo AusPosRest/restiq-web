@@ -15,10 +15,10 @@ export default async function GuestTableEntryPage({
   params: Promise<{ outletId: string; tableId: string }>;
 }) {
   const { outletId, tableId } = await params;
-  const result = await checkAvailability(outletId);
+  const result = await checkAvailability(outletId, tableId);
 
   if (result.kind !== "available") {
-    return <UnavailableView />;
+    return <UnavailableView tableBusy={result.kind === "unavailable" && result.reason === "table_busy"} />;
   }
 
   return <WelcomeFlow outletId={outletId} tableId={tableId} />;

@@ -92,6 +92,14 @@ describe("StationQueueScreen", () => {
     expect(ids).toEqual(["kds-ticket-oldest", "kds-ticket-middle", "kds-ticket-newest"]);
   });
 
+  it("wraps tickets onto new rows instead of a sideways scroll, so the newest is never off screen (CU-19)", async () => {
+    vi.stubGlobal("fetch", mockFetch(() => [ticket({ id: "a" }), ticket({ id: "b" })]));
+    renderScreen();
+    const rail = await vi.waitFor(() => screen.getByTestId("kds-station-rail"));
+    expect(rail.className).toContain("flex-wrap");
+    expect(rail.className).not.toContain("overflow-x-auto");
+  });
+
   it("shows the Station-tab explainer", async () => {
     vi.stubGlobal("fetch", mockFetch(() => []));
     renderScreen();
