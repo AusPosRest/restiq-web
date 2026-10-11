@@ -476,6 +476,18 @@ describe("OrderTakingView", () => {
     expect(screen.queryByTestId("item-tile-item-paneer")).toBeNull();
   });
 
+describe("OrderTakingView - long category names (CU-16)", () => {
+  it("clamps a very long category name instead of stretching the till, with the full name on hover", async () => {
+    const longName = "SE Ω🍛".repeat(400);
+    stubFetch((url) => (url.includes("/menu") ? jsonResponse({ ...MENU, categories: [{ id: "cat-long", name: longName, sortOrder: 0 }] }) : jsonResponse(order())));
+    renderView();
+    const tab = await screen.findByTestId("category-tab-cat-long");
+    expect(tab.getAttribute("title")).toBe(longName);
+    expect(tab.className).toContain("line-clamp-2");
+    expect(tab.className).toContain("truncate");
+  });
+});
+
 describe("OrderTakingView - mistakes on a sent order (CU-15, CU-27)", () => {
   const sentLine = {
     id: "line-sent",

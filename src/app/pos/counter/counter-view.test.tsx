@@ -9,6 +9,8 @@ import { cleanup, render, screen, waitFor } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { CounterView } from "./counter-view";
+
+vi.mock("next/navigation", () => ({ useRouter: () => ({ push: vi.fn(), replace: vi.fn() }) }));
 import type { BillView } from "../orders/[orderId]/settle/bill-state";
 import type { PaymentIntentView } from "@/lib/payment-intent";
 import type { PosMenuView, RawOrder } from "../orders/[orderId]/order-taking-state";

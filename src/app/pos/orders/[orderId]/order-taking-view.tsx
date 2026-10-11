@@ -299,7 +299,8 @@ function OrderTakingLoaded({
                 setSelectedCategoryId(category.id);
                 setQuery("");
               }}
-              className={`shrink-0 whitespace-nowrap rounded-md px-3 py-2 text-left text-sm font-semibold transition-colors lg:whitespace-normal ${
+              title={category.name}
+              className={`shrink-0 max-w-48 truncate rounded-md px-3 py-2 text-left text-sm font-semibold transition-colors lg:max-w-none lg:whitespace-normal lg:line-clamp-2 lg:[overflow-wrap:anywhere] ${
                 category.id === effectiveCategoryId ? "bg-primary text-primary-foreground" : "text-muted-foreground hover:bg-accent hover:text-foreground"
               }`}
             >
@@ -309,7 +310,7 @@ function OrderTakingLoaded({
         </nav>
 
         <main className="p-4 lg:min-w-0 lg:flex-1 lg:overflow-y-auto">
-          <h2 className="mb-3 font-headline text-base font-semibold text-foreground">
+          <h2 className="mb-3 line-clamp-2 font-headline text-base font-semibold text-foreground [overflow-wrap:anywhere]">
             {query.trim() ? "Search results" : activeCategory?.name} <span className="font-normal text-muted-foreground">· {visibleItems.length} items</span>
           </h2>
           {visibleItems.length === 0 && visibleCombos.length === 0 ? (

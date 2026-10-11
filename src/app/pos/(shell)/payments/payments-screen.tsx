@@ -27,6 +27,12 @@ function billLabel(payment: PaymentHistoryEntry): string {
   return parts.filter(Boolean).join(" · ") || "—";
 }
 
+/** "2026-10-11" (the outlet's calendar day) -> "11 Oct 2026" (PE-19: no raw ISO dates on screen). */
+function formatDay(isoDay: string): string {
+  const day = new Date(`${isoDay}T00:00:00Z`);
+  return Number.isNaN(day.getTime()) ? isoDay : day.toLocaleDateString("en-IN", { day: "numeric", month: "short", year: "numeric", timeZone: "UTC" });
+}
+
 export function PaymentsScreen({ outletId }: Readonly<{ outletId: string }>) {
   const { loading, failed, data, retry } = usePosLoad<PaymentHistoryView>(`outlets/${encodeURIComponent(outletId)}/payments`);
 
@@ -37,7 +43,7 @@ export function PaymentsScreen({ outletId }: Readonly<{ outletId: string }>) {
           <h1 className="font-headline text-lg font-semibold">Payments today</h1>
           {data && (
             <p className="mt-1 text-sm text-muted-foreground" data-testid="pos-payments-summary">
-              {data.count} payment{data.count === 1 ? "" : "s"} · {formatMinor(data.totalMinor, data.currency)} · {data.date}
+              {data.count} payment{data.count === 1 ? "" : "s"} · {formatMinor(data.totalMinor, data.currency)} · {formatDay(data.date)}
             </p>
           )}
         </div>
