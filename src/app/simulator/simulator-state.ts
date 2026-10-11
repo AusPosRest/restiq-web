@@ -15,16 +15,19 @@ export interface FramePreset {
   height: number;
 }
 
-// Label -> path, default frame size (SPEC: issue #294). Guest QR/owner/
+// Label -> path, default frame size (SPEC: issue #294). Each device frame is
+// a fresh device (issue #339), so it opens /device to enter the enrolment code
+// for that device type; /device then routes to the till, KDS, kiosk, printer
+// or terminal screen itself. Guest QR/owner/
 // platform entries reuse the exact routes the landing page (page.tsx)
 // already links to, not reimplemented.
 export const PRESETS: readonly FramePreset[] = [
   { key: "device-enrol", label: "Device enrol", path: "/device", width: 390, height: 844 },
-  { key: "pos-till", label: "POS till", path: "/pos/login", width: 1024, height: 768 },
-  { key: "kds", label: "KDS", path: "/kds", width: 1280, height: 720 },
-  { key: "kiosk", label: "Kiosk", path: "/pos/login", width: 768, height: 1024 },
-  { key: "receipt-printer", label: "Receipt printer", path: "/pos/login?next=%2Fpos%2Fprinter", width: 360, height: 640 },
-  { key: "card-terminal", label: "Card terminal", path: "/pos/login?next=%2Fpos%2Fterminal", width: 360, height: 640 },
+  { key: "pos-till", label: "POS till", path: "/device", width: 1024, height: 768 },
+  { key: "kds", label: "KDS", path: "/device", width: 1280, height: 720 },
+  { key: "kiosk", label: "Kiosk", path: "/device", width: 768, height: 1024 },
+  { key: "receipt-printer", label: "Receipt printer", path: "/device", width: 360, height: 640 },
+  { key: "card-terminal", label: "Card terminal", path: "/device", width: 360, height: 640 },
   {
     key: "guest-qr",
     label: "Guest QR",
