@@ -89,11 +89,13 @@ export function BillSummary({
           <tbody>
             {lines.map((line) => {
               const isBusy = busyLineId === line.id;
+              // CU-15: a line the kitchen already has can't be stepped or removed here.
+              const lineEditable = editable && !line.sentToKitchen;
               return (
                 <tr key={line.id} data-testid={`bill-line-${line.id}`} className="align-top">
                   <td className="py-1.5 pr-3 tabular-nums">
                     {/* A combo can only be removed, not stepped (restiq-backend#160). */}
-                    {editable && !line.comboId ? (
+                    {lineEditable && !line.comboId ? (
                       <div className="flex items-center gap-1">
                         <button
                           type="button"
@@ -137,10 +139,16 @@ export function BillSummary({
                         {line.components.join(" · ")}
                       </p>
                     )}
+                    {line.note && (
+                      <p data-testid={`bill-line-note-${line.id}`} className="text-xs italic text-foreground/80">
+                        Note: {line.note}
+                      </p>
+                    )}
                   </td>
                   <td className="whitespace-nowrap py-1.5 text-right tabular-nums">{formatMinor(line.lineTotalMinor, currency)}</td>
                   {editable && (
                     <td className="py-1.5 pl-2 text-right">
+                      {lineEditable && (
                       <button
                         type="button"
                         data-testid={`bill-line-remove-${line.id}`}
@@ -151,6 +159,7 @@ export function BillSummary({
                       >
                         <Trash2 className="size-3.5" aria-hidden="true" />
                       </button>
+                      )}
                     </td>
                   )}
                 </tr>

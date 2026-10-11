@@ -19,7 +19,7 @@
 import Link from "next/link";
 import { Minus, Plus, Trash2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
-import { canSendToKitchen, computeOrderTotalMinor, formatPriceMinor, orderOriginLabel, type OrderLineView, type OrderView } from "./order-taking-state";
+import { canSendToKitchen, computeOrderTotalMinor, formatPriceMinor, orderOriginLabel, staffLabel, unsentLineCount, type OrderLineView, type OrderView } from "./order-taking-state";
 
 export interface OrderPanelProps {
   /** The Order's real id - CAP-3 has no gapless bill-number concept (that's CAP-7's Bill), so the header shows a short display slice of the real id, not a fabricated sequence number. */
@@ -35,6 +35,13 @@ export interface OrderPanelProps {
   onIncrement: (line: OrderLineView) => void;
   onDecrement: (line: OrderLineView) => void;
   onRemove: (line: OrderLineView) => void;
+  /** restiq-backend#210 (CU-15): a line the kitchen already has is voided with a manager PIN instead of removed. */
+  onVoid: (line: OrderLineView) => void;
+  /** Absent while someone else owns the order - every change control is hidden then (SE-22). */
+  editable: boolean;
+  /** Shown only while the order has no lines (PE-16/CU-27). */
+  onDiscard: () => void;
+  discarding: boolean;
   sendingToKitchen: boolean;
   onSendToKitchen: () => void;
 }
@@ -51,14 +58,29 @@ export function OrderPanel({
   onIncrement,
   onDecrement,
   onRemove,
+  onVoid,
+  editable,
+  onDiscard,
+  discarding,
   sendingToKitchen,
   onSendToKitchen,
 }: Readonly<OrderPanelProps>) {
   const totalMinor = computeOrderTotalMinor(lines);
-  const canSend = canSendToKitchen({ lines, status });
+  const canSend = editable && canSendToKitchen({ lines, status });
   // issue #306: a closed (paid) order is a record - no quantity or remove controls.
   const closed = status === "closed";
-  const sendButtonLabel = status === "closed" ? "Closed" : status === "sent" ? "Sent to kitchen" : sendingToKitchen ? "Sending…" : "Send to kitchen";
+  const unsent = unsentLineCount({ lines });
+  const sendButtonLabel = closed
+    ? "Closed"
+    : sendingToKitchen
+      ? "Sending…"
+      : unsent === 0
+        ? lines.length === 0
+          ? "Send to kitchen"
+          : "Sent to kitchen"
+        : status === "sent"
+          ? `Send ${unsent} new item${unsent === 1 ? "" : "s"} to kitchen`
+          : "Send to kitchen";
 
   return (
     <aside data-testid="order-panel" className="flex w-full shrink-0 flex-col border-t border-border/60 bg-card lg:w-80 lg:border-l lg:border-t-0">
@@ -77,6 +99,9 @@ export function OrderPanel({
         ) : (
           lines.map((line) => {
             const isBusy = busyLineId === line.id;
+            // CU-15: an unsent line can be changed freely; a sent one only voided. Controls that can't work are not shown.
+            const canChange = editable && !closed && !line.sentToKitchen;
+            const canVoid = editable && !closed && line.sentToKitchen;
             return (
               <div key={line.id} data-testid={`order-line-${line.id}`} className="flex flex-col gap-1.5 rounded-lg border border-border/60 p-3">
                 <div className="flex items-start justify-between gap-2">
@@ -95,15 +120,28 @@ export function OrderPanel({
                         ))}
                       </ul>
                     )}
+                    {line.note && (
+                      <p data-testid={`order-line-note-${line.id}`} className="text-xs italic text-foreground/80">
+                        Note: {line.note}
+                      </p>
+                    )}
                     <p data-testid={`order-line-added-by-${line.id}`} className="text-[11px] text-muted-foreground/80">
-                      Added by {line.addedByStaffId === currentStaffId ? "You" : line.addedByStaffId}
+                      Added by {staffLabel(line.addedByStaffId, line.addedByStaffName, currentStaffId)}
                     </p>
+                    {!closed && (
+                      <p
+                        data-testid={`order-line-kitchen-state-${line.id}`}
+                        className={`text-[11px] font-semibold uppercase tracking-wider ${line.sentToKitchen ? "text-muted-foreground" : "text-primary"}`}
+                      >
+                        {line.sentToKitchen ? "In kitchen" : status === "sent" ? "New - not sent yet" : "Not sent yet"}
+                      </p>
+                    )}
                   </div>
                   <p className="tabular-nums text-sm font-semibold text-foreground">{formatPriceMinor(line.lineTotalMinor, currency)}</p>
                 </div>
                 <div className="flex items-center gap-2">
                   {/* A combo is changed by removing it and adding it again (restiq-backend#160). */}
-                  {line.comboId ? (
+                  {line.comboId || !canChange ? (
                     <span data-testid={`order-line-qty-${line.id}`} className="text-sm font-semibold tabular-nums">
                       {line.quantity}×
                     </span>
@@ -113,7 +151,7 @@ export function OrderPanel({
                         type="button"
                         data-testid={`order-line-decrement-${line.id}`}
                         aria-label="Decrease quantity"
-                        disabled={isBusy || closed}
+                        disabled={isBusy}
                         onClick={() => onDecrement(line)}
                         className="flex size-7 items-center justify-center rounded-md border border-border text-foreground hover:bg-accent disabled:opacity-40"
                       >
@@ -126,7 +164,7 @@ export function OrderPanel({
                         type="button"
                         data-testid={`order-line-increment-${line.id}`}
                         aria-label="Increase quantity"
-                        disabled={isBusy || closed}
+                        disabled={isBusy}
                         onClick={() => onIncrement(line)}
                         className="flex size-7 items-center justify-center rounded-md border border-border text-foreground hover:bg-accent disabled:opacity-40"
                       >
@@ -134,16 +172,29 @@ export function OrderPanel({
                       </button>
                     </>
                   )}
-                  <button
-                    type="button"
-                    data-testid={`order-line-remove-${line.id}`}
-                    aria-label="Remove line"
-                    disabled={isBusy || closed}
-                    onClick={() => onRemove(line)}
-                    className="ml-auto flex size-7 items-center justify-center rounded-md text-muted-foreground hover:bg-accent hover:text-status-alert disabled:opacity-40"
-                  >
-                    <Trash2 className="size-3.5" aria-hidden="true" />
-                  </button>
+                  {canChange && (
+                    <button
+                      type="button"
+                      data-testid={`order-line-remove-${line.id}`}
+                      aria-label={`Remove ${line.itemName}`}
+                      disabled={isBusy}
+                      onClick={() => onRemove(line)}
+                      className="ml-auto flex size-7 items-center justify-center rounded-md text-muted-foreground hover:bg-accent hover:text-status-alert disabled:opacity-40"
+                    >
+                      <Trash2 className="size-3.5" aria-hidden="true" />
+                    </button>
+                  )}
+                  {canVoid && (
+                    <button
+                      type="button"
+                      data-testid={`order-line-void-${line.id}`}
+                      disabled={isBusy}
+                      onClick={() => onVoid(line)}
+                      className="ml-auto rounded-md px-2 py-1 text-xs font-semibold text-muted-foreground hover:bg-accent hover:text-status-alert disabled:opacity-40"
+                    >
+                      Void…
+                    </button>
+                  )}
                 </div>
               </div>
             );
@@ -171,9 +222,16 @@ export function OrderPanel({
         </button>
 
         {lines.length === 0 ? (
-          <Button size="lg" className="mt-3 w-full" data-testid="go-to-settle" disabled>
-            Settle
-          </Button>
+          <>
+            <Button size="lg" className="mt-3 w-full" data-testid="go-to-settle" disabled>
+              Settle
+            </Button>
+            {editable && !closed && (
+              <Button size="lg" variant="outline" className="mt-2 w-full" data-testid="discard-order" disabled={discarding} onClick={onDiscard}>
+                {discarding ? "Discarding…" : "Discard empty order"}
+              </Button>
+            )}
+          </>
         ) : (
           <Button asChild size="lg" variant={closed ? "outline" : "default"} className="mt-3 w-full" data-testid="go-to-settle">
             <Link href={`/pos/orders/${orderId}/settle`}>{closed ? "View bill" : "Settle"}</Link>

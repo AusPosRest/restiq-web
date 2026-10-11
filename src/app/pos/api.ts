@@ -158,6 +158,22 @@ export function removeOrderLine(orderId: string, lineId: string, menu?: Pick<Pos
   return posApi<RawOrder>(`orders/${orderId}/lines/${lineId}`, { method: "DELETE" }).then((raw) => toOrderView(raw, menu));
 }
 
+/** restiq-backend#210 (CU-15): takes back a line the kitchen already has - a manager PIN and reason are checked server-side. */
+export function voidOrderLine(orderId: string, lineId: string, managerPin: string, reason: string, menu?: Pick<PosMenuView, "items">): Promise<OrderView> {
+  return posApi<RawOrder>(`orders/${orderId}/lines/${lineId}/void`, { method: "POST", body: JSON.stringify({ managerPin, reason }) }).then((raw) =>
+    toOrderView(raw, menu),
+  );
+}
+
+/** restiq-backend#210 (PE-16/CU-27): throws away an order with nothing on it. 409 `order_not_empty` once anything is on it. */
+export function discardOrder(orderId: string): Promise<null> {
+  return posApi<null>(`orders/${orderId}`, { method: "DELETE" });
+}
+
+export function fetchOrder(orderId: string, menu?: Pick<PosMenuView, "items">): Promise<OrderView> {
+  return posApi<RawOrder>(`orders/${orderId}`).then((raw) => toOrderView(raw, menu));
+}
+
 /**
  * CAP-6 QSR counter mode (story 7, issue #56 web / #62 backend). Starts a
  * fresh counter order - no table, no seat - issuing a new sequential token

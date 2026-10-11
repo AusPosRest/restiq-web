@@ -11,11 +11,24 @@
 // Both use the same five-state pattern (skeleton/error/loaded) as every
 // other /pos screen (usePosLoad).
 import Link from "next/link";
+import { useRouter } from "next/navigation";
 import { useMemo, useState } from "react";
 import { Search } from "lucide-react";
+import { Button } from "@/components/ui/button";
 import { ComboPicker, type ComboPickerConfirmValue } from "@/components/combo-picker";
 import { combosFor, type ComboMenuView } from "@/lib/combo";
-import { addComboLine, addOrderLine, PosApiError, removeOrderLine, sendOrderToKitchen, updateOrderLineQuantity } from "../../api";
+import {
+  addComboLine,
+  addOrderLine,
+  discardOrder,
+  PosApiError,
+  removeOrderLine,
+  sendOrderToKitchen,
+  transferOrder,
+  updateOrderLineQuantity,
+  voidOrderLine,
+} from "../../api";
+import { DEFAULT_MANAGER_REASON_CODES, ManagerPinDialog, type ManagerApprovalResult } from "../../components/manager-pin-dialog";
 import { LoadErrorPanel, Skeleton } from "../../data-states";
 import { usePosLoad } from "../../use-pos-load";
 import { ModifierSheet, type ModifierSheetConfirmValue } from "./modifier-sheet";
@@ -28,6 +41,7 @@ import {
   formatPriceMinor,
   itemNeedsModifierSheet,
   orderOriginLabel,
+  staffLabel,
   toOrderView,
   type OrderLineView,
   type OrderView,
@@ -74,6 +88,13 @@ function OrderTakingLoaded({
   const [busyLineId, setBusyLineId] = useState<string | null>(null);
   const [actionError, setActionError] = useState<string | null>(null);
   const [sendingToKitchen, setSendingToKitchen] = useState(false);
+  const [voidLine, setVoidLine] = useState<OrderLineView | null>(null);
+  const [discarding, setDiscarding] = useState(false);
+  const [takingOver, setTakingOver] = useState(false);
+  const router = useRouter();
+  // SE-22: only the owner (or anyone, on an unclaimed QR order) changes an order - everyone else sees it read-only with a Take over action.
+  const isMine = order.ownerStaffId === null || order.ownerStaffId === currentStaffId;
+  const editable = isMine && order.status !== "closed";
 
   const sortedCategories = useMemo(() => [...menu.categories].sort((a, b) => a.sortOrder - b.sortOrder), [menu.categories]);
   const effectiveCategoryId = selectedCategoryId ?? sortedCategories[0]?.id ?? null;
@@ -92,7 +113,7 @@ function OrderTakingLoaded({
         variantId: value.variantId ?? undefined,
         quantity: value.quantity,
         modifierIds: value.modifierIds,
-        specialInstructions: value.specialInstructions || undefined,
+        note: value.specialInstructions || undefined,
       },
       menu,
     )
@@ -105,7 +126,7 @@ function OrderTakingLoaded({
   }
 
   function handleTapItem(item: PosMenuItemView) {
-    if (order.status === "closed") return; // issue #306: a paid order takes no new lines
+    if (!editable) return; // issue #306: a paid order takes no new lines; SE-22: nor someone else's
     if (addingLine || busyLineId !== null) return;
     if (itemNeedsModifierSheet(item)) {
       setActiveItem(item);
@@ -172,6 +193,38 @@ function OrderTakingLoaded({
       .finally(() => setBusyLineId(null));
   }
 
+  function handleVoid(pin: string, reasonCode: string): Promise<ManagerApprovalResult> {
+    if (!voidLine) return Promise.resolve({ ok: false, error: "Nothing to void." });
+    const reason = DEFAULT_MANAGER_REASON_CODES.find((option) => option.value === reasonCode)?.label ?? reasonCode;
+    return voidOrderLine(orderId, voidLine.id, pin, reason, menu).then(
+      (updated) => {
+        setOrder(updated);
+        return { ok: true };
+      },
+      (error: unknown) => ({ ok: false, error: errorMessage(error, "Couldn't void that item.") }),
+    );
+  }
+
+  function handleDiscard() {
+    setDiscarding(true);
+    setActionError(null);
+    discardOrder(orderId)
+      .then(() => router.push("/pos/table-map"))
+      .catch((error: unknown) => {
+        setActionError(errorMessage(error, "Couldn't discard this order."));
+        setDiscarding(false);
+      });
+  }
+
+  function handleTakeOver() {
+    setTakingOver(true);
+    setActionError(null);
+    transferOrder(orderId, currentStaffId)
+      .then((raw) => setOrder(toOrderView(raw, menu)))
+      .catch((error: unknown) => setActionError(errorMessage(error, "Couldn't take over this order.")))
+      .finally(() => setTakingOver(false));
+  }
+
   function handleSendToKitchen() {
     // Defensive re-check mirroring the button's own disabled state.
     if (!canSendToKitchen(order)) return;
@@ -205,9 +258,20 @@ function OrderTakingLoaded({
           />
         </div>
         <p data-testid="order-owner" className="text-sm text-muted-foreground">
-          Owned by <span className="font-semibold text-foreground">{order.ownerStaffName === currentStaffId ? "You" : order.ownerStaffName}</span>
+          Owned by <span className="font-semibold text-foreground">{staffLabel(order.ownerStaffId, order.ownerName, currentStaffId)}</span>
         </p>
       </header>
+
+      {!isMine && order.status !== "closed" && (
+        <div data-testid="order-not-yours" className="mx-6 mt-4 flex flex-wrap items-center gap-3 rounded-lg border border-border bg-card px-4 py-3 text-sm text-foreground">
+          <span>
+            This order belongs to <span className="font-semibold">{order.ownerName ?? "another staff member"}</span>. Take it over to add or change items.
+          </span>
+          <Button size="sm" data-testid="order-take-over" disabled={takingOver} onClick={handleTakeOver}>
+            {takingOver ? "Taking over…" : "Take over"}
+          </Button>
+        </div>
+      )}
 
       {actionError && (
         <div role="alert" data-testid="order-taking-action-error" className="mx-6 mt-4 rounded-lg border border-status-alert/40 bg-card px-4 py-3 text-sm text-status-alert">
@@ -255,7 +319,7 @@ function OrderTakingLoaded({
           ) : (
             <div data-testid="item-grid" className="grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-4">
               {visibleCombos.map((combo) => (
-                <PosComboTile key={combo.id} combo={combo} itemsById={itemsById} currency={menu.currency} onTap={() => !addingLine && order.status !== "closed" && setActiveCombo(combo)} />
+                <PosComboTile key={combo.id} combo={combo} itemsById={itemsById} currency={menu.currency} onTap={() => !addingLine && editable && setActiveCombo(combo)} />
               ))}
               {visibleItems.map((item) => (
                 <PosItemTile key={item.id} item={item} currency={menu.currency} onTap={() => item.available && handleTapItem(item)} />
@@ -276,6 +340,10 @@ function OrderTakingLoaded({
           onIncrement={handleIncrement}
           onDecrement={handleDecrement}
           onRemove={handleRemove}
+          onVoid={setVoidLine}
+          editable={editable}
+          onDiscard={handleDiscard}
+          discarding={discarding}
           sendingToKitchen={sendingToKitchen}
           onSendToKitchen={handleSendToKitchen}
         />
@@ -292,6 +360,13 @@ function OrderTakingLoaded({
           onConfirm={handleConfirmCombo}
         />
       )}
+
+      <ManagerPinDialog
+        open={voidLine !== null}
+        onOpenChange={(open) => !open && setVoidLine(null)}
+        actionTitle={`Void ${voidLine?.itemName ?? "item"}`}
+        onApprove={handleVoid}
+      />
 
       {activeItem && (
         <ModifierSheet item={activeItem} currency={menu.currency} busy={addingLine} onCancel={() => setActiveItem(null)} onConfirm={handleConfirmModifiers} />

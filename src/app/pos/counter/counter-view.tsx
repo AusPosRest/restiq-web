@@ -29,7 +29,13 @@
 //  - tenders accumulate locally and only ever submit together with Finalize
 //    (`FinalizeBillDto` has no per-tender endpoint) - discount stays
 //    deliberately unoffered here (YAGNI, unchanged from the original story).
-import { useEffect, useMemo, useRef, useState } from "react";
+//
+// restiq-web#343 (PE-16/SE-27/CU-13): the counter order - and its token - is
+// created lazily on the FIRST item, never on page open, and the order in
+// progress is remembered for this tab (counter-session.ts) so a reload
+// resumes it instead of orphaning it. An order emptied again can be
+// discarded.
+import { useEffect, useMemo, useState } from "react";
 import Link from "next/link";
 import { Search } from "lucide-react";
 import { Button } from "@/components/ui/button";
@@ -39,7 +45,9 @@ import { PrintBillButton } from "../bills/print-bill-button";
 import {
   addComboLine,
   addOrderLine,
+  discardOrder,
   fetchOrCreateBill,
+  fetchOrder,
   finalizeBill,
   getBill,
   PosApiError,
@@ -77,55 +85,83 @@ import { TerminalIntentPanel } from "../orders/[orderId]/settle/terminal-intent-
 import { useTerminalIntent } from "../orders/[orderId]/settle/use-terminal-intent";
 import { PosHeader } from "../components/pos-header";
 import { TokenBadge } from "./token-badge";
+import { clearCounterOrderId, readCounterOrderId, saveCounterOrderId } from "./counter-session";
 import { openDrawerForTenders } from "@/lib/desktop";
 
-export function CounterView({ outletId, currentStaffId }: Readonly<{ outletId: string; currentStaffId: string }>) {
+export function CounterView({
+  outletId,
+  currentStaffId,
+  currentStaffName,
+}: Readonly<{ outletId: string; currentStaffId: string; currentStaffName: string }>) {
   const menuLoad = usePosLoad<PosMenuView>("menu");
-  const [order, setOrder] = useState<OrderView | null>(null);
-  const [orderStarting, setOrderStarting] = useState(true);
-  const [orderError, setOrderError] = useState(false);
-  const startedRef = useRef(false);
+  // undefined = still checking this tab for an order in progress; null = none (a fresh, not-yet-created order).
+  const [resumed, setResumed] = useState<OrderView | null | undefined>(undefined);
+  // Bumped by "Start next order" / discard so CounterLoaded remounts empty.
+  const [round, setRound] = useState(0);
 
-  function beginNewOrder() {
-    setOrderStarting(true);
-    setOrderError(false);
-    setOrder(null);
-    startCounterOrder(outletId)
-      .then((raw) => setOrder(toOrderView(raw, menuLoad.data ?? undefined)))
-      .catch(() => setOrderError(true))
-      .finally(() => setOrderStarting(false));
-  }
-
+  const menu = menuLoad.data;
   useEffect(() => {
-    if (startedRef.current) return;
-    startedRef.current = true;
-    beginNewOrder();
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []);
+    if (!menu) return;
+    let cancelled = false;
+    const savedId = readCounterOrderId(currentStaffId);
+    const lookup: Promise<OrderView | null> = savedId
+      ? fetchOrder(savedId, menu).then(
+          (order) => (order.status !== "closed" && order.ownerStaffId === currentStaffId ? order : null),
+          () => null,
+        )
+      : Promise.resolve(null);
+    void lookup.then((order) => {
+      if (cancelled) return;
+      if (!order) clearCounterOrderId(currentStaffId);
+      setResumed(order);
+    });
+    return () => {
+      cancelled = true;
+    };
+  }, [menu, currentStaffId]);
 
-  if (menuLoad.loading || orderStarting) return <LoadingShell />;
-  if (menuLoad.failed || !menuLoad.data) {
+  if (menuLoad.failed) {
     return <LoadErrorPanel testId="counter-menu-error" message="Couldn't load the menu." onRetry={menuLoad.retry} />;
   }
-  if (orderError || !order) {
-    return <LoadErrorPanel testId="counter-order-error" message="Couldn't start a counter order." onRetry={beginNewOrder} />;
+  if (!menu || resumed === undefined) return <LoadingShell />;
+
+  function startNextOrder() {
+    clearCounterOrderId(currentStaffId);
+    setResumed(null);
+    setRound((n) => n + 1);
   }
 
-  // Keyed on the order id: finalizing and starting the next counter order
-  // swaps in a brand new id, remounting CounterLoaded fresh rather than
-  // hand-resetting every piece of its ring-up-in-progress state.
-  return <CounterLoaded key={order.id} menu={menuLoad.data} initialOrder={order} currentStaffId={currentStaffId} onStartNextOrder={beginNewOrder} />;
+  return (
+    <CounterLoaded
+      key={`${round}:${resumed?.id ?? "new"}`}
+      outletId={outletId}
+      menu={menu}
+      initialOrder={resumed}
+      currentStaffId={currentStaffId}
+      currentStaffName={currentStaffName}
+      onStartNextOrder={startNextOrder}
+    />
+  );
 }
 
 function CounterLoaded({
+  outletId,
   menu,
   initialOrder,
   currentStaffId,
+  currentStaffName,
   onStartNextOrder,
-}: Readonly<{ menu: PosMenuView; initialOrder: OrderView; currentStaffId: string; onStartNextOrder: () => void }>) {
-  const [order, setOrder] = useState(initialOrder);
+}: Readonly<{
+  outletId: string;
+  menu: PosMenuView;
+  initialOrder: OrderView | null;
+  currentStaffId: string;
+  currentStaffName: string;
+  onStartNextOrder: () => void;
+}>) {
+  // null until the first item is rung up - opening the screen creates nothing (PE-16).
+  const [order, setOrder] = useState<OrderView | null>(initialOrder);
   const [bill, setBill] = useState<BillView | null>(null);
-  const [billLoading, setBillLoading] = useState(true);
   const [billError, setBillError] = useState(false);
 
   const [selectedCategoryId, setSelectedCategoryId] = useState<string | null>(null);
@@ -139,16 +175,15 @@ function CounterLoaded({
   const [finalizeBusy, setFinalizeBusy] = useState(false);
   const [finalizeError, setFinalizeError] = useState<string | null>(null);
   const [changeGiven, setChangeGiven] = useState(0);
+  const [discarding, setDiscarding] = useState(false);
 
   // Refreshes after add / quantity / remove / tender keep the counter on
-  // screen (#269); only the first read or a retry shows the loading shell.
-  function loadBill() {
-    if (!bill) setBillLoading(true);
+  // screen (#269) - no loading shell for a refresh.
+  function loadBill(orderId: string) {
     setBillError(false);
-    fetchOrCreateBill(order.id)
+    fetchOrCreateBill(orderId)
       .then(setBill)
-      .catch(() => setBillError(true))
-      .finally(() => setBillLoading(false));
+      .catch(() => setBillError(true));
   }
 
   // Card terminal (issue #188): a quiet re-read once the terminal approves -
@@ -160,12 +195,9 @@ function CounterLoaded({
       .catch(() => undefined);
   });
 
-  // Runs once per mounted counter order (this component remounts wholesale -
-  // see the `key={order.id}` above - rather than re-running for the same
-  // order), same "no optimistic local patch, always replace from the
-  // server's response" convention order-taking-view.tsx/bill-settle-view.tsx
-  // already use.
+  // A resumed order's bill, once (this component remounts per order).
   useEffect(() => {
+    if (!initialOrder) return;
     let cancelled = false;
     fetchOrCreateBill(initialOrder.id)
       .then((value) => {
@@ -173,15 +205,28 @@ function CounterLoaded({
       })
       .catch(() => {
         if (!cancelled) setBillError(true);
-      })
-      .finally(() => {
-        if (!cancelled) setBillLoading(false);
       });
     return () => {
       cancelled = true;
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
+
+  /** The order in progress, created (with its token) on the first item only. */
+  function ensureOrder(): Promise<OrderView> {
+    if (order) return Promise.resolve(order);
+    return startCounterOrder(outletId).then((raw) => {
+      const created = toOrderView(raw, menu);
+      saveCounterOrderId(currentStaffId, created.id);
+      setOrder(created);
+      return created;
+    });
+  }
+
+  function applyUpdate(updated: OrderView) {
+    setOrder(updated);
+    loadBill(updated.id);
+  }
 
   const sortedCategories = useMemo(() => [...menu.categories].sort((a, b) => a.sortOrder - b.sortOrder), [menu.categories]);
   const effectiveCategoryId = selectedCategoryId ?? sortedCategories[0]?.id ?? null;
@@ -193,20 +238,22 @@ function CounterLoaded({
   function submitLine(itemId: string, value: ModifierSheetConfirmValue, onSettled: () => void) {
     setAddingLine(true);
     setActionError(null);
-    addOrderLine(
-      order.id,
-      {
-        itemId,
-        variantId: value.variantId ?? undefined,
-        quantity: value.quantity,
-        modifierIds: value.modifierIds,
-        specialInstructions: value.specialInstructions || undefined,
-      },
-      menu,
-    )
+    ensureOrder()
+      .then((current) =>
+        addOrderLine(
+          current.id,
+          {
+            itemId,
+            variantId: value.variantId ?? undefined,
+            quantity: value.quantity,
+            modifierIds: value.modifierIds,
+            note: value.specialInstructions || undefined,
+          },
+          menu,
+        ),
+      )
       .then((updated) => {
-        setOrder(updated);
-        loadBill();
+        applyUpdate(updated);
         onSettled();
       })
       .catch((error: unknown) => setActionError(errorMessage(error, "Couldn't add that item to the order.")))
@@ -217,10 +264,11 @@ function CounterLoaded({
     if (!activeCombo) return;
     setAddingLine(true);
     setActionError(null);
-    addComboLine(order.id, { comboId: activeCombo.id, ...value }, menu)
+    const comboId = activeCombo.id;
+    ensureOrder()
+      .then((current) => addComboLine(current.id, { comboId, ...value }, menu))
       .then((updated) => {
-        setOrder(updated);
-        loadBill();
+        applyUpdate(updated);
         setActiveCombo(null);
       })
       .catch((error: unknown) => setActionError(errorMessage(error, "Couldn't add that combo to the order.")))
@@ -235,7 +283,7 @@ function CounterLoaded({
     }
     // Same rule as table mode (restiq-web#63/#129): a repeat tap on a plain
     // item bumps its existing line instead of adding a duplicate.
-    const existingLine = order.lines.find((line) => line.itemId === item.id && line.variantId === null && line.modifiers.length === 0);
+    const existingLine = order?.lines.find((line) => line.itemId === item.id && line.variantId === null && line.modifiers.length === 0 && !line.note);
     if (existingLine) {
       handleIncrement(existingLine);
       return;
@@ -249,38 +297,32 @@ function CounterLoaded({
   }
 
   function handleIncrement(line: OrderLineView) {
+    if (!order) return;
     setBusyLineId(line.id);
     setActionError(null);
     updateOrderLineQuantity(order.id, line.id, line.quantity + 1, menu)
-      .then((updated) => {
-        setOrder(updated);
-        loadBill();
-      })
+      .then(applyUpdate)
       .catch((error: unknown) => setActionError(errorMessage(error, "Couldn't update that line.")))
       .finally(() => setBusyLineId(null));
   }
 
   function handleDecrement(line: OrderLineView) {
+    if (!order) return;
     setBusyLineId(line.id);
     setActionError(null);
     const request = line.quantity <= 1 ? removeOrderLine(order.id, line.id, menu) : updateOrderLineQuantity(order.id, line.id, line.quantity - 1, menu);
     request
-      .then((updated) => {
-        setOrder(updated);
-        loadBill();
-      })
+      .then(applyUpdate)
       .catch((error: unknown) => setActionError(errorMessage(error, "Couldn't update that line.")))
       .finally(() => setBusyLineId(null));
   }
 
   function handleRemove(line: OrderLineView) {
+    if (!order) return;
     setBusyLineId(line.id);
     setActionError(null);
     removeOrderLine(order.id, line.id, menu)
-      .then((updated) => {
-        setOrder(updated);
-        loadBill();
-      })
+      .then(applyUpdate)
       .catch((error: unknown) => setActionError(errorMessage(error, "Couldn't remove that line.")))
       .finally(() => setBusyLineId(null));
   }
@@ -293,8 +335,20 @@ function CounterLoaded({
     setPendingTenders((current) => current.filter((_, i) => i !== index));
   }
 
+  function handleDiscard() {
+    if (!order) return;
+    setDiscarding(true);
+    setActionError(null);
+    discardOrder(order.id)
+      .then(onStartNextOrder)
+      .catch((error: unknown) => {
+        setActionError(errorMessage(error, "Couldn't discard this order."));
+        setDiscarding(false);
+      });
+  }
+
   function handleFinalize() {
-    if (!bill) return;
+    if (!bill || !order) return;
     const change = cashChangeMinor(billTotalMinor(bill), bill, pendingTenders);
     setFinalizeBusy(true);
     setFinalizeError(null);
@@ -305,6 +359,8 @@ function CounterLoaded({
       .then(() => finalizeBill(bill.id, { tenders: tendersNetOfChange(pendingTenders, change) }))
       .then((finalised) => {
         setBill(finalised);
+        // Paid: a reload now starts a fresh order rather than resuming this one.
+        clearCounterOrderId(currentStaffId);
         setChangeGiven(change);
         openDrawerForTenders(pendingTenders);
       })
@@ -312,14 +368,14 @@ function CounterLoaded({
       .finally(() => setFinalizeBusy(false));
   }
 
-  if (billError) {
-    return <LoadErrorPanel testId="counter-bill-error" message="Couldn't load the bill." onRetry={loadBill} />;
+  if (billError && order) {
+    return <LoadErrorPanel testId="counter-bill-error" message="Couldn't load the bill." onRetry={() => loadBill(order.id)} />;
   }
-  if (billLoading || !bill) return <LoadingShell />;
 
-  const readOnly = isBillReadOnly(bill);
-  const totalMinor = billTotalMinor(bill);
-  const remainingMinor = remainingToTenderMinor(totalMinor, bill, pendingTenders);
+  const readOnly = bill !== null && isBillReadOnly(bill);
+  const totalMinor = bill ? billTotalMinor(bill) : 0;
+  const remainingMinor = bill ? remainingToTenderMinor(totalMinor, bill, pendingTenders) : 0;
+  const empty = !order || order.lines.length === 0;
   const intents = terminal.intent ? [terminal.intent] : [];
 
   return (
@@ -340,9 +396,15 @@ function CounterLoaded({
         )}
         <div className="flex items-center gap-3">
           <p data-testid="counter-cashier" className="text-sm text-muted-foreground">
-            Cashier <span className="font-semibold text-foreground">{order.ownerStaffName === currentStaffId ? "You" : order.ownerStaffName}</span>
+            Cashier <span className="font-semibold text-foreground">{order?.ownerName ?? currentStaffName}</span>
           </p>
-          {typeof order.tokenNumber === "number" && <TokenBadge tokenNumber={order.tokenNumber} />}
+          {typeof order?.tokenNumber === "number" ? (
+            <TokenBadge tokenNumber={order.tokenNumber} />
+          ) : (
+            <span data-testid="counter-new-order" className="text-sm font-semibold text-muted-foreground">
+              New order
+            </span>
+          )}
         </div>
       </PosHeader>
 
@@ -405,6 +467,12 @@ function CounterLoaded({
           </>
         )}
 
+        {!bill || !order ? (
+          <section data-testid="counter-empty-cart" className="flex w-full shrink-0 flex-col items-center justify-center gap-2 border-b border-border/60 bg-card p-6 text-center lg:w-80 lg:border-b-0 lg:border-r">
+            <p className="font-headline text-base font-semibold text-foreground">{order ? "Loading the bill…" : "No items yet"}</p>
+            {!order && <p className="text-sm text-muted-foreground">Tap an item to start a new order. The token number is given on the first item.</p>}
+          </section>
+        ) : (
         <BillSummary
           bill={bill}
           lines={order.lines}
@@ -416,8 +484,9 @@ function CounterLoaded({
           onDecrement={readOnly ? undefined : handleDecrement}
           onRemove={readOnly ? undefined : handleRemove}
         />
+        )}
 
-        {readOnly ? (
+        {!bill ? null : readOnly ? (
           <section data-testid="counter-settled-panel" className="flex w-full shrink-0 flex-col items-center justify-center gap-3 p-6 text-center lg:w-80">
             <p className="font-headline text-xl font-semibold text-status-available">Order settled</p>
             <p className="text-sm text-muted-foreground">
@@ -466,6 +535,11 @@ function CounterLoaded({
                 <p role="alert" data-testid="finalize-error" className="mb-2 text-sm text-status-alert">
                   {finalizeError}
                 </p>
+              )}
+              {empty && (
+                <Button size="lg" variant="outline" className="mb-2 w-full" data-testid="counter-discard-order" disabled={discarding} onClick={handleDiscard}>
+                  {discarding ? "Discarding…" : "Discard empty order"}
+                </Button>
               )}
               <div className="flex gap-2">
                 <Button
