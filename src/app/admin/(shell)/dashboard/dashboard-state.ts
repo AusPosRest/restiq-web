@@ -30,9 +30,21 @@ export interface FinancialMetric {
   message: string;
 }
 
+/** The outlet's own calendar day so far (PE-33/CU-7). `sales.amountMinor` is `netMinor` - bills less refunds, the same figure Reports > Payments shows as Net sales. */
+export interface OutletToday {
+  billCount: number;
+  grossMinor: number;
+  refundedMinor: number;
+  netMinor: number;
+  averageBillMinor: number;
+  openOrderCount: number;
+  byMethod: { method: string; amountMinor: number }[];
+}
+
 export interface OutletKpis {
   outletId: string;
   outletName: string;
+  today: OutletToday;
   sales: FinancialMetric;
   margin: FinancialMetric;
   labourCost: FinancialMetric;

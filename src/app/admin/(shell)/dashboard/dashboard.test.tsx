@@ -5,6 +5,19 @@ import { Dashboard } from "./dashboard";
 import { formatAsOf, type DashboardView } from "./dashboard-state";
 
 const NO_DATA = { amountMinor: 0, currency: "INR", hasData: false, message: "No sales data yet - connect POS to see live figures" };
+const QUIET_DAY = { billCount: 0, grossMinor: 0, refundedMinor: 0, netMinor: 0, averageBillMinor: 0, openOrderCount: 0, byMethod: [] };
+const BUSY_DAY = {
+  billCount: 3,
+  grossMinor: 8462000,
+  refundedMinor: 30000,
+  netMinor: 8432000,
+  averageBillMinor: 2820667,
+  openOrderCount: 4,
+  byMethod: [
+    { method: "card_terminal", amountMinor: 6000000 },
+    { method: "upi_manual", amountMinor: 2462000 },
+  ],
+};
 
 const MULTI_OUTLET: DashboardView = {
   asOf: "2026-08-24T09:05:00.000Z",
@@ -13,6 +26,7 @@ const MULTI_OUTLET: DashboardView = {
     {
       outletId: "o1",
       outletName: "Indiranagar",
+      today: BUSY_DAY,
       sales: { amountMinor: 8432000, currency: "INR", hasData: true, message: "" },
       margin: { amountMinor: 2396288, currency: "INR", hasData: true, message: "" },
       labourCost: { amountMinor: 1200000, currency: "INR", hasData: true, message: "" },
@@ -21,6 +35,7 @@ const MULTI_OUTLET: DashboardView = {
     {
       outletId: "o2",
       outletName: "Koramangala",
+      today: QUIET_DAY,
       sales: NO_DATA,
       margin: NO_DATA,
       labourCost: NO_DATA,
@@ -36,6 +51,7 @@ const SINGLE_OUTLET: DashboardView = {
     {
       outletId: "o1",
       outletName: "Whitefield",
+      today: QUIET_DAY,
       sales: NO_DATA,
       margin: NO_DATA,
       labourCost: NO_DATA,
@@ -98,7 +114,7 @@ describe("Dashboard", () => {
     render(<Dashboard />);
     await screen.findByTestId("dashboard-count-outlets-value");
 
-    expect(screen.getByTestId("outlet-kpi-o1-sales-value").textContent).toBe("₹84320");
+    expect(screen.getByTestId("outlet-kpi-o1-sales-value").textContent).toBe("₹84,320.00");
     // Only Sales has a data source; margin/labour/waste tiles are not shown (walkthrough fix).
     expect(screen.queryByTestId("outlet-kpi-o1-margin-value")).toBeNull();
     expect(screen.queryByTestId("outlet-kpi-o1-sales-empty")).toBeNull();
@@ -109,13 +125,26 @@ describe("Dashboard", () => {
     expect(screen.queryByTestId("outlet-kpi-o2-sales-value")).toBeNull();
   });
 
+  it("CU-7/PE-33: shows the day at a glance - bills, average, refunds, open orders, payment split - linked to the payments report", async () => {
+    stubFetch(MULTI_OUTLET);
+    render(<Dashboard />);
+
+    expect((await screen.findByTestId("outlet-kpi-o1-bills-value")).textContent).toBe("3");
+    expect(screen.getByTestId("outlet-kpi-o1-average-bill").textContent).toBe("Average ₹28,206.67");
+    expect(screen.getByTestId("outlet-kpi-o1-refunds-value").textContent).toBe("₹300.00");
+    expect(screen.getByTestId("outlet-kpi-o1-open-orders-value").textContent).toBe("4");
+    expect(screen.getByTestId("outlet-kpi-o1-by-method-card_terminal").textContent).toBe("Card terminal₹60,000.00");
+    expect(screen.getByTestId("outlet-kpi-o1-by-method-upi_manual").textContent).toBe("UPI₹24,620.00");
+    expect(screen.getByTestId("outlet-kpi-o1-sales").getAttribute("href")).toBe("/admin/reports/payments");
+  });
+
   it("renders a cross-outlet comparison table with real and honest no-data cells side by side", async () => {
     stubFetch(MULTI_OUTLET);
     render(<Dashboard />);
     const table = await screen.findByTestId("dashboard-comparison-table");
 
     const row1 = within(table).getByTestId("dashboard-comparison-row-o1");
-    expect(within(row1).getByTestId("dashboard-comparison-o1-sales").textContent).toBe("₹84320");
+    expect(within(row1).getByTestId("dashboard-comparison-o1-sales").textContent).toBe("₹84,320.00");
     const row2 = within(table).getByTestId("dashboard-comparison-row-o2");
     expect(within(row2).getByTestId("dashboard-comparison-o2-sales").textContent).toBe("No sales yet today");
   });
