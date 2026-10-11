@@ -2,13 +2,14 @@
 // own-share-emphasis/pay-all-eligibility logic the whole screen hinges on.
 // Kept framework-free, same split as cart/cart-state.ts, so it's
 // unit-testable without a DOM.
+import { formatMoney } from "@/lib/money";
 import type { BillShareView, GuestBillView } from "./checkout-api";
 
 // GuestBillView (via BillView, src/pos/bills/bills.dtos.ts) carries no
-// `currency` field at all - this demo's money model is INR-only, so unlike
-// cart-state.ts's formatMinor there is no other currency to fall back to.
-export function formatRupees(amountMinor: number): string {
-  return `₹${(amountMinor / 100).toFixed(2)}`;
+// `currency` field - checkout-screen.tsx reads it off the table cart (PE-10),
+// rupees until that lands.
+export function formatRupees(amountMinor: number, currency = "INR"): string {
+  return formatMoney(amountMinor, currency);
 }
 
 export function findShare(shares: BillShareView[], guestId: string): BillShareView | undefined {

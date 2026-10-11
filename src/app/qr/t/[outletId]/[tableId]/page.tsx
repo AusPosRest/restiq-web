@@ -1,6 +1,7 @@
 import { checkAvailability } from "./availability";
 import { UnavailableView } from "./unavailable-view";
 import { WelcomeFlow } from "./welcome-flow";
+import { fetchTableWelcome } from "./welcome";
 
 // The table-QR entry URL (SPEC Assumptions: "a documented per-table URL
 // pattern suffices for the demo") - CAP-1's Q1 Welcome / Q2 Session PIN.
@@ -21,5 +22,5 @@ export default async function GuestTableEntryPage({
     return <UnavailableView />;
   }
 
-  return <WelcomeFlow outletId={outletId} tableId={tableId} />;
+  return <WelcomeFlow outletId={outletId} tableId={tableId} welcome={await fetchTableWelcome(outletId, tableId)} />;
 }

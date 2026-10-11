@@ -34,6 +34,9 @@ export interface GuestBillView {
   billNumber: number | null;
   subtotalMinor: number;
   taxMinor: number;
+  /** BillView's own breakdown (CGST/SGST, IGST or GST) - CU-24: shown split, never one lump. */
+  taxBreakdown?: Array<{ label: string; ratePercent: number; amountMinor: number }>;
+  pricesIncludeTax?: boolean;
   discountMinor: number | null;
   discountReason: string | null;
   totalMinor: number;

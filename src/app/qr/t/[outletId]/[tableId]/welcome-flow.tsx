@@ -32,6 +32,7 @@ import {
   PIN_LENGTH,
   type WelcomeFlowState,
 } from "./welcome-flow-state";
+import type { TableWelcome } from "./welcome";
 
 interface ApiErrorBody {
   error?: { code?: string; message?: string };
@@ -47,9 +48,12 @@ const START_INVITE_NOTICE = "This table doesn't have an order started yet - you 
 export function WelcomeFlow({
   outletId,
   tableId,
+  welcome = null,
 }: Readonly<{
   outletId: string;
   tableId: string;
+  /** Who and where the guest scanned (CU-22/PE-24); null leaves the names out. */
+  welcome?: TableWelcome | null;
 }>) {
   const menuHref = "/qr/menu";
   const [state, setState] = useState<WelcomeFlowState>(initialFlowState);
@@ -160,6 +164,14 @@ export function WelcomeFlow({
 
   return (
     <main className="flex min-h-screen flex-1 flex-col px-6 pb-28 pt-8">
+      {welcome && (
+        <header data-testid="qr-welcome-identity" className="text-center">
+          <p className="font-headline text-2xl font-bold text-foreground">{welcome.restaurantName}</p>
+          <p className="mt-1 text-sm text-muted-foreground">
+            {welcome.outletName !== welcome.restaurantName ? `${welcome.outletName} · ` : ""}Table {welcome.tableLabel}
+          </p>
+        </header>
+      )}
       <div className="mt-8" role="region" aria-live="polite" aria-label="Table session status">
         {state.step === "start-form" ? (
           <StartForm state={state} onSubmit={startSession} onSwitchToJoin={switchToJoin} />
@@ -225,8 +237,16 @@ function StartForm({
             placeholder="10-digit number"
             inputMode="numeric"
             autoComplete="tel"
+            aria-describedby={phone !== "" && !isValidPhone(phone) ? "qr-phone-hint" : undefined}
+            aria-invalid={phone !== "" && !isValidPhone(phone)}
             className="mt-1 w-full rounded-lg border border-border bg-background px-3 py-3 text-base tabular-nums text-foreground outline-none focus-visible:ring-2 focus-visible:ring-ring"
           />
+          {/* PE-24/CU-22: say why Start Session is still greyed out. */}
+          {phone !== "" && !isValidPhone(phone) && (
+            <p id="qr-phone-hint" data-testid="qr-phone-hint" className="mt-1 text-xs text-error-soft">
+              Enter your 10-digit mobile number.
+            </p>
+          )}
         </div>
       </div>
 

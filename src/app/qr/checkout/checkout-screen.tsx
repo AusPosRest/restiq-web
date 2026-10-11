@@ -22,13 +22,23 @@
 // the backend itself places no ownership check on `payShare`'s `:guestId`
 // param (any guest may technically pay any share, or pay-all) - this UI
 // simply never exposes that button for someone else's row.
-import { useEffect, useState } from "react";
+import { createContext, useContext, useEffect, useState } from "react";
+import { fetchCart } from "../cart/cart-api";
+import { KioskReceipt } from "../kiosk/kiosk-pay";
 import { GuestApiError } from "../api-client";
 import { SessionEndedView } from "../session-ended-view";
-import { createOrFetchBill, payAll, payShare, type BillShareView, type GuestBillView, type SimulatedOutcome } from "./checkout-api";
+import { createOrFetchBill, fetchInvoice, payAll, payShare, type BillShareView, type GuestBillView, type GuestInvoiceView, type SimulatedOutcome } from "./checkout-api";
 import { canPayAll, findShare, formatRupees, isSettled, sortSharesOwnFirst } from "./checkout-state";
 
 type Phase = "loading" | "ready" | "error" | "settled" | "no-order";
+
+// PE-10: the bill carries no currency; the table cart does. Rupees until it loads.
+const CurrencyContext = createContext("INR");
+
+function useMoney(): (amountMinor: number) => string {
+  const currency = useContext(CurrencyContext);
+  return (amountMinor) => formatRupees(amountMinor, currency);
+}
 type PayMode = "split" | "all";
 type SheetKind = "own" | "all";
 
@@ -36,6 +46,7 @@ export function CheckoutScreen({ orderId, myGuestId }: Readonly<{ orderId: strin
   const [phase, setPhase] = useState<Phase>(orderId ? "loading" : "no-order");
   const [bill, setBill] = useState<GuestBillView | null>(null);
   const [attempt, setAttempt] = useState(0);
+  const [currency, setCurrency] = useState("INR");
 
   useEffect(() => {
     if (!orderId) return;
@@ -45,6 +56,12 @@ export function CheckoutScreen({ orderId, myGuestId }: Readonly<{ orderId: strin
         if (cancelled) return;
         setBill(value);
         setPhase("ready");
+        // Once the bill is in hand: its currency, from the table cart (best effort - rupees otherwise).
+        fetchCart()
+          .then((cart) => {
+            if (!cancelled && cart.currency) setCurrency(cart.currency);
+          })
+          .catch(() => {});
       })
       .catch((error: unknown) => {
         if (cancelled) return;
@@ -73,15 +90,14 @@ export function CheckoutScreen({ orderId, myGuestId }: Readonly<{ orderId: strin
     );
   }
 
-  if (isSettled(bill)) return <SettledPanel bill={bill} />;
-
   return (
-    <BillLoaded
-      bill={bill}
-      myGuestId={myGuestId}
-      onUpdate={setBill}
-      onSessionEnded={() => setPhase("settled")}
-    />
+    <CurrencyContext.Provider value={currency}>
+      {isSettled(bill) ? (
+        <SettledPanel bill={bill} />
+      ) : (
+        <BillLoaded bill={bill} myGuestId={myGuestId} onUpdate={setBill} onSessionEnded={() => setPhase("settled")} />
+      )}
+    </CurrencyContext.Provider>
   );
 }
 
@@ -200,15 +216,24 @@ function BillLoaded({
 }
 
 function BillSummary({ bill }: Readonly<{ bill: GuestBillView }>) {
+  const money = useMoney();
+  const breakdown = bill.taxBreakdown ?? [];
   return (
     <div data-testid="checkout-bill-summary" className="mt-6 rounded-xl border border-border bg-card p-4">
       <SummaryRow label="Subtotal" amountMinor={bill.subtotalMinor} />
-      <SummaryRow label="Tax" amountMinor={bill.taxMinor} />
+      {/* CU-24: the tax split the till and the invoice show (CGST + SGST), not one lump. */}
+      {breakdown.length > 0 ? (
+        breakdown.map((line) => (
+          <SummaryRow key={line.label} label={`${bill.pricesIncludeTax ? "Includes " : ""}${line.label} (${line.ratePercent}%)`} amountMinor={line.amountMinor} />
+        ))
+      ) : (
+        <SummaryRow label="Tax" amountMinor={bill.taxMinor} />
+      )}
       {bill.discountMinor ? <SummaryRow label={bill.discountReason ?? "Discount"} amountMinor={-bill.discountMinor} /> : null}
       <div className="mt-2 flex items-baseline justify-between border-t border-border pt-2">
         <span className="text-sm font-semibold text-foreground">Total</span>
         <span data-testid="checkout-total" className="font-headline text-xl font-bold tabular-nums text-foreground">
-          {formatRupees(bill.totalMinor)}
+          {money(bill.totalMinor)}
         </span>
       </div>
     </div>
@@ -216,10 +241,11 @@ function BillSummary({ bill }: Readonly<{ bill: GuestBillView }>) {
 }
 
 function SummaryRow({ label, amountMinor }: Readonly<{ label: string; amountMinor: number }>) {
+  const money = useMoney();
   return (
     <div className="flex items-baseline justify-between text-sm text-muted-foreground">
       <span>{label}</span>
-      <span className="tabular-nums">{formatRupees(amountMinor)}</span>
+      <span className="tabular-nums">{money(amountMinor)}</span>
     </div>
   );
 }
@@ -252,6 +278,7 @@ function SplitShareRow({
   failed,
   onPay,
 }: Readonly<{ share: BillShareView; own: boolean; failed: boolean; onPay: () => void }>) {
+  const money = useMoney();
   return (
     <li data-testid={`checkout-share-${share.guestId}`} className="rounded-xl border border-border bg-card p-4">
       <div className="flex items-center justify-between gap-3">
@@ -262,7 +289,7 @@ function SplitShareRow({
           {share.guestName}
           {own ? <span className="text-primary">(you)</span> : null}
         </span>
-        <span className="text-sm font-semibold tabular-nums text-foreground">{formatRupees(share.amountMinor)}</span>
+        <span className="text-sm font-semibold tabular-nums text-foreground">{money(share.amountMinor)}</span>
       </div>
 
       <div className="mt-3 flex items-center justify-between">
@@ -304,6 +331,7 @@ function PayAllPanel({
   failed,
   onPay,
 }: Readonly<{ bill: GuestBillView; eligible: boolean; failed: boolean; onPay: () => void }>) {
+  const money = useMoney();
   return (
     <div data-testid="checkout-payall-panel" className="mt-4 rounded-xl border border-border bg-card p-4">
       <p className="text-sm text-muted-foreground">One payment settles the whole table.</p>
@@ -314,7 +342,7 @@ function PayAllPanel({
           onClick={onPay}
           className="mt-3 w-full rounded-lg bg-primary px-4 py-2.5 text-sm font-semibold text-primary-foreground focus-visible:outline focus-visible:outline-2 focus-visible:outline-ring"
         >
-          Pay full bill · {formatRupees(bill.totalMinor)}
+          Pay full bill · {money(bill.totalMinor)}
         </button>
       ) : (
         <p data-testid="checkout-payall-blocked" className="mt-3 text-sm text-muted-foreground">
@@ -349,6 +377,7 @@ function PaymentSheet({
   onSimulate: (outcome: SimulatedOutcome) => void;
   onCancel: () => void;
 }>) {
+  const money = useMoney();
   return (
     <div
       data-testid="checkout-payment-sheet"
@@ -370,7 +399,7 @@ function PaymentSheet({
         This is a demo - no real money moves. Choose an outcome to see how {kind === "own" ? "your share" : "the whole bill"} responds.
       </p>
 
-      <p className="mt-3 font-headline text-xl font-bold tabular-nums text-foreground">{formatRupees(amountMinor)}</p>
+      <p className="mt-3 font-headline text-xl font-bold tabular-nums text-foreground">{money(amountMinor)}</p>
 
       <label className="mt-4 block text-sm font-medium text-foreground" htmlFor="checkout-payer-phone">
         Phone number for updates <span className="font-normal text-muted-foreground">(optional)</span>
@@ -425,12 +454,43 @@ function PaymentSheet({
 }
 
 function SettledPanel({ bill }: Readonly<{ bill: GuestBillView }>) {
+  const money = useMoney();
+  // CU-24: the diner can see (and screenshot) a proper receipt for the paid bill.
+  const [receipt, setReceipt] = useState<{ invoice: GuestInvoiceView | null; failed: boolean; loading: boolean }>({ invoice: null, failed: false, loading: false });
+
+  function showReceipt() {
+    setReceipt({ invoice: null, failed: false, loading: true });
+    fetchInvoice(bill.id)
+      .then((invoice) => setReceipt({ invoice, failed: false, loading: false }))
+      .catch(() => setReceipt({ invoice: null, failed: true, loading: false }));
+  }
+
   return (
     <main data-testid="checkout-settled" className="flex min-h-screen flex-1 flex-col items-center justify-center px-6 py-12 text-center">
       <h1 className="font-headline text-2xl font-semibold text-foreground">Bill settled - thanks!</h1>
       <p className="mt-3 max-w-sm text-sm text-muted-foreground">
-        Table total <span className="tabular-nums">{formatRupees(bill.totalMinor)}</span> is paid in full. We hope you enjoyed your meal.
+        Table total <span className="tabular-nums">{money(bill.totalMinor)}</span> is paid in full. We hope you enjoyed your meal.
       </p>
+      {receipt.invoice ? (
+        <div className="mt-6">
+          <KioskReceipt invoice={receipt.invoice} />
+        </div>
+      ) : (
+        <button
+          type="button"
+          data-testid="checkout-show-receipt"
+          disabled={receipt.loading}
+          onClick={showReceipt}
+          className="mt-6 rounded-lg border border-border px-4 py-2 text-sm font-medium text-foreground disabled:opacity-50 focus-visible:outline focus-visible:outline-2 focus-visible:outline-ring"
+        >
+          {receipt.loading ? "Loading receipt…" : "Show my receipt"}
+        </button>
+      )}
+      {receipt.failed && (
+        <p role="alert" data-testid="checkout-receipt-error" className="mt-2 text-sm text-error-soft">
+          Couldn&apos;t load the receipt - please try again.
+        </p>
+      )}
     </main>
   );
 }
