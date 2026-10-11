@@ -529,7 +529,7 @@ describe("ItemDrawer kitchen station (PE-21)", () => {
       return Promise.resolve(jsonResponse({ error: { code: "not_found", message: "unhandled" } }, 404));
     });
     vi.stubGlobal("fetch", fetchMock);
-    const { onSaved } = renderDrawer({ outlets: [{ id: "o1", name: "Main", address: "", type: "dine_in", timezone: "Asia/Kolkata" }], selectedOutletId: "o1" });
+    const { onSaved } = renderDrawer({ outlets: [{ id: "o1", name: "Main", address: "", type: "dine_in", timezone: "Asia/Kolkata", currency: "INR" }], selectedOutletId: "o1" });
 
     const select = await screen.findByTestId("item-station-select");
     await userEvent.selectOptions(select, "st-bar");

@@ -7,7 +7,6 @@
 // PE-8: the sample order is in the tenant's own name, currency and tax style, and it adds up - India adds
 // CGST + SGST (2.5% each, the 5% restaurant rate) on top; Australia's prices already include 10% GST.
 import type { CSSProperties } from "react";
-import { formatMoney } from "@/lib/money";
 import type { BrandingTokens } from "./branding-state";
 
 export interface PreviewTenant {

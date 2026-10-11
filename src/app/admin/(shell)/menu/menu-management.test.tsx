@@ -306,6 +306,7 @@ describe("MenuManagement list", () => {
       }
       if (url.includes("/admin/api/menu/items")) return Promise.resolve(jsonResponse(ITEMS));
       if (url.includes("/admin/api/menu/categories")) return Promise.resolve(jsonResponse(CATEGORIES));
+      if (url.includes("/admin/api/menu/directory")) return Promise.resolve(jsonResponse({ products: [] }));
       if (url.includes("/admin/api/menu/")) return Promise.resolve(jsonResponse([]));
       return Promise.resolve(jsonResponse({ error: { code: "not_found", message: "unhandled" } }, 404));
     });
