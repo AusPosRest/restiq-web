@@ -787,26 +787,37 @@ function AddTableControl({ outletId, floorId, tables, onOptimisticAdd, onSettled
           className={`${TOOLBAR_INPUT_CLASS} w-16`}
         />
       </div>
-      <input
-        type="number"
-        min={0}
-        aria-label={`${label || "New table"} X position`}
-        data-testid="floor-plan-add-table-x"
-        value={position.x}
-        disabled={submitting}
-        onChange={(event) => handlePositionChange("x", event.target.value)}
-        className={`${TOOLBAR_INPUT_CLASS} w-16`}
-      />
-      <input
-        type="number"
-        min={0}
-        aria-label={`${label || "New table"} Y position`}
-        data-testid="floor-plan-add-table-y"
-        value={position.y}
-        disabled={submitting}
-        onChange={(event) => handlePositionChange("y", event.target.value)}
-        className={`${TOOLBAR_INPUT_CLASS} w-16`}
-      />
+      {/* PE-20: the two position boxes were unlabeled numbers; say what they are. */}
+      <div>
+        <label htmlFor="floor-plan-add-table-x" className={TOOLBAR_LABEL_CLASS}>
+          From left
+        </label>
+        <input
+          id="floor-plan-add-table-x"
+          type="number"
+          min={0}
+          data-testid="floor-plan-add-table-x"
+          value={position.x}
+          disabled={submitting}
+          onChange={(event) => handlePositionChange("x", event.target.value)}
+          className={`${TOOLBAR_INPUT_CLASS} w-16`}
+        />
+      </div>
+      <div>
+        <label htmlFor="floor-plan-add-table-y" className={TOOLBAR_LABEL_CLASS}>
+          From top
+        </label>
+        <input
+          id="floor-plan-add-table-y"
+          type="number"
+          min={0}
+          data-testid="floor-plan-add-table-y"
+          value={position.y}
+          disabled={submitting}
+          onChange={(event) => handlePositionChange("y", event.target.value)}
+          className={`${TOOLBAR_INPUT_CLASS} w-16`}
+        />
+      </div>
       {overlapId && (
         <p data-testid="floor-plan-add-table-overlap-warning" className="w-full text-xs text-status-error">
           This position overlaps another table. Adjust X/Y before saving.
