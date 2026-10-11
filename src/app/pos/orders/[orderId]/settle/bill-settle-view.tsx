@@ -40,6 +40,7 @@ import { canFinalizeWithElectronic, cashChangeMinor, isElectronicMethod, remaini
 import { TerminalIntentPanel } from "./terminal-intent-panel";
 import { useTerminalIntent } from "./use-terminal-intent";
 import { openDrawerForTenders } from "@/lib/desktop";
+import { useShiftOpen } from "../../../(shell)/shift/use-shift-open";
 
 interface BillLanded {
   attempt: number;
@@ -106,6 +107,7 @@ function BillSettleLoaded({
   rawOrder,
 }: Readonly<{ orderId: string; initialBill: BillView; menu: PosMenuView; rawOrder: RawOrder }>) {
   const [bill, setBill] = useState(initialBill);
+  const shiftOpen = useShiftOpen(rawOrder.outletId);
   const [discountDialogOpen, setDiscountDialogOpen] = useState(false);
   const [pendingDiscount, setPendingDiscount] = useState<PendingDiscount | null>(null);
   const [pendingTenders, setPendingTenders] = useState<PendingTender[]>([]);
@@ -204,6 +206,7 @@ function BillSettleLoaded({
                 onSendToTerminal={terminal.send}
                 terminalBusy={terminal.busy}
                 changeMinor={cashChangeMinor(totalMinor, bill, pendingTenders)}
+                cashLocked={shiftOpen === false}
               />
             )}
             <footer className="border-t border-border/60 p-4">
