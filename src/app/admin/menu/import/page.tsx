@@ -1,6 +1,7 @@
 import { ArrowLeft } from "lucide-react";
 import Link from "next/link";
 import { MenuImport } from "../../menu-import";
+import { OwnerSetupHeader } from "../../owner-setup-header";
 
 // Rendered outside the owner shell (no sidebar), so it carries its own way
 // back to the menu. ?from=setup is set by the go-live checklist's link.
@@ -8,6 +9,7 @@ export default async function AdminMenuImportPage({ searchParams }: Readonly<{ s
   const { from } = await searchParams;
   return (
     <main className="mx-auto flex min-h-screen w-full max-w-5xl flex-1 flex-col justify-center px-6 py-12">
+      <OwnerSetupHeader />
       <Link
         href="/admin/menu"
         data-testid="menu-import-back-link"
