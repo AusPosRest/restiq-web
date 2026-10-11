@@ -15,6 +15,8 @@
 //    file's PendingPriceInfo is therefore populated only from what the UI
 //    itself just wrote in this session (see item-drawer.tsx), not fetched.
 
+import { formatPrice } from "@/lib/money";
+
 export type PriceChannel = "dine_in" | "takeaway" | "delivery" | "qr" | "aggregator";
 
 export interface VariantView {
@@ -115,6 +117,8 @@ export interface OutletView {
   address: string;
   type: OutletType;
   timezone: string;
+  /** The tenant's currency (INR/AUD) - restiq-backend#212. */
+  currency: string;
 }
 
 /** Client-tracked only (see file header) - the price just scheduled/saved in
@@ -127,11 +131,8 @@ export interface PendingPriceInfo {
   effectiveAt: string;
 }
 
-const CURRENCY_SYMBOLS: Record<string, string> = { INR: "₹", USD: "$", AUD: "$", GBP: "£" };
-
 export function formatPriceMinor(priceMinor: number, currency: string): string {
-  const symbol = CURRENCY_SYMBOLS[currency] ?? `${currency} `;
-  return `${symbol}${(priceMinor / 100).toFixed(0)}`;
+  return formatPrice(priceMinor, currency);
 }
 
 export function majorStringToPriceMinor(value: string): number | null {

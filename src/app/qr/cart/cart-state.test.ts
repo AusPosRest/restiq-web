@@ -22,7 +22,7 @@ function line(overrides: Partial<CartLineView> = {}): CartLineView {
 
 describe("formatMinor", () => {
   it("formats INR with the rupee symbol and two decimals", () => {
-    expect(formatMinor(162750, "INR")).toBe("₹1627.50");
+    expect(formatMinor(162750, "INR")).toBe("₹1,627.50");
   });
 
   it("falls back to the currency code for an unrecognized currency", () => {

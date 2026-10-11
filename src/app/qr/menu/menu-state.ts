@@ -26,6 +26,7 @@
 // inventing any of them.
 
 import type { ComboMenuView } from "@/lib/combo";
+import { formatPrice } from "@/lib/money";
 
 export interface MenuModifierView {
   id: string;
@@ -89,12 +90,9 @@ export interface PriceDisplay {
   currency: string;
 }
 
-const CURRENCY_SYMBOLS: Record<string, string> = { INR: "₹" };
-
-/** Menu/cart prices render whole-currency-unit, no decimals - matches the Q3/Q4 mocks (₹340, not ₹340.00). */
+/** Menu/cart prices render whole-currency-unit when whole (₹340, not ₹340.00), never rounding paise away. */
 export function formatPriceMinor(priceMinor: number, currency: string): string {
-  const symbol = CURRENCY_SYMBOLS[currency] ?? `${currency} `;
-  return `${symbol}${(priceMinor / 100).toFixed(0)}`;
+  return formatPrice(priceMinor, currency);
 }
 
 /** EXPERIENCE.md State Patterns: "an empty menu category is skipped, not shown hollow." */

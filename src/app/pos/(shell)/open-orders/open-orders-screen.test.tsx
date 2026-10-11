@@ -192,6 +192,6 @@ describe("OpenOrdersScreen", () => {
     render(<OpenOrdersScreen outletId="outlet-1" currentStaffId={CURRENT_STAFF_ID} />);
     await waitFor(() => expect(screen.getByTestId("open-orders")).toBeTruthy());
 
-    expect(screen.getByTestId("open-orders-summary").textContent).toBe("2 open orders · ₹1500.00 in progress");
+    expect(screen.getByTestId("open-orders-summary").textContent).toBe("2 open orders · ₹1,500.00 in progress");
   });
 });

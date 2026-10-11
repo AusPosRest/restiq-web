@@ -124,7 +124,7 @@ describe("CartScreen", () => {
     expect(screen.getByTestId("cart-guest-g2")).toBeTruthy();
     expect(screen.getByTestId("cart-guest-subtotal-g1").textContent).toBe("₹680.00");
     expect(screen.getByTestId("cart-guest-subtotal-g2").textContent).toBe("₹320.00");
-    expect(screen.getByTestId("cart-total").textContent).toBe("₹1000.00");
+    expect(screen.getByTestId("cart-total").textContent).toBe("₹1,000.00");
   });
 
   it("renders the signed-in guest's own lines editable and everyone else's read-only", async () => {

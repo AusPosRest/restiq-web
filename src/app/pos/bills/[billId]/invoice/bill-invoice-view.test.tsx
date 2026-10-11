@@ -161,7 +161,7 @@ describe("BillInvoiceView - AU invoice (ABN, prices include tax)", () => {
 
     expect(screen.getByText("Tax Invoice")).toBeTruthy();
     expect(screen.getByTestId("invoice-seller").textContent).toContain("ABN: 51 824 753 556");
-    expect(screen.getByTestId("invoice-tax-0").textContent).toBe("GST (10%)AUD 0.45");
+    expect(screen.getByTestId("invoice-tax-0").textContent).toBe("GST (10%)A$0.45");
     expect(screen.getByTestId("invoice-prices-include-tax")).toBeTruthy();
     expect(screen.queryByTestId("invoice-discount")).toBeNull();
     expect(screen.queryByTestId("invoice-tenders")).toBeNull();
