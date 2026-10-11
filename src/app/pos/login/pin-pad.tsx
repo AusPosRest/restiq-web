@@ -17,7 +17,7 @@
 // added `retryAfterSeconds` to the 429, so the countdown runs to the real
 // end of the window; 30s is only the fallback for an older API.
 import { Delete } from "lucide-react";
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useRef, useState, useSyncExternalStore } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 import { clearTerminalBinding, getTabDeviceId, getTerminalBinding, saveTabDeviceId, saveTerminalBinding, type TerminalBinding } from "../terminal-binding";
 import {
@@ -118,6 +118,8 @@ function submitOutletSelection(pendingToken: string, outletId: string): Promise<
   return postJson("/pos/auth/select-outlet", { pendingToken, outletId });
 }
 
+const subscribeNoop = () => () => {};
+
 export function PinPad({ nextPath }: { nextPath: string }) {
   const router = useRouter();
   const searchParams = useSearchParams();
@@ -137,11 +139,17 @@ export function PinPad({ nextPath }: { nextPath: string }) {
   const queryDeviceId = searchParams.get("device");
   const queryOutletId = searchParams.get("outlet") ?? undefined;
   const queryTenantName = searchParams.get("name") ?? undefined;
+  // SE-21: the saved binding lives in localStorage, which the server render
+  // can't see - read it only after hydration so the first client render
+  // matches the server HTML (React error #418 otherwise).
+  const hydrated = useSyncExternalStore(subscribeNoop, () => true, () => false);
   const binding: TerminalBinding | null = rebound
     ? null
     : queryTenantId && queryDeviceId
       ? { tenantId: queryTenantId, deviceId: queryDeviceId, ...(queryTenantName ? { tenantName: queryTenantName } : {}), ...(queryOutletId ? { outletId: queryOutletId } : {}) }
-      : getTerminalBinding();
+      : hydrated
+        ? getTerminalBinding()
+        : null;
 
   useEffect(() => {
     if (!queryTenantId || !queryDeviceId) return;

@@ -1,6 +1,7 @@
 import { cleanup, render, screen, waitFor } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
+import { renderToString } from "react-dom/server";
 import { PinPad } from "./pin-pad";
 
 const replace = vi.fn();
@@ -73,6 +74,12 @@ describe("PinPad", () => {
 
     expect(screen.queryByTestId("pos-terminal-binding")).toBeNull();
     expect(window.localStorage.getItem("pos:terminal-binding")).toBeNull();
+  });
+
+  it("renders the same HTML as the server on first paint, even with a saved binding - no hydration error #418 (SE-21)", () => {
+    window.localStorage.setItem("pos:terminal-binding", JSON.stringify({ tenantId: "tenant-5", deviceId: "dev-5" }));
+    const html = renderToString(<PinPad nextPath="/pos" />);
+    expect(html).not.toContain("pos-terminal-binding");
   });
 
   it("auto-submits at 4 digits and redirects on a correct PIN", async () => {
