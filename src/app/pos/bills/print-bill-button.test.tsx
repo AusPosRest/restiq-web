@@ -16,6 +16,17 @@ afterEach(() => {
 });
 
 describe("PrintBillButton", () => {
+  it("never claims Sent to printer when no printer is set up - it offers the bill on screen (CU-18)", async () => {
+    vi.stubGlobal("fetch", vi.fn(() => Promise.resolve(jsonResponse({ id: "job-1", printerAvailable: false }, 201))));
+    render(<PrintBillButton billId="bill-7" label="Print bill" testId="print-bill" />);
+
+    await userEvent.click(screen.getByTestId("print-bill"));
+    const onScreen = await screen.findByTestId("print-bill-on-screen");
+    expect(onScreen.textContent).toBe("No printer · Show bill");
+    expect(onScreen.getAttribute("href")).toBe("/pos/bills/bill-7/invoice");
+    expect(screen.queryByText("Sent to printer")).toBeNull();
+  });
+
   it("posts to bills/:id/print and shows Sent to printer, then resets to the label", async () => {
     const fetchMock = vi.fn<(input: RequestInfo | URL, init?: RequestInit) => Promise<Response>>(() => Promise.resolve(jsonResponse({ id: "job-1" }, 201)));
     vi.stubGlobal("fetch", fetchMock);

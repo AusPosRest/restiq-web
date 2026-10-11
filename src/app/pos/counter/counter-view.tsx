@@ -188,12 +188,16 @@ function CounterLoaded({
 
   // Card terminal (issue #188): a quiet re-read once the terminal approves -
   // the tender is already on the server; no loading shell for a refresh.
-  const terminal = useTerminalIntent(bill?.id ?? null, () => {
-    if (!bill) return;
-    getBill(bill.id)
-      .then(setBill)
-      .catch(() => undefined);
-  });
+  const terminal = useTerminalIntent(
+    bill?.id ?? null,
+    () => {
+      if (!bill) return;
+      getBill(bill.id)
+        .then(setBill)
+        .catch(() => undefined);
+    },
+    outletId,
+  );
 
   // A resumed order's bill, once (this component remounts per order).
   useEffect(() => {

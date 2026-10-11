@@ -15,7 +15,7 @@ import {
   nextIntentPollMs,
   type PaymentIntentView,
 } from "@/lib/payment-intent";
-import { cancelPaymentIntent, createPaymentIntent, getPaymentIntent, PosApiError } from "../../../api";
+import { cancelPaymentIntent, createPaymentIntent, getPaymentIntent, listPendingPaymentIntents, PosApiError } from "../../../api";
 
 export interface TerminalIntent {
   intent: PaymentIntentView | null;
@@ -26,7 +26,13 @@ export interface TerminalIntent {
   dismiss: () => void;
 }
 
-export function useTerminalIntent(billId: string | null, onSettled: () => void): TerminalIntent {
+/**
+ * `outletId` (restiq-web#343, PE-22/CU-13): lets the hook find a card payment
+ * already waiting on the terminal for this bill - after a reload, or when a
+ * send is refused because one is already waiting - so the waiting state with
+ * its Cancel comes back instead of a dead end.
+ */
+export function useTerminalIntent(billId: string | null, onSettled: () => void, outletId?: string): TerminalIntent {
   const [intent, setIntent] = useState<PaymentIntentView | null>(null);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -68,6 +74,24 @@ export function useTerminalIntent(billId: string | null, onSettled: () => void):
     };
   }, [intentId, active]);
 
+  function adoptWaitingIntent(): Promise<boolean> {
+    if (!billId || !outletId) return Promise.resolve(false);
+    return listPendingPaymentIntents(outletId).then(
+      (pending) => {
+        const waiting = pending.find((candidate) => candidate.billId === billId && isActiveIntent(candidate));
+        if (waiting) setIntent(waiting);
+        return Boolean(waiting);
+      },
+      () => false,
+    );
+  }
+
+  // A payment already waiting for this bill (e.g. before a reload) shows again.
+  useEffect(() => {
+    void adoptWaitingIntent();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [billId, outletId]);
+
   // Tell the caller exactly once per intent that money landed.
   useEffect(() => {
     if (intent?.status !== "succeeded" || settledFor.current === intent.id) return;
@@ -81,7 +105,10 @@ export function useTerminalIntent(billId: string | null, onSettled: () => void):
     setError(null);
     createPaymentIntent(billId, { rail: "card_terminal", amountMinor, clientKey: crypto.randomUUID() })
       .then(setIntent)
-      .catch((cause: unknown) => setError(cause instanceof PosApiError ? cause.message : "Couldn't reach the terminal."))
+      .catch(async (cause: unknown) => {
+        if (cause instanceof PosApiError && cause.code === "intent_active" && (await adoptWaitingIntent())) return;
+        setError(cause instanceof PosApiError ? cause.message : "Couldn't reach the card terminal. Choose another way to pay, or try again.");
+      })
       .finally(() => setBusy(false));
   }
 

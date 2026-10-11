@@ -502,6 +502,8 @@ export interface PrintJobView {
   payload: InvoiceView;
   createdAt: string;
   printedAt: string | null;
+  /** restiq-backend#210: on the POST response only - false when no printer will pick the job up. */
+  printerAvailable?: boolean;
 }
 
 // --- Device topology (issue #210 / restiq-backend#134). Each call names this
