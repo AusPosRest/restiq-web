@@ -291,7 +291,7 @@ function ImportDialog({ open, onClose, onCommitted }: Readonly<{ open: boolean; 
               ✕
             </button>
           </Dialog.Close>
-          <MenuImport onCommitted={onCommitted} />
+          <MenuImport onCommitted={onCommitted} resume />
         </Dialog.Content>
       </Dialog.Portal>
     </Dialog.Root>

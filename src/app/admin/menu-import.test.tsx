@@ -348,3 +348,50 @@ describe("MenuImport review", () => {
     expect((screen.getByTestId("menu-import-commit") as HTMLButtonElement).disabled).toBe(false);
   });
 });
+
+// PE-11: an upload left mid-review is still on the server; the page offers it back.
+describe("MenuImport resume", () => {
+  beforeEach(() => vi.unstubAllGlobals());
+  afterEach(cleanup);
+
+  function stubLatest(draft: unknown) {
+    const fetchMock = vi.fn((input: RequestInfo | URL) =>
+      Promise.resolve(String(input).includes("/admin/api/menu-import/latest") ? jsonResponse({ draft }) : jsonResponse({ error: { code: "not_found", message: "x" } }, 404)),
+    );
+    vi.stubGlobal("fetch", fetchMock);
+    return fetchMock;
+  }
+
+  it("offers to continue the open draft and opens it for review", async () => {
+    stubLatest({ ...DRAFT, items: [draftItem({ id: "1" }), draftItem({ id: "2", name: "Kebab", duplicate: "on_menu" })] });
+    render(<MenuImport resume />);
+
+    const card = await screen.findByTestId("menu-import-resume");
+    expect(card.textContent).toContain("Continue your import");
+    expect(card.textContent).toContain("menu.csv");
+    expect(card.textContent).toContain("2 items");
+
+    await userEvent.click(screen.getByTestId("menu-import-resume-continue"));
+    expect(await screen.findByTestId("menu-import-table")).toBeTruthy();
+    expect(screen.getByTestId("menu-import-row-2-duplicate")).toBeTruthy();
+  });
+
+  it("shows only the dropzone when there is no open draft, or the lookup fails", async () => {
+    const fetchMock = stubLatest(null);
+    render(<MenuImport resume />);
+    await waitFor(() => expect(fetchMock).toHaveBeenCalled());
+    expect(screen.queryByTestId("menu-import-resume")).toBeNull();
+    cleanup();
+
+    vi.stubGlobal("fetch", vi.fn().mockResolvedValue(jsonResponse({ error: { code: "error", message: "nope" } }, 500)));
+    render(<MenuImport resume />);
+    expect(screen.getByTestId("menu-import-dropzone")).toBeTruthy();
+    expect(screen.queryByTestId("menu-import-resume")).toBeNull();
+  });
+
+  it("does not look for a draft unless asked to", () => {
+    const fetchMock = stubLatest(DRAFT);
+    render(<MenuImport />);
+    expect(fetchMock).not.toHaveBeenCalled();
+  });
+});

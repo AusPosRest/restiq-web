@@ -7,9 +7,9 @@
 // go-live checklist's menu_import step).
 import { PartyPopper, Trash2, UploadCloud } from "lucide-react";
 import Link from "next/link";
-import { useRef, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { Button } from "@/components/ui/button";
-import { AdminApiError, commitMenuImport, MenuImportCommitResult, removeMenuImportItem, updateMenuImportItem, uploadMenuImport } from "./api";
+import { AdminApiError, commitMenuImport, fetchLatestMenuImport, MenuImportCommitResult, removeMenuImportItem, updateMenuImportItem, uploadMenuImport } from "./api";
 import {
   canCommit,
   CONFIDENCE_LABEL,
@@ -21,6 +21,7 @@ import {
   isAcceptedMenuFile,
   majorStringToPriceMinor,
   MENU_IMPORT_ACCEPT,
+  MenuImportDraft,
   MenuImportItem,
   priceMinorToMajorString,
   reviewedCount,
@@ -41,7 +42,12 @@ type Phase = "dropzone" | "uploading" | "review" | "committing" | "success";
 // onCommitted: set when opened as the Menu page's dialog (issue #239), which
 // closes and reloads instead of showing the success screen. fromSetup: opened
 // from the go-live checklist, so success goes back there; otherwise to the menu.
-export function MenuImport({ onCommitted, fromSetup = false }: Readonly<{ onCommitted?: (itemCount: number) => void; fromSetup?: boolean }>) {
+// resume (PE-11): offer the tenant's open draft, which the server keeps until commit.
+export function MenuImport({
+  onCommitted,
+  fromSetup = false,
+  resume = false,
+}: Readonly<{ onCommitted?: (itemCount: number) => void; fromSetup?: boolean; resume?: boolean }>) {
   const [phase, setPhase] = useState<Phase>("dropzone");
   const [uploadError, setUploadError] = useState<string | null>(null);
   const [importId, setImportId] = useState<string | null>(null);
@@ -52,7 +58,31 @@ export function MenuImport({ onCommitted, fromSetup = false }: Readonly<{ onComm
   const [commitResult, setCommitResult] = useState<MenuImportCommitResult | null>(null);
   const [toast, setToast] = useState<string | null>(null);
   const [dragOver, setDragOver] = useState(false);
+  const [openDraft, setOpenDraft] = useState<MenuImportDraft | null>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
+
+  useEffect(() => {
+    if (!resume) return;
+    let cancelled = false;
+    // A failed lookup just means no offer; the dropzone still works.
+    fetchLatestMenuImport()
+      .then(({ draft }) => {
+        if (!cancelled && draft && draft.items.length > 0) setOpenDraft(draft);
+      })
+      .catch(() => undefined);
+    return () => {
+      cancelled = true;
+    };
+  }, [resume]);
+
+  function openForReview(draft: MenuImportDraft) {
+    setImportId(draft.importId);
+    setItems(draft.items);
+    setReviewed(new Set());
+    setDuplicates(draftDuplicates(draft.items));
+    setOpenDraft(null);
+    setPhase("review");
+  }
 
   function flashToast(message: string) {
     setToast(message);
@@ -67,12 +97,7 @@ export function MenuImport({ onCommitted, fromSetup = false }: Readonly<{ onComm
     setUploadError(null);
     setPhase("uploading");
     try {
-      const draft = await uploadMenuImport(file);
-      setImportId(draft.importId);
-      setItems(draft.items);
-      setReviewed(new Set());
-      setDuplicates(draftDuplicates(draft.items));
-      setPhase("review");
+      openForReview(await uploadMenuImport(file));
     } catch (error) {
       setUploadError(error instanceof Error ? error.message : GENERIC_FAILURE);
       setPhase("dropzone");
@@ -174,6 +199,22 @@ export function MenuImport({ onCommitted, fromSetup = false }: Readonly<{ onComm
           <h1 className="font-headline text-xl font-semibold">Import your menu</h1>
           <p className="text-sm text-muted-foreground">Upload a spreadsheet and we&apos;ll draft your menu for you to check.</p>
         </div>
+        {openDraft && phase === "dropzone" && (
+          <div
+            data-testid="menu-import-resume"
+            className="flex flex-wrap items-center justify-between gap-3 rounded-lg border border-primary/40 bg-primary/5 px-4 py-3"
+          >
+            <div>
+              <p className="text-sm font-semibold">Continue your import</p>
+              <p className="text-sm text-muted-foreground">
+                {openDraft.fileName} - {openDraft.items.length} {openDraft.items.length === 1 ? "item" : "items"}, not on your menu yet.
+              </p>
+            </div>
+            <Button data-testid="menu-import-resume-continue" onClick={() => openForReview(openDraft)}>
+              Continue
+            </Button>
+          </div>
+        )}
         <div
           data-testid="menu-import-dropzone"
           role="button"

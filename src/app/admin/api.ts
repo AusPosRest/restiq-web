@@ -102,6 +102,11 @@ export async function uploadMenuImport(file: File): Promise<MenuImportDraft> {
   return payload as MenuImportDraft;
 }
 
+// PE-11: the open (uncommitted) draft the owner left, so the import page can resume it.
+export function fetchLatestMenuImport(): Promise<{ draft: MenuImportDraft | null }> {
+  return adminApi<{ draft: MenuImportDraft | null }>("menu-import/latest");
+}
+
 // The backend's PATCH takes a batch of per-item edits and returns the full,
 // re-authoritative draft (same "no extra fetch needed" shape as the
 // checklist's completeStep) - one field on one item is just a batch of one.
