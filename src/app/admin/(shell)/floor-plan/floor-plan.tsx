@@ -347,7 +347,8 @@ function FloorPlanEditor({ outletId, initial, onReload }: Readonly<{ outletId: s
               </Button>
             </div>
 
-            <div className="grid flex-1 grid-cols-[1fr_320px] gap-6">
+            {/* PE-27: side by side only when there is room - on a phone the canvas collapsed to a 30 px strip. */}
+            <div className="grid flex-1 grid-cols-1 gap-6 lg:grid-cols-[1fr_320px]">
               <div className="min-w-0">
                 {view === "canvas" ? (
                   <FloorPlanCanvas tables={tables} selectedFloorId={selectedFloorId} onTableMoved={handleTableMoved} onQrRequested={handleQrRequested} />
