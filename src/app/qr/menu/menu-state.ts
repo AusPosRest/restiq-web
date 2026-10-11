@@ -91,10 +91,11 @@ export interface PriceDisplay {
 
 const CURRENCY_SYMBOLS: Record<string, string> = { INR: "₹" };
 
-/** Menu/cart prices render whole-currency-unit, no decimals - matches the Q3/Q4 mocks (₹340, not ₹340.00). */
+/** Menu/cart prices render whole units when even (₹340, the Q3/Q4 mocks), with paise otherwise (₹289.50). */
 export function formatPriceMinor(priceMinor: number, currency: string): string {
   const symbol = CURRENCY_SYMBOLS[currency] ?? `${currency} `;
-  return `${symbol}${(priceMinor / 100).toFixed(0)}`;
+  // PE-12: paise are shown when there are any (₹289.50), so the menu never disagrees with the bill.
+  return `${symbol}${(priceMinor / 100).toFixed(priceMinor % 100 === 0 ? 0 : 2)}`;
 }
 
 /** EXPERIENCE.md State Patterns: "an empty menu category is skipped, not shown hollow." */
