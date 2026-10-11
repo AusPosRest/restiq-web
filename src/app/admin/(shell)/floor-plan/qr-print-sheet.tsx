@@ -27,6 +27,8 @@ export function QrPrintSheet({ cards, template }: Readonly<{ cards: readonly Pri
     // paint a display:none image as an empty box. Restored to flow in print.
     // CU-8: black text on the white page, and as many cards per row as fit (it printed two per A4 page).
     <div data-testid="qr-print-sheet" className="fixed top-0 -left-full w-full text-black print:static print:w-auto" aria-hidden="true">
+      {/* PE-20: A4 with small margins, so "Save as PDF" gives one sheet of several cards per page. */}
+      <style>{"@page{size:A4;margin:10mm}"}</style>
       {(template.heading || template.instruction) && (
         <div data-testid="qr-print-sheet-header" className="mb-6 text-center">
           {template.heading && <h1 className="text-xl font-semibold">{template.heading}</h1>}
