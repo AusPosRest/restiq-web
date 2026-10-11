@@ -18,7 +18,7 @@ const CURRENT_STAFF_NAME = "Ravi";
 function tables(overrides: Partial<RawTableMapEntry>[] = []): RawTableMapEntry[] {
   const base: RawTableMapEntry[] = [
     { tableId: "t1", floorId: "f1", floorName: "Ground Floor", label: "T1", seatCapacity: 2, status: "empty", orderId: null, ownerId: null },
-    { tableId: "t9", floorId: "f1", floorName: "Ground Floor", label: "T9", seatCapacity: 4, status: "occupied", orderId: "order-t9", ownerId: "staff-priya" },
+    { tableId: "t9", floorId: "f1", floorName: "Ground Floor", label: "T9", seatCapacity: 4, status: "occupied", orderId: "order-t9", ownerId: "staff-priya", ownerName: "Priya" },
     { tableId: "t4", floorId: "f1", floorName: "Ground Floor", label: "T4", seatCapacity: 4, status: "occupied", orderId: "order-t4", ownerId: CURRENT_STAFF_ID },
   ];
   return overrides.length ? base.map((t, i) => ({ ...t, ...overrides[i] })) : base;
@@ -129,7 +129,7 @@ describe("TableMap", () => {
 
   it("reflects the server's real owner after a get-or-claim race (openOrClaimTable can return a pre-existing order owned by someone else), requiring transfer on a second tap instead of a silent open", async () => {
     const user = userEvent.setup();
-    const claimedOrder = { id: "order-t1", tenantId: "t", outletId: OUTLET_ID, tableId: "t1", ownerId: "staff-other", status: "open", tokenNumber: null, createdAt: "now", updatedAt: "now", lines: [] };
+    const claimedOrder = { id: "order-t1", tenantId: "t", outletId: OUTLET_ID, tableId: "t1", ownerId: "staff-other", ownerName: "Other", status: "open", tokenNumber: null, createdAt: "now", updatedAt: "now", lines: [] };
     const fetchMock = stubFetch((url) => {
       if (url.endsWith(`/pos/api/outlets/${OUTLET_ID}/table-map`)) return jsonResponse(tables());
       if (url.endsWith(`/pos/api/outlets/${OUTLET_ID}/tables/t1/order`)) return jsonResponse(claimedOrder);
@@ -150,7 +150,8 @@ describe("TableMap", () => {
 
     expect(push).not.toHaveBeenCalled();
     const dialog = await screen.findByTestId("transfer-ownership-dialog");
-    expect(dialog.textContent).toContain("staff-other");
+    expect(dialog.textContent).toContain("Other");
+    expect(dialog.textContent).not.toContain("staff-other");
     expect(fetchMock.mock.calls.filter(([url]) => (url as string).endsWith(`/tables/t1/order`))).toHaveLength(1);
   });
 
@@ -166,7 +167,7 @@ describe("TableMap", () => {
     expect(screen.queryByTestId("transfer-ownership-dialog")).toBeNull();
   });
 
-  it("shows the raw owner id and the transfer action instead of opening someone else's table directly - no name-lookup endpoint exists server-side", async () => {
+  it("shows the owner's name (never their id) and the transfer action instead of opening someone else's table directly (SE-22)", async () => {
     const user = userEvent.setup();
     stubFetch(() => jsonResponse(tables()));
     renderTableMap();
@@ -176,7 +177,8 @@ describe("TableMap", () => {
 
     expect(push).not.toHaveBeenCalled();
     const dialog = await screen.findByTestId("transfer-ownership-dialog");
-    expect(dialog.textContent).toContain("staff-priya");
+    expect(dialog.textContent).toContain("Priya");
+    expect(dialog.textContent).not.toContain("staff-priya");
   });
 
   it("completing a transfer sends newOwnerStaffId (the real TransferOrderDto requires it) and opens the order", async () => {
@@ -214,5 +216,30 @@ describe("TableMap", () => {
     expect(push).not.toHaveBeenCalled();
     // only the initial table-map GET happened - no transfer request was fired.
     expect(fetchMock).toHaveBeenCalledTimes(1);
+  });
+});
+
+describe("TableMap - abandoned QR sessions (CU-26)", () => {
+  it("offers Reset table for an empty table whose guests joined but never ordered, after a confirm", async () => {
+    const user = userEvent.setup();
+    let closed = 0;
+    stubFetch((url, init) => {
+      if (url.endsWith("/pos/api/tables/t1/close-session") && init?.method === "POST") {
+        closed += 1;
+        return jsonResponse({ closed: true });
+      }
+      return jsonResponse(tables([{ guestSessionOpen: true }]));
+    });
+    renderTableMap();
+    const reset = await screen.findByTestId("table-reset-t1");
+    expect(reset.textContent).toBe("Reset table T1");
+
+    const confirm = vi.spyOn(window, "confirm").mockReturnValueOnce(false).mockReturnValueOnce(true);
+    await user.click(reset);
+    expect(closed).toBe(0);
+    await user.click(reset);
+    await waitFor(() => expect(screen.queryByTestId("table-reset-t1")).toBeNull());
+    expect(closed).toBe(1);
+    confirm.mockRestore();
   });
 });

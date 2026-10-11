@@ -101,6 +101,11 @@ export function startOrder(outletId: string, tableId: string): Promise<RawOrder>
  * audited (actor + reason) same as other mutations, but it isn't one of
  * CAP-8's six manager-gated actions, so no PIN and no required reason.
  */
+/** CU-26: ends a table's abandoned QR guest session so the next guests start fresh (POST /pos/v1/tables/:id/close-session). */
+export function closeTableSession(tableId: string): Promise<{ closed: true }> {
+  return posApi<{ closed: true }>(`tables/${encodeURIComponent(tableId)}/close-session`, { method: "POST" });
+}
+
 export function transferOrder(orderId: string, newOwnerStaffId: string, reason?: string): Promise<RawOrder> {
   return posApi<RawOrder>(`orders/${orderId}/transfer`, {
     method: "POST",
