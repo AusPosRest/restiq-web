@@ -94,7 +94,7 @@ function TaxRegistrationForm({ initial }: Readonly<{ initial: TaxRegistrationDra
         <div>
           <span className="font-label mb-1 block text-xs font-semibold uppercase tracking-wider text-muted-foreground">Country</span>
           <p data-testid="tax-registration-country" className={READONLY_FIELD_CLASS}>
-            {draft.country}
+            {draft.country === "AU" ? "Australia" : draft.country === "IN" ? "India" : draft.country}
           </p>
         </div>
         <div>
@@ -157,30 +157,35 @@ function TaxRegistrationForm({ initial }: Readonly<{ initial: TaxRegistrationDra
         />
       </div>
 
-      <div>
-        <label htmlFor="tax-registration-fssai-license" className="font-label mb-1 block text-xs font-semibold uppercase tracking-wider text-muted-foreground">
-          FSSAI License (optional)
-        </label>
-        <input
-          id="tax-registration-fssai-license"
-          data-testid="tax-registration-fssai-license"
-          type="text"
-          value={draft.fssaiLicense}
-          onChange={(event) => updateField({ fssaiLicense: event.target.value })}
-          className={FIELD_CLASS}
-        />
-      </div>
+      {/* FSSAI and the composition scheme are Indian concepts (PE-10) - not shown for an Australian business. */}
+      {draft.country === "IN" && (
+        <>
+          <div>
+            <label htmlFor="tax-registration-fssai-license" className="font-label mb-1 block text-xs font-semibold uppercase tracking-wider text-muted-foreground">
+              FSSAI License (optional)
+            </label>
+            <input
+              id="tax-registration-fssai-license"
+              data-testid="tax-registration-fssai-license"
+              type="text"
+              value={draft.fssaiLicense}
+              onChange={(event) => updateField({ fssaiLicense: event.target.value })}
+              className={FIELD_CLASS}
+            />
+          </div>
 
-      <label className="flex items-center gap-2 text-sm">
-        <input
-          type="checkbox"
-          data-testid="tax-registration-composition-scheme"
-          checked={draft.compositionScheme}
-          onChange={(event) => updateField({ compositionScheme: event.target.checked })}
-          className="size-4 rounded border-border accent-primary focus-visible:ring-2 focus-visible:ring-ring"
-        />
-        Composition scheme
-      </label>
+          <label className="flex items-center gap-2 text-sm">
+            <input
+              type="checkbox"
+              data-testid="tax-registration-composition-scheme"
+              checked={draft.compositionScheme}
+              onChange={(event) => updateField({ compositionScheme: event.target.checked })}
+              className="size-4 rounded border-border accent-primary focus-visible:ring-2 focus-visible:ring-ring"
+            />
+            Composition scheme
+          </label>
+        </>
+      )}
 
       {draft.country === "AU" && (
         <label className="flex items-center gap-2 text-sm">

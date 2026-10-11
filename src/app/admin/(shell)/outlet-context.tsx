@@ -56,3 +56,8 @@ export function useOutlets(): OutletContextValue {
   if (!ctx) throw new Error("useOutlets must be used inside OutletProvider");
   return ctx;
 }
+
+/** The tenant's currency (INR/AUD, PE-10), read off the outlet list; INR until it loads or outside the provider. */
+export function useTenantCurrency(): string {
+  return useContext(OutletContext)?.outlets[0]?.currency ?? "INR";
+}

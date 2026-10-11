@@ -224,3 +224,18 @@ describe("walkthrough fixes (Binflow, 2026-10-08)", () => {
     });
   });
 });
+
+describe("PE-9: an Australian tenant's outlets keep an Australian timezone", () => {
+  it("never submits the India default the first outlet was created with", () => {
+    const data = emptyWizardData();
+    data.tax.country = "AU";
+    data.tax.compositionScheme = true;
+    data.brandsOutlets.outlets = [
+      { name: "Surry Hills", address: "1 Crown St", type: "dine_in", timezone: "Asia/Kolkata" },
+      { name: "Perth CBD", address: "2 Hay St", type: "qsr", timezone: "Australia/Perth" },
+    ];
+    const payload = toSubmitPayload(data) as { brandsOutlets: { outlets: { timezone: string }[] }; tax: { compositionScheme: boolean } };
+    expect(payload.brandsOutlets.outlets.map((o) => o.timezone)).toEqual(["Australia/Sydney", "Australia/Perth"]);
+    expect(payload.tax.compositionScheme).toBe(false);
+  });
+});

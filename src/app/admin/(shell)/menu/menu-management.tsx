@@ -12,7 +12,7 @@ import { Button } from "@/components/ui/button";
 import { fetchAllergens, fetchCategories, fetchCombos, fetchItems, fetchModifierGroups } from "../../api";
 import { MenuImport } from "../../menu-import";
 import { LoadErrorPanel, Skeleton } from "../data-states";
-import { useOutlets } from "../outlet-context";
+import { useOutlets, useTenantCurrency } from "../outlet-context";
 import { useToast } from "../toast";
 import { CategorySidebar } from "./category-sidebar";
 import { CombosPanel } from "./combos-panel";
@@ -68,7 +68,7 @@ function useMenuData() {
 export function MenuManagement() {
   const { loading, failed, data, retry } = useMenuData();
   const { outlets, selectedOutletId } = useOutlets();
-  const currency = outlets[0]?.currency ?? "INR";
+  const currency = useTenantCurrency();
 
   const [items, setItems] = useState<ItemView[] | null>(null);
   const [categories, setCategories] = useState<CategoryView[] | null>(null);

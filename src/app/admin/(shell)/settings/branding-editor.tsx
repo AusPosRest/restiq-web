@@ -11,6 +11,7 @@ import { useState } from "react";
 import { Button } from "@/components/ui/button";
 import { saveBranding } from "../../api";
 import { LoadErrorPanel, Skeleton } from "../data-states";
+import { useTenantCurrency } from "../outlet-context";
 import { useToast } from "../toast";
 import { useAdminLoad } from "../use-admin-load";
 import {
@@ -60,6 +61,7 @@ export function BrandingEditor() {
 // a synchronous setState-in-effect, which only exists here on the very first
 // render of a freshly successful load).
 function BrandingForm({ initial }: Readonly<{ initial: BrandingTokens }>) {
+  const currency = useTenantCurrency();
   const [draft, setDraft] = useState<BrandingTokens>(initial);
   const [saved, setSaved] = useState<BrandingTokens>(initial);
   const [saving, setSaving] = useState(false);
@@ -215,7 +217,7 @@ function BrandingForm({ initial }: Readonly<{ initial: BrandingTokens }>) {
 
       <div>
         <h2 className="font-headline mb-2 text-sm font-semibold text-muted-foreground">Live Preview</h2>
-        <ReceiptPreview tokens={draft} />
+        <ReceiptPreview tokens={draft} currency={currency} />
       </div>
     </div>
   );

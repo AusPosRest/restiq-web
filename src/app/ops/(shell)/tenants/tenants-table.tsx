@@ -267,7 +267,7 @@ export function TenantsTable() {
                     <td className="px-4 font-medium">{tenant.name}</td>
                     <td className="px-4 text-muted-foreground">{tenant.country}</td>
                     <td className="px-4 text-right tabular-nums">{tenant.outletCount}</td>
-                    <td className="px-4 text-muted-foreground">{tenant.plan}</td>
+                    <td className="px-4 text-muted-foreground">{tenant.plan.charAt(0).toUpperCase() + tenant.plan.slice(1)}</td>
                     <td className="px-4">
                       <StatusBadge status={tenant.status} />
                     </td>

@@ -9,7 +9,7 @@ import { Button } from "@/components/ui/button";
 import { opsApi, type PlanPriceView } from "../../api";
 import { useOpsLoad } from "../../use-ops-load";
 import { FieldError, SelectField, TextAreaField, TextField, ToggleField } from "./fields";
-import { BrandsOutletsData, BusinessData, CountryCode, DEFAULT_GST_RATE, OUTLET_TYPES, OwnerInviteData, StepErrors, SubscriptionData, TAX_PROFILES, TaxData, SLUG_PATTERN, TIMEZONES, emptyOutlet, PLAN_CURRENCY_SYMBOL, annualDiscountPercent, planPrice, recommendedPlan } from "./wizard-state";
+import { BrandsOutletsData, BusinessData, CountryCode, DEFAULT_GST_RATE, OUTLET_TYPES, OwnerInviteData, StepErrors, SubscriptionData, TAX_PROFILES, TaxData, SLUG_PATTERN, TIMEZONES, emptyOutlet, timezoneFor, PLAN_CURRENCY_SYMBOL, annualDiscountPercent, planPrice, recommendedPlan } from "./wizard-state";
 
 interface StepProps<T> {
   data: T;
@@ -347,7 +347,7 @@ export function OutletsStep({
             <SelectField
               id={`onb-outlet-${index}-timezone`}
               label="Timezone"
-              value={outlet.timezone}
+              value={timezoneFor(country, outlet.timezone)}
               error={errors[`outlets.${index}.timezone`]}
               options={TIMEZONES[country].map((zone) => ({ value: zone, label: zone }))}
               onChange={(timezone) => setOutlet(index, { timezone })}
