@@ -569,7 +569,9 @@ export interface CreateStaffInput {
 
 export function createStaff(input: CreateStaffInput): Promise<StaffView> {
   const name = `${input.firstName} ${input.lastName}`.trim();
-  return adminApi<StaffView>("staff", { method: "POST", body: JSON.stringify({ name, email: input.email, roleId: input.roleId, outletIds: input.outletIds ?? [] }) });
+  // CU-3: a blank email is left out (the API takes no email, but rejects an empty one).
+  const email = input.email.trim() || undefined;
+  return adminApi<StaffView>("staff", { method: "POST", body: JSON.stringify({ name, email, roleId: input.roleId, outletIds: input.outletIds ?? [] }) });
 }
 
 /** restiq-backend#197: where this person may sign in (empty = every outlet). Ends their open till sessions. */

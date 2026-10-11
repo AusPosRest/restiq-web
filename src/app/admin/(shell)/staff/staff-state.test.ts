@@ -25,12 +25,17 @@ describe("staffFullName", () => {
 });
 
 describe("validateAddStaffForm", () => {
-  it("requires first name, last name, email and a role", () => {
+  it("requires first name, last name and a role", () => {
     const errors = validateAddStaffForm(EMPTY_ADD_STAFF_FORM, ROLES);
     expect(errors.firstName).toBeTruthy();
     expect(errors.lastName).toBeTruthy();
-    expect(errors.email).toBeTruthy();
     expect(errors.roleId).toBeTruthy();
+  });
+
+  // CU-3: a waiter without an email can be added.
+  it("does not require an email", () => {
+    const errors = validateAddStaffForm({ firstName: "Raju", lastName: "K", email: "", roleId: "r-cashier", outletIds: [] }, ROLES);
+    expect(errors).toEqual({});
   });
 
   it("rejects a malformed email", () => {

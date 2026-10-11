@@ -97,7 +97,7 @@ function DialogBody({ roles, outlets = [], busy, error, onCancel, onSubmit }: Re
 
             <div>
               <label htmlFor="add-staff-email" className="font-label mb-1 block text-xs font-semibold uppercase tracking-wider text-muted-foreground">
-                Email
+                Email (optional)
               </label>
               <input
                 id="add-staff-email"
