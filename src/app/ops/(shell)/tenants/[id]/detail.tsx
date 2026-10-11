@@ -7,6 +7,7 @@ import { ChevronRight, PauseCircle, PlayCircle, Rocket, Trash2 } from "lucide-re
 import Link from "next/link";
 import { useParams, usePathname, useRouter, useSearchParams } from "next/navigation";
 import { useState } from "react";
+import { TestModeBadge } from "@/components/test-mode-badge";
 import { Button } from "@/components/ui/button";
 import { opsApi, OpsApiError, TenantDetail } from "../../api";
 import { ConfirmReasonDialog } from "../../confirm-reason-dialog";
@@ -66,6 +67,27 @@ const LIFECYCLE_DIALOG: Record<
   },
 };
 
+type Mode = "test" | "live";
+
+// restiq-backend#213: switching Test / Live. Going Live stops simulated payments; going back to Test is
+// refused by the API once the tenant has real sales, so the dialog says so up front.
+const MODE_DIALOG: Record<Mode, { title: (name: string) => string; description: (name: string) => string; verb: string; checkbox: (name: string) => string }> = {
+  live: {
+    title: (name) => `Switch ${name} to Live`,
+    description: (name) =>
+      `Simulated card and QR payments stop working for ${name} - only real payments from then on. Its emails go to the real owner and staff addresses, and it starts counting in the platform figures.`,
+    verb: "Switch to Live",
+    checkbox: (name) => `I understand ${name} will take real payments only.`,
+  },
+  test: {
+    title: (name) => `Switch ${name} to Test`,
+    description: (name) =>
+      `Card and QR payments for ${name} become simulated - no money moves. Its emails go to the operators' inbox instead of real addresses, and it drops out of the platform figures. A tenant that already has real sales can't be switched back to Test.`,
+    verb: "Switch to Test",
+    checkbox: (name) => `I understand ${name}'s payments will be simulated.`,
+  },
+};
+
 const TAB_LABELS: Record<TabKey, string> = {
   overview: "Overview",
   outlets: "Outlets",
@@ -89,6 +111,8 @@ export function TenantDetailPage() {
   const { loading, failed, data, retry: load } = useOpsLoad<TenantDetail>(`tenants/${params.id}`);
   const [lifecycleAction, setLifecycleAction] = useState<LifecycleAction | null>(null);
   const [lifecycleBusy, setLifecycleBusy] = useState(false);
+  const [modeTarget, setModeTarget] = useState<Mode | null>(null);
+  const [modeBusy, setModeBusy] = useState(false);
 
   function selectTab(next: TabKey) {
     router.replace(next === "overview" ? pathname : `${pathname}?tab=${next}`);
@@ -115,6 +139,22 @@ export function TenantDetailPage() {
       });
     } finally {
       setLifecycleBusy(false);
+    }
+  }
+
+  async function switchMode(reason: string) {
+    if (!modeTarget) return;
+    setModeBusy(true);
+    try {
+      await opsApi(`tenants/${params.id}/mode`, { method: "POST", body: JSON.stringify({ mode: modeTarget, reason }) });
+      setModeTarget(null);
+      toast({ kind: "success", message: modeTarget === "live" ? "The tenant is now Live." : "The tenant is now in Test mode." });
+      load();
+    } catch (error) {
+      setModeTarget(null);
+      toast({ kind: "error", message: error instanceof OpsApiError ? error.message : "The mode could not be changed." });
+    } finally {
+      setModeBusy(false);
     }
   }
 
@@ -155,6 +195,7 @@ export function TenantDetailPage() {
           <div className="flex items-center gap-3">
             <h1 className="font-headline text-2xl font-semibold">{tenant.name}</h1>
             <StatusBadge status={tenant.status} testId="tenant-detail-status" />
+            {tenant.testMode && <TestModeBadge testId="tenant-detail-test-badge" />}
           </div>
           <p className="mt-2 text-sm text-muted-foreground">
             {tenant.country === "IN" ? "India" : "Australia"}
@@ -222,6 +263,20 @@ export function TenantDetailPage() {
         {tab === "agreements" && <AgreementsTab tenantId={tenant.id} />}
       </div>
 
+      <section className="mt-10 flex max-w-3xl flex-wrap items-center justify-between gap-4 rounded-lg border border-border p-4" data-testid="tenant-mode">
+        <div>
+          <p className="text-sm font-semibold">{tenant.testMode ? "Test mode" : "Live"}</p>
+          <p className="text-xs text-muted-foreground" data-testid="tenant-mode-text">
+            {tenant.testMode
+              ? "Payments are simulated, emails go to the operators' inbox, and this tenant is left out of the platform figures."
+              : `Taking real payments${tenant.liveSince ? ` since ${new Date(tenant.liveSince).toLocaleDateString(undefined, { day: "2-digit", month: "short", year: "numeric" })}` : ""}.`}
+          </p>
+        </div>
+        <Button variant="outline" size="sm" data-testid="tenant-mode-switch" onClick={() => setModeTarget(tenant.testMode ? "live" : "test")}>
+          {tenant.testMode ? "Switch to Live" : "Switch to Test"}
+        </Button>
+      </section>
+
       {/* Danger zone: out of the header, so Delete never sits beside the everyday actions. */}
       <section className="mt-10 flex max-w-3xl items-center justify-between gap-4 rounded-lg border border-status-critical/40 p-4" data-testid="tenant-danger-zone">
         <div>
@@ -232,6 +287,19 @@ export function TenantDetailPage() {
           <Trash2 aria-hidden="true" /> Delete tenant
         </Button>
       </section>
+
+      {modeTarget && (
+        <ConfirmReasonDialog
+          open
+          title={MODE_DIALOG[modeTarget].title(tenant.name)}
+          description={MODE_DIALOG[modeTarget].description(tenant.name)}
+          verb={MODE_DIALOG[modeTarget].verb}
+          confirmCheckboxLabel={MODE_DIALOG[modeTarget].checkbox(tenant.name)}
+          busy={modeBusy}
+          onCancel={() => setModeTarget(null)}
+          onConfirm={(reason) => void switchMode(reason)}
+        />
+      )}
 
       {lifecycleAction && (
         <ConfirmReasonDialog

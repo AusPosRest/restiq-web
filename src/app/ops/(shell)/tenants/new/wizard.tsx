@@ -54,8 +54,10 @@ export function OnboardingWizard() {
       try {
         const res = await api("tenants/draft");
         if (cancelled) return;
-        if (res.ok) {
-          const body = (await res.json()) as { draft: { steps: Record<string, unknown>; updatedAt: string } };
+        // PE-6: no draft is { draft: null }, not a 404.
+        const body = res.ok ? ((await res.json()) as { draft: { steps: Record<string, unknown>; updatedAt: string } | null }) : null;
+        if (cancelled) return;
+        if (body?.draft) {
           setPhase({ name: "resume-prompt", draftUpdatedAt: body.draft.updatedAt, draftData: dataFromDraft(body.draft.steps) });
           return;
         }
@@ -138,8 +140,10 @@ export function OnboardingWizard() {
 
   function onResume(): void {
     if (phase.name !== "resume-prompt") return;
-    setData(phase.draftData);
-    setStep(firstIncompleteStep(phase.draftData));
+    // PE-5: the owner invite is never saved as its own step until it is edited - start it from the step 1 contact, as a fresh run does.
+    const resumed = { ...phase.draftData, ownerInvite: prefillOwner(phase.draftData.ownerInvite, phase.draftData.business) };
+    setData(resumed);
+    setStep(firstIncompleteStep(resumed));
     setPhase({ name: "editing" });
   }
 
@@ -382,20 +386,20 @@ export function OnboardingWizard() {
         <footer className="mt-10 flex items-center justify-between border-t border-border/60 pt-6">
           <div>
             {step > 1 ? (
-              <Button variant="outline" data-testid="onb-back" onClick={onBack}>
+              <Button type="button" variant="outline" data-testid="onb-back" onClick={onBack}>
                 Back
               </Button>
             ) : null}
           </div>
           <div className="flex items-center gap-4">
             {step < STEP_COUNT ? (
-              <Button data-testid="onb-next" onClick={onNext}>
+              <Button type="button" data-testid="onb-next" onClick={onNext}>
                 {step === 1 ? "Next Step" : `Continue to ${STEPS[step].title}`}
               </Button>
             ) : (
               <>
                 <span className="text-sm text-muted-foreground">Tenant creation ready</span>
-                <Button data-testid="onb-submit" disabled={submitting} onClick={() => void onSubmit()}>
+                <Button type="button" data-testid="onb-submit" disabled={submitting} onClick={() => void onSubmit()}>
                   {submitting ? "Provisioning..." : "Send Invite & Finish"}
                 </Button>
               </>

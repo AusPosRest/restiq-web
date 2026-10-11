@@ -16,7 +16,8 @@ vi.mock("next/link", () => ({
 type FetchCall = { path: string; method: string; body: unknown };
 
 let fetchCalls: FetchCall[] = [];
-let draftResponse: { status: number; body: unknown } = { status: 404, body: { error: { code: "not_found" } } };
+// PE-6: the API answers { draft: null } when there is no draft (it used to 404).
+let draftResponse: { status: number; body: unknown } = { status: 200, body: { draft: null } };
 let slugAnswer: (slug: string) => unknown = (slug) => ({ slug, available: true, reason: null });
 let submitResponse: { status: number; body: unknown } = { status: 201, body: null };
 
@@ -47,7 +48,7 @@ beforeEach(() => {
 afterEach(() => {
   cleanup();
   vi.unstubAllGlobals();
-  draftResponse = { status: 404, body: { error: { code: "not_found" } } };
+  draftResponse = { status: 200, body: { draft: null } };
 });
 
 async function renderFresh() {
@@ -262,5 +263,47 @@ describe("OnboardingWizard", () => {
     // Issue #85: the accept link must be visible and carry the raw token.
     expect(screen.getByTestId("invite-link-url").textContent).toContain(`/admin/invite/${"a".repeat(64)}`);
     expect(screen.getByTestId("onb-success-tenants-link").getAttribute("href")).toBe("/ops/tenants");
+  });
+
+  const STEPS_1_TO_3 = {
+    "1": { companyName: "Spice Route", registeredAddress: "a", contactName: "Asha Rao", contactEmail: "asha@d.example", contactPhone: "1" },
+    "2": { country: "IN", registrationNumber: "29ABCDE1234F1Z5", legalEntityName: "L", taxProfile: "India GST - CGST/SGST split" },
+    "3": { brandName: "SR", outlets: [{ name: "O1", address: "A", type: "dine_in", timezone: "Asia/Kolkata" }] },
+  };
+
+  // PE-5: a resumed draft never saved step 5 - the owner invite starts from the step 1 contact, like a fresh run.
+  it("prefills the owner invite from the primary contact when a draft is resumed", async () => {
+    draftResponse = { status: 200, body: { draft: { steps: { ...STEPS_1_TO_3, "4": { plan: "standard", billingPeriod: "monthly" } }, updatedAt: new Date().toISOString() } } };
+    const user = userEvent.setup();
+    render(<OnboardingWizard />);
+    await screen.findByTestId("onb-resume-prompt");
+    await user.click(screen.getByTestId("onb-resume"));
+    await screen.findByTestId("onb-submit");
+    expect((screen.getByTestId("onb-owner-email") as HTMLInputElement).value).toBe("asha@d.example");
+    expect((screen.getByTestId("onb-owner-first-name") as HTMLInputElement).value).toBe("Asha");
+    expect((screen.getByTestId("onb-owner-last-name") as HTMLInputElement).value).toBe("Rao");
+  });
+
+  // restiq-backend#213: the "Test tenant" switch on the plan step goes out as testMode on submit.
+  it("provisions a Test tenant when the Test tenant switch is on", async () => {
+    draftResponse = { status: 200, body: { draft: { steps: STEPS_1_TO_3, updatedAt: new Date().toISOString() } } };
+    submitResponse = {
+      status: 201,
+      body: { tenant: { id: "t-1", name: "Spice Route", status: "provisioning" }, invite: { email: "asha@d.example", expiresAt: new Date().toISOString(), inviteToken: "a".repeat(64) } },
+    };
+    const user = userEvent.setup();
+    render(<OnboardingWizard />);
+    await screen.findByTestId("onb-resume-prompt");
+    await user.click(screen.getByTestId("onb-resume"));
+    await user.click(await screen.findByTestId("onb-plan-standard"));
+    const toggle = screen.getByTestId("onb-test-mode");
+    expect(toggle.getAttribute("aria-checked")).toBe("false");
+    await user.click(toggle);
+    await user.click(screen.getByTestId("onb-next"));
+    await user.click(await screen.findByTestId("onb-submit"));
+    await screen.findByTestId("onb-success");
+    const submit = fetchCalls.find((call) => call.path === "/ops/api/tenants" && call.method === "POST");
+    expect(submit?.body).toMatchObject({ testMode: true, subscription: { plan: "standard", billingPeriod: "monthly" } });
+    expect((submit?.body as { subscription: Record<string, unknown> }).subscription).not.toHaveProperty("testMode");
   });
 });

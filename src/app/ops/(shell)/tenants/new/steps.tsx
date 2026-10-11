@@ -135,7 +135,7 @@ export function BusinessStep({ data, errors, onChange, onFieldBlur }: StepProps<
             id="onb-contact-phone"
             label="Phone Number"
             type="tel"
-            placeholder="+91 00000 00000"
+            placeholder="With country code, e.g. +61 or +91"
             value={data.contactPhone}
             error={errors.contactPhone}
             onChange={(contactPhone) => set({ contactPhone })}
@@ -373,13 +373,14 @@ const PLANS = [
     value: "standard" as const,
     name: "Standard",
     tagline: "For a single outlet.",
-    features: ["Up to 3 POS devices per outlet", "Basic menu management", "Standard end-of-day reporting", "Email support (24hr SLA)"],
+    // PE-4: only what RESTIQ does today - no device limits, analytics API or inventory it doesn't have.
+    features: ["POS till, kitchen display and QR ordering", "Menu, floor plan and staff management", "Sales and payment reports"],
   },
   {
     value: "enterprise" as const,
     name: "Enterprise",
     tagline: "For two or more outlets and franchises.",
-    features: ["Unlimited POS devices", "Centralized multi-location menus", "Real-time analytics API", "Advanced inventory syncing", "24/7 priority phone support"],
+    features: ["Everything in Standard", "Two or more outlets and brands", "One owner console for every outlet"],
   },
 ];
 
@@ -474,6 +475,14 @@ export function SubscriptionStep({
         })}
       </div>
       <FieldError error={errors.plan} id="onb-plan-error" />
+      {/* restiq-backend#213: a Test tenant gets simulated payments and email and is left out of the platform figures. */}
+      <ToggleField
+        id="onb-test-mode"
+        label="Test tenant"
+        description="For demos and trials: card and QR payments are simulated, emails go to the operators' inbox, and the tenant is left out of the platform figures. Switch it to Live from the tenant page when it starts trading."
+        checked={data.testMode}
+        onChange={(testMode) => onChange({ ...data, testMode })}
+      />
     </div>
   );
 }

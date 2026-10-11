@@ -24,6 +24,7 @@ function tenant(overrides: Partial<TenantListItem>): TenantListItem {
     plan: "standard",
     outletCount: 2,
     health: "unknown",
+    testMode: false,
     createdAt: "2026-08-20T10:00:00.000Z",
     ...overrides,
   };
@@ -58,6 +59,15 @@ describe("TenantsTable", () => {
     expect(row.textContent).toContain("Bombay Bistro Group");
     await userEvent.click(row);
     expect(push).toHaveBeenCalledWith("/ops/tenants/0192aaaa-0000-7000-8000-000000000001");
+  });
+
+  it("badges Test-mode tenants TEST and shows each tenant's health (#213, PE-2)", async () => {
+    const testId = "0192aaaa-0000-7000-8000-000000000002";
+    vi.stubGlobal("fetch", vi.fn().mockResolvedValue(listResponse([tenant({ health: "lagging" }), tenant({ id: testId, name: "Demo Diner", testMode: true })])));
+    render(<TenantsTable />);
+    expect((await screen.findByTestId(`tenants-test-badge-${testId}`)).textContent).toBe("Test");
+    expect(screen.queryByTestId("tenants-test-badge-0192aaaa-0000-7000-8000-000000000001")).toBeNull();
+    expect(screen.getByTestId("tenants-row-0192aaaa-0000-7000-8000-000000000001").textContent).toContain("lagging");
   });
 
   it("shows the true-empty state with a New tenant CTA when nothing exists", async () => {

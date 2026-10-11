@@ -168,7 +168,8 @@ export function ToggleField({
       >
         <span
           aria-hidden="true"
-          className={`absolute top-0.5 size-5 rounded-full bg-foreground transition-transform ${
+          // PE-6: pinned to the track's left edge - a button centres its content, which pushed the knob out of the track.
+          className={`absolute left-0 top-0.5 size-5 rounded-full bg-foreground transition-transform ${
             checked ? "translate-x-[1.375rem]" : "translate-x-0.5"
           }`}
         />

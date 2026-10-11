@@ -52,6 +52,8 @@ export interface BrandsOutletsData {
 export interface SubscriptionData {
   plan: "" | "standard" | "enterprise";
   billingPeriod: "monthly" | "annual";
+  /** restiq-backend#213: provision the tenant in Test mode. */
+  testMode: boolean;
 }
 
 export interface OwnerInviteData {
@@ -108,7 +110,7 @@ export function emptyWizardData(): WizardData {
       gstRatePercent: DEFAULT_GST_RATE.IN,
     },
     brandsOutlets: { brandName: "", outlets: [emptyOutlet("IN")] },
-    subscription: { plan: "", billingPeriod: "monthly" },
+    subscription: { plan: "", billingPeriod: "monthly", testMode: false },
     ownerInvite: { email: "", firstName: "", lastName: "" },
   };
 }
@@ -264,7 +266,8 @@ export function toSubmitPayload(data: WizardData): Record<string, unknown> {
       ...(data.tax.gstApplicable ? { gstRatePercent: Number(data.tax.gstRatePercent) } : {}),
     },
     brandsOutlets: data.brandsOutlets,
-    subscription: data.subscription,
+    subscription: { plan: data.subscription.plan, billingPeriod: data.subscription.billingPeriod },
+    ...(data.subscription.testMode ? { testMode: true } : {}),
     ownerInvite: data.ownerInvite,
   };
 }
