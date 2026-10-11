@@ -33,6 +33,7 @@ describe("DeviceScreen", () => {
   beforeEach(() => {
     push.mockReset();
     window.sessionStorage.clear();
+    window.localStorage.clear();
     vi.unstubAllGlobals();
   });
   afterEach(cleanup);

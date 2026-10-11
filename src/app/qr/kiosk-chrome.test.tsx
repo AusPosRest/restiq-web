@@ -18,6 +18,7 @@ beforeEach(() => {
   replace.mockReset();
   pathname = "/qr/menu";
   sessionStorage.clear();
+  localStorage.clear();
   vi.stubGlobal("fetch", vi.fn(() => Promise.resolve(new Response("{}", { status: 200 }))));
 });
 afterEach(() => {

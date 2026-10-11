@@ -20,6 +20,7 @@ beforeEach(() => {
   push.mockReset();
   search = "device=dev-1";
   sessionStorage.clear();
+  localStorage.clear();
 });
 afterEach(() => {
   cleanup();
