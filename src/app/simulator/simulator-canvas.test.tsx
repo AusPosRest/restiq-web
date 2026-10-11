@@ -34,7 +34,7 @@ describe("SimulatorCanvas", () => {
 
     const iframe = await screen.findByTitle("KDS");
     expect(iframe.tagName).toBe("IFRAME");
-    expect(iframe.getAttribute("src")).toMatch(/^http:\/\/sim-[a-z0-9]+\.localhost:3000\/kds$/);
+    expect(iframe.getAttribute("src")).toMatch(/^http:\/\/sim-[a-z0-9]+\.localhost:3000\/device$/);
     expect(screen.queryByText("Add a device to begin")).toBeNull();
   });
 
