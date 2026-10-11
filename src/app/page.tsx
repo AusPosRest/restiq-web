@@ -428,8 +428,8 @@ function FinalCta() {
 
 const FOOTER_LINKS = [
   { href: "/demo", label: "Live demo", testId: "landing-footer-demo" },
-  { href: "/pos/login", label: "Staff POS", testId: "landing-footer-pos" },
-  { href: "/kds", label: "Kitchen display", testId: "landing-footer-kds" },
+  { href: "/pos/login", label: "Staff POS (staff PIN)", testId: "landing-footer-pos" },
+  { href: "/kds", label: "Kitchen display (staff PIN)", testId: "landing-footer-kds" },
   { href: "/admin/login", label: "Owner console", testId: "landing-footer-admin" },
   { href: "/ops/login", label: "Platform operators", testId: "landing-footer-ops" },
 ];

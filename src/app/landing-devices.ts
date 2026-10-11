@@ -5,7 +5,9 @@
 // for never leaves this module. Mirrors the fetch-then-degrade pattern in
 // src/app/qr/t/[outletId]/[tableId]/availability.ts.
 //   POST ops/v1/auth/login {email,password} -> { token, operator }
+//   GET  ops/v1/tenants    -> { tenants: [{ name, testMode, ... }] }
 //   GET  ops/v1/devices    -> { devices: DeviceListItem[], nextCursor, total }
+// restiq-web#346 (PE-30): /demo shows only tenants in Test mode - their devices and their logins.
 export interface LandingDevice {
   id: string;
   tenantId: string;
@@ -18,7 +20,7 @@ export interface LandingDevice {
 }
 
 export type LandingDevicesResult =
-  | { kind: "available"; devices: LandingDevice[] }
+  | { kind: "available"; devices: LandingDevice[]; testTenantNames: string[] }
   | { kind: "unavailable" };
 
 // pos terminals sign in at the shared POS PIN pad; kds shares that
@@ -63,18 +65,23 @@ export async function fetchLandingDevices(): Promise<LandingDevicesResult> {
 
     // ponytail: one page at the API's max page size rather than a cursor
     // loop - fine for a demo-scale fleet; add pagination if it outgrows 100.
-    const devicesRes = await fetch(`${apiUrl}/ops/v1/devices?limit=100`, {
-      headers: { authorization: `Bearer ${loginBody.token}` },
-      cache: "no-store",
-    });
+    const headers = { authorization: `Bearer ${loginBody.token}` };
+    const tenantsRes = await fetch(`${apiUrl}/ops/v1/tenants?limit=100`, { headers, cache: "no-store" });
+    if (!tenantsRes.ok) return { kind: "unavailable" };
+    const tenantsBody = (await tenantsRes.json().catch(() => null)) as { tenants?: { id: string; name: string; testMode?: boolean }[] } | null;
+    if (!tenantsBody?.tenants) return { kind: "unavailable" };
+    const testTenants = tenantsBody.tenants.filter((tenant) => tenant.testMode === true);
+    const testTenantIds = new Set(testTenants.map((tenant) => tenant.id));
+
+    const devicesRes = await fetch(`${apiUrl}/ops/v1/devices?limit=100`, { headers, cache: "no-store" });
     if (!devicesRes.ok) return { kind: "unavailable" };
     const body = (await devicesRes.json().catch(() => null)) as { devices?: LandingDevice[] } | null;
     if (!body?.devices) return { kind: "unavailable" };
 
-    const devices = [...body.devices].sort(
+    const devices = body.devices.filter((device) => testTenantIds.has(device.tenantId)).sort(
       (a, b) => a.tenantName.localeCompare(b.tenantName) || a.label.localeCompare(b.label),
     );
-    return { kind: "available", devices };
+    return { kind: "available", devices, testTenantNames: testTenants.map((tenant) => tenant.name) };
   } catch {
     return { kind: "unavailable" };
   }
