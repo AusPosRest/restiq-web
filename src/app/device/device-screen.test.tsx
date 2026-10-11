@@ -3,6 +3,7 @@ import userEvent from "@testing-library/user-event";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { DeviceScreen } from "./device-screen";
 import { readStoredDevice, type DeviceView } from "./device-state";
+import { getDeviceSecret } from "@/lib/device-secret";
 
 const push = vi.fn();
 vi.mock("next/navigation", () => ({
@@ -77,6 +78,18 @@ describe("DeviceScreen", () => {
     expect(body.code).toBe("ABC-234");
     expect(body.label).toBe("Front Counter 1");
     expect(String(body.hardwareKeyFingerprint)).toMatch(/^web-/);
+  });
+
+  it("keeps the device secret from the enrolment response for the PIN pad (restiq-backend#209)", async () => {
+    vi.stubGlobal("fetch", vi.fn().mockResolvedValue(jsonResponse(201, { device: POS_DEVICE, deviceSecret: "dvs_abc" })));
+    render(<DeviceScreen />);
+    await screen.findByTestId("device-enrol-form");
+    await typeCode("ABC234");
+    await userEvent.click(screen.getByTestId("device-enrol-submit"));
+    expect(await screen.findByTestId("device-card")).toBeTruthy();
+    expect(getDeviceSecret(POS_DEVICE.id)).toBe("dvs_abc");
+    // The secret is not part of the stored device card.
+    expect(JSON.stringify(readStoredDevice())).not.toContain("dvs_abc");
   });
 
   it.each([

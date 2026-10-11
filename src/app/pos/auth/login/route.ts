@@ -39,7 +39,7 @@ function errorResponse(status: number, body: unknown): NextResponse {
 
 export async function POST(request: Request): Promise<NextResponse> {
   const body: unknown = await request.json().catch(() => null);
-  const { pin, tenantId: requestedTenantId, deviceId } = (body ?? {}) as { pin?: unknown; tenantId?: unknown; deviceId?: unknown };
+  const { pin, tenantId: requestedTenantId, deviceId, deviceSecret } = (body ?? {}) as { pin?: unknown; tenantId?: unknown; deviceId?: unknown; deviceSecret?: unknown };
   if (typeof pin !== "string" || !PIN_PATTERN.test(pin)) {
     return errorResponse(400, { error: { code: "validation_failed", message: "A 4-digit PIN is required" } });
   }
@@ -49,6 +49,10 @@ export async function POST(request: Request): Promise<NextResponse> {
   // restiq-backend#171: the tab's enrolled device, so the API can give that till its own throttle allowance.
   if (deviceId !== undefined && (typeof deviceId !== "string" || !UUID_PATTERN.test(deviceId))) {
     return errorResponse(400, { error: { code: "validation_failed", message: "deviceId must be a UUID" } });
+  }
+  // restiq-backend#209: the secret the till got at enrolment - only with it does deviceId earn that allowance.
+  if (deviceSecret !== undefined && (typeof deviceSecret !== "string" || !deviceSecret || deviceSecret.length > 200)) {
+    return errorResponse(400, { error: { code: "validation_failed", message: "deviceSecret is not valid" } });
   }
 
   const apiUrl = process.env.NEXT_PUBLIC_API_URL;
@@ -63,7 +67,7 @@ export async function POST(request: Request): Promise<NextResponse> {
     upstream = await fetch(`${apiUrl}/pos/v1/auth/login`, {
       method: "POST",
       headers: { "content-type": "application/json", ...clientIpHeaders(request) },
-      body: JSON.stringify({ tenantId, pin, deviceId }),
+      body: JSON.stringify({ tenantId, pin, deviceId, deviceSecret }),
       cache: "no-store",
     });
   } catch {
