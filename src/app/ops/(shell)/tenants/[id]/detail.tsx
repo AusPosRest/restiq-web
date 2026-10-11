@@ -19,6 +19,7 @@ import { CapabilitiesTab } from "./capabilities-tab";
 import { AgreementsTab } from "./agreements-tab";
 import { SubscriptionTab } from "./subscription-tab";
 import { OutletsTab, OverviewTab, OwnersTab } from "./tabs";
+import { DATE_LOCALE } from "@/lib/datetime";
 
 // Branding is the owner's job (Settings > Branding); ops no longer edits it (walkthrough cut).
 const TABS = ["overview", "outlets", "devices", "subscription", "capabilities", "owners", "agreements"] as const;
@@ -165,7 +166,7 @@ export function TenantDetailPage() {
               </>
             )}
             {" · Onboarded "}
-            {new Date(tenant.createdAt).toLocaleDateString(undefined, { day: "2-digit", month: "short", year: "numeric" })}
+            {new Date(tenant.createdAt).toLocaleDateString(DATE_LOCALE, { day: "2-digit", month: "short", year: "numeric" })}
           </p>
         </div>
         <div className="flex items-center gap-2">

@@ -14,6 +14,7 @@ import { createPortal } from "react-dom";
 import { GuestApiError } from "../api-client";
 import { formatMinor } from "../cart/cart-state";
 import { createOrFetchBill, fetchInvoice, payAll, type GuestBillView, type GuestInvoiceView } from "../checkout/checkout-api";
+import { DATE_LOCALE } from "@/lib/datetime";
 
 const TRAY_ID = "kiosk-receipt-tray";
 const TENDER_LABEL: Record<string, string> = { card_terminal: "Card", card_online: "Card", cash: "Cash", upi_manual: "UPI", upi_intent: "UPI", upi_qr: "UPI" };
@@ -192,7 +193,7 @@ function KioskReceipt({ invoice, tokenNumber }: Readonly<{ invoice: GuestInvoice
       <p className="text-center font-bold">
         {invoice.title} {invoice.invoiceNumber}
       </p>
-      {invoice.issuedAt && <p className="text-center">{new Date(invoice.issuedAt).toLocaleString([], { dateStyle: "short", timeStyle: "short" })}</p>}
+      {invoice.issuedAt && <p className="text-center">{new Date(invoice.issuedAt).toLocaleString(DATE_LOCALE, { dateStyle: "short", timeStyle: "short" })}</p>}
       <p data-testid="kiosk-receipt-token" className="my-2 text-center text-[28px] font-bold leading-8">
         #{tokenNumber}
       </p>

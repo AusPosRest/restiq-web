@@ -16,6 +16,7 @@
 //    itself just wrote in this session (see item-drawer.tsx), not fetched.
 
 import { formatPrice } from "@/lib/money";
+import { DATE_LOCALE } from "@/lib/datetime";
 
 export type PriceChannel = "dine_in" | "takeaway" | "delivery" | "qr" | "aggregator";
 
@@ -142,7 +143,7 @@ export function majorStringToPriceMinor(value: string): number | null {
 }
 
 export function formatEffectiveDate(iso: string): string {
-  return new Date(iso).toLocaleDateString(undefined, { day: "numeric", month: "short" });
+  return new Date(iso).toLocaleDateString(DATE_LOCALE, { day: "numeric", month: "short" });
 }
 
 export function pendingChangeFor(

@@ -10,6 +10,7 @@ import { InviteLinkChip } from "../invite-link";
 import { ConfirmReasonDialog } from "../../confirm-reason-dialog";
 import { StatusBadge } from "../../status-badge";
 import { useToast } from "../../toast";
+import { DATE_LOCALE } from "@/lib/datetime";
 
 interface TabProps {
   detail: TenantDetail;
@@ -264,7 +265,7 @@ export function OwnersTab({ detail }: Readonly<{ detail: TenantDetail }>) {
                   <StatusBadge status={ownerInvite.status} testId="owner-invite-status" />
                   <span className="text-muted-foreground">
                     {ownerInvite.status === "pending" ? "expires" : "expired"}{" "}
-                    {new Date(ownerInvite.expiresAt).toLocaleString(undefined, {
+                    {new Date(ownerInvite.expiresAt).toLocaleString(DATE_LOCALE, {
                       day: "2-digit",
                       month: "short",
                       hour: "2-digit",

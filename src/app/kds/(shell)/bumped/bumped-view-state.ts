@@ -3,6 +3,7 @@
 // ordering/formatting stay unit-testable without a DOM.
 import { formatElapsed } from "../station/station-queue-state";
 import type { BumpedTicketView } from "../../api";
+import { DATE_LOCALE } from "@/lib/datetime";
 
 /**
  * Newest-bumped-first (this story's documented reading of CAP-4's
@@ -18,7 +19,7 @@ export function sortBumpedNewestFirst(tickets: BumpedTicketView[]): BumpedTicket
 
 /** Local wall-clock label, e.g. "10:00 AM" - shared by the bumped-at and last-recall lines. */
 function formatClockTime(iso: string): string {
-  return new Date(iso).toLocaleTimeString([], { hour: "numeric", minute: "2-digit" });
+  return new Date(iso).toLocaleTimeString(DATE_LOCALE, { hour: "numeric", minute: "2-digit" });
 }
 
 /**

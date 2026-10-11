@@ -11,6 +11,7 @@ import { Button } from "@/components/ui/button";
 import { InviteLinkChip } from "../invite-link";
 import { BusinessStep, OutletsStep, OwnerInviteStep, SubscriptionStep, TaxStep } from "./steps";
 import { STEP_COUNT, STEPS, StepErrors, StepKey, WizardData, dataFromDraft, emptyWizardData, firstIncompleteStep, toSubmitPayload, validateStep, keepUnfixedErrors, prefillOwner } from "./wizard-state";
+import { DATE_LOCALE, formatDate, formatDateTime } from "@/lib/datetime";
 
 const AUTOSAVE_DEBOUNCE_MS = 800;
 
@@ -211,7 +212,7 @@ export function OnboardingWizard() {
               {phase.inviteEmail}
             </p>
             <p className="mt-1 text-xs text-muted-foreground">
-              Expires {new Date(phase.inviteExpiresAt).toLocaleDateString()}
+              Expires {formatDate(phase.inviteExpiresAt)}
             </p>
             <InviteLinkChip token={phase.inviteToken} />
           </div>
@@ -244,7 +245,7 @@ export function OnboardingWizard() {
         <h1 className="font-headline text-2xl font-semibold">Resume onboarding draft?</h1>
         <p className="mt-3 text-muted-foreground">
           You have an unfinished tenant onboarding draft, last saved{" "}
-          {new Date(phase.draftUpdatedAt).toLocaleString()}. Drafts never create a tenant until final submit.
+          {formatDateTime(phase.draftUpdatedAt)}. Drafts never create a tenant until final submit.
         </p>
         <div className="mt-8 flex items-center gap-4">
           <Button data-testid="onb-resume" onClick={onResume}>
@@ -329,7 +330,7 @@ export function OnboardingWizard() {
           </div>
           <span data-testid="onb-draft-status" className="font-label shrink-0 rounded-md bg-accent px-2.5 py-1 text-xs font-semibold uppercase tracking-wider text-muted-foreground">
             {draftStatus.state === "saved"
-              ? `Draft · saved ${new Date(draftStatus.at).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })}`
+              ? `Draft · saved ${new Date(draftStatus.at).toLocaleTimeString(DATE_LOCALE, { hour: "2-digit", minute: "2-digit" })}`
               : draftStatus.state === "error"
                 ? "Draft · not saved"
                 : "Draft"}

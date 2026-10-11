@@ -16,6 +16,7 @@ import { StatusBadge } from "../status-badge";
 import { formatClockSkew, formatLag } from "./format";
 import { clearFilter, FILTER_LABELS, FILTER_VALUES, parseSyncHealthQuery, toApiParams, toUrlParams, withFilter } from "./table-state";
 import { useLiveSyncHealth } from "./use-live-sync-health";
+import { formatDateTime } from "@/lib/datetime";
 
 const SELECT_CLASSES =
   "h-9 rounded-lg border border-border bg-input px-2.5 text-sm text-foreground focus:outline-none focus-visible:ring-2 focus-visible:ring-ring";
@@ -41,7 +42,7 @@ function UpdatedAgo({ generatedAt }: Readonly<{ generatedAt: string }>) {
 }
 
 function LastContactCell({ row }: Readonly<{ row: SyncHealthRow }>) {
-  const absolute = row.lastContactAt ? new Date(row.lastContactAt).toLocaleString() : null;
+  const absolute = row.lastContactAt ? formatDateTime(row.lastContactAt) : null;
   const relative = row.lastContactAt ? formatLag(row.lagSeconds) : "Never contacted";
 
   if (row.severity !== "silent") {

@@ -10,6 +10,7 @@ import { usePosLoad } from "../../use-pos-load";
 import { TENDER_METHOD_LABEL } from "../../orders/[orderId]/settle/bill-state";
 import { formatMinor } from "../shift/shift-state";
 import { LoadErrorPanel, Skeleton } from "../status/data-states";
+import { DATE_LOCALE } from "@/lib/datetime";
 
 const METHOD_LABEL: Record<string, string> = { ...TENDER_METHOD_LABEL, external: "External" };
 const TH = "font-label px-3 text-left text-xs font-semibold uppercase tracking-wider text-muted-foreground";
@@ -19,7 +20,7 @@ export function methodLabel(method: string): string {
 }
 
 function formatTime(iso: string): string {
-  return new Date(iso).toLocaleTimeString(undefined, { hour: "2-digit", minute: "2-digit" });
+  return new Date(iso).toLocaleTimeString(DATE_LOCALE, { hour: "2-digit", minute: "2-digit" });
 }
 
 function billLabel(payment: PaymentHistoryEntry): string {

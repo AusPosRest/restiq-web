@@ -4,6 +4,7 @@ import { redirect } from "next/navigation";
 import { OPS_SESSION_COOKIE } from "@/lib/ops-session";
 import { AutoRefresh } from "./auto-refresh";
 import { linkify, type InboxMessage, type InboxResult } from "./inbox-state";
+import { formatDateTime } from "@/lib/datetime";
 
 export const metadata: Metadata = { title: "Mail inbox" };
 export const dynamic = "force-dynamic";
@@ -85,7 +86,7 @@ export default async function InboxPage({ searchParams }: { searchParams: Promis
                     <span className="font-medium">{message.subject}</span>
                     <span className="text-sm text-muted-foreground">to {message.to}</span>
                     <time className="ml-auto text-xs text-muted-foreground" dateTime={message.sentAt}>
-                      {new Date(message.sentAt).toLocaleString()}
+                      {formatDateTime(message.sentAt)}
                     </time>
                   </summary>
                   <p className="whitespace-pre-wrap break-words border-t border-border px-4 py-3 text-sm">

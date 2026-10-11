@@ -4,11 +4,12 @@
 // Oct 24, 2023"). A device-local clock, not backend telemetry - there is
 // nothing to fetch here since no session exists yet at the login screen.
 import { useEffect, useState } from "react";
+import { DATE_LOCALE } from "@/lib/datetime";
 
 export function formatClock(now: Date): { time: string; date: string } {
   return {
-    time: now.toLocaleTimeString(undefined, { hour: "2-digit", minute: "2-digit" }),
-    date: now.toLocaleDateString(undefined, { weekday: "long", month: "short", day: "numeric", year: "numeric" }),
+    time: now.toLocaleTimeString(DATE_LOCALE, { hour: "2-digit", minute: "2-digit" }),
+    date: now.toLocaleDateString(DATE_LOCALE, { weekday: "long", month: "short", day: "numeric", year: "numeric" }),
   };
 }
 

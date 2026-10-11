@@ -17,6 +17,7 @@ import { LogMovementDialog } from "./log-movement-dialog";
 import { OpenShiftForm } from "./open-shift-form";
 import { formatMinor } from "./shift-state";
 import { usePosCurrency } from "./use-pos-currency";
+import { DATE_LOCALE } from "@/lib/datetime";
 
 // The tenant's currency (PE-10) - ShiftView carries none, see use-pos-currency.ts.
 
@@ -110,7 +111,7 @@ export function ShiftScreen({ outletId }: Readonly<{ outletId: string }>) {
           <div className="flex flex-wrap items-center gap-6 rounded-lg border border-border/40 bg-card px-5 py-4">
             <div>
               <p className="text-xs text-muted-foreground">Opened</p>
-              <p className="font-semibold">{new Date(shift.openedAt).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })}</p>
+              <p className="font-semibold">{new Date(shift.openedAt).toLocaleTimeString(DATE_LOCALE, { hour: "2-digit", minute: "2-digit" })}</p>
             </div>
             <div>
               <p className="text-xs text-muted-foreground">Starting float</p>
