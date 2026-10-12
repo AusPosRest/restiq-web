@@ -10,12 +10,13 @@ import {
 
 describe("formatMinor", () => {
   it("renders rupees with paise, not rounded to whole rupees", () => {
-    expect(formatMinor(184550)).toBe("₹1845.50");
+    expect(formatMinor(184550)).toBe("₹1,845.50");
     expect(formatMinor(0)).toBe("₹0.00");
   });
 
-  it("falls back to the currency code for an unmapped currency", () => {
-    expect(formatMinor(500, "AUD")).toBe("AUD 5.00");
+  it("shows Australian dollars as A$ (PE-10), and falls back to the code for an unmapped currency", () => {
+    expect(formatMinor(500, "AUD")).toBe("A$5.00");
+    expect(formatMinor(500, "NZD")).toBe("NZD 5.00");
   });
 });
 

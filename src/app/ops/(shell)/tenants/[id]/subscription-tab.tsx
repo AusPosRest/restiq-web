@@ -14,16 +14,17 @@ import { LoadErrorPanel, Skeleton } from "../../data-states";
 import { StatusBadge } from "../../status-badge";
 import { useToast } from "../../toast";
 import { useOpsLoad } from "../../use-ops-load";
+import { DATE_LOCALE } from "@/lib/datetime";
 
 function formatDate(iso: string): string {
-  return new Date(iso).toLocaleDateString(undefined, { day: "2-digit", month: "short", year: "numeric" });
+  return new Date(iso).toLocaleDateString(DATE_LOCALE, { day: "2-digit", month: "short", year: "numeric" });
 }
 
 function formatAmount(amountMinor: string): string {
   return (Number(amountMinor) / 100).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 });
 }
 
-export function SubscriptionTab({ tenantId }: Readonly<{ tenantId: string }>) {
+export function SubscriptionTab({ tenantId, tenantStatus }: Readonly<{ tenantId: string; tenantStatus?: string }>) {
   const toast = useToast();
   const { loading, failed, data, retry } = useOpsLoad<SubscriptionView>(`tenants/${tenantId}/subscription`);
   const invoices = useOpsLoad<{ invoices: InvoiceView[] }>(`tenants/${tenantId}/subscription/invoices`);
@@ -76,6 +77,11 @@ export function SubscriptionTab({ tenantId }: Readonly<{ tenantId: string }>) {
                 {sub.plan} · {sub.billingPeriod}
               </span>
             </div>
+            {tenantStatus === "provisioning" && (
+              <p className="mt-2 text-xs text-muted-foreground" data-testid="subscription-not-live">
+                The restaurant isn&apos;t live yet. It goes live on its first sale or when the owner presses Go live.
+              </p>
+            )}
           </div>
           {sub.status === "suspended" ? (
             <button

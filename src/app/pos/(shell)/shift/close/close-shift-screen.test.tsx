@@ -149,13 +149,13 @@ describe("CloseShiftScreen - blind count", () => {
     for (const digit of ["1", "8", "4", "5", "0", "0", "0"]) {
       await userEvent.click(screen.getByTestId(`blind-count-digit-${digit}`));
     }
-    expect(screen.getByTestId("blind-count-display").textContent).toBe("₹18450.00");
+    expect(screen.getByTestId("blind-count-display").textContent).toBe("₹18,450.00");
 
     await userEvent.click(screen.getByTestId("blind-count-submit"));
 
     expect(await screen.findByTestId("close-shift-result")).toBeTruthy();
-    expect(screen.getByTestId("result-counted").textContent).toBe("₹18450.00");
-    expect(screen.getByTestId("result-expected").textContent).toBe("₹18600.00");
+    expect(screen.getByTestId("result-counted").textContent).toBe("₹18,450.00");
+    expect(screen.getByTestId("result-expected").textContent).toBe("₹18,600.00");
     expect(screen.getByTestId("result-over-short").textContent).toBe("-₹150.00");
 
     // The populated expected value only ever appeared in the close call's own response.

@@ -177,6 +177,26 @@ describe("FloorPlan", () => {
     );
   });
 
+  it("settles a table nudged onto its neighbour beside it instead of saving an overlap (issue #258)", async () => {
+    const t2 = { id: "t2", floorId: "floor-1", label: "T2", x: 80, y: 40, width: 40, height: 40, shape: "square", seatCapacity: 4 };
+    const fetchMock = stubFetch({ floors: [{ ...DEFAULT_FLOORS[0], tables: [...DEFAULT_FLOORS[0].tables, t2] }] });
+    renderFloorPlan();
+    const shape = await screen.findByTestId("table-shape-t1");
+
+    // T1 (40..80) shares an edge with T2 (80..120); one step right would overlap it,
+    // so it settles one grid step clear on T2's nearest free side.
+    shape.focus();
+    await userEvent.keyboard("{ArrowRight}");
+
+    await waitFor(() =>
+      expect(fetchMock).toHaveBeenCalledWith(
+        expect.stringContaining("/floor-plan/tables/t1"),
+        expect.objectContaining({ method: "PATCH", body: JSON.stringify({ x: 32, y: 40 }) }),
+      ),
+    );
+    expect(screen.queryByTestId("toast-error")).toBeNull();
+  });
+
   it("snaps a moved table back and toasts an error when the backend rejects it as an overlap", async () => {
     stubFetch({ patchStatus: 409 });
     renderFloorPlan();
@@ -188,6 +208,24 @@ describe("FloorPlan", () => {
     await screen.findByTestId("toast-error");
     expect(screen.getByTestId("toast-error").textContent).toContain("overlaps another table");
     await waitFor(() => expect(shape.dataset.x).toBe("40"));
+  });
+
+  it("zooms the canvas in and out from its zoom controls, within limits", async () => {
+    stubFetch();
+    renderFloorPlan();
+    await screen.findByTestId("table-shape-t1");
+    const reset = screen.getByTestId("floor-plan-zoom-reset");
+    expect(reset.textContent).toBe("100%");
+
+    await userEvent.click(screen.getByTestId("floor-plan-zoom-in"));
+    expect(reset.textContent).toBe("125%");
+
+    for (let i = 0; i < 10; i += 1) fireEvent.click(screen.getByTestId("floor-plan-zoom-out"));
+    expect(reset.textContent).toBe("25%");
+    expect(screen.getByTestId("floor-plan-zoom-out")).toHaveProperty("disabled", true);
+
+    await userEvent.click(reset);
+    expect(reset.textContent).toBe("100%");
   });
 
   describe("zero floors", () => {
@@ -575,32 +613,29 @@ describe("FloorPlan", () => {
       printSpy.mockRestore();
     });
 
-    it("downloads a ZIP with the HTML sheet and one PNG per table from the toolbar's Download QR sheet button", async () => {
+    // PE-20 / CU-8: the sheet is one printable PDF via the browser's own "Save as PDF", not a ZIP of PNGs.
+    it("offers one print-or-PDF button, names the PDF after the outlet, and lays the cards out on A4", async () => {
       stubFetch({ floors: TWO_TABLE_FLOORS });
-      const createObjectURL = vi.fn((blob: Blob) => (blob ? "blob:mock-url" : ""));
-      const revokeObjectURL = vi.fn();
-      vi.stubGlobal("URL", { ...URL, createObjectURL, revokeObjectURL });
-      const click = vi.spyOn(HTMLAnchorElement.prototype, "click").mockImplementation(() => {});
+      document.title = "RESTIQ Admin";
+      let titleWhilePrinting = "";
+      const printSpy = vi.spyOn(window, "print").mockImplementation(() => {
+        titleWhilePrinting = document.title;
+      });
       renderFloorPlan();
       await screen.findByTestId("table-shape-t1");
 
-      await userEvent.click(screen.getByTestId("floor-plan-download-qr-sheet-button"));
+      expect(screen.queryByTestId("floor-plan-download-qr-sheet-button")).toBeNull();
+      const button = screen.getByTestId("floor-plan-print-qr-sheet-button");
+      expect(button.textContent).toContain("Print or save as PDF");
+      await userEvent.click(button);
 
-      await waitFor(() => expect(click).toHaveBeenCalled());
-      const anchor = click.mock.instances[0] as HTMLAnchorElement;
-      expect(anchor.download).toBe("indiranagar-qr-codes.zip");
-      expect(revokeObjectURL).toHaveBeenCalledWith("blob:mock-url");
+      await waitFor(() => expect(printSpy).toHaveBeenCalled());
+      expect(titleWhilePrinting).toBe("Indiranagar - QR codes");
+      expect(screen.getByTestId("qr-print-sheet").innerHTML).toContain("@page{size:A4");
+      window.dispatchEvent(new Event("afterprint"));
+      expect(document.title).toBe("RESTIQ Admin");
 
-      const zipBlob = createObjectURL.mock.calls[0][0] as Blob;
-      const { default: JSZip } = await import("jszip");
-      const zip = await JSZip.loadAsync(await zipBlob.arrayBuffer());
-      expect(Object.keys(zip.files).sort()).toEqual(["ground-floor-t1-qr.png", "qr-sheet.html", "terrace-t2-qr.png"]);
-      const html = await zip.file("qr-sheet.html")?.async("string");
-      expect(html).toContain(`${window.location.origin}/qr/t/outlet-1/t1`);
-      expect(html).toContain(`${window.location.origin}/qr/t/outlet-1/t2`);
-
-      click.mockRestore();
-      vi.unstubAllGlobals();
+      printSpy.mockRestore();
     });
   });
 

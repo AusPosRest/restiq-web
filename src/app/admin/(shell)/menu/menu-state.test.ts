@@ -1,9 +1,9 @@
 import { describe, expect, it } from "vitest";
 import {
   ALL_CATEGORY,
-  combosForItem,
   formatEffectiveDate,
   formatPriceMinor,
+  unsellableNote,
   ItemView,
   majorStringToPriceMinor,
   parseMenuQuery,
@@ -20,6 +20,8 @@ function item(overrides: Partial<ItemView> = {}): ItemView {
     shortName: "Paneer Tikka",
     categoryId: "tandoor",
     available: true,
+    priceMinor: null,
+    currency: null,
     variants: [],
     modifierGroups: [],
     allergens: [],
@@ -34,6 +36,23 @@ describe("formatPriceMinor", () => {
 
   it("falls back to the currency code for an unmapped currency", () => {
     expect(formatPriceMinor(500, "SGD")).toBe("SGD 5");
+  });
+
+  it("shows paise instead of rounding them away (PE-12)", () => {
+    expect(formatPriceMinor(28950, "INR")).toBe("₹289.50");
+  });
+});
+
+describe("unsellableNote (CU-23)", () => {
+  const v = (name: string, priceMinor: number | null) => ({ id: name, name, sortOrder: 0, priceMinor });
+  it("is null for a priced item and for an item whose every variant is priced", () => {
+    expect(unsellableNote({ priceMinor: 100, variants: [] })).toBeNull();
+    expect(unsellableNote({ priceMinor: null, variants: [v("Half", 100)] })).toBeNull();
+  });
+  it("explains an unpriced item, an item with no priced variant, and the unpriced variants", () => {
+    expect(unsellableNote({ priceMinor: null, variants: [] })).toBe("No price set, so it isn't on the till or QR menu.");
+    expect(unsellableNote({ priceMinor: 100, variants: [v("Half", null)] })).toBe("No portion has a price, so it isn't on the till or QR menu.");
+    expect(unsellableNote({ priceMinor: null, variants: [v("Half", null), v("Full", 100)] })).toBe("Half has no price, so it isn't offered.");
   });
 });
 
@@ -152,15 +171,5 @@ describe("validateModifierGroup", () => {
       ],
     };
     expect(validateModifierGroup(multi)).toEqual({});
-  });
-});
-
-describe("combosForItem", () => {
-  it("returns only combos whose components include the item", () => {
-    const combos = [
-      { id: "c1", name: "Thali", categoryId: null, priceMinor: 1, currency: "INR", components: [{ itemId: "i1", quantity: 1 }] },
-      { id: "c2", name: "Other", categoryId: null, priceMinor: 1, currency: "INR", components: [{ itemId: "i2", quantity: 1 }] },
-    ];
-    expect(combosForItem(combos, "i1").map((c) => c.id)).toEqual(["c1"]);
   });
 });

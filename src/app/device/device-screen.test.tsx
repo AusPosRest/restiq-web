@@ -3,6 +3,7 @@ import userEvent from "@testing-library/user-event";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { DeviceScreen } from "./device-screen";
 import { readStoredDevice, type DeviceView } from "./device-state";
+import { getDeviceSecret } from "@/lib/device-secret";
 
 const push = vi.fn();
 vi.mock("next/navigation", () => ({
@@ -33,6 +34,7 @@ describe("DeviceScreen", () => {
   beforeEach(() => {
     push.mockReset();
     window.sessionStorage.clear();
+    window.localStorage.clear();
     vi.unstubAllGlobals();
   });
   afterEach(cleanup);
@@ -69,7 +71,7 @@ describe("DeviceScreen", () => {
     expect(screen.getByTestId("device-card-label").textContent).toBe("Front Counter 1");
     expect(screen.getByTestId("device-card-type").textContent).toBe("POS terminal");
     expect(screen.getByTestId("device-card-status").textContent).toBe("Enrolled");
-    expect(readStoredDevice()).toEqual(POS_DEVICE);
+    expect(readStoredDevice()).toEqual({ ...POS_DEVICE, tenantName: null, outletName: null });
 
     const [url, init] = fetchMock.mock.calls[0] as [string, RequestInit];
     expect(url).toBe("/device/api/enroll");
@@ -77,6 +79,18 @@ describe("DeviceScreen", () => {
     expect(body.code).toBe("ABC-234");
     expect(body.label).toBe("Front Counter 1");
     expect(String(body.hardwareKeyFingerprint)).toMatch(/^web-/);
+  });
+
+  it("keeps the device secret from the enrolment response for the PIN pad (restiq-backend#209)", async () => {
+    vi.stubGlobal("fetch", vi.fn().mockResolvedValue(jsonResponse(201, { device: POS_DEVICE, deviceSecret: "dvs_abc" })));
+    render(<DeviceScreen />);
+    await screen.findByTestId("device-enrol-form");
+    await typeCode("ABC234");
+    await userEvent.click(screen.getByTestId("device-enrol-submit"));
+    expect(await screen.findByTestId("device-card")).toBeTruthy();
+    expect(getDeviceSecret(POS_DEVICE.id)).toBe("dvs_abc");
+    // The secret is not part of the stored device card.
+    expect(JSON.stringify(readStoredDevice())).not.toContain("dvs_abc");
   });
 
   it.each([
@@ -141,19 +155,29 @@ describe("DeviceScreen", () => {
     render(<DeviceScreen />);
 
     await userEvent.click(await screen.findByTestId("device-continue"));
-    expect(push).toHaveBeenCalledWith("/pos/login?device=d1&tenant=t1");
+    expect(push).toHaveBeenCalledWith("/pos/login?device=d1&tenant=t1&outlet=o1");
   });
 
-  it("routes Continue by device type - kds to /kds", async () => {
+  it("names the outlet and says when a newly opened code wasn't used (walkthrough fix)", async () => {
+    window.sessionStorage.setItem("device:enrolled", JSON.stringify({ ...POS_DEVICE, outletName: "Binflow Indiranagar" }));
+    window.history.replaceState({}, "", "/device?code=ABC234");
+    render(<DeviceScreen />);
+
+    expect((await screen.findByTestId("device-card-outlet")).textContent).toBe("Binflow Indiranagar");
+    expect(screen.getByTestId("device-code-ignored").textContent).toContain("code ABC-234 wasn't used");
+    window.history.replaceState({}, "", "/");
+  });
+
+  it("routes Continue by device type - kds through the PIN pad to /kds", async () => {
     window.sessionStorage.setItem("device:enrolled", JSON.stringify({ ...POS_DEVICE, type: "kds" }));
     render(<DeviceScreen />);
 
     await userEvent.click(await screen.findByTestId("device-continue"));
-    expect(push).toHaveBeenCalledWith("/kds");
+    expect(push).toHaveBeenCalledWith(expect.stringMatching(/^\/pos\/login\?device=d1&tenant=t1.*&next=%2Fkds$/));
   });
 
-  it("shows a plain no-web-surface line for a kiosk device instead of a Continue button", async () => {
-    window.sessionStorage.setItem("device:enrolled", JSON.stringify({ ...POS_DEVICE, type: "kiosk" }));
+  it("shows a plain no-web-surface line for a cds device instead of a Continue button", async () => {
+    window.sessionStorage.setItem("device:enrolled", JSON.stringify({ ...POS_DEVICE, type: "cds" }));
     render(<DeviceScreen />);
 
     expect(await screen.findByTestId("device-continue-unsupported")).toBeTruthy();

@@ -17,6 +17,8 @@ function item(overrides: Partial<ItemView> = {}): ItemView {
     shortName: "Paneer Tikka",
     categoryId: "tandoor",
     available: true,
+    priceMinor: 18000,
+    currency: "INR",
     variants: [],
     modifierGroups: [],
     allergens: [],
@@ -30,9 +32,11 @@ const CATEGORIES = [
   { id: "mains", name: "Mains", sortOrder: 1, itemCount: 1 },
 ];
 
-function stubFetch(overrides: { items?: unknown; fail?: boolean } = {}) {
+function stubFetch(overrides: { items?: unknown; fail?: boolean; route?: (url: string) => Response | undefined } = {}) {
   const fetchMock = vi.fn((input: RequestInfo | URL) => {
     const url = String(input);
+    const routed = overrides.route?.(url);
+    if (routed) return Promise.resolve(routed);
     if (overrides.fail) return Promise.resolve(jsonResponse({ error: { code: "error", message: "nope" } }, 500));
     if (url.includes("/admin/api/outlets")) return Promise.resolve(jsonResponse([]));
     if (url.includes("/admin/api/menu/items") && url.includes("price?")) {
@@ -72,6 +76,38 @@ describe("MenuManagement list", () => {
     await screen.findByTestId("menu-table");
     expect(screen.getByTestId("menu-item-row-1")).toBeTruthy();
     expect(screen.getByTestId("menu-item-row-2")).toBeTruthy();
+  });
+
+  it("shows prices from the item list itself, a range for portions, and flags what the till can't sell (SE-20, CU-23, PE-12)", async () => {
+    const fetchMock = stubFetch({
+      items: [
+        item({ id: "1", priceMinor: 28950 }),
+        item({
+          id: "2",
+          name: "Biryani",
+          priceMinor: null,
+          variants: [
+            { id: "h", name: "Half", sortOrder: 0, priceMinor: 16900 },
+            { id: "f", name: "Full", sortOrder: 1, priceMinor: 28950 },
+          ],
+        }),
+        item({ id: "3", name: "Garden Salad", priceMinor: null, variants: [{ id: "x", name: "Half", sortOrder: 0, priceMinor: null }] }),
+      ],
+    });
+    renderMenu();
+    await screen.findByTestId("menu-table");
+    expect(screen.getByTestId("menu-item-row-1-price").textContent).toBe("₹289.50");
+    expect(screen.getByTestId("menu-item-row-2-price").textContent).toBe("₹169 – ₹289.50");
+    expect(screen.queryByTestId("menu-item-row-2-unsellable")).toBeNull();
+    expect(screen.getByTestId("menu-item-row-3-unsellable").textContent).toContain("isn't on the till or QR menu");
+    expect(fetchMock.mock.calls.some(([url]) => String(url).includes("/price?"))).toBe(false);
+  });
+
+  it("hides Browse directory while the product directory is empty (PE-13)", async () => {
+    stubFetch({ route: (url) => (url.includes("/admin/api/menu/directory") ? jsonResponse({ products: [] }) : undefined) });
+    renderMenu();
+    await screen.findByTestId("menu-table");
+    await vi.waitFor(() => expect(screen.queryByTestId("menu-browse-directory")).toBeNull());
   });
 
   it("shows a retryable error panel when the menu fails to load", async () => {
@@ -116,6 +152,91 @@ describe("MenuManagement list", () => {
     expect(await screen.findByTestId("menu-empty")).toBeTruthy();
     expect(screen.getByTestId("menu-empty-import")).toBeTruthy();
     expect(screen.getByTestId("menu-empty-add")).toBeTruthy();
+
+    await userEvent.click(screen.getByTestId("menu-empty-import"));
+    expect(screen.getByTestId("menu-import-dialog")).toBeTruthy();
+  });
+
+  it("opens Import as a dialog over the menu instead of navigating away (issue #239)", async () => {
+    stubFetch();
+    renderMenu();
+    await screen.findByTestId("menu-table");
+
+    await userEvent.click(screen.getByTestId("menu-import-link"));
+    const dialog = screen.getByTestId("menu-import-dialog");
+    expect(within(dialog).getByTestId("menu-import-dropzone")).toBeTruthy();
+    expect(within(dialog).getByTestId("menu-import-template-link")).toBeTruthy();
+
+    await userEvent.click(screen.getByTestId("menu-import-dialog-close"));
+    expect(screen.queryByTestId("menu-import-dialog")).toBeNull();
+    expect(screen.getByTestId("menu-table")).toBeTruthy();
+  });
+
+  it("closes the dialog, reloads the list and confirms once an import commits (issue #239)", async () => {
+    let committed = false;
+    stubFetch({
+      route: (url) => {
+        if (url.includes("/admin/api/menu-import/upload")) {
+          return jsonResponse(
+            {
+              importId: "imp-1",
+              status: "draft",
+              sourceType: "csv",
+              fileName: "menu.csv",
+              items: [
+                {
+                  id: "d1",
+                  name: "Veg Samosa",
+                  shortName: "Samosa",
+                  category: "Tandoor",
+                  priceMinor: 4000,
+                  currency: "INR",
+                  confidence: { name: 1, shortName: 1, category: 1, price: 1, overall: 1 },
+                },
+              ],
+            },
+            201,
+          );
+        }
+        if (url.includes("/admin/api/menu-import/imp-1/commit")) {
+          committed = true;
+          return jsonResponse(
+            {
+              importId: "imp-1",
+              committedAt: "2026-09-16T00:00:00.000Z",
+              categories: [{ id: "tandoor", name: "Tandoor" }],
+              items: [{ id: "3", name: "Veg Samosa", shortName: "Samosa", categoryId: "tandoor", price: { id: "p3", priceMinor: 4000, currency: "INR" } }],
+            },
+            201,
+          );
+        }
+        if (committed && url.includes("/admin/api/menu/items") && !url.includes("price")) {
+          return jsonResponse([...ITEMS, item({ id: "3", name: "Veg Samosa", shortName: "Samosa", categoryId: "tandoor" })]);
+        }
+        return undefined;
+      },
+    });
+    renderMenu();
+    await screen.findByTestId("menu-table");
+
+    await userEvent.click(screen.getByTestId("menu-import-link"));
+    await userEvent.upload(screen.getByTestId("menu-import-file-input"), new File(["name,price\nSamosa,40"], "menu.csv", { type: "text/csv" }));
+    await userEvent.click(await screen.findByTestId("menu-import-row-d1-reviewed"));
+    await userEvent.click(screen.getByTestId("menu-import-commit"));
+
+    expect(await screen.findByTestId("menu-item-row-3")).toBeTruthy();
+    expect(screen.queryByTestId("menu-import-dialog")).toBeNull();
+    expect(screen.getByTestId("toast-success").textContent).toContain("1 item added to your menu");
+  });
+
+  it("scrolls the item list within a capped height, not the whole page (issue #266)", async () => {
+    stubFetch();
+    renderMenu();
+    await screen.findByTestId("menu-table");
+
+    const scroll = screen.getByTestId("menu-list-scroll");
+    expect(scroll.className).toContain("overflow-auto");
+    expect(scroll.className).toMatch(/md:max-h-/);
   });
 
   it("opens the item drawer when a row is clicked, and Add Item opens it in create mode", async () => {
@@ -129,5 +250,94 @@ describe("MenuManagement list", () => {
 
     await userEvent.click(screen.getByTestId("menu-add-item"));
     expect(within(screen.getByTestId("item-drawer")).getByText("Add Item")).toBeTruthy();
+  });
+
+  it("bumps the category's item count when a new item is created in it (issue #330)", async () => {
+    const created = item({ id: "3", name: "Chicken Tikka", shortName: "Chicken Tikka", categoryId: "tandoor" });
+    const fetchMock = vi.fn((input: RequestInfo | URL, init?: RequestInit) => {
+      const url = String(input);
+      const method = init?.method ?? "GET";
+      if (method === "POST" && url === "/admin/api/menu/items") return Promise.resolve(jsonResponse(created, 201));
+      if (method === "POST" && url === "/admin/api/menu/items/3/prices") return Promise.resolve(jsonResponse({ id: "p1" }, 201));
+      if (url.includes("/admin/api/outlets")) return Promise.resolve(jsonResponse([]));
+      if (url.includes("/admin/api/menu/items") && url.includes("price?")) {
+        return Promise.resolve(
+          jsonResponse({ itemId: "1", variantId: null, channel: "dine_in", outletId: null, priceMinor: 18000, currency: "INR", effectiveAt: "2026-08-01T00:00:00.000Z" }),
+        );
+      }
+      if (url.includes("/admin/api/menu/items")) return Promise.resolve(jsonResponse(ITEMS));
+      if (url.includes("/admin/api/menu/categories")) return Promise.resolve(jsonResponse(CATEGORIES));
+      if (url.includes("/admin/api/menu/modifier-groups")) return Promise.resolve(jsonResponse([]));
+      if (url.includes("/admin/api/menu/allergens")) return Promise.resolve(jsonResponse([]));
+      if (url.includes("/admin/api/menu/combos")) return Promise.resolve(jsonResponse([]));
+      return Promise.resolve(jsonResponse({ error: { code: "not_found", message: "unhandled" } }, 404));
+    });
+    vi.stubGlobal("fetch", fetchMock);
+    renderMenu();
+    await screen.findByTestId("menu-table");
+    expect(within(screen.getByTestId("menu-category-tandoor")).getByText("1")).toBeTruthy();
+
+    await userEvent.click(screen.getByTestId("menu-add-item"));
+    await userEvent.type(screen.getByTestId("item-name-input"), "Chicken Tikka");
+    await userEvent.type(screen.getByTestId("item-short-name-input"), "Chicken Tikka");
+    await userEvent.type(screen.getByTestId("item-create-price"), "200");
+    await userEvent.click(screen.getByTestId("item-save"));
+
+    expect(await screen.findByTestId("menu-item-row-3")).toBeTruthy();
+    expect(within(screen.getByTestId("menu-category-tandoor")).getByText("2")).toBeTruthy();
+  });
+
+  it("PE-10: an Australian tenant's prices are posted in AUD, never INR", async () => {
+    const created = item({ id: "3", name: "Flat White", shortName: "Flat White", categoryId: "tandoor" });
+    const posted: string[] = [];
+    const fetchMock = vi.fn((input: RequestInfo | URL, init?: RequestInit) => {
+      const url = String(input);
+      const method = init?.method ?? "GET";
+      if (method === "POST" && url === "/admin/api/menu/items") return Promise.resolve(jsonResponse(created, 201));
+      if (method === "POST" && url === "/admin/api/menu/items/3/prices") {
+        posted.push(String(init?.body));
+        return Promise.resolve(jsonResponse({ id: "p1" }, 201));
+      }
+      if (url.includes("/admin/api/outlets")) {
+        return Promise.resolve(jsonResponse([{ id: "o1", name: "Surry Hills", address: "1 Crown St", type: "dine_in", timezone: "Australia/Sydney", currency: "AUD" }]));
+      }
+      if (url.includes("/admin/api/menu/items") && url.includes("price?")) {
+        return Promise.resolve(jsonResponse({ itemId: "1", variantId: null, channel: "dine_in", outletId: null, priceMinor: 1650, currency: "AUD", effectiveAt: "2026-08-01T00:00:00.000Z" }));
+      }
+      if (url.includes("/admin/api/menu/items")) return Promise.resolve(jsonResponse(ITEMS));
+      if (url.includes("/admin/api/menu/categories")) return Promise.resolve(jsonResponse(CATEGORIES));
+      if (url.includes("/admin/api/menu/directory")) return Promise.resolve(jsonResponse({ products: [] }));
+      if (url.includes("/admin/api/menu/")) return Promise.resolve(jsonResponse([]));
+      return Promise.resolve(jsonResponse({ error: { code: "not_found", message: "unhandled" } }, 404));
+    });
+    vi.stubGlobal("fetch", fetchMock);
+    renderMenu();
+    await screen.findByTestId("menu-table");
+
+    await userEvent.click(screen.getByTestId("menu-add-item"));
+    await userEvent.type(screen.getByTestId("item-name-input"), "Flat White");
+    await userEvent.type(screen.getByTestId("item-short-name-input"), "Flat White");
+    await userEvent.type(screen.getByTestId("item-create-price"), "5");
+    await userEvent.click(screen.getByTestId("item-save"));
+
+    expect(await screen.findByTestId("menu-item-row-3")).toBeTruthy();
+    expect(JSON.parse(posted[0]) as { currency: string }).toMatchObject({ currency: "AUD" });
+  });
+
+  it("pages the item table 20 at a time and returns to page 1 when the search changes (issue #255)", async () => {
+    const many = Array.from({ length: 25 }, (_, i) => item({ id: `m${i + 1}`, name: `Dish ${String(i + 1).padStart(2, "0")}`, categoryId: "mains" }));
+    stubFetch({ items: many });
+    renderMenu();
+    expect(await screen.findByTestId("menu-item-row-m1")).toBeTruthy();
+    expect(screen.queryByTestId("menu-item-row-m21")).toBeNull();
+    expect(screen.getByTestId("menu-pagination-range").textContent).toBe("1–20 of 25");
+
+    await userEvent.click(screen.getByTestId("menu-pagination-next"));
+    expect(screen.getByTestId("menu-item-row-m21")).toBeTruthy();
+    expect(screen.queryByTestId("menu-item-row-m1")).toBeNull();
+
+    await userEvent.type(screen.getByTestId("menu-search"), "Dish 0");
+    expect(await screen.findByTestId("menu-item-row-m1")).toBeTruthy();
+    expect(screen.queryByTestId("menu-pagination")).toBeNull();
   });
 });

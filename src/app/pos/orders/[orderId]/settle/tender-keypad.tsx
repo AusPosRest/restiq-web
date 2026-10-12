@@ -24,11 +24,13 @@
 // terminal approves, the server-written tender arrives in `bill.tenders` and
 // is listed here as captured (`capturedTenders`) - never removable, since
 // the money already moved.
+import Link from "next/link";
 import { useState } from "react";
 import { X } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { AmountKeypad } from "../../../(shell)/shift/amount-keypad";
 import { appendDigit, digitsToMinor, formatMinor } from "../../../(shell)/shift/shift-state";
+import { cashRoundOffMinor } from "@/lib/money";
 import { TENDER_METHOD_LABEL, type BillTenderView, type PendingTender, type PostableTenderMethod } from "./bill-state";
 
 type KeypadMethod = PostableTenderMethod | "card_terminal";
@@ -39,14 +41,24 @@ export interface TenderKeypadProps {
   tenders: PendingTender[];
   /** Server-written electronic tenders already on the bill (isElectronicMethod) - shown as captured, never removable. */
   capturedTenders?: BillTenderView[];
-  onAddTender: (method: PostableTenderMethod, amountMinor: number) => void;
+  /** `reference` is set only for an external tender (issue #224). */
+  onAddTender: (method: PostableTenderMethod, amountMinor: number, reference?: string) => void;
   onRemoveTender: (index: number) => void;
   /** Present when the outlet can send an amount to the card terminal. */
   onSendToTerminal?: (amountMinor: number) => void;
   terminalBusy?: boolean;
+  /** Cash over the total, to hand back (issue #306). */
+  changeMinor?: number;
+  /** No shift is open at this outlet - cash can't be taken until one is (restiq-web#341). */
+  cashLocked?: boolean;
 }
 
-const METHODS: PostableTenderMethod[] = ["cash", "upi_manual"];
+// External (issue #224): paid outside RESTIQ - a standalone EFTPOS machine, a
+// delivery app, a bank transfer - recorded with that system's reference.
+const METHODS: PostableTenderMethod[] = ["cash", "upi_manual", "external"];
+
+// CU-11: one tap for the notes a customer usually hands over.
+const QUICK_NOTES_MINOR: Record<string, number[]> = { INR: [20000, 50000, 100000, 200000], AUD: [2000, 5000, 10000] };
 
 export function TenderKeypad({
   currency,
@@ -57,19 +69,32 @@ export function TenderKeypad({
   onRemoveTender,
   onSendToTerminal,
   terminalBusy = false,
+  changeMinor = 0,
+  cashLocked = false,
 }: Readonly<TenderKeypadProps>) {
   const [method, setMethod] = useState<KeypadMethod>("cash");
   const [digits, setDigits] = useState("");
-  const amountMinor = digitsToMinor(digits);
+  const [reference, setReference] = useState("");
+  // Whole rupees / dollars (issue #306): cashiers key the note value; "Exact remaining" covers paise/cents.
+  const amountMinor = digitsToMinor(digits) * 100;
   const isTerminal = method === "card_terminal";
-  const canAdd = amountMinor > 0 && (!isTerminal || (amountMinor <= remainingMinor && !terminalBusy));
+  const isExternal = method === "external";
+  const referenceReady = !isExternal || reference.trim() !== "";
+  const blocked = cashLocked && method === "cash";
+  const canAdd = !blocked && amountMinor > 0 && referenceReady && (!isTerminal || (amountMinor <= remainingMinor && !terminalBusy));
   const methods: KeypadMethod[] = onSendToTerminal ? [...METHODS, "card_terminal"] : METHODS;
+  // CU-11: rupee cash is collected to the nearest rupee; the bill keeps its exact total.
+  const isCash = method === "cash";
+  const roundOffMinor = isCash ? cashRoundOffMinor(remainingMinor, currency) : 0;
+  const fillMinor = remainingMinor + roundOffMinor;
+  const quickNotes = isCash ? (QUICK_NOTES_MINOR[currency] ?? []).filter((note) => note >= fillMinor) : [];
 
   function submit(minor: number) {
-    if (minor <= 0) return;
+    if (blocked || minor <= 0 || !referenceReady) return;
     if (isTerminal) onSendToTerminal?.(minor);
-    else onAddTender(method, minor);
+    else onAddTender(method, minor, isExternal ? reference.trim() : undefined);
     setDigits("");
+    setReference("");
   }
 
   return (
@@ -79,6 +104,18 @@ export function TenderKeypad({
         <p data-testid="tender-remaining" className="font-headline text-3xl font-bold tabular-nums text-foreground">
           {formatMinor(remainingMinor, currency)}
         </p>
+        {roundOffMinor !== 0 && remainingMinor > 0 && (
+          <p data-testid="tender-cash-rounded" className="mt-1 text-sm text-muted-foreground">
+            Cash to collect <span className="font-semibold tabular-nums text-foreground">{formatMinor(fillMinor, currency)}</span> · round off{" "}
+            {roundOffMinor < 0 ? "-" : "+"}
+            {formatMinor(Math.abs(roundOffMinor), currency)}
+          </p>
+        )}
+        {changeMinor > 0 && (
+          <p data-testid="tender-change-due" className="mt-1 text-lg font-semibold tabular-nums text-status-available">
+            Change due {formatMinor(changeMinor, currency)}
+          </p>
+        )}
       </div>
 
       {(capturedTenders.length > 0 || tenders.length > 0) && (
@@ -101,7 +138,10 @@ export function TenderKeypad({
               data-testid={`tender-captured-${index}`}
               className="flex items-center justify-between rounded-lg bg-muted px-3 py-2 text-sm"
             >
-              <span className="text-status-available">{TENDER_METHOD_LABEL[tender.method]}</span>
+              <span className="text-status-available">
+                {TENDER_METHOD_LABEL[tender.method]}
+                {tender.reference && <span className="text-muted-foreground"> #{tender.reference}</span>}
+              </span>
               <span className="flex items-center gap-2">
                 <span className="tabular-nums font-semibold text-foreground">{formatMinor(tender.amountMinor, currency)}</span>
                 <button
@@ -141,11 +181,26 @@ export function TenderKeypad({
         </div>
       </div>
 
+      {isExternal && (
+        <label className="flex flex-col gap-1.5">
+          <span className="font-label text-xs font-semibold uppercase tracking-wider text-muted-foreground">Reference / bill no.</span>
+          <input
+            data-testid="tender-external-reference"
+            value={reference}
+            maxLength={64}
+            placeholder="e.g. EFTPOS receipt 004512"
+            onChange={(event) => setReference(event.target.value)}
+            className="rounded-lg border border-border bg-transparent px-3 py-2.5 text-sm text-foreground outline-none focus-visible:ring-2 focus-visible:ring-ring"
+          />
+        </label>
+      )}
+
       <div className="flex min-h-fit flex-1 flex-col items-center justify-center gap-2">
         <AmountKeypad
           testId="tender-keypad-amount"
           digits={digits}
           currency={currency}
+          display={formatMinor(amountMinor, currency)}
           onDigit={(digit) => setDigits((current) => appendDigit(current, digit))}
           onBackspace={() => setDigits((current) => current.slice(0, -1))}
           onClear={() => setDigits("")}
@@ -155,12 +210,30 @@ export function TenderKeypad({
           variant="outline"
           size="sm"
           data-testid="tender-fill-remaining"
-          disabled={remainingMinor <= 0 || (isTerminal && terminalBusy)}
-          onClick={() => submit(remainingMinor)}
+          disabled={blocked || remainingMinor <= 0 || !referenceReady || (isTerminal && terminalBusy)}
+          onClick={() => submit(fillMinor)}
         >
-          {isTerminal ? "Send exact remaining" : "Exact remaining"} · {formatMinor(remainingMinor, currency)}
+          {isTerminal ? "Send exact remaining" : "Exact remaining"} · {formatMinor(fillMinor, currency)}
         </Button>
+        {quickNotes.length > 0 && remainingMinor > 0 && (
+          <div data-testid="tender-quick-notes" className="flex flex-wrap justify-center gap-2">
+            {quickNotes.map((note) => (
+              <Button key={note} type="button" variant="outline" size="sm" data-testid={`tender-quick-note-${note}`} onClick={() => submit(note)}>
+                {formatMinor(note, currency)}
+              </Button>
+            ))}
+          </div>
+        )}
       </div>
+
+      {blocked && (
+        <div role="alert" data-testid="tender-shift-required" className="rounded-lg border border-status-alert/40 px-3 py-2 text-sm text-status-alert">
+          Open your shift with the starting cash float before taking cash.{" "}
+          <Link href="/pos/shift" data-testid="tender-open-shift" className="font-semibold underline underline-offset-4">
+            Open shift
+          </Link>
+        </div>
+      )}
 
       <Button size="lg" data-testid={isTerminal ? "tender-send-terminal" : "tender-add"} disabled={!canAdd} onClick={() => submit(amountMinor)}>
         {isTerminal ? (terminalBusy ? "Sending…" : "Send to terminal") : `Add ${TENDER_METHOD_LABEL[method]} tender`}

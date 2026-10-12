@@ -5,32 +5,33 @@
 // create and edit. Field-by-field API shape verified against
 // restiq-backend's actual admin/v1/menu working tree (see menu-state.ts's
 // file header and api.ts's CAP-4 comment for what that means and its limits).
+import { Trash2 } from "lucide-react";
 import { Dialog } from "radix-ui";
 import { useEffect, useState } from "react";
 import { Button } from "@/components/ui/button";
 import {
   addVariant as apiAddVariant,
   createAllergen,
-  createCombo,
   createItemPrice,
   createMenuItem,
   createModifierGroup,
   CreateItemInput,
-  fetchCurrentPrice,
+  deleteMenuItem,
+  fetchFloorPlan,
+  NewVariantInput,
   removeVariant as apiRemoveVariant,
   replaceItemAllergens,
   replaceItemModifierGroups,
+  setItemStation,
   setOutletAvailability,
   clearOutletAvailability,
   updateMenuItem,
 } from "../../api";
-import { itemDraftFromView, ItemDraft, toggleId, validateItemDraft } from "./item-drawer-state";
+import type { StationView } from "../floor-plan/floor-plan-state";
+import { itemDraftFromView, ItemDraft, priceError as priceInputError, toggleId, validateItemDraft, withName } from "./item-drawer-state";
 import {
   AllergenView,
   CategoryView,
-  ComboView,
-  combosForItem,
-  CHANNEL_LABEL,
   formatEffectiveDate,
   formatPriceMinor,
   ItemView,
@@ -39,7 +40,9 @@ import {
   OutletView,
   PendingPriceInfo,
   pendingChangeFor,
+  unsellableNote,
   validateModifierGroup,
+  VegMarker,
 } from "./menu-state";
 import { PriceChangeDialog } from "./price-change-dialog";
 import type { PriceScheduleForm } from "./price-schedule-state";
@@ -49,6 +52,23 @@ const FIELD_CLASS =
   "w-full rounded-lg border border-border bg-input px-3 py-2 text-sm text-foreground placeholder:text-muted-foreground/60 focus:outline-none focus-visible:ring-2 focus-visible:ring-ring";
 const LABEL_CLASS = "font-label mb-1 block text-xs font-semibold uppercase tracking-wider text-muted-foreground";
 
+// Item photo upload (issue #218). No object storage: the photo is shrunk in
+// the browser to a small JPEG and stored inline as a data:image URL
+// (restiq-backend#142 caps it at PHOTO_MAX_CHARS).
+const PHOTO_MAX_PX = 480;
+const PHOTO_MAX_CHARS = 280_000;
+
+async function photoToDataUrl(file: File): Promise<string> {
+  const bitmap = await createImageBitmap(file);
+  const scale = Math.min(1, PHOTO_MAX_PX / Math.max(bitmap.width, bitmap.height));
+  const canvas = document.createElement("canvas");
+  canvas.width = Math.round(bitmap.width * scale);
+  canvas.height = Math.round(bitmap.height * scale);
+  canvas.getContext("2d")?.drawImage(bitmap, 0, 0, canvas.width, canvas.height);
+  bitmap.close();
+  return canvas.toDataURL("image/jpeg", 0.8);
+}
+
 interface PriceLine {
   variantId: string | null;
   label: string;
@@ -57,20 +77,44 @@ interface PriceLine {
 export interface ItemDrawerProps {
   open: boolean;
   item: ItemView | null;
-  allItems: ItemView[];
   categories: CategoryView[];
   modifierGroupCatalog: ModifierGroupView[];
   allergenCatalog: AllergenView[];
-  comboCatalog: ComboView[];
   outlets: OutletView[];
   selectedOutletId: string | null;
   defaultCategoryId: string;
   currency: string;
   onClose: () => void;
+  /** Called after the main Save and after every inline edit; the drawer stays open for inline edits. */
   onSaved: (item: ItemView) => void;
+  /** Issue #248: called after the item is deleted (archived on the backend). */
+  onDeleted?: (item: ItemView) => void;
   onModifierGroupCreated: (group: ModifierGroupView) => void;
   onAllergenCreated: (allergen: AllergenView) => void;
-  onComboCreated: (combo: ComboView) => void;
+}
+
+interface DraftVariant {
+  name: string;
+  price: string;
+}
+
+// The selected outlet's kitchen stations (PE-21), from the floor plan - the
+// item's route; the same-named station is used at every other outlet.
+function useStations(outletId: string | null): StationView[] {
+  const [stations, setStations] = useState<StationView[]>([]);
+  useEffect(() => {
+    if (!outletId) return;
+    let cancelled = false;
+    fetchFloorPlan(outletId)
+      .then((plan) => {
+        if (!cancelled) setStations(plan.stations);
+      })
+      .catch(() => undefined);
+    return () => {
+      cancelled = true;
+    };
+  }, [outletId]);
+  return stations;
 }
 
 export function ItemDrawer(props: Readonly<ItemDrawerProps>) {
@@ -79,66 +123,68 @@ export function ItemDrawer(props: Readonly<ItemDrawerProps>) {
 
 function DrawerBody({
   item,
-  allItems,
   categories,
   modifierGroupCatalog,
   allergenCatalog,
-  comboCatalog,
   outlets,
   selectedOutletId,
   defaultCategoryId,
   currency,
   onClose,
   onSaved,
+  onDeleted,
   onModifierGroupCreated,
   onAllergenCreated,
-  onComboCreated,
 }: Readonly<ItemDrawerProps>) {
   const isCreate = item === null;
   const [draft, setDraft] = useState<ItemDraft>(() => itemDraftFromView(item, defaultCategoryId || categories[0]?.id || ""));
+  const [createPriceMajor, setCreatePriceMajor] = useState("");
   const [liveItem, setLiveItem] = useState<ItemView | null>(item);
   const [selectedGroupIds, setSelectedGroupIds] = useState<string[]>(item?.modifierGroups.map((g) => g.id) ?? []);
   const [selectedAllergenIds, setSelectedAllergenIds] = useState<string[]>(item?.allergens.map((a) => a.id) ?? []);
   const [saving, setSaving] = useState(false);
   const [saveError, setSaveError] = useState<string | null>(null);
+  const [confirmingDelete, setConfirmingDelete] = useState(false);
+  const [deleting, setDeleting] = useState(false);
+  const [photoBusy, setPhotoBusy] = useState(false);
   const [priceLine, setPriceLine] = useState<PriceLine | null>(null);
   const [priceBusy, setPriceBusy] = useState(false);
   const [priceError, setPriceError] = useState<string | null>(null);
   const [pending, setPending] = useState<PendingPriceInfo[]>([]);
-  const [currentPrices, setCurrentPrices] = useState<Record<string, { dineInPriceMinor: number; deliveryPriceMinor: number }>>({});
+  // CU-1: the kitchen ticket name copies the name until edited; PE-13: errors wait until a field was left or Save was tried.
+  const [shortNameEdited, setShortNameEdited] = useState(!isCreate);
+  const [touched, setTouched] = useState<Record<string, boolean>>({});
+  const [attempted, setAttempted] = useState(false);
+  const show = (field: string) => attempted || touched[field] === true;
+  const touch = (field: string) => setTouched((t) => ({ ...t, [field]: true }));
+  // CU-1: portions (Half/Full) with their prices right on the Add form.
+  const [newVariants, setNewVariants] = useState<DraftVariant[]>([]);
+  const [stationId, setStationId] = useState(item?.stationId ?? "");
+  const stations = useStations(selectedOutletId ?? outlets[0]?.id ?? null);
 
   const errors = validateItemDraft(draft);
-  const canSave = Object.keys(errors).length === 0;
+  const createPriceError = isCreate && newVariants.length === 0 ? priceInputError(createPriceMajor) : undefined;
+  const variantErrors = newVariants.map((v) => (!v.name.trim() ? "Name this portion." : priceInputError(v.price)));
+  const createPriceMinor = isCreate && newVariants.length === 0 ? majorStringToPriceMinor(createPriceMajor) : null;
+  const canSave = Object.keys(errors).length === 0 && !createPriceError && variantErrors.every((e) => !e);
+  const priceOf = (variantId: string | null): number | null =>
+    variantId === null ? (liveItem?.priceMinor ?? null) : (liveItem?.variants.find((v) => v.id === variantId)?.priceMinor ?? null);
 
-  useEffect(() => {
+  async function handleDelete() {
     if (!liveItem) return;
-    let cancelled = false;
-    const lines: Array<string | null> = [null, ...liveItem.variants.map((v) => v.id)];
-    Promise.all(
-      lines.map(async (variantId) => {
-        const [dineIn, delivery] = await Promise.all([
-          fetchCurrentPrice(liveItem.id, { channel: "dine_in", variantId: variantId ?? undefined }),
-          fetchCurrentPrice(liveItem.id, { channel: "delivery", variantId: variantId ?? undefined }),
-        ]);
-        return [variantId, dineIn, delivery] as const;
-      }),
-    )
-      .then((results) => {
-        if (cancelled) return;
-        const map: Record<string, { dineInPriceMinor: number; deliveryPriceMinor: number }> = {};
-        for (const [variantId, dineIn, delivery] of results) {
-          map[variantId ?? "base"] = { dineInPriceMinor: dineIn?.priceMinor ?? 0, deliveryPriceMinor: delivery?.priceMinor ?? 0 };
-        }
-        setCurrentPrices(map);
-      })
-      .catch(() => undefined);
-    return () => {
-      cancelled = true;
-    };
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [liveItem?.id, liveItem?.variants.length]);
+    setDeleting(true);
+    setSaveError(null);
+    try {
+      await deleteMenuItem(liveItem.id);
+      onDeleted?.(liveItem);
+    } catch (error) {
+      setSaveError(error instanceof Error ? error.message : "That item couldn't be deleted. Try again.");
+      setDeleting(false);
+    }
+  }
 
   async function handleSave() {
+    setAttempted(true);
     if (!canSave) return;
     setSaving(true);
     setSaveError(null);
@@ -148,16 +194,41 @@ function DrawerBody({
           categoryId: draft.categoryId,
           name: draft.name,
           shortName: draft.shortName,
+          ...(draft.vegMarker ? { vegMarker: draft.vegMarker } : {}),
+          ...(stationId ? { stationId } : {}),
+          ...(newVariants.length > 0
+            ? { variants: newVariants.map((v) => ({ name: v.name.trim(), priceMinor: majorStringToPriceMinor(v.price) ?? 0, currency })) }
+            : {}),
           modifierGroupIds: selectedGroupIds,
           allergenIds: selectedAllergenIds,
         };
         const created = await createMenuItem(input);
-        onSaved(created);
+        if (createPriceMinor === null) {
+          onSaved(created);
+        } else {
+          try {
+            // Same client the price-change dialog uses (handlePriceSubmit below): no
+            // variantId (base price), no channel (every channel), effective now.
+            await createItemPrice(created.id, { priceMinor: createPriceMinor, currency, reason: "Initial price" });
+            onSaved({ ...created, priceMinor: createPriceMinor, currency });
+          } catch (error) {
+            setSaveError(error instanceof Error ? error.message : "The item saved, but its price didn't - set it from the drawer.");
+            onSaved(created);
+          }
+        }
       } else {
-        const updated = await updateMenuItem(item!.id, { name: draft.name, shortName: draft.shortName, categoryId: draft.categoryId });
+        const updated = await updateMenuItem(item!.id, {
+          name: draft.name,
+          shortName: draft.shortName,
+          categoryId: draft.categoryId,
+          vegMarker: draft.vegMarker || null,
+        });
         setLiveItem(updated);
         onSaved(updated);
       }
+      // Issue #333: only the main Save closes the drawer - inline edits (variants,
+      // photo, ...) also call onSaved to refresh the list but keep it open.
+      onClose();
     } catch (error) {
       setSaveError(error instanceof Error ? error.message : "That didn't save. Try again.");
     } finally {
@@ -165,14 +236,68 @@ function DrawerBody({
     }
   }
 
-  async function handleAddVariant(name: string) {
-    if (!liveItem || !name.trim()) return;
+  async function handlePhoto(file: File | undefined) {
+    if (!liveItem || !file) return;
+    setSaveError(null);
+    if (!file.type.startsWith("image/")) {
+      setSaveError("Choose an image file (JPEG, PNG or WebP).");
+      return;
+    }
+    setPhotoBusy(true);
     try {
-      const updated = await apiAddVariant(liveItem.id, name.trim());
+      const photoUrl = await photoToDataUrl(file);
+      if (photoUrl.length > PHOTO_MAX_CHARS) {
+        setSaveError("That photo is too large - try a smaller one.");
+        return;
+      }
+      const updated = await updateMenuItem(liveItem.id, { photoUrl });
       setLiveItem(updated);
       onSaved(updated);
     } catch (error) {
+      setSaveError(error instanceof Error ? error.message : "That photo didn't upload. Try another one.");
+    } finally {
+      setPhotoBusy(false);
+    }
+  }
+
+  async function handleRemovePhoto() {
+    if (!liveItem) return;
+    setPhotoBusy(true);
+    try {
+      const updated = await updateMenuItem(liveItem.id, { photoUrl: null });
+      setLiveItem(updated);
+      onSaved(updated);
+    } catch (error) {
+      setSaveError(error instanceof Error ? error.message : "That photo couldn't be removed. Try again.");
+    } finally {
+      setPhotoBusy(false);
+    }
+  }
+
+  async function handleAddVariant(input: NewVariantInput): Promise<boolean> {
+    if (!liveItem) return false;
+    try {
+      const updated = await apiAddVariant(liveItem.id, { ...input, currency });
+      setLiveItem(updated);
+      onSaved(updated);
+      return true;
+    } catch (error) {
       setSaveError(error instanceof Error ? error.message : "That variant didn't save. Try again.");
+      return false;
+    }
+  }
+
+  async function handleStation(next: string) {
+    const previous = stationId;
+    setStationId(next);
+    if (!liveItem) return;
+    try {
+      const updated = await setItemStation(liveItem.id, next || null);
+      setLiveItem(updated);
+      onSaved(updated);
+    } catch (error) {
+      setStationId(previous);
+      setSaveError(error instanceof Error ? error.message : "That kitchen station didn't save. Try again.");
     }
   }
 
@@ -222,33 +347,29 @@ function DrawerBody({
     const effectiveAt = priceScheduleEffectiveAt(form) ?? undefined;
     const reason = form.reason.trim();
     try {
-      for (const [channel, value] of [
-        ["dine_in", form.dineIn],
-        ["delivery", form.delivery],
-      ] as const) {
-        const priceMinor = majorStringToPriceMinor(value) ?? 0;
-        await createItemPrice(liveItem.id, {
-          variantId: priceLine.variantId ?? undefined,
-          channel,
-          priceMinor,
-          currency,
-          effectiveAt,
-          reason,
-        });
-        if (effectiveAt) {
-          setPending((current) => [
-            ...current.filter((p) => !(p.variantId === priceLine.variantId && p.channel === channel)),
-            { variantId: priceLine.variantId, channel, priceMinor, currency, effectiveAt },
-          ]);
-        } else {
-          setCurrentPrices((current) => ({
-            ...current,
-            [priceLine.variantId ?? "base"]: {
-              ...(current[priceLine.variantId ?? "base"] ?? { dineInPriceMinor: 0, deliveryPriceMinor: 0 }),
-              ...(channel === "dine_in" ? { dineInPriceMinor: priceMinor } : { deliveryPriceMinor: priceMinor }),
-            },
-          }));
-        }
+      const channel = "dine_in";
+      const priceMinor = majorStringToPriceMinor(form.dineIn) ?? 0;
+      // No channel: one price for dine-in, QR, takeaway and aggregator orders alike.
+      await createItemPrice(liveItem.id, {
+        variantId: priceLine.variantId ?? undefined,
+        priceMinor,
+        currency,
+        effectiveAt,
+        reason,
+      });
+      if (effectiveAt) {
+        setPending((current) => [
+          ...current.filter((p) => !(p.variantId === priceLine.variantId && p.channel === channel)),
+          { variantId: priceLine.variantId, channel, priceMinor, currency, effectiveAt },
+        ]);
+      } else {
+        const variantId = priceLine.variantId;
+        const updated: ItemView =
+          variantId === null
+            ? { ...liveItem, priceMinor, currency }
+            : { ...liveItem, variants: liveItem.variants.map((v) => (v.id === variantId ? { ...v, priceMinor } : v)) };
+        setLiveItem(updated);
+        onSaved(updated);
       }
       setPriceLine(null);
     } catch (error) {
@@ -266,7 +387,7 @@ function DrawerBody({
         <Dialog.Overlay className="fixed inset-0 z-30 bg-black/60" />
         <Dialog.Content
           data-testid="item-drawer"
-          className="admin-theme fixed inset-y-0 right-0 z-40 flex w-full max-w-lg flex-col overflow-y-auto border-l border-border/60 bg-card text-foreground shadow-2xl"
+          className="admin-theme fixed inset-y-0 right-0 z-40 flex w-full max-w-lg flex-col border-l border-border/60 bg-card text-foreground shadow-2xl"
         >
           <div className="flex items-center justify-between border-b border-border/40 px-6 py-4">
             <Dialog.Title className="font-headline text-lg font-semibold">{isCreate ? "Add Item" : "Edit Item"}</Dialog.Title>
@@ -282,7 +403,7 @@ function DrawerBody({
             </Dialog.Close>
           </div>
 
-          <div className="flex-1 space-y-6 px-6 py-5">
+          <div data-testid="item-drawer-body" className="scrollbar-visible min-h-0 flex-1 space-y-6 px-6 py-5">
             <div>
               <label htmlFor="item-name" className={LABEL_CLASS}>
                 Name *
@@ -291,10 +412,11 @@ function DrawerBody({
                 id="item-name"
                 data-testid="item-name-input"
                 value={draft.name}
-                onChange={(event) => setDraft((d) => ({ ...d, name: event.target.value }))}
+                onChange={(event) => setDraft((d) => withName(d, event.target.value, shortNameEdited))}
+                onBlur={() => touch("name")}
                 className={FIELD_CLASS}
               />
-              {errors.name && (
+              {errors.name && show("name") && (
                 <p data-testid="item-name-error" className="mt-1 text-xs text-status-error">
                   {errors.name}
                 </p>
@@ -309,10 +431,15 @@ function DrawerBody({
                 id="item-short-name"
                 data-testid="item-short-name-input"
                 value={draft.shortName}
-                onChange={(event) => setDraft((d) => ({ ...d, shortName: event.target.value }))}
+                onChange={(event) => {
+                  setShortNameEdited(true);
+                  setDraft((d) => ({ ...d, shortName: event.target.value }));
+                }}
+                onBlur={() => touch("shortName")}
                 className={FIELD_CLASS}
               />
-              {errors.shortName && (
+              <p className="mt-1 text-xs text-muted-foreground">Printed on kitchen tickets. Starts as the item name.</p>
+              {errors.shortName && show("shortName") && (
                 <p data-testid="item-short-name-error" className="mt-1 text-xs text-status-error">
                   {errors.shortName}
                 </p>
@@ -338,13 +465,183 @@ function DrawerBody({
               </select>
             </div>
 
+            <div className="grid grid-cols-2 gap-3">
+              <div>
+                <label htmlFor="item-veg-marker" className={LABEL_CLASS}>
+                  Veg / non-veg
+                </label>
+                <select
+                  id="item-veg-marker"
+                  data-testid="item-veg-marker-select"
+                  value={draft.vegMarker}
+                  onChange={(event) => setDraft((d) => ({ ...d, vegMarker: event.target.value as VegMarker | "" }))}
+                  className={FIELD_CLASS}
+                >
+                  <option value="">Not marked</option>
+                  <option value="veg">Veg</option>
+                  <option value="non_veg">Non-veg</option>
+                </select>
+              </div>
+              {stations.length > 0 && (
+                <div>
+                  <label htmlFor="item-station" className={LABEL_CLASS}>
+                    Kitchen station
+                  </label>
+                  <select
+                    id="item-station"
+                    data-testid="item-station-select"
+                    value={stationId}
+                    onChange={(event) => void handleStation(event.target.value)}
+                    className={FIELD_CLASS}
+                  >
+                    <option value="">{`${stations[0]?.name ?? "First station"} (default)`}</option>
+                    {stations.map((station) => (
+                      <option key={station.id} value={station.id}>
+                        {station.name}
+                      </option>
+                    ))}
+                  </select>
+                </div>
+              )}
+            </div>
+
+            {isCreate && newVariants.length === 0 && (
+              <div>
+                <label htmlFor="item-create-price" className={LABEL_CLASS}>
+                  Price ({currency}) *
+                </label>
+                <input
+                  id="item-create-price"
+                  data-testid="item-create-price"
+                  type="number"
+                  min="0"
+                  step="0.01"
+                  value={createPriceMajor}
+                  onChange={(event) => setCreatePriceMajor(event.target.value)}
+                  onBlur={() => touch("price")}
+                  className={FIELD_CLASS}
+                />
+                {createPriceError && show("price") && (
+                  <p data-testid="item-create-price-error" className="mt-1 text-xs text-status-error">
+                    {createPriceError}
+                  </p>
+                )}
+              </div>
+            )}
+
+            {isCreate && (
+              <div data-testid="item-create-variants">
+                <p className={LABEL_CLASS}>Portions (optional)</p>
+                <p className="text-xs text-muted-foreground">Sell it as Half / Full or Small / Large, each with its own price.</p>
+                <ul className="mt-2 space-y-2">
+                  {newVariants.map((variant, index) => (
+                    <li key={index} className="flex items-start gap-2">
+                      <div className="flex-1">
+                        <input
+                          aria-label={`Portion ${index + 1} name`}
+                          data-testid={`item-create-variant-${index}-name`}
+                          placeholder="e.g. Half"
+                          value={variant.name}
+                          onChange={(event) => setNewVariants((vs) => vs.map((v, i) => (i === index ? { ...v, name: event.target.value } : v)))}
+                          className={FIELD_CLASS}
+                        />
+                      </div>
+                      <div className="w-28">
+                        <input
+                          aria-label={`Portion ${index + 1} price (${currency})`}
+                          data-testid={`item-create-variant-${index}-price`}
+                          type="number"
+                          min="0"
+                          step="0.01"
+                          placeholder="Price"
+                          value={variant.price}
+                          onChange={(event) => setNewVariants((vs) => vs.map((v, i) => (i === index ? { ...v, price: event.target.value } : v)))}
+                          className={FIELD_CLASS}
+                        />
+                      </div>
+                      <button
+                        type="button"
+                        data-testid={`item-create-variant-${index}-remove`}
+                        aria-label={`Remove portion ${index + 1}`}
+                        onClick={() => setNewVariants((vs) => vs.filter((_, i) => i !== index))}
+                        className="rounded-md p-2 text-muted-foreground hover:text-status-error focus:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+                      >
+                        ✕
+                      </button>
+                      {attempted && variantErrors[index] && (
+                        <p data-testid={`item-create-variant-${index}-error`} className="sr-only" role="alert">
+                          {variantErrors[index]}
+                        </p>
+                      )}
+                    </li>
+                  ))}
+                </ul>
+                {attempted && variantErrors.some(Boolean) && (
+                  <p data-testid="item-create-variants-error" className="mt-1 text-xs text-status-error">
+                    Give every portion a name and a price.
+                  </p>
+                )}
+                <button
+                  type="button"
+                  data-testid="item-create-add-variant"
+                  onClick={() => setNewVariants((vs) => [...vs, { name: "", price: vs.length === 0 ? createPriceMajor : "" }])}
+                  className="mt-2 text-sm font-medium text-primary hover:underline"
+                >
+                  + Add portion
+                </button>
+              </div>
+            )}
+
+            {!isCreate && liveItem && (
+              <div data-testid="item-photo-section">
+                <p className={LABEL_CLASS}>Photo</p>
+                <div className="flex items-center gap-4">
+                  <div className="flex size-24 shrink-0 items-center justify-center overflow-hidden rounded-lg border border-border/60 bg-muted text-xs text-muted-foreground">
+                    {liveItem.photoUrl ? (
+                      // eslint-disable-next-line @next/next/no-img-element -- an https or data: URL, not something next/image's optimizer can handle
+                      <img data-testid="item-photo-preview" src={liveItem.photoUrl} alt={`${liveItem.name} photo`} className="size-full object-cover" />
+                    ) : (
+                      "No photo"
+                    )}
+                  </div>
+                  <div className="flex flex-col items-start gap-2">
+                    <label className="cursor-pointer rounded-md border border-border/60 px-3 py-1.5 text-sm font-medium hover:bg-accent focus-within:ring-2 focus-within:ring-ring">
+                      {photoBusy ? "Uploading…" : liveItem.photoUrl ? "Replace photo" : "Upload photo"}
+                      <input
+                        type="file"
+                        accept="image/jpeg,image/png,image/webp"
+                        data-testid="item-photo-input"
+                        disabled={photoBusy}
+                        className="sr-only"
+                        onChange={(event) => {
+                          void handlePhoto(event.target.files?.[0]);
+                          event.target.value = "";
+                        }}
+                      />
+                    </label>
+                    {liveItem.photoUrl && (
+                      <button
+                        type="button"
+                        data-testid="item-photo-remove"
+                        disabled={photoBusy}
+                        onClick={() => void handleRemovePhoto()}
+                        className="text-xs font-medium text-muted-foreground hover:text-status-error focus:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+                      >
+                        Remove photo
+                      </button>
+                    )}
+                    <p className="text-xs text-muted-foreground">Shown on the QR menu and the kiosk.</p>
+                  </div>
+                </div>
+              </div>
+            )}
+
             {!isCreate && liveItem && (
               <VariantsSection
                 item={liveItem}
                 currency={currency}
-                currentPrices={currentPrices}
                 pending={pending}
-                onAddVariant={(name) => void handleAddVariant(name)}
+                onAddVariant={handleAddVariant}
                 onRemoveVariant={(id) => void handleRemoveVariant(id)}
                 onOpenPriceChange={setPriceLine}
               />
@@ -368,16 +665,6 @@ function DrawerBody({
               onCreated={onAllergenCreated}
             />
 
-            {!isCreate && liveItem && (
-              <ComboSection
-                item={liveItem}
-                allItems={allItems}
-                currency={currency}
-                comboCatalog={comboCatalog}
-                onComboCreated={onComboCreated}
-              />
-            )}
-
             {!isCreate && liveItem && outlet && (
               <OutletAvailabilitySection itemId={liveItem.id} outlet={outlet} />
             )}
@@ -389,9 +676,31 @@ function DrawerBody({
                 {saveError}
               </p>
             )}
-            <div className="flex justify-end">
-              <Button data-testid="item-save" disabled={!canSave || saving} onClick={() => void handleSave()}>
-                {saving ? "Saving..." : "Save Changes"}
+            {confirmingDelete && liveItem && (
+              <div data-testid="item-delete-confirm" role="alert" className="mb-3 rounded-lg border border-status-error/40 p-3 text-sm">
+                <p>
+                  Delete <strong>{liveItem.name}</strong>? It disappears from the menu, POS, QR and kiosk. Past bills keep it.
+                </p>
+                <div className="mt-2 flex justify-end gap-2">
+                  <Button variant="secondary" size="sm" data-testid="item-delete-cancel" disabled={deleting} onClick={() => setConfirmingDelete(false)}>
+                    Cancel
+                  </Button>
+                  <Button size="sm" data-testid="item-delete-confirm-button" disabled={deleting} onClick={() => void handleDelete()}>
+                    {deleting ? "Deleting..." : "Delete item"}
+                  </Button>
+                </div>
+              </div>
+            )}
+            <div className="flex items-center justify-between gap-3">
+              {!isCreate && liveItem && !confirmingDelete ? (
+                <Button variant="secondary" data-testid="item-delete" className="text-status-error" onClick={() => setConfirmingDelete(true)}>
+                  <Trash2 aria-hidden="true" /> Delete
+                </Button>
+              ) : (
+                <span />
+              )}
+              <Button data-testid="item-save" disabled={saving || deleting} onClick={() => void handleSave()}>
+                {saving ? "Saving..." : isCreate ? "Add item" : "Save changes"}
               </Button>
             </div>
           </div>
@@ -403,7 +712,7 @@ function DrawerBody({
           open
           itemLabel={priceLine.label}
           currency={currency}
-          current={currentPrices[priceLine.variantId ?? "base"] ?? { dineInPriceMinor: 0, deliveryPriceMinor: 0 }}
+          current={priceOf(priceLine.variantId) ?? 0}
           busy={priceBusy}
           error={priceError}
           onCancel={() => {
@@ -420,7 +729,6 @@ function DrawerBody({
 function VariantsSection({
   item,
   currency,
-  currentPrices,
   pending,
   onAddVariant,
   onRemoveVariant,
@@ -428,29 +736,58 @@ function VariantsSection({
 }: Readonly<{
   item: ItemView;
   currency: string;
-  currentPrices: Record<string, { dineInPriceMinor: number; deliveryPriceMinor: number }>;
   pending: PendingPriceInfo[];
-  onAddVariant: (name: string) => void;
+  onAddVariant: (input: NewVariantInput) => Promise<boolean>;
   onRemoveVariant: (id: string) => void;
   onOpenPriceChange: (line: PriceLine) => void;
 }>) {
   const [newVariantName, setNewVariantName] = useState("");
+  const [newVariantPrice, setNewVariantPrice] = useState("");
+  const [basePortionName, setBasePortionName] = useState("Regular");
+  const [tried, setTried] = useState(false);
+  const [busy, setBusy] = useState(false);
+  const hasVariants = item.variants.length > 0;
+  // PE-15: an item's first variant keeps its current price on sale as a named portion.
+  const keepsBase = !hasVariants && item.priceMinor !== null;
+  const newPriceError = priceInputError(newVariantPrice);
+  const note = unsellableNote(item);
+
+  async function add() {
+    setTried(true);
+    if (!newVariantName.trim() || newPriceError) return;
+    setBusy(true);
+    const saved = await onAddVariant({
+      name: newVariantName.trim(),
+      priceMinor: majorStringToPriceMinor(newVariantPrice) ?? 0,
+      ...(keepsBase ? { basePortionName: basePortionName.trim() || "Regular" } : {}),
+    });
+    setBusy(false);
+    if (saved) {
+      setNewVariantName("");
+      setNewVariantPrice("");
+      setTried(false);
+    }
+  }
 
   return (
     <div data-testid="item-variants-section">
-      <p className={LABEL_CLASS}>Variants &amp; Pricing</p>
+      <p className={LABEL_CLASS}>{hasVariants ? "Portions & prices" : "Price"}</p>
+      {note && (
+        <p data-testid="item-unsellable-note" role="status" className="mb-2 text-xs text-status-warning">
+          {note}
+        </p>
+      )}
 
-      <PriceRow
-        label={item.variants.length === 0 ? "Base price" : undefined}
-        testId="item-base-price"
-        currency={currency}
-        current={currentPrices.base ?? { dineInPriceMinor: 0, deliveryPriceMinor: 0 }}
-        pending={{
-          dineIn: pendingChangeFor(pending, null, "dine_in"),
-          delivery: pendingChangeFor(pending, null, "delivery"),
-        }}
-        onChange={() => onOpenPriceChange({ variantId: null, label: item.name })}
-      />
+      {/* CU-1: once an item has portions, only their prices are used - the old base price is not shown. */}
+      {!hasVariants && (
+        <PriceRow
+          testId="item-base-price"
+          currency={currency}
+          current={item.priceMinor}
+          pending={pendingChangeFor(pending, null, "dine_in")}
+          onChange={() => onOpenPriceChange({ variantId: null, label: item.name })}
+        />
+      )}
 
       <ul className="mt-3 space-y-3">
         {item.variants.map((variant) => (
@@ -470,38 +807,59 @@ function VariantsSection({
             <PriceRow
               testId={`item-variant-${variant.id}-price`}
               currency={currency}
-              current={currentPrices[variant.id] ?? { dineInPriceMinor: 0, deliveryPriceMinor: 0 }}
-              pending={{
-                dineIn: pendingChangeFor(pending, variant.id, "dine_in"),
-                delivery: pendingChangeFor(pending, variant.id, "delivery"),
-              }}
+              current={variant.priceMinor}
+              pending={pendingChangeFor(pending, variant.id, "dine_in")}
               onChange={() => onOpenPriceChange({ variantId: variant.id, label: variant.name })}
             />
           </li>
         ))}
       </ul>
 
-      <div className="mt-3 flex items-center gap-2">
-        <input
-          data-testid="item-new-variant-name"
-          value={newVariantName}
-          placeholder="e.g. Half, Full"
-          onChange={(event) => setNewVariantName(event.target.value)}
-          className={`${FIELD_CLASS} flex-1`}
-        />
-        <Button
-          type="button"
-          variant="secondary"
-          size="sm"
-          data-testid="item-add-variant"
-          disabled={!newVariantName.trim()}
-          onClick={() => {
-            onAddVariant(newVariantName);
-            setNewVariantName("");
-          }}
-        >
-          + Add Variant
-        </Button>
+      <div className="mt-3 rounded-lg border border-dashed border-border/60 p-3">
+        <p className="text-xs font-medium text-muted-foreground">Add a portion (e.g. Half, Full)</p>
+        {keepsBase && (
+          <div className="mt-2">
+            <label htmlFor="item-base-portion-name" className="text-xs text-muted-foreground">
+              Name for the current {formatPriceMinor(item.priceMinor ?? 0, currency)} portion
+            </label>
+            <input
+              id="item-base-portion-name"
+              data-testid="item-base-portion-name"
+              value={basePortionName}
+              onChange={(event) => setBasePortionName(event.target.value)}
+              className={FIELD_CLASS}
+            />
+          </div>
+        )}
+        <div className="mt-2 flex items-start gap-2">
+          <input
+            aria-label="New portion name"
+            data-testid="item-new-variant-name"
+            value={newVariantName}
+            placeholder="e.g. Half"
+            onChange={(event) => setNewVariantName(event.target.value)}
+            className={`${FIELD_CLASS} flex-1`}
+          />
+          <input
+            aria-label={`New portion price (${currency})`}
+            data-testid="item-new-variant-price"
+            type="number"
+            min="0"
+            step="0.01"
+            placeholder="Price"
+            value={newVariantPrice}
+            onChange={(event) => setNewVariantPrice(event.target.value)}
+            className={`${FIELD_CLASS} w-28`}
+          />
+          <Button type="button" variant="secondary" size="sm" data-testid="item-add-variant" disabled={!newVariantName.trim() || busy} onClick={() => void add()}>
+            + Add
+          </Button>
+        </div>
+        {tried && newPriceError && (
+          <p data-testid="item-new-variant-price-error" className="mt-1 text-xs text-status-error">
+            {newPriceError}
+          </p>
+        )}
       </div>
     </div>
   );
@@ -518,26 +876,24 @@ function PriceRow({
   label?: string;
   testId: string;
   currency: string;
-  current: { dineInPriceMinor: number; deliveryPriceMinor: number };
-  pending: { dineIn: PendingPriceInfo | null; delivery: PendingPriceInfo | null };
+  current: number | null;
+  pending: PendingPriceInfo | null;
   onChange: () => void;
 }>) {
   return (
     <div className="mt-2">
       {label && <p className="text-xs text-muted-foreground">{label}</p>}
       <div className="flex items-center justify-between gap-2">
-        <p data-testid={`${testId}-current`} className="text-sm tabular-nums">
-          {CHANNEL_LABEL.dine_in} {formatPriceMinor(current.dineInPriceMinor, currency)} / {CHANNEL_LABEL.delivery}{" "}
-          {formatPriceMinor(current.deliveryPriceMinor, currency)}
+        <p data-testid={`${testId}-current`} className={`text-sm tabular-nums ${current === null ? "text-status-warning" : ""}`}>
+          {current === null ? "No price yet" : formatPriceMinor(current, currency)}
         </p>
         <button type="button" data-testid={`${testId}-change`} onClick={onChange} className="text-xs font-medium text-primary hover:underline">
-          Change price
+          {current === null ? "Set price" : "Change price"}
         </button>
       </div>
-      {(pending.dineIn || pending.delivery) && (
+      {pending && (
         <p data-testid={`${testId}-pending`} className="text-xs text-status-scheduled">
-          {pending.dineIn && `Dine-in changes to ${formatPriceMinor(pending.dineIn.priceMinor, currency)} on ${formatEffectiveDate(pending.dineIn.effectiveAt)}. `}
-          {pending.delivery && `Delivery changes to ${formatPriceMinor(pending.delivery.priceMinor, currency)} on ${formatEffectiveDate(pending.delivery.effectiveAt)}.`}
+          Changes to {formatPriceMinor(pending.priceMinor, currency)} on {formatEffectiveDate(pending.effectiveAt)}.
         </p>
       )}
     </div>
@@ -737,96 +1093,6 @@ function AllergensSection({
         <button type="button" data-testid="item-add-allergen" onClick={() => setAdding(true)} className="mt-2 text-xs font-medium text-primary hover:underline">
           + New tag
         </button>
-      )}
-    </div>
-  );
-}
-
-function ComboSection({
-  item,
-  allItems,
-  currency,
-  comboCatalog,
-  onComboCreated,
-}: Readonly<{ item: ItemView; allItems: ItemView[]; currency: string; comboCatalog: ComboView[]; onComboCreated: (combo: ComboView) => void }>) {
-  const [adding, setAdding] = useState(false);
-  const [name, setName] = useState("");
-  const [price, setPrice] = useState("");
-  const [selectedItemIds, setSelectedItemIds] = useState<string[]>([item.id]);
-  const pickable = allItems.filter((candidate) => candidate.id !== item.id);
-  const combos = combosForItem(comboCatalog, item.id);
-
-  async function handleAdd() {
-    if (!name.trim() || selectedItemIds.length === 0) return;
-    const created = await createCombo({
-      name: name.trim(),
-      priceMinor: majorStringToPriceMinor(price) ?? 0,
-      currency,
-      components: selectedItemIds.map((itemId) => ({ itemId })),
-    });
-    onComboCreated(created);
-    setName("");
-    setPrice("");
-    setSelectedItemIds([item.id]);
-    setAdding(false);
-  }
-
-  return (
-    <div data-testid="item-combos-section">
-      <div className="flex items-center justify-between">
-        <p className={LABEL_CLASS}>Combos</p>
-        {!adding && (
-          <button type="button" data-testid="item-add-combo" onClick={() => setAdding(true)} className="text-sm font-medium text-primary hover:underline">
-            + Add combo
-          </button>
-        )}
-      </div>
-
-      <ul className="mt-2 space-y-2">
-        {combos.map((combo) => (
-          <li key={combo.id} data-testid={`item-combo-${combo.id}`} className="rounded-lg border border-border/60 px-3 py-2 text-sm">
-            {combo.name} - {formatPriceMinor(combo.priceMinor, combo.currency)} - {combo.components.length} item{combo.components.length === 1 ? "" : "s"}
-          </li>
-        ))}
-      </ul>
-
-      {adding && (
-        <div className="mt-2 space-y-2 rounded-lg border border-border/60 p-3">
-          <input data-testid="item-combo-name-input" value={name} placeholder="Combo name (e.g. Thali Combo)" onChange={(event) => setName(event.target.value)} className={FIELD_CLASS} />
-          <input
-            type="number"
-            step="0.01"
-            min="0"
-            data-testid="item-combo-price-input"
-            placeholder={`Combo price (${currency})`}
-            value={price}
-            onChange={(event) => setPrice(event.target.value)}
-            className={FIELD_CLASS}
-          />
-          <div className="max-h-32 space-y-1 overflow-y-auto">
-            {pickable.map((candidate) => (
-              <label key={candidate.id} className="flex items-center gap-1.5 text-sm">
-                <input
-                  type="checkbox"
-                  data-testid={`item-combo-pick-${candidate.id}`}
-                  checked={selectedItemIds.includes(candidate.id)}
-                  onChange={(event) =>
-                    setSelectedItemIds((current) => (event.target.checked ? [...current, candidate.id] : current.filter((id) => id !== candidate.id)))
-                  }
-                />
-                {candidate.name}
-              </label>
-            ))}
-          </div>
-          <div className="flex justify-end gap-2">
-            <Button type="button" variant="secondary" size="sm" data-testid="item-combo-cancel" onClick={() => setAdding(false)}>
-              Cancel
-            </Button>
-            <Button type="button" size="sm" data-testid="item-combo-confirm" disabled={!name.trim()} onClick={() => void handleAdd()}>
-              Add
-            </Button>
-          </div>
-        </div>
       )}
     </div>
   );

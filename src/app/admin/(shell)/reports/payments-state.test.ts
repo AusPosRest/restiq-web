@@ -136,8 +136,8 @@ describe("refundedMinorFor", () => {
   it("sums credit note amounts", () => {
     const row = paymentRow({
       creditNotes: [
-        { id: "cn-1", amountMinor: 100, reason: "Wrong item", createdAt: "2026-09-03T09:00:00.000Z" },
-        { id: "cn-2", amountMinor: 50, reason: "Goodwill", createdAt: "2026-09-03T09:05:00.000Z" },
+        { id: "cn-1", amountMinor: 100, method: "cash", reason: "Wrong item", createdAt: "2026-09-03T09:00:00.000Z" },
+        { id: "cn-2", amountMinor: 50, method: null, reason: "Goodwill", createdAt: "2026-09-03T09:05:00.000Z" },
       ],
     });
     expect(refundedMinorFor(row)).toBe(150);
@@ -156,9 +156,9 @@ describe("formatBillTime", () => {
 
 describe("appendPaymentsPage", () => {
   it("appends the page's items and replaces the cursor and totals", () => {
-    const totals = { count: 2, subtotalMinor: 1, discountMinor: 0, taxMinor: 0, totalMinor: 1, tenderedMinor: 1, refundedMinor: 0 };
-    const current: PaymentsResponse = { items: [paymentRow({ billId: "bill-1" })], nextCursor: "cursor-1", totals };
-    const page: PaymentsResponse = { items: [paymentRow({ billId: "bill-2" })], nextCursor: "cursor-2", totals };
+    const totals = { count: 2, subtotalMinor: 1, discountMinor: 0, taxMinor: 0, totalMinor: 1, tenderedMinor: 1, refundedMinor: 0, netMinor: 1 };
+    const current: PaymentsResponse = { currency: "INR", items: [paymentRow({ billId: "bill-1" })], nextCursor: "cursor-1", totals };
+    const page: PaymentsResponse = { currency: "INR", items: [paymentRow({ billId: "bill-2" })], nextCursor: "cursor-2", totals };
 
     const merged = appendPaymentsPage(current, page);
 
@@ -168,9 +168,9 @@ describe("appendPaymentsPage", () => {
   });
 
   it("clears the cursor once the last page reports none", () => {
-    const totals = { count: 1, subtotalMinor: 1, discountMinor: 0, taxMinor: 0, totalMinor: 1, tenderedMinor: 1, refundedMinor: 0 };
-    const current: PaymentsResponse = { items: [paymentRow()], nextCursor: "cursor-1", totals };
-    const page: PaymentsResponse = { items: [], nextCursor: null, totals };
+    const totals = { count: 1, subtotalMinor: 1, discountMinor: 0, taxMinor: 0, totalMinor: 1, tenderedMinor: 1, refundedMinor: 0, netMinor: 1 };
+    const current: PaymentsResponse = { currency: "INR", items: [paymentRow()], nextCursor: "cursor-1", totals };
+    const page: PaymentsResponse = { currency: "INR", items: [], nextCursor: null, totals };
 
     expect(appendPaymentsPage(current, page).nextCursor).toBeNull();
   });

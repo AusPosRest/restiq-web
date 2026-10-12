@@ -129,6 +129,20 @@ describe("ExpoScreen", () => {
     expect(screen.queryByTestId("kds-waiting-on-l-butter-chicken")).toBeNull();
   });
 
+  it("names a table order's table once, and a token order's table after its token (PE-21)", async () => {
+    const tableOrder = { ...twoStationOrder(), tokenNumber: null };
+    vi.stubGlobal("fetch", mockFetch(() => [tableOrder]));
+    renderScreen();
+    await vi.waitFor(() => expect(screen.getByTestId("kds-waiting-on-l-naan-where")).toBeTruthy());
+    expect(screen.getByTestId("kds-waiting-on-l-naan-where").textContent).toBe("Tandoor - Table T4");
+    cleanup();
+
+    vi.stubGlobal("fetch", mockFetch(() => [twoStationOrder()]));
+    renderScreen();
+    await vi.waitFor(() => expect(screen.getByTestId("kds-waiting-on-l-naan-where")).toBeTruthy());
+    expect(screen.getByTestId("kds-waiting-on-l-naan-where").textContent).toBe("Tandoor - #1035 - Table T4");
+  });
+
   it("flips a station's readiness chip from Cooking to Ready once every ticket at that station is bumped", async () => {
     let curryBumped = false;
     vi.stubGlobal(
@@ -192,6 +206,6 @@ describe("ExpoScreen", () => {
     renderScreen();
 
     await vi.waitFor(() => expect(screen.getByTestId("kds-expo-empty")).toBeTruthy());
-    expect(screen.getByTestId("kds-tab-subtitle").textContent).toBe("Everything across stations that's ready to go out");
+    expect(screen.getByTestId("kds-tab-subtitle").textContent).toBe("Expo — orders by table; send out when every station is ready");
   });
 });

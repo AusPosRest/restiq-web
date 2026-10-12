@@ -69,7 +69,7 @@ function DashboardContent({ view }: Readonly<{ view: DashboardView }>) {
         <div data-testid="dashboard-no-outlets" className="flex flex-col items-center gap-2 rounded-lg border border-dashed border-border/60 bg-card/50 px-8 py-16 text-center">
           <LayoutDashboard className="size-8 text-muted-foreground" aria-hidden="true" />
           <p className="font-headline text-lg font-medium">No outlets yet</p>
-          <p className="max-w-sm text-sm text-muted-foreground">Once an outlet is set up, its sales, margin, labour and waste will show up here.</p>
+          <p className="max-w-sm text-sm text-muted-foreground">Once an outlet is set up, its sales will show up here.</p>
         </div>
       ) : (
         <div className="flex flex-col gap-6">

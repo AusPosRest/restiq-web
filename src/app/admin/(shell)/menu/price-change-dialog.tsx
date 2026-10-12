@@ -19,7 +19,8 @@ export interface PriceChangeDialogProps {
   open: boolean;
   itemLabel: string;
   currency: string;
-  current: { dineInPriceMinor: number; deliveryPriceMinor: number };
+  /** Current price in minor units. */
+  current: number;
   busy?: boolean;
   error?: string | null;
   onCancel: () => void;
@@ -33,6 +34,8 @@ export function PriceChangeDialog(props: Readonly<PriceChangeDialogProps>) {
 function DialogBody({ itemLabel, currency, current, busy, error, onCancel, onSubmit }: Readonly<PriceChangeDialogProps>) {
   const [form, setForm] = useState<PriceScheduleForm>(() => initialPriceScheduleForm(current));
   const errors = validatePriceScheduleForm(form, new Date());
+  // CU-2: Save stays clickable and says what is missing, rather than greying out with no reason.
+  const [attempted, setAttempted] = useState(false);
   const tomorrow = new Date();
   tomorrow.setDate(tomorrow.getDate() + 1);
   const minDate = tomorrow.toISOString().slice(0, 10);
@@ -47,14 +50,14 @@ function DialogBody({ itemLabel, currency, current, busy, error, onCancel, onSub
         >
           <Dialog.Title className="font-headline text-lg font-semibold">Change {itemLabel}&apos;s price</Dialog.Title>
           <Dialog.Description className="mt-1 text-sm text-muted-foreground">
-            Current: {formatPriceMinor(current.dineInPriceMinor, currency)} dine-in / {formatPriceMinor(current.deliveryPriceMinor, currency)}{" "}
-            delivery. This never overwrites that price - it creates a new version.
+            Current: {formatPriceMinor(current, currency)}. This never overwrites that price - it creates a new version.
           </Dialog.Description>
 
           <form
             className="mt-4 space-y-4"
             onSubmit={(event) => {
               event.preventDefault();
+              setAttempted(true);
               if (Object.keys(errors).length === 0 && !busy) onSubmit(form);
             }}
           >
@@ -88,7 +91,7 @@ function DialogBody({ itemLabel, currency, current, busy, error, onCancel, onSub
                   onChange={(event) => setForm((f) => ({ ...f, effectiveDate: event.target.value }))}
                   className="w-full rounded-lg border border-border bg-input px-3 py-2 text-sm text-foreground focus:outline-none focus-visible:ring-2 focus-visible:ring-ring"
                 />
-                {errors.effectiveDate && (
+                {errors.effectiveDate && attempted && (
                   <p data-testid="price-change-date-error" className="mt-1 text-xs text-status-error">
                     {errors.effectiveDate}
                   </p>
@@ -96,52 +99,30 @@ function DialogBody({ itemLabel, currency, current, busy, error, onCancel, onSub
               </div>
             )}
 
-            <div className="grid grid-cols-2 gap-3">
-              <div>
-                <label htmlFor="price-change-dinein" className="font-label mb-1 block text-xs font-semibold uppercase tracking-wider text-muted-foreground">
-                  Dine-in ({currency})
-                </label>
-                <input
-                  id="price-change-dinein"
-                  data-testid="price-change-dinein"
-                  type="number"
-                  step="0.01"
-                  min="0"
-                  value={form.dineIn}
-                  onChange={(event) => setForm((f) => ({ ...f, dineIn: event.target.value }))}
-                  className="w-full rounded-lg border border-border bg-input px-3 py-2 text-sm tabular-nums text-foreground focus:outline-none focus-visible:ring-2 focus-visible:ring-ring"
-                />
-                {errors.dineIn && (
-                  <p data-testid="price-change-dinein-error" className="mt-1 text-xs text-status-error">
-                    {errors.dineIn}
-                  </p>
-                )}
-              </div>
-              <div>
-                <label htmlFor="price-change-delivery" className="font-label mb-1 block text-xs font-semibold uppercase tracking-wider text-muted-foreground">
-                  Delivery ({currency})
-                </label>
-                <input
-                  id="price-change-delivery"
-                  data-testid="price-change-delivery"
-                  type="number"
-                  step="0.01"
-                  min="0"
-                  value={form.delivery}
-                  onChange={(event) => setForm((f) => ({ ...f, delivery: event.target.value }))}
-                  className="w-full rounded-lg border border-border bg-input px-3 py-2 text-sm tabular-nums text-foreground focus:outline-none focus-visible:ring-2 focus-visible:ring-ring"
-                />
-                {errors.delivery && (
-                  <p data-testid="price-change-delivery-error" className="mt-1 text-xs text-status-error">
-                    {errors.delivery}
-                  </p>
-                )}
-              </div>
+            <div>
+              <label htmlFor="price-change-dinein" className="font-label mb-1 block text-xs font-semibold uppercase tracking-wider text-muted-foreground">
+                Price ({currency})
+              </label>
+              <input
+                id="price-change-dinein"
+                data-testid="price-change-dinein"
+                type="number"
+                step="0.01"
+                min="0"
+                value={form.dineIn}
+                onChange={(event) => setForm((f) => ({ ...f, dineIn: event.target.value }))}
+                className="w-full rounded-lg border border-border bg-input px-3 py-2 text-sm tabular-nums text-foreground focus:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+              />
+              {errors.dineIn && attempted && (
+                <p data-testid="price-change-dinein-error" className="mt-1 text-xs text-status-error">
+                  {errors.dineIn}
+                </p>
+              )}
             </div>
 
             <div>
               <label htmlFor="price-change-reason" className="font-label mb-1 block text-xs font-semibold uppercase tracking-wider text-muted-foreground">
-                Why is this changing? (kept in the audit trail)
+                Why is this changing? * (kept in the audit trail)
               </label>
               <textarea
                 id="price-change-reason"
@@ -151,8 +132,14 @@ function DialogBody({ itemLabel, currency, current, busy, error, onCancel, onSub
                 placeholder="e.g. Supplier cost increase"
                 value={form.reason}
                 onChange={(event) => setForm((f) => ({ ...f, reason: event.target.value }))}
+                aria-required="true"
                 className="w-full resize-none rounded-lg border border-border bg-input px-3 py-2 text-sm text-foreground placeholder:text-muted-foreground/60 focus:outline-none focus-visible:ring-2 focus-visible:ring-ring"
               />
+              {errors.reason && attempted && (
+                <p data-testid="price-change-reason-error" className="mt-1 text-xs text-status-error">
+                  {errors.reason}
+                </p>
+              )}
             </div>
 
             {error && (
@@ -165,7 +152,7 @@ function DialogBody({ itemLabel, currency, current, busy, error, onCancel, onSub
               <Button type="button" variant="secondary" data-testid="price-change-cancel" disabled={busy} onClick={onCancel}>
                 Cancel
               </Button>
-              <Button type="submit" data-testid="price-change-submit" disabled={Object.keys(errors).length > 0 || busy}>
+              <Button type="submit" data-testid="price-change-submit" disabled={busy}>
                 {busy ? "Saving..." : form.mode === "today" ? "Save new price" : "Schedule price change"}
               </Button>
             </div>

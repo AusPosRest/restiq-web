@@ -52,7 +52,7 @@ function inInvoice(overrides: Partial<InvoiceView> = {}): InvoiceView {
     totalMinor: 11550,
     pricesIncludeTax: false,
     tenders: [{ method: "cash", amountMinor: 11550, createdAt: "2026-09-02T10:31:00.000Z" }],
-    creditNotes: [{ id: "cn-1", amountMinor: 500, reason: "Item returned", createdAt: "2026-09-02T10:45:00.000Z" }],
+    creditNotes: [{ id: "cn-1", amountMinor: 500, method: "cash", reason: "Item returned", createdAt: "2026-09-02T10:45:00.000Z" }],
     notes: ["Thank you for dining with us.", "This is a computer-generated invoice."],
     footerMessage: null,
     ...overrides,
@@ -124,6 +124,7 @@ describe("BillInvoiceView - IN invoice (GSTIN, CGST+SGST)", () => {
 
     expect(screen.getByTestId("invoice-tender-0").textContent).toContain("Cash");
     expect(screen.getByTestId("invoice-credit-note-cn-1").textContent).toContain("Item returned");
+    expect(screen.getByTestId("invoice-credit-note-cn-1").textContent).toContain("refunded by Cash");
     expect(screen.getByTestId("invoice-notes").textContent).toContain("Thank you for dining with us.");
     expect(screen.getByTestId("invoice-notes").textContent).toContain("This is a computer-generated invoice.");
   });
@@ -152,6 +153,44 @@ describe("BillInvoiceView - IN invoice (GSTIN, CGST+SGST)", () => {
   });
 });
 
+describe("BillInvoiceView - GST details, variants, token and round-off (PE-18, CU-10, CU-11)", () => {
+  it("shows SAC, place of supply and the counter token, and links back to the counter", async () => {
+    stubFetch(() => jsonResponse(inInvoice({ sacCode: "996331", placeOfSupply: "Karnataka (29)", tokenNumber: 23 })));
+    render(<BillInvoiceView billId={BILL_ID} />);
+    await screen.findByTestId("bill-invoice-view");
+
+    expect(screen.getByTestId("invoice-gst-details").textContent).toBe("SAC 996331 · Place of supply: Karnataka (29)");
+    expect(screen.getByTestId("invoice-token").textContent).toBe("Token #23");
+    expect(screen.getByTestId("invoice-back").textContent).toContain("Back to counter");
+    expect(screen.getByTestId("invoice-back").getAttribute("href")).toBe("/pos/counter");
+  });
+
+  it("keeps the table-map link and no token line for a table order", async () => {
+    stubFetch(() => jsonResponse(inInvoice({ tokenNumber: null })));
+    render(<BillInvoiceView billId={BILL_ID} />);
+    await screen.findByTestId("bill-invoice-view");
+    expect(screen.queryByTestId("invoice-token")).toBeNull();
+    expect(screen.getByTestId("invoice-back").getAttribute("href")).toBe("/pos/table-map");
+  });
+
+  it("rounds a rupee cash bill to the nearest rupee with a Round off line, and shows the cash actually collected", async () => {
+    stubFetch(() => jsonResponse(inInvoice({ totalMinor: 89040, tenders: [{ method: "cash", amountMinor: 89040, createdAt: "2026-09-02T10:31:00.000Z" }] })));
+    render(<BillInvoiceView billId={BILL_ID} />);
+    await screen.findByTestId("bill-invoice-view");
+
+    expect(screen.getByTestId("invoice-round-off").textContent).toBe("Round off-₹0.40");
+    expect(screen.getByTestId("invoice-amount-paid").textContent).toBe("Amount paid₹890.00");
+    expect(screen.getByTestId("invoice-tender-0").textContent).toContain("₹890.00");
+  });
+
+  it("does not round a card / UPI bill or an AUD bill", async () => {
+    stubFetch(() => jsonResponse(inInvoice({ totalMinor: 89040, tenders: [{ method: "upi_manual", amountMinor: 89040, createdAt: "2026-09-02T10:31:00.000Z" }] })));
+    render(<BillInvoiceView billId={BILL_ID} />);
+    await screen.findByTestId("bill-invoice-view");
+    expect(screen.queryByTestId("invoice-round-off")).toBeNull();
+  });
+});
+
 describe("BillInvoiceView - AU invoice (ABN, prices include tax)", () => {
   it("shows the Tax Invoice title, ABN registration, and the prices-include-tax line", async () => {
     stubFetch(() => jsonResponse(auInvoice()));
@@ -161,7 +200,7 @@ describe("BillInvoiceView - AU invoice (ABN, prices include tax)", () => {
 
     expect(screen.getByText("Tax Invoice")).toBeTruthy();
     expect(screen.getByTestId("invoice-seller").textContent).toContain("ABN: 51 824 753 556");
-    expect(screen.getByTestId("invoice-tax-0").textContent).toBe("GST (10%)AUD 0.45");
+    expect(screen.getByTestId("invoice-tax-0").textContent).toBe("GST (10%)A$0.45");
     expect(screen.getByTestId("invoice-prices-include-tax")).toBeTruthy();
     expect(screen.queryByTestId("invoice-discount")).toBeNull();
     expect(screen.queryByTestId("invoice-tenders")).toBeNull();
@@ -177,6 +216,19 @@ describe("BillInvoiceView - footerMessage", () => {
 
     await screen.findByTestId("bill-invoice-view");
     expect(screen.getByTestId("invoice-footer-message").textContent).toBe("Follow us @restiqfoods");
+  });
+
+  // restiq-backend#213: a bill rung up in Test mode is marked on the invoice itself.
+  it("marks a Test-mode bill as not a valid tax invoice, and a live one not at all", async () => {
+    stubFetch(() => jsonResponse(inInvoice({ testMode: true })));
+    render(<BillInvoiceView billId={BILL_ID} />);
+    expect((await screen.findByTestId("invoice-test-mode")).textContent).toBe("Test mode - not a valid tax invoice");
+    cleanup();
+
+    stubFetch(() => jsonResponse(inInvoice({ testMode: false })));
+    render(<BillInvoiceView billId={BILL_ID} />);
+    await screen.findByTestId("bill-invoice-view");
+    expect(screen.queryByTestId("invoice-test-mode")).toBeNull();
   });
 
   it("renders nothing when footerMessage is null", async () => {

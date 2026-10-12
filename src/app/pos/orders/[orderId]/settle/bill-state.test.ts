@@ -57,6 +57,25 @@ describe("billTotalMinor", () => {
     expect(billTotalMinor(bill({ discountMinor: 5000 }), 10000)).toBe(100000);
   });
 
+  it("charges GST on the discounted value for an India bill, CGST and SGST each rounded on their own (restiq-backend#207)", () => {
+    const india = bill({
+      subtotalMinor: 24045,
+      taxMinor: 1202,
+      taxBreakdown: [
+        { label: "CGST", ratePercent: 2.5, amountMinor: 601 },
+        { label: "SGST", ratePercent: 2.5, amountMinor: 601 },
+      ],
+    });
+    // 10% discount: net 21641; each half = round(21641 x 2.5%) = round(541.025) = 541.
+    expect(billTotalMinor(india, 2404)).toBe(21641 + 541 + 541);
+    // No discount: unchanged from the snapshotted tax.
+    expect(billTotalMinor(india)).toBe(24045 + 601 + 601);
+  });
+
+  it("keeps a composition-scheme bill's own tax (no rated breakdown)", () => {
+    expect(billTotalMinor(bill({ taxMinor: 0, taxBreakdown: [] }), 10000)).toBe(90000);
+  });
+
   it("never adds tax on top of a tax-inclusive (AU) subtotal (issue #156)", () => {
     expect(billTotalMinor(bill({ pricesIncludeTax: true }))).toBe(100000);
     expect(billTotalMinor(bill({ pricesIncludeTax: true }), 10000)).toBe(90000);

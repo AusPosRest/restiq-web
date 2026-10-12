@@ -13,6 +13,7 @@
 // its own localStorage read behind an always-null first render.
 import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
+import { saveDeviceSecret } from "@/lib/device-secret";
 import {
   clearStoredDevice,
   continueTargetFor,
@@ -25,6 +26,7 @@ import {
   writeStoredDevice,
   type DeviceView,
 } from "./device-state";
+import { formatDateTime } from "@/lib/datetime";
 
 interface ErrorBody {
   code?: string;
@@ -50,7 +52,7 @@ function errorMessage(body: ErrorBody, fallback: string): string {
 type ScreenState =
   | { step: "loading" }
   | { step: "enrol"; code: string; label: string; error: string | null }
-  | { step: "enrolled"; device: DeviceView };
+  | { step: "enrolled"; device: DeviceView; ignoredCode: string | null };
 
 const INITIAL_ENROL_STATE: ScreenState = { step: "enrol", code: "", label: "", error: null };
 
@@ -65,8 +67,10 @@ async function submitEnrol(code: string, label: string): Promise<{ device: Devic
       ...(trimmedLabel ? { label: trimmedLabel } : {}),
     }),
   });
-  const body = (await res.json().catch(() => ({}))) as ErrorBody & { device?: DeviceView };
-  if (res.ok && body.device) return { device: body.device };
+  const body = (await res.json().catch(() => ({}))) as ErrorBody & { device?: DeviceView; tenantName?: string | null; outletName?: string | null; deviceSecret?: string };
+  // restiq-backend#209: kept for the PIN pad, which proves this till with it at sign-in.
+  if (res.ok && body.device && body.deviceSecret) saveDeviceSecret(body.device.id, body.deviceSecret);
+  if (res.ok && body.device) return { device: { ...body.device, tenantName: body.tenantName ?? null, outletName: body.outletName ?? null } };
   return { errorBody: body };
 }
 
@@ -84,7 +88,8 @@ export function DeviceScreen() {
     const timeout = setTimeout(() => {
       const stored = readStoredDevice();
       const scanned = formatCodeInput(new URLSearchParams(window.location.search).get("code") ?? "");
-      setState(stored ? { step: "enrolled", device: stored } : { step: "enrol", code: scanned, label: "", error: null });
+      // A new code opened on an already-set-up device is not used - say so instead of ignoring it.
+      setState(stored ? { step: "enrolled", device: stored, ignoredCode: scanned || null } : { step: "enrol", code: scanned, label: "", error: null });
     }, 0);
     return () => clearTimeout(timeout);
   }, []);
@@ -97,7 +102,7 @@ export function DeviceScreen() {
     setPending(false);
     if ("device" in result) {
       writeStoredDevice(result.device);
-      setState({ step: "enrolled", device: result.device });
+      setState({ step: "enrolled", device: result.device, ignoredCode: null });
       return;
     }
     setState({ ...state, error: errorMessage(result.errorBody, "Enrolment failed. Check your connection and try again.") });
@@ -120,10 +125,9 @@ export function DeviceScreen() {
       <section className="hidden flex-1 flex-col justify-between p-12 lg:flex" aria-hidden="true">
         <p className="font-headline text-5xl font-bold tracking-tight text-primary">RESTIQ</p>
         <p className="max-w-sm text-sm text-muted-foreground">
-          Turn this browser tab into a POS, KDS, kiosk, or customer-display terminal by redeeming a one-time enrolment code
-          from the console.
+          Set this device up as a till, kitchen screen, kiosk or customer display with the one-time code from the owner
+          console&apos;s Devices page.
         </p>
-        <p className="text-xs text-muted-foreground">App Version v2.4.1</p>
       </section>
 
       <section className="flex flex-1 flex-col justify-center bg-card px-6 py-12 sm:px-16 lg:max-w-[36rem]">
@@ -131,7 +135,7 @@ export function DeviceScreen() {
           {state.step === "enrol" ? (
             <EnrolForm state={state} pending={pending} onChange={setState} onSubmit={handleSubmit} />
           ) : (
-            <DeviceCard device={state.device} onContinue={handleContinue} onUnenrol={handleUnenrol} />
+            <DeviceCard device={state.device} ignoredCode={state.ignoredCode} onContinue={handleContinue} onUnenrol={handleUnenrol} />
           )}
         </div>
       </section>
@@ -154,7 +158,7 @@ function EnrolForm({
     <form data-testid="device-enrol-form" onSubmit={onSubmit}>
       <h1 className="font-headline text-xl font-semibold text-foreground">Enrol this device</h1>
       <p className="mt-1 text-sm text-muted-foreground">
-        Enter the one-time code shown in the console to turn this tab into a RESTIQ terminal.
+        Enter the one-time code shown on the owner console&apos;s Devices page.
       </p>
 
       <label htmlFor="device-code" className="mt-6 block text-sm font-medium text-foreground">
@@ -210,10 +214,12 @@ function EnrolForm({
 
 function DeviceCard({
   device,
+  ignoredCode,
   onContinue,
   onUnenrol,
 }: Readonly<{
   device: DeviceView;
+  ignoredCode: string | null;
   onContinue: (device: DeviceView) => void;
   onUnenrol: () => void;
 }>) {
@@ -221,7 +227,13 @@ function DeviceCard({
 
   return (
     <div data-testid="device-card">
-      <h1 className="font-headline text-xl font-semibold text-foreground">This tab is enrolled</h1>
+      <h1 className="font-headline text-xl font-semibold text-foreground">This device is set up</h1>
+      {ignoredCode ? (
+        <p role="status" data-testid="device-code-ignored" className="mt-2 text-sm text-status-warning">
+          This device is already {device.label}, so code {ignoredCode} wasn&apos;t used. To set it up as something else, un-enrol it below
+          first.
+        </p>
+      ) : null}
 
       <div className="mt-6 rounded-lg border border-border bg-background p-5">
         <p data-testid="device-card-label" className="text-lg font-semibold text-foreground">
@@ -234,11 +246,11 @@ function DeviceCard({
           </dd>
           <dt className="text-muted-foreground">Outlet</dt>
           <dd data-testid="device-card-outlet" className="text-right text-foreground">
-            {device.outletId ?? "Not yet assigned"}
+            {device.outletName ?? (device.outletId ? "Assigned" : "Not yet assigned")}
           </dd>
           <dt className="text-muted-foreground">Enrolled</dt>
           <dd data-testid="device-card-enrolled-at" className="text-right text-foreground">
-            {new Date(device.enrolledAt).toLocaleString()}
+            {formatDateTime(device.enrolledAt)}
           </dd>
           <dt className="text-muted-foreground">Status</dt>
           <dd data-testid="device-card-status" className="text-right text-foreground">
@@ -262,18 +274,21 @@ function DeviceCard({
         </p>
       )}
 
-      <button
-        type="button"
-        data-testid="device-unenrol"
-        onClick={onUnenrol}
-        className="mt-4 w-full rounded-lg border border-border bg-transparent px-4 py-3 text-sm font-medium text-muted-foreground transition-colors hover:bg-accent focus:outline-none focus-visible:ring-2 focus-visible:ring-ring"
-      >
-        Un-enrol this tab
-      </button>
-      <p data-testid="device-unenrol-note" className="mt-2 text-xs text-muted-foreground">
-        This only clears this tab&apos;s stored identity - it doesn&apos;t revoke the device. Revoking access is an
-        ops/admin job.
-      </p>
+      {/* Kept out of the way: a stray tap on a shop till shouldn't undo its setup. */}
+      <details className="mt-6 text-xs text-muted-foreground">
+        <summary data-testid="device-unenrol-toggle" className="cursor-pointer">Set this device up as something else</summary>
+        <p data-testid="device-unenrol-note" className="mt-2">
+          Un-enrolling clears this device&apos;s setup here only. To block it completely, revoke it on the Devices page.
+        </p>
+        <button
+          type="button"
+          data-testid="device-unenrol"
+          onClick={onUnenrol}
+          className="mt-2 rounded-lg border border-border bg-transparent px-3 py-2 font-medium text-foreground transition-colors hover:bg-accent focus:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+        >
+          Un-enrol this device
+        </button>
+      </details>
     </div>
   );
 }

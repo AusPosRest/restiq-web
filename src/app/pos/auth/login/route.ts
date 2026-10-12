@@ -11,7 +11,7 @@
 //     200 { status: "select_outlet", pendingToken, staff: {id,name}, outlets: [{id,name}] }
 //     401 { code: "invalid_pin", message }
 //     409 { code: "no_outlets", message }
-//     429 { code: "locked_out", message } (5 wrong attempts, keyed to tenant+pin)
+//     429 { code: "locked_out", message, retryAfterSeconds } (per till or address - restiq-backend#171)
 //
 // tenantId: PIN entry has no tenant-picker step ahead of it (SPEC/
 // EXPERIENCE.md never describe one), so the client supplies it instead -
@@ -25,6 +25,8 @@
 // yet, same as every other env var here) remains the fallback for a terminal
 // opened with no binding (e.g. a bare /pos/login in dev).
 import { NextResponse } from "next/server";
+import { clientIpHeaders } from "@/lib/client-ip-headers";
+import { fetchTenantByHost, hostOf } from "@/lib/tenant-by-host";
 import { posLoginResponse } from "../session-cookies";
 import type { PosLoginResult } from "../types";
 
@@ -37,26 +39,35 @@ function errorResponse(status: number, body: unknown): NextResponse {
 
 export async function POST(request: Request): Promise<NextResponse> {
   const body: unknown = await request.json().catch(() => null);
-  const { pin, tenantId: requestedTenantId } = (body ?? {}) as { pin?: unknown; tenantId?: unknown };
+  const { pin, tenantId: requestedTenantId, deviceId, deviceSecret } = (body ?? {}) as { pin?: unknown; tenantId?: unknown; deviceId?: unknown; deviceSecret?: unknown };
   if (typeof pin !== "string" || !PIN_PATTERN.test(pin)) {
     return errorResponse(400, { error: { code: "validation_failed", message: "A 4-digit PIN is required" } });
   }
   if (requestedTenantId !== undefined && (typeof requestedTenantId !== "string" || !UUID_PATTERN.test(requestedTenantId))) {
     return errorResponse(400, { error: { code: "validation_failed", message: "tenantId must be a UUID" } });
   }
+  // restiq-backend#171: the tab's enrolled device, so the API can give that till its own throttle allowance.
+  if (deviceId !== undefined && (typeof deviceId !== "string" || !UUID_PATTERN.test(deviceId))) {
+    return errorResponse(400, { error: { code: "validation_failed", message: "deviceId must be a UUID" } });
+  }
+  // restiq-backend#209: the secret the till got at enrolment - only with it does deviceId earn that allowance.
+  if (deviceSecret !== undefined && (typeof deviceSecret !== "string" || !deviceSecret || deviceSecret.length > 200)) {
+    return errorResponse(400, { error: { code: "validation_failed", message: "deviceSecret is not valid" } });
+  }
 
   const apiUrl = process.env.NEXT_PUBLIC_API_URL;
-  const tenantId = (requestedTenantId as string | undefined) ?? process.env.POS_TENANT_ID;
+  // A terminal's own binding wins, then the POS_TENANT_ID setting, then the restaurant whose address this is (D14).
+  const tenantId = (requestedTenantId as string | undefined) ?? process.env.POS_TENANT_ID ?? (await fetchTenantByHost(hostOf(request.headers)))?.tenantId;
   if (!apiUrl || !tenantId) {
-    return errorResponse(500, { error: { code: "misconfigured", message: "NEXT_PUBLIC_API_URL/POS_TENANT_ID is not set" } });
+    return errorResponse(500, { error: { code: "misconfigured", message: "This till isn't linked to a restaurant yet. Set it up with a code from the owner console's Devices page." } });
   }
 
   let upstream: Response;
   try {
     upstream = await fetch(`${apiUrl}/pos/v1/auth/login`, {
       method: "POST",
-      headers: { "content-type": "application/json" },
-      body: JSON.stringify({ tenantId, pin }),
+      headers: { "content-type": "application/json", ...clientIpHeaders(request) },
+      body: JSON.stringify({ tenantId, pin, deviceId, deviceSecret }),
       cache: "no-store",
     });
   } catch {

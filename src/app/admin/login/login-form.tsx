@@ -1,14 +1,16 @@
 "use client";
 
+import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useState } from "react";
 import { Button } from "@/components/ui/button";
+import { PasswordInput } from "@/components/password-input";
 
 const GENERIC_ERROR = "Incorrect email or password";
 const LOCKED_OUT_ERROR = "Too many sign-in attempts. Please try again later.";
 const FAILURE_ERROR = "Sign-in failed. Check your connection and try again.";
 
-export function LoginForm({ nextPath, sessionExpired }: { nextPath: string; sessionExpired: boolean }) {
+export function LoginForm({ nextPath, sessionExpired, passwordReset = false }: { nextPath: string; sessionExpired: boolean; passwordReset?: boolean }) {
   const router = useRouter();
   const [error, setError] = useState<string | null>(null);
   const [pending, setPending] = useState(false);
@@ -43,6 +45,16 @@ export function LoginForm({ nextPath, sessionExpired }: { nextPath: string; sess
 
   return (
     <form onSubmit={(event) => void handleSubmit(event)} className="mt-10 space-y-6" noValidate>
+      {passwordReset ? (
+        <p
+          role="status"
+          data-testid="admin-login-reset-banner"
+          className="rounded-lg border border-status-active/40 bg-status-active/10 px-4 py-3 text-sm text-status-active"
+        >
+          Your password was changed. Sign in with the new one.
+        </p>
+      ) : null}
+
       {sessionExpired ? (
         <p
           role="status"
@@ -74,11 +86,11 @@ export function LoginForm({ nextPath, sessionExpired }: { nextPath: string; sess
         <label htmlFor="admin-login-password" className="font-label text-xs font-semibold uppercase tracking-wider text-muted-foreground">
           Password
         </label>
-        <input
+        <PasswordInput
           id="admin-login-password"
           data-testid="admin-login-password"
+          toggleTestId="admin-login-password-toggle"
           name="password"
-          type="password"
           autoComplete="current-password"
           required
           aria-invalid={error === GENERIC_ERROR || undefined}
@@ -100,6 +112,11 @@ export function LoginForm({ nextPath, sessionExpired }: { nextPath: string; sess
         {pending ? "Signing in..." : "Sign in"}
       </Button>
 
+      <p className="text-center text-sm">
+        <Link data-testid="admin-login-forgot" href="/admin/forgot-password" className="text-primary underline underline-offset-2">
+          Forgot your password?
+        </Link>
+      </p>
       <p className="text-center text-xs text-muted-foreground">Got an invite link? Open it to set your password.</p>
     </form>
   );

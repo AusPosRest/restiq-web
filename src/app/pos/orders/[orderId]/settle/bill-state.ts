@@ -25,10 +25,12 @@
 //    those are the Order/Menu's job (`order-taking-state.ts`), read
 //    separately by the settle screen alongside the Bill.
 
+import type { TaxBreakdownEntry } from "@/lib/tax-lines";
+
 export type BillStatus = "open" | "finalized";
 
-/** The two methods a cashier can post in the finalize call (bills.dtos.ts's `TENDER_METHODS`). */
-export type PostableTenderMethod = "cash" | "upi_manual";
+/** The methods a cashier can post in the finalize call (bills.dtos.ts's `TENDER_METHODS`). `external` (issue #224) is money taken outside RESTIQ, with its reference. */
+export type PostableTenderMethod = "cash" | "upi_manual" | "external";
 /** Every method a bill's tenders can carry (prisma's `TenderMethod`, widened by restiq-backend#130): the four electronic ones are only ever written by the server when a payment intent confirms (ADR-001). */
 export type BillTenderMethod = PostableTenderMethod | "upi_intent" | "upi_qr" | "card_online" | "card_terminal";
 
@@ -39,6 +41,7 @@ export const TENDER_METHOD_LABEL: Record<BillTenderMethod, string> = {
   upi_qr: "UPI QR",
   card_online: "Card (online)",
   card_terminal: "Card terminal",
+  external: "External",
 };
 
 /** The real, verified wire shape of one entry in `BillView.tenders` (bills.dtos.ts's `TenderView`, read directly; `paymentIntentId`/`riskAcknowledged` per restiq-backend#130). */
@@ -49,6 +52,8 @@ export interface BillTenderView {
   /** The confirmed intent an electronic tender came from; null for cash / manual UPI. Optional only for older fixtures - the backend always sends it. */
   paymentIntentId?: string | null;
   riskAcknowledged?: boolean;
+  /** An external tender's reference / bill number (restiq-backend#146); null otherwise. */
+  reference?: string | null;
   createdAt: string;
 }
 
@@ -59,6 +64,8 @@ export interface BillView {
   billNumber: number | null;
   subtotalMinor: number;
   taxMinor: number;
+  /** Per-rate tax lines (CGST/SGST for India, GST for AU), snapshotted when the bill is created (bills.dtos.ts's TaxBreakdownLineView). Optional for older fixtures. */
+  taxBreakdown?: TaxBreakdownEntry[];
   discountMinor: number | null;
   discountReason: string | null;
   /** True for tax-inclusive pricing (AU): subtotalMinor already contains taxMinor, so the payable total is subtotal - discount. Optional only for older fixtures; the backend always sends it. */
@@ -80,6 +87,8 @@ export interface BillView {
 export interface PendingTender {
   method: PostableTenderMethod;
   amountMinor: number;
+  /** Required for `external`: the outside receipt / bill number. */
+  reference?: string;
 }
 
 /** Not yet submitted either - same finalize-call-only posture as `PendingTender` (`FinalizeBillDto.discountMinor`/`discountReason`). `managerPin` is only ever present on the above-threshold path (see discount-dialog.tsx). */
@@ -109,14 +118,38 @@ export function pendingTenderedMinor(tenders: readonly PendingTender[]): number 
   return tenders.reduce((sum, tender) => sum + tender.amountMinor, 0);
 }
 
-/** subtotal + tax - discount, mirroring bill-core.ts's `toBillView`/`commitFinalize` math exactly. `pendingDiscountMinor` lets the settle screen preview the total for a discount that hasn't been submitted yet (an already-finalized bill's own `discountMinor` always wins once it's non-null). */
+/** round(numerator / denominator), half away from zero - the backend's tax.ts roundHalfUp, integer-only. */
+// BigInt(...) rather than 1n literals: the web build targets below ES2020.
+const ZERO = BigInt(0);
+const TWO = BigInt(2);
+const BASIS_POINTS = BigInt(10_000);
+
+function roundHalfUp(numerator: bigint, denominator: bigint): bigint {
+  if (numerator < ZERO) return -roundHalfUp(-numerator, denominator);
+  return (numerator * TWO + denominator) / (denominator * TWO);
+}
+
+/**
+ * The payable total, mirroring the backend's finalize maths (restiq-backend#207):
+ * GST is charged on the discounted value - net = subtotal - discount, and each
+ * breakdown component (CGST, SGST, IGST) is round(net x rate) on its own, so
+ * CGST always equals SGST. Inclusive pricing (AU) never adds tax on top, and a
+ * bill with no rated breakdown (composition scheme, older bills) keeps its own
+ * taxMinor. `pendingDiscountMinor` previews a discount not yet submitted (a
+ * finalized bill's own `discountMinor` wins once it's non-null).
+ */
 export function billTotalMinor(
-  bill: Pick<BillView, "subtotalMinor" | "taxMinor" | "discountMinor" | "pricesIncludeTax">,
+  bill: Pick<BillView, "subtotalMinor" | "taxMinor" | "discountMinor" | "pricesIncludeTax" | "taxBreakdown">,
   pendingDiscountMinor = 0,
 ): number {
   const discountMinor = bill.discountMinor ?? pendingDiscountMinor;
-  // Mirrors bill-core.ts's computeTotalMinor: inclusive pricing (AU) never adds tax on top (issue #156).
-  return (bill.pricesIncludeTax ? bill.subtotalMinor : bill.subtotalMinor + bill.taxMinor) - discountMinor;
+  const netMinor = bill.subtotalMinor - discountMinor;
+  if (bill.pricesIncludeTax) return netMinor;
+  const rated = (bill.taxBreakdown ?? []).filter((line) => line.ratePercent > 0);
+  if (rated.length === 0) return netMinor + bill.taxMinor;
+  const net = BigInt(netMinor);
+  const taxMinor = rated.reduce((sum, line) => sum + roundHalfUp(net * BigInt(Math.round(line.ratePercent * 100)), BASIS_POINTS), ZERO);
+  return Number(net + taxMinor);
 }
 
 /** Finalize is disabled until the pending tenders exactly cover the total - `bill-core.ts`'s `commitFinalize` rejects any other sum with a 400 `tender_mismatch`, this mirrors that gate client-side, same posture as `order-taking-state.ts`'s `canSendToKitchen`. */

@@ -1,21 +1,23 @@
 "use client";
 
-// Read-only device list for the current outlet (name/type/role/app version/
-// last seen/status) - enrolment and revocation stay Platform Console's job;
-// this screen only surfaces what's already enrolled plus generates codes.
+// Device list for the current outlet (name/type/role/app version/last
+// seen/status). Enrolment happens through the code chip; removal (issue
+// #215) is a per-row Remove that the parent confirms with a reason and
+// revokes - the row then stays listed as Revoked for the audit trail.
 import { Dialog } from "radix-ui";
-import { ExternalLink, MonitorSmartphone, QrCode, Radio } from "lucide-react";
+import { ExternalLink, MonitorSmartphone, QrCode, Radio, Trash2 } from "lucide-react";
 import { useState } from "react";
+import { PaginationControls, usePagination } from "@/components/pagination";
 import { QR_SIZE_PX, useQrDataUrl } from "../floor-plan/table-qr-dialog";
 import { formatLastSeen, type AdminDeviceView } from "./devices-state";
 
 // Where an enrolled device's surface lives, so an owner can click straight
-// through to log in and take orders (issue #112). Kiosk/CDS have no web
-// surface yet. Mirrors src/app/device/device-state.ts's continueTargetFor -
+// through to log in and take orders (issue #112). CDS has no web surface
+// yet; a kiosk opens its attract screen (issue #214). Mirrors src/app/device/device-state.ts's continueTargetFor -
 // not imported across route trees (AD-4). POS carries `?device=&tenant=` so
 // the shared PIN pad can bind itself to this device's tenant (issue #150,
 // terminal-binding.ts) instead of relying on POS_TENANT_ID.
-const SURFACE_LINKS: Record<string, { href: (device: Pick<AdminDeviceView, "id" | "tenantId">) => string; label: string }> = {
+const SURFACE_LINKS: Record<string, { href: (device: Pick<AdminDeviceView, "id" | "tenantId" | "outletId">) => string; label: string }> = {
   pos: { href: (device) => `/pos/login?device=${encodeURIComponent(device.id)}&tenant=${encodeURIComponent(device.tenantId)}`, label: "Open POS" },
   kds: { href: () => "/kds", label: "Open KDS" },
   // The simulated receipt printer (issue #172) is a POS-realm screen: bind the
@@ -32,6 +34,12 @@ const SURFACE_LINKS: Record<string, { href: (device: Pick<AdminDeviceView, "id" 
       `/pos/login?device=${encodeURIComponent(device.id)}&tenant=${encodeURIComponent(device.tenantId)}&next=${encodeURIComponent("/pos/terminal")}`,
     label: "Open terminal",
   },
+  // Kiosk (issue #214): the guest-realm attract screen, bound by `?device=`.
+  // ponytail: the list is outlet-scoped, so outletId is always set here.
+  kiosk: {
+    href: (device) => `/qr/kiosk/${encodeURIComponent(device.outletId ?? "")}?device=${encodeURIComponent(device.id)}`,
+    label: "Open kiosk",
+  },
 };
 
 const STATUS_LABELS: Record<string, string> = { active: "Enrolled", revoked: "Revoked" };
@@ -40,12 +48,19 @@ const STATUS_STYLES: Record<string, string> = {
   revoked: "border-status-error/50 bg-status-error/10 text-status-error",
 };
 
-export function DevicesTable({ devices }: Readonly<{ devices: readonly AdminDeviceView[] }>) {
+export interface DevicesTableProps {
+  devices: readonly AdminDeviceView[];
+  /** Present when the parent can revoke: every enrolled row gets a Remove button. */
+  onRemove?: (device: AdminDeviceView) => void;
+}
+
+export function DevicesTable({ devices, onRemove }: Readonly<DevicesTableProps>) {
   // Read once at mount, same lazy-initializer escape hatch code-chip.tsx uses
   // for Date.now() - "last seen" doesn't need to live-tick like the
   // enrolment countdown does.
   const [now] = useState(() => Date.now());
   const [qrFor, setQrFor] = useState<AdminDeviceView | null>(null);
+  const pager = usePagination(devices);
 
   if (devices.length === 0) {
     return (
@@ -74,7 +89,7 @@ export function DevicesTable({ devices }: Readonly<{ devices: readonly AdminDevi
           </tr>
         </thead>
         <tbody>
-          {devices.map((device) => (
+          {pager.items.map((device) => (
             <tr key={device.id} data-testid={`devices-row-${device.id}`} className="h-14 border-b border-border/20 last:border-b-0">
               <td className="px-4 font-medium">{device.label}</td>
               <td className="px-4 text-muted-foreground">{device.type.toUpperCase()}</td>
@@ -103,27 +118,43 @@ export function DevicesTable({ devices }: Readonly<{ devices: readonly AdminDevi
                 </span>
               </td>
               <td className="px-4 text-right">
-                {device.status === "active" && SURFACE_LINKS[device.type] ? (
+                {device.status === "active" ? (
                   <div className="inline-flex items-center gap-3">
-                    <button
-                      type="button"
-                      aria-label={`Show QR for ${device.label}`}
-                      data-testid={`device-qr-${device.id}`}
-                      onClick={() => setQrFor(device)}
-                      className="rounded-md p-1 text-muted-foreground hover:bg-accent hover:text-foreground focus:outline-none focus-visible:ring-2 focus-visible:ring-ring"
-                    >
-                      <QrCode className="size-4" aria-hidden="true" />
-                    </button>
-                    <a
-                      href={SURFACE_LINKS[device.type].href(device)}
-                      target="_blank"
-                      rel="noopener"
-                      data-testid={`device-open-${device.id}`}
-                      className="inline-flex items-center gap-1 whitespace-nowrap text-xs font-semibold text-primary hover:underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
-                    >
-                      {SURFACE_LINKS[device.type].label}
-                      <ExternalLink className="size-3" aria-hidden="true" />
-                    </a>
+                    {SURFACE_LINKS[device.type] && (
+                      <>
+                        <button
+                          type="button"
+                          aria-label={`Show QR for ${device.label}`}
+                          data-testid={`device-qr-${device.id}`}
+                          onClick={() => setQrFor(device)}
+                          className="rounded-md p-1 text-muted-foreground hover:bg-accent hover:text-foreground focus:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+                        >
+                          <QrCode className="size-4" aria-hidden="true" />
+                        </button>
+                        <a
+                          href={SURFACE_LINKS[device.type].href(device)}
+                          target="_blank"
+                          rel="noopener"
+                          data-testid={`device-open-${device.id}`}
+                          className="inline-flex items-center gap-1 whitespace-nowrap text-xs font-semibold text-primary hover:underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+                        >
+                          {SURFACE_LINKS[device.type].label}
+                          <ExternalLink className="size-3" aria-hidden="true" />
+                        </a>
+                      </>
+                    )}
+                    {onRemove && (
+                      <button
+                        type="button"
+                        data-testid={`device-remove-${device.id}`}
+                        aria-label={`Remove ${device.label}`}
+                        onClick={() => onRemove(device)}
+                        className="inline-flex items-center gap-1 whitespace-nowrap rounded-md px-1 text-xs font-semibold text-muted-foreground hover:text-status-error focus:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+                      >
+                        <Trash2 className="size-3.5" aria-hidden="true" />
+                        Remove
+                      </button>
+                    )}
                   </div>
                 ) : (
                   <span className="text-xs text-muted-foreground">-</span>
@@ -133,6 +164,7 @@ export function DevicesTable({ devices }: Readonly<{ devices: readonly AdminDevi
           ))}
         </tbody>
       </table>
+      <PaginationControls pager={pager} testId="devices-pagination" />
       {qrFor && <DeviceQrDialog key={qrFor.id} device={qrFor} onClose={() => setQrFor(null)} />}
     </div>
   );

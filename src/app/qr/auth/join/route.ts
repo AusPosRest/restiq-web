@@ -11,6 +11,7 @@
 // flips into start mode rather than showing it as a submission error, so
 // this route passes the upstream body through untouched either way.
 import { NextResponse } from "next/server";
+import { clientIpHeaders } from "@/lib/client-ip-headers";
 import { guestSessionResponse } from "../session-cookies";
 import type { GuestApiError, GuestJoinResult } from "../types";
 
@@ -43,7 +44,8 @@ export async function POST(request: Request): Promise<NextResponse> {
   try {
     upstream = await fetch(`${apiUrl}/guest/v1/sessions/join`, {
       method: "POST",
-      headers: { "content-type": "application/json" },
+      // restiq-backend#209 (SE-24): wrong PINs are counted per guest address, so pass the guest's along.
+      headers: { "content-type": "application/json", ...clientIpHeaders(request) },
       body: JSON.stringify({ outletId, tableId, pin, name: name.trim() }),
       cache: "no-store",
     });

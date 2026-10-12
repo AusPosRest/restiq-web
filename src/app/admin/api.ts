@@ -25,6 +25,8 @@ export class AdminApiError extends Error {
     message: string,
     readonly status: number,
     readonly code?: string,
+    /** The whole error envelope, for errors that carry detail next to code/message (e.g. duplicate_items' `duplicates`). */
+    readonly details?: Record<string, unknown>,
   ) {
     super(message);
   }
@@ -42,8 +44,8 @@ export async function adminApi<T>(path: string, init?: RequestInit): Promise<T> 
   }
   const body: unknown = res.status === 204 ? null : await res.json().catch(() => null);
   if (!res.ok) {
-    const error = (body as { error?: { code?: string; message?: string } } | null)?.error;
-    throw new AdminApiError(error?.message ?? "The request failed", res.status, error?.code);
+    const error = (body as { error?: { code?: string; message?: string } & Record<string, unknown> } | null)?.error;
+    throw new AdminApiError(error?.message ?? "The request failed", res.status, error?.code, error);
   }
   return body as T;
 }
@@ -100,6 +102,11 @@ export async function uploadMenuImport(file: File): Promise<MenuImportDraft> {
   return payload as MenuImportDraft;
 }
 
+// PE-11: the open (uncommitted) draft the owner left, so the import page can resume it.
+export function fetchLatestMenuImport(): Promise<{ draft: MenuImportDraft | null }> {
+  return adminApi<{ draft: MenuImportDraft | null }>("menu-import/latest");
+}
+
 // The backend's PATCH takes a batch of per-item edits and returns the full,
 // re-authoritative draft (same "no extra fetch needed" shape as the
 // checklist's completeStep) - one field on one item is just a batch of one.
@@ -112,6 +119,14 @@ export function updateMenuImportItem(
   return adminApi<MenuImportDraft>(`menu-import/${importId}`, {
     method: "PATCH",
     body: JSON.stringify({ items: [{ id: itemId, [field]: value }] }),
+  });
+}
+
+// Drops a draft row before commit, e.g. one already on the menu (issue #247).
+export function removeMenuImportItem(importId: string, itemId: string): Promise<MenuImportDraft> {
+  return adminApi<MenuImportDraft>(`menu-import/${importId}`, {
+    method: "PATCH",
+    body: JSON.stringify({ items: [], removeIds: [itemId] }),
   });
 }
 
@@ -158,11 +173,22 @@ export function fetchItems(categoryId?: string): Promise<ItemView[]> {
   return adminApi<ItemView[]>(categoryId ? `menu/items?categoryId=${encodeURIComponent(categoryId)}` : "menu/items");
 }
 
+export interface NewVariantInput {
+  name: string;
+  /** restiq-backend#211: the variant is created with its price (every channel). */
+  priceMinor?: number;
+  currency?: string;
+  /** On an item's first variant: the name its existing price is kept under (default "Regular"). */
+  basePortionName?: string;
+}
+
 export interface CreateItemInput {
   categoryId: string;
   name: string;
   shortName: string;
-  variants?: Array<{ name: string; sortOrder?: number }>;
+  vegMarker?: "veg" | "non_veg";
+  stationId?: string;
+  variants?: NewVariantInput[];
   modifierGroupIds?: string[];
   allergenIds?: string[];
 }
@@ -175,6 +201,9 @@ export interface UpdateItemInput {
   name?: string;
   shortName?: string;
   categoryId?: string;
+  /** null removes the photo (restiq-backend#142). */
+  photoUrl?: string | null;
+  vegMarker?: "veg" | "non_veg" | null;
 }
 
 export function updateMenuItem(itemId: string, input: UpdateItemInput): Promise<ItemView> {
@@ -185,8 +214,18 @@ export function setItemAvailability(itemId: string, available: boolean): Promise
   return adminApi<ItemView>(`menu/items/${itemId}/availability`, { method: "PATCH", body: JSON.stringify({ available }) });
 }
 
-export function addVariant(itemId: string, name: string): Promise<ItemView> {
-  return adminApi<ItemView>(`menu/items/${itemId}/variants`, { method: "POST", body: JSON.stringify({ name }) });
+// Issue #248: the backend archives rather than deletes, so past bills keep the item.
+export function deleteMenuItem(itemId: string): Promise<null> {
+  return adminApi<null>(`menu/items/${itemId}`, { method: "DELETE" });
+}
+
+export function addVariant(itemId: string, input: NewVariantInput): Promise<ItemView> {
+  return adminApi<ItemView>(`menu/items/${itemId}/variants`, { method: "POST", body: JSON.stringify(input) });
+}
+
+/** PE-21: which kitchen station gets this item's tickets; null = the outlet's first station. */
+export function setItemStation(itemId: string, stationId: string | null): Promise<ItemView> {
+  return adminApi<ItemView>(`menu/items/${itemId}/station`, { method: "PATCH", body: JSON.stringify(stationId ? { stationId } : {}) });
 }
 
 export function removeVariant(itemId: string, variantId: string): Promise<ItemView> {
@@ -211,7 +250,8 @@ export function clearOutletAvailability(itemId: string, outletId: string): Promi
 
 export interface CreatePriceInput {
   variantId?: string;
-  channel: PriceChannel;
+  /** Omitted = every channel (the owner console sets one price per item). */
+  channel?: PriceChannel;
   outletId?: string;
   priceMinor: number;
   currency: string;
@@ -226,21 +266,6 @@ export interface ItemPriceView extends CurrentPriceView {
 
 export function createItemPrice(itemId: string, input: CreatePriceInput): Promise<ItemPriceView> {
   return adminApi<ItemPriceView>(`menu/items/${itemId}/prices`, { method: "POST", body: JSON.stringify(input) });
-}
-
-export function fetchCurrentPrice(
-  itemId: string,
-  params: { channel: PriceChannel; variantId?: string; outletId?: string },
-): Promise<CurrentPriceView> {
-  const search = new URLSearchParams({ channel: params.channel });
-  if (params.variantId) search.set("variantId", params.variantId);
-  if (params.outletId) search.set("outletId", params.outletId);
-  return adminApi<CurrentPriceView>(`menu/items/${itemId}/price?${search.toString()}`).catch((error: unknown) => {
-    // 404 (no_current_price) means this line has never been priced yet -
-    // that's a normal state for a freshly added variant, not a load failure.
-    if (error instanceof AdminApiError && error.status === 404) return null as unknown as CurrentPriceView;
-    throw error;
-  });
 }
 
 export function fetchModifierGroups(): Promise<ModifierGroupView[]> {
@@ -274,16 +299,25 @@ export function fetchCombos(): Promise<ComboView[]> {
   return adminApi<ComboView[]>("menu/combos");
 }
 
-export interface CreateComboInput {
+// restiq-backend#160: a combo is saved whole - fields and every slot.
+export interface SaveComboInput {
   name: string;
   categoryId?: string;
   priceMinor: number;
   currency: string;
-  components: Array<{ itemId: string; quantity?: number }>;
+  photoUrl?: string;
+  available: boolean;
+  slots: Array<{ name: string; pickCount: number; options: Array<{ itemId: string; variantId?: string; upchargeMinor?: number }> }>;
 }
 
-export function createCombo(input: CreateComboInput): Promise<ComboView> {
-  return adminApi<ComboView>("menu/combos", { method: "POST", body: JSON.stringify(input) });
+export function saveCombo(comboId: string | null, input: SaveComboInput): Promise<ComboView> {
+  return comboId
+    ? adminApi<ComboView>(`menu/combos/${comboId}`, { method: "PUT", body: JSON.stringify(input) })
+    : adminApi<ComboView>("menu/combos", { method: "POST", body: JSON.stringify(input) });
+}
+
+export function archiveCombo(comboId: string): Promise<void> {
+  return adminApi<void>(`menu/combos/${comboId}`, { method: "DELETE" });
 }
 
 // --- CAP-10 Branding & capabilities. Verified against restiq-backend's
@@ -317,6 +351,18 @@ export function setOutletCapability(outletId: string, key: string, enabled: bool
     method: "PATCH",
     body: JSON.stringify({ enabled }),
   });
+}
+
+// Issue #329: owner-editable outlet name/address/timezone. Outlet type is
+// set at provisioning and never sent here.
+export interface UpdateOutletInput {
+  name?: string;
+  address?: string;
+  timezone?: string;
+}
+
+export function updateOutlet(outletId: string, input: UpdateOutletInput): Promise<OutletView> {
+  return adminApi<OutletView>(`outlets/${outletId}`, { method: "PATCH", body: JSON.stringify(input) });
 }
 
 // --- CAP-5 Floor plan & stations. Verified against restiq-backend's actual
@@ -405,6 +451,22 @@ export function updateStation(outletId: string, stationId: string, input: Update
   });
 }
 
+export function deleteStation(outletId: string, stationId: string): Promise<void> {
+  return adminApi<void>(`outlets/${outletId}/floor-plan/stations/${stationId}`, { method: "DELETE" });
+}
+
+export interface StarterSetupResult {
+  type: string;
+  stationsCreated: string[];
+  tablesCreated: number;
+  capabilitiesSet: string[];
+}
+
+/** Builds the outlet type's starting stations, tables and switches; safe to repeat - it only adds what is missing. */
+export function applyStarterSetup(outletId: string): Promise<StarterSetupResult> {
+  return adminApi<StarterSetupResult>(`outlets/${outletId}/starter-setup`, { method: "POST" });
+}
+
 export function updatePrinter(outletId: string, printerId: string, renderMode: PrinterRenderMode): Promise<PrinterView> {
   return adminApi<PrinterView>(`outlets/${outletId}/floor-plan/printers/${printerId}`, {
     method: "PATCH",
@@ -488,6 +550,20 @@ export function setDevicePairing(outletId: string, deviceId: string, posDeviceId
   });
 }
 
+// Owner-side removal (issue #215 / restiq-backend#140): POST
+// .../devices/:deviceId/revoke { reason } -> { id, status: "revoked",
+// revokedAt }. Revoke, never delete - the row stays listed as Revoked for
+// the audit trail. 409 conflict when it is already revoked.
+export interface DeviceRevokeResult {
+  id: string;
+  status: "revoked";
+  revokedAt: string;
+}
+
+export function revokeDevice(outletId: string, deviceId: string, reason: string): Promise<DeviceRevokeResult> {
+  return adminApi<DeviceRevokeResult>(`outlets/${outletId}/devices/${deviceId}/revoke`, { method: "POST", body: JSON.stringify({ reason }) });
+}
+
 // --- CAP-7 Staff & roles. Reconciled against the real restiq-backend#38/#39
 // DTOs (GET /admin/v1/staff returns { staff: [...] }, not a bare array;
 // CreateStaffDto/UpdateStaffDto take a single `name`, not firstName/lastName;
@@ -507,11 +583,19 @@ export interface CreateStaffInput {
   lastName: string;
   email: string;
   roleId: string;
+  outletIds?: string[];
 }
 
 export function createStaff(input: CreateStaffInput): Promise<StaffView> {
   const name = `${input.firstName} ${input.lastName}`.trim();
-  return adminApi<StaffView>("staff", { method: "POST", body: JSON.stringify({ name, email: input.email, roleId: input.roleId }) });
+  // CU-3: a blank email is left out (the API takes no email, but rejects an empty one).
+  const email = input.email.trim() || undefined;
+  return adminApi<StaffView>("staff", { method: "POST", body: JSON.stringify({ name, email, roleId: input.roleId, outletIds: input.outletIds ?? [] }) });
+}
+
+/** restiq-backend#197: where this person may sign in (empty = every outlet). Ends their open till sessions. */
+export function updateStaffOutlets(staffId: string, outletIds: string[]): Promise<StaffView> {
+  return adminApi<StaffView>(`staff/${staffId}`, { method: "PATCH", body: JSON.stringify({ outletIds }) });
 }
 
 // Role change is security-relevant (SPEC constraints: audited with actor +
@@ -645,11 +729,44 @@ export interface AgreementSignatureView {
 }
 
 export interface OwnerAgreementView {
-  current: { id: string; version: number; title: string; body: string; publishedAt: string } | null;
+  /** The agreement is a PDF: read it at /admin/api/agreement/{id}/file. hasFile is false for a version published as text. */
+  current: { id: string; version: number; title: string; hasFile: boolean; fileName: string | null; sizeBytes: number | null; fileSha256: string; publishedAt: string } | null;
   signature: AgreementSignatureView | null;
   history: AgreementSignatureView[];
 }
 
-export function signAgreement(versionId: string, signerName: string): Promise<{ signature: AgreementSignatureView }> {
-  return adminApi(`agreement/${versionId}/sign`, { method: "POST", body: JSON.stringify({ signerName, accepted: true }) });
+/** fileSha256 is the hash of the file the owner was shown; the server refuses if the current file has changed. */
+export function signAgreement(versionId: string, signerName: string, fileSha256: string): Promise<{ signature: AgreementSignatureView }> {
+  return adminApi(`agreement/${versionId}/sign`, { method: "POST", body: JSON.stringify({ signerName, accepted: true, fileSha256 }) });
+}
+
+export const agreementFileUrl = (versionId: string): string => `/admin/api/agreement/${versionId}/file`;
+
+// --- Product directory (issue #245): the platform catalog, scoped by the
+// backend to this tenant's currency. Import copies the chosen products into
+// the tenant's own menu (same result shape as a menu-import commit).
+
+export interface DirectoryProduct {
+  id: string;
+  name: string;
+  shortName: string;
+  nameHindi: string | null;
+  vegMarker: "veg" | "non_veg" | null;
+  photoUrl: string | null;
+  category: string;
+  suggestedPriceMinor: number;
+  currency: string;
+  tags: string[];
+}
+
+export function directoryPath(q: string, tag: string): string {
+  const params = new URLSearchParams();
+  if (q.trim()) params.set("q", q.trim());
+  if (tag) params.set("tag", tag);
+  const search = params.toString();
+  return `menu/directory${search ? `?${search}` : ""}`;
+}
+
+export function importDirectoryProducts(productIds: string[]): Promise<MenuImportCommitResult> {
+  return adminApi<MenuImportCommitResult>("menu/directory/import", { method: "POST", body: JSON.stringify({ productIds }) });
 }

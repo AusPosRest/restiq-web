@@ -1,5 +1,5 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
-import { guestOrderUrl, qrPngFilename, qrSheetHtml, qrZipPngFilename, renderTableQrPng, slug } from "./table-qr-state";
+import { guestOrderUrl, qrPngFilename, renderTableQrPng, wrapText } from "./table-qr-state";
 import { defaultQrSheetTemplate } from "./qr-sheet-template";
 
 const TEMPLATE = defaultQrSheetTemplate("Indiranagar Diner");
@@ -26,71 +26,6 @@ describe("qrPngFilename", () => {
   });
 });
 
-describe("slug", () => {
-  it("lowercases and dash-separates, stripping anything that isn't alphanumeric", () => {
-    expect(slug("Ground Floor")).toBe("ground-floor");
-    expect(slug("Patio / 2")).toBe("patio-2");
-    expect(slug("  T-1  ")).toBe("t-1");
-  });
-
-  it("falls back to a placeholder rather than an empty segment", () => {
-    expect(slug("")).toBe("item");
-    expect(slug("###")).toBe("item");
-  });
-});
-
-describe("qrZipPngFilename", () => {
-  it("combines the floor and table slugs into one ZIP entry name", () => {
-    expect(qrZipPngFilename("Ground Floor", "T-1")).toBe("ground-floor-t-1-qr.png");
-  });
-});
-
-describe("qrSheetHtml", () => {
-  const CARDS = [
-    { table: { id: "t1", label: "<b>T1</b>" }, floorName: "Ground & Co", url: "https://example.com/qr/t/o/t1", qrDataUrl: "data:image/png;base64,ONE" },
-    { table: { id: "t2", label: "T2" }, floorName: "Terrace", url: "https://example.com/qr/t/o/t2", qrDataUrl: "data:image/png;base64,TWO" },
-  ];
-
-  it("renders one card per table with its QR, and escapes owner-entered labels", () => {
-    const html = qrSheetHtml(CARDS, TEMPLATE);
-
-    expect(html.startsWith("<!doctype html>")).toBe(true);
-    expect(html).not.toContain("<b>T1</b>");
-    expect(html).toContain("&#60;b&#62;T1&#60;/b&#62;");
-    expect(html).toContain("Ground &#38; Co");
-    expect(html).toContain('src="data:image/png;base64,ONE"');
-    expect(html).toContain('src="data:image/png;base64,TWO"');
-    expect(html).toContain("https://example.com/qr/t/o/t2");
-  });
-
-  it("shows the template's heading and instruction once, escaped, at the top of the sheet", () => {
-    const html = qrSheetHtml(CARDS, { ...TEMPLATE, heading: "<b>Diner</b>", instruction: "Scan & order" });
-    expect(html).toContain("<header>");
-    expect(html).toContain("&#60;b&#62;Diner&#60;/b&#62;");
-    expect(html).toContain("Scan &#38; order");
-  });
-
-  it("omits the header entirely when heading and instruction are both blank", () => {
-    const html = qrSheetHtml(CARDS, { ...TEMPLATE, heading: "", instruction: "" });
-    expect(html).not.toContain("<header>");
-  });
-
-  it("drops a per-card field's markup when its toggle is off", () => {
-    const html = qrSheetHtml(CARDS, { ...TEMPLATE, showFloorName: false, showTableLabel: false, showUrl: false });
-    expect(html).not.toContain("Terrace");
-    expect(html).not.toContain("<h2>T2</h2>");
-    expect(html).not.toContain("https://example.com/qr/t/o/t2");
-    // The QR image itself, and its accessible alt text, always stay.
-    expect(html).toContain('src="data:image/png;base64,TWO"');
-    expect(html).toContain('alt="Self-order QR code for T2"');
-  });
-
-  it("sizes the QR image per the template's card size", () => {
-    const html = qrSheetHtml(CARDS, { ...TEMPLATE, cardSize: "large" });
-    expect(html).toContain("width:64mm;height:64mm");
-  });
-});
-
 describe("renderTableQrPng", () => {
   function stubImage() {
     class FakeImage {
@@ -112,7 +47,7 @@ describe("renderTableQrPng", () => {
     const fillText = vi.fn();
     const drawImage = vi.fn();
     const toDataURL = vi.fn(() => "data:image/png;base64,COMPOSITE");
-    const context = { fillStyle: "", font: "", textAlign: "", textBaseline: "", fillRect: vi.fn(), fillText, drawImage };
+    const context = { fillStyle: "", font: "", textAlign: "", textBaseline: "", fillRect: vi.fn(), fillText, drawImage, measureText: (text: string) => ({ width: text.length * 10 }) };
     vi.spyOn(HTMLCanvasElement.prototype, "getContext").mockReturnValue(context as unknown as CanvasRenderingContext2D);
     vi.spyOn(HTMLCanvasElement.prototype, "toDataURL").mockImplementation(toDataURL);
     return { fillText, drawImage, toDataURL };
@@ -165,5 +100,26 @@ describe("renderTableQrPng", () => {
     const texts = fillText.mock.calls.map((call) => call[0]);
     expect(texts).not.toContain("Ground Floor");
     expect(texts).toContain("T1");
+  });
+});
+
+// PE-20 / CU-8: the long table link on a downloaded PNG was clipped at both edges.
+describe("wrapText", () => {
+  const measure = (text: string) => text.length * 10;
+
+  it("keeps short text on one line", () => {
+    expect(wrapText("T1", 100, measure)).toEqual(["T1"]);
+  });
+
+  it("breaks a long URL into lines that each fit", () => {
+    const url = "http://bay-leaf.localhost:3105/qr/t/01a12afd-0a44-72cd-a839-75e12aaaaaaa/01a12afd-0a44-72cd-a839-75e12bbbbbbb";
+    const lines = wrapText(url, 300, measure);
+    expect(lines.length).toBeGreaterThan(1);
+    expect(lines.every((line) => measure(line) <= 300)).toBe(true);
+    expect(lines.join("")).toBe(url);
+  });
+
+  it("breaks words at spaces", () => {
+    expect(wrapText("Scan to view the menu", 120, measure)).toEqual(["Scan to view", "the menu"]);
   });
 });

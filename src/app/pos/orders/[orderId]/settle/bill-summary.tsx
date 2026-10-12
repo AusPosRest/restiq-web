@@ -27,6 +27,7 @@
 // than a second, parallel line-item component) is the ponytail
 // reuse-over-rewrite call.
 import { Minus, Plus, Trash2 } from "lucide-react";
+import { taxLines } from "@/lib/tax-lines";
 import { formatMinor } from "../../../(shell)/shift/shift-state";
 import type { OrderLineView } from "../order-taking-state";
 import { billTotalMinor, type BillView, type PendingDiscount } from "./bill-state";
@@ -88,10 +89,13 @@ export function BillSummary({
           <tbody>
             {lines.map((line) => {
               const isBusy = busyLineId === line.id;
+              // CU-15: a line the kitchen already has can't be stepped or removed here.
+              const lineEditable = editable && !line.sentToKitchen;
               return (
                 <tr key={line.id} data-testid={`bill-line-${line.id}`} className="align-top">
                   <td className="py-1.5 pr-3 tabular-nums">
-                    {editable ? (
+                    {/* A combo can only be removed, not stepped (restiq-backend#160). */}
+                    {lineEditable && !line.comboId ? (
                       <div className="flex items-center gap-1">
                         <button
                           type="button"
@@ -130,10 +134,21 @@ export function BillSummary({
                     {line.modifiers.length > 0 && (
                       <p className="text-xs text-muted-foreground">{line.modifiers.map((modifier) => modifier.name).join(", ")}</p>
                     )}
+                    {line.components.length > 0 && (
+                      <p data-testid={`bill-line-components-${line.id}`} className="text-xs text-muted-foreground">
+                        {line.components.join(" · ")}
+                      </p>
+                    )}
+                    {line.note && (
+                      <p data-testid={`bill-line-note-${line.id}`} className="text-xs italic text-foreground/80">
+                        Note: {line.note}
+                      </p>
+                    )}
                   </td>
                   <td className="whitespace-nowrap py-1.5 text-right tabular-nums">{formatMinor(line.lineTotalMinor, currency)}</td>
                   {editable && (
                     <td className="py-1.5 pl-2 text-right">
+                      {lineEditable && (
                       <button
                         type="button"
                         data-testid={`bill-line-remove-${line.id}`}
@@ -144,6 +159,7 @@ export function BillSummary({
                       >
                         <Trash2 className="size-3.5" aria-hidden="true" />
                       </button>
+                      )}
                     </td>
                   )}
                 </tr>
@@ -163,7 +179,10 @@ export function BillSummary({
               tone="available"
             />
           )}
-          <Row label="Tax" value={formatMinor(bill.taxMinor, currency)} />
+          {/* issue #306: the per-rate lines (CGST + SGST) the backend already snapshots, else one Tax line. */}
+          {taxLines(bill).map((line) => (
+            <Row key={line.label || "tax"} label={line.label || "Tax"} value={formatMinor(line.amountMinor, currency)} />
+          ))}
           <div className="mt-1 flex items-center justify-between border-t border-border/60 pt-2">
             <span className="font-label text-sm font-semibold uppercase tracking-wider text-foreground">Total</span>
             <span data-testid="bill-grand-total" className="tabular-nums text-lg font-bold text-primary">

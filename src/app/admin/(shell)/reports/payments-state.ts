@@ -5,11 +5,9 @@
 //
 // Contract: GET /admin/v1/reports/payments (restiq-backend#104, landing in
 // parallel with this story) - see api.ts#fetchPayments's header for the full
-// wire shape this was built against. Money carries no per-row currency field
-// (same gap CAP-4's menu prices had before a tenant-currency source
-// existed) - payments.tsx follows the admin surface's existing convention
-// (menu-management.tsx, dashboard's outlet-kpi-tiles.tsx) of a local INR
-// constant plus menu-state.ts's formatPriceMinor, not a new formatter.
+// wire shape this was built against. Every amount is in the response's
+// `currency` (the tenant's), shown to the paisa/cent with lib/money.ts's
+// formatMoney (PE-10, PE-23) - accounting figures are never rounded.
 
 export interface PaymentTender {
   method: string;
@@ -20,15 +18,16 @@ export interface PaymentTender {
 export interface PaymentCreditNote {
   id: string;
   amountMinor: number;
+  /** How the money went back (a tender method); null on a note issued before this was recorded (restiq-backend#221). */
+  method: string | null;
   reason: string;
   createdAt: string;
 }
 
-export interface PaymentTaxBreakdownEntry {
-  label: string;
-  ratePercent: number;
-  amountMinor: number;
-}
+import { localeForCurrency } from "@/lib/money";
+import type { TaxBreakdownEntry } from "@/lib/tax-lines";
+export type { TaxLine } from "@/lib/tax-lines";
+export type PaymentTaxBreakdownEntry = TaxBreakdownEntry;
 
 export type PaymentSource = "pos" | "qr";
 
@@ -62,9 +61,12 @@ export interface PaymentsTotals {
   totalMinor: number;
   tenderedMinor: number;
   refundedMinor: number;
+  /** totalMinor - refundedMinor: the same "sales" the dashboard shows (PE-33). */
+  netMinor: number;
 }
 
 export interface PaymentsResponse {
+  currency: string;
   items: PaymentRow[];
   nextCursor: string | null;
   totals: PaymentsTotals;
@@ -161,28 +163,17 @@ export function sourceLabel(source: PaymentSource): string {
   return source === "qr" ? "QR" : "POS";
 }
 
-export interface TaxLine {
-  label: string;
-  amountMinor: number;
-}
-
-/** Per-bill tax display: the real breakdown when the backend sent one, else one unlabelled line off `taxMinor` (the contract's `taxBreakdown?` "may be absent"). */
-export function taxLines(row: Pick<PaymentRow, "taxBreakdown" | "taxMinor">): TaxLine[] {
-  if (row.taxBreakdown && row.taxBreakdown.length > 0) {
-    return row.taxBreakdown.map((line) => ({ label: `${line.label} (${line.ratePercent}%)`, amountMinor: line.amountMinor }));
-  }
-  return [{ label: "", amountMinor: row.taxMinor }];
-}
+export { taxLines } from "@/lib/tax-lines";
 
 export function refundedMinorFor(row: Pick<PaymentRow, "creditNotes">): number {
   return row.creditNotes.reduce((sum, note) => sum + note.amountMinor, 0);
 }
 
-export function formatBillTime(iso: string, timeZone: string): string {
-  return new Date(iso).toLocaleTimeString("en-US", { timeZone, hour: "2-digit", minute: "2-digit" });
+export function formatBillTime(iso: string, timeZone: string, currency = "INR"): string {
+  return new Date(iso).toLocaleTimeString(localeForCurrency(currency), { timeZone, hour: "2-digit", minute: "2-digit" });
 }
 
 /** Appends a "load more" page onto what's already loaded - totals describe the whole filtered range on every page (not just what's loaded so far), so the latest response's totals replace the running ones rather than being summed. */
 export function appendPaymentsPage(current: PaymentsResponse, page: PaymentsResponse): PaymentsResponse {
-  return { items: [...current.items, ...page.items], nextCursor: page.nextCursor, totals: page.totals };
+  return { currency: page.currency, items: [...current.items, ...page.items], nextCursor: page.nextCursor, totals: page.totals };
 }

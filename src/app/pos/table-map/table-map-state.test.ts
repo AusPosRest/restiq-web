@@ -8,7 +8,7 @@ import {
 } from "./table-map-state";
 
 function emptyTable(id: string, floorId = "f1", floorName = "Ground Floor"): TableMapEntry {
-  return { id, floorId, floorName, label: id.toUpperCase(), seatCapacity: 4, status: "empty", order: null };
+  return { id, floorId, floorName, label: id.toUpperCase(), seatCapacity: 4, status: "empty", order: null, guestSessionOpen: false };
 }
 
 function occupiedTable(id: string, ownerStaffId: string, floorId = "f1"): TableMapEntry {
@@ -19,13 +19,14 @@ function occupiedTable(id: string, ownerStaffId: string, floorId = "f1"): TableM
     label: id.toUpperCase(),
     seatCapacity: 4,
     status: "occupied",
-    order: { id: `order-${id}`, ownerStaffId },
+    order: { id: `order-${id}`, ownerStaffId, ownerName: null },
+    guestSessionOpen: false,
   };
 }
 
 describe("toTableMapEntry", () => {
   it("maps the real, flat wire shape (RawTableMapEntry) into the display shape, including the real floorName", () => {
-    const raw: RawTableMapEntry = { tableId: "t1", floorId: "f1", floorName: "Ground Floor", label: "T1", seatCapacity: 4, status: "occupied", orderId: "order-1", ownerId: "staff-me" };
+    const raw: RawTableMapEntry = { tableId: "t1", floorId: "f1", floorName: "Ground Floor", label: "T1", seatCapacity: 4, status: "occupied", orderId: "order-1", ownerId: "staff-me", ownerName: "Me", guestSessionOpen: true };
     expect(toTableMapEntry(raw)).toEqual({
       id: "t1",
       floorId: "f1",
@@ -33,7 +34,8 @@ describe("toTableMapEntry", () => {
       label: "T1",
       seatCapacity: 4,
       status: "occupied",
-      order: { id: "order-1", ownerStaffId: "staff-me" },
+      order: { id: "order-1", ownerStaffId: "staff-me", ownerName: "Me" },
+      guestSessionOpen: true,
     });
   });
 

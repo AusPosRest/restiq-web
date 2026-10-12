@@ -15,6 +15,7 @@
 // either), so this story's original percent-based Margin/Labour rendering
 // was wrong and has been corrected to match.
 
+import { DATE_LOCALE } from "@/lib/datetime";
 export interface DashboardTenant {
   outletCount: number;
   staffCount: number;
@@ -30,9 +31,21 @@ export interface FinancialMetric {
   message: string;
 }
 
+/** The outlet's own calendar day so far (PE-33/CU-7). `sales.amountMinor` is `netMinor` - bills less refunds, the same figure Reports > Payments shows as Net sales. */
+export interface OutletToday {
+  billCount: number;
+  grossMinor: number;
+  refundedMinor: number;
+  netMinor: number;
+  averageBillMinor: number;
+  openOrderCount: number;
+  byMethod: { method: string; amountMinor: number }[];
+}
+
 export interface OutletKpis {
   outletId: string;
   outletName: string;
+  today: OutletToday;
   sales: FinancialMetric;
   margin: FinancialMetric;
   labourCost: FinancialMetric;
@@ -48,16 +61,14 @@ export interface DashboardView {
 
 // Formats in UTC explicitly (rather than the host's local timezone) so the
 // badge is deterministic in tests and in CI regardless of runner TZ.
-export function formatAsOf(iso: string, now: Date = new Date()): string {
+export function formatAsOf(iso: string, now: Date = new Date(), timeZone?: string): string {
+  // The viewer's own clock (walkthrough fix: it showed UTC, 7:26pm at 00:56 in
+  // Bengaluru). Tests pin `timeZone` to "UTC" to stay deterministic.
   const then = new Date(iso);
-  const hours24 = then.getUTCHours();
-  const period = hours24 >= 12 ? "pm" : "am";
-  const hours12 = hours24 % 12 === 0 ? 12 : hours24 % 12;
-  const time = `${hours12}:${then.getUTCMinutes().toString().padStart(2, "0")}${period}`;
-
-  const sameDay = then.toISOString().slice(0, 10) === now.toISOString().slice(0, 10);
-  if (sameDay) return time;
-
-  const month = then.toLocaleString("en-US", { month: "short", timeZone: "UTC" });
-  return `${then.getUTCDate()} ${month}, ${time}`;
+  const day = (date: Date) => date.toLocaleDateString("en-CA", { timeZone });
+  const time = then.toLocaleTimeString(DATE_LOCALE, { hour: "numeric", minute: "2-digit", timeZone }).replace(/\s/g, "").toLowerCase();
+  if (day(then) === day(now)) return time;
+  const month = then.toLocaleString(DATE_LOCALE, { month: "short", timeZone });
+  const date = then.toLocaleString(DATE_LOCALE, { day: "numeric", timeZone });
+  return `${date} ${month}, ${time}`;
 }

@@ -72,7 +72,7 @@ describe("OpenOrdersScreen", () => {
   it("renders every open order with its origin, server, status and elapsed time - the real table label, never the raw table id (regression for #96)", async () => {
     const orders = [
       order({ id: "order-1", tableId: "table-4", tableLabel: "T4" }),
-      order({ id: "order-2", tableId: null, tableLabel: null, ownerId: "staff-priya" }),
+      order({ id: "order-2", tableId: null, tableLabel: null, ownerId: "staff-priya", ownerName: "Priya", tokenNumber: 23 }),
     ];
     stubFetch(() => jsonResponse(orders));
     render(<OpenOrdersScreen outletId="outlet-1" currentStaffId={CURRENT_STAFF_ID} />);
@@ -80,8 +80,10 @@ describe("OpenOrdersScreen", () => {
 
     expect(screen.getByTestId("open-order-order-1").textContent).toContain("Table T4");
     expect(screen.getByTestId("open-order-order-1").textContent).not.toContain("table-4");
-    expect(screen.getByTestId("open-order-order-2").textContent).toContain("Counter");
-    expect(screen.getByTestId("open-order-order-2").textContent).toContain("staff-priya");
+    expect(screen.getByTestId("open-order-order-2").textContent).toContain("Counter · Token #23");
+    // CU-14: the server's name, never the raw staff id.
+    expect(screen.getByTestId("open-order-order-2").textContent).toContain("Priya");
+    expect(screen.getByTestId("open-order-order-2").textContent).not.toContain("staff-priya");
   });
 
   it('shows "You" for the signed-in staff\'s own order, not their raw id', async () => {
@@ -139,7 +141,7 @@ describe("OpenOrdersScreen", () => {
     const user = userEvent.setup();
     stubFetch((url) => {
       if (url.endsWith("/pos/api/outlets/outlet-1/orders")) {
-        return jsonResponse([order({ id: "order-1", ownerId: "staff-priya" })]);
+        return jsonResponse([order({ id: "order-1", ownerId: "staff-priya", ownerName: "Priya" })]);
       }
       if (url.endsWith("/pos/api/orders/order-1/transfer")) return jsonResponse({});
       throw new Error(`unexpected fetch ${url}`);
@@ -149,7 +151,8 @@ describe("OpenOrdersScreen", () => {
 
     await user.click(screen.getByTestId("open-order-take-over-order-1"));
     const dialog = await screen.findByTestId("transfer-ownership-dialog");
-    expect(dialog.textContent).toContain("staff-priya");
+    expect(dialog.textContent).toContain("Priya");
+    expect(dialog.textContent).not.toContain("staff-priya");
     expect(push).not.toHaveBeenCalled();
 
     await user.click(screen.getByTestId("transfer-confirm"));
@@ -192,6 +195,35 @@ describe("OpenOrdersScreen", () => {
     render(<OpenOrdersScreen outletId="outlet-1" currentStaffId={CURRENT_STAFF_ID} />);
     await waitFor(() => expect(screen.getByTestId("open-orders")).toBeTruthy());
 
-    expect(screen.getByTestId("open-orders-summary").textContent).toBe("2 open orders · ₹1500.00 in progress");
+    expect(screen.getByTestId("open-orders-summary").textContent).toBe("2 open orders · ₹1,500.00 in progress");
+  });
+});
+
+describe("OpenOrdersScreen - clearing out empty orders (CU-14)", () => {
+  it("offers Discard only on my own empty orders, and the list reloads without it", async () => {
+    const user = userEvent.setup();
+    let listed = [order({ id: "order-empty" }), order({ id: "order-full", lines: [{ quantity: 1, unitPriceMinor: 1000, modifiers: [] }] })];
+    stubFetch((url, init) => {
+      if (url.endsWith("/pos/api/orders/order-empty") && init?.method === "DELETE") {
+        listed = listed.filter((o) => o.id !== "order-empty");
+        return new Response(null, { status: 204 });
+      }
+      return jsonResponse(listed);
+    });
+    render(<OpenOrdersScreen outletId="outlet-1" currentStaffId={CURRENT_STAFF_ID} />);
+    await waitFor(() => expect(screen.getByTestId("open-orders")).toBeTruthy());
+    expect(screen.queryByTestId("open-order-discard-order-full")).toBeNull();
+
+    await user.click(screen.getByTestId("open-order-discard-order-empty"));
+    await waitFor(() => expect(screen.queryByTestId("open-order-order-empty")).toBeNull());
+  });
+
+  it("resumes my counter order on the counter screen", async () => {
+    const user = userEvent.setup();
+    stubFetch(() => jsonResponse([order({ id: "order-c", tableId: null, tableLabel: null, tokenNumber: 7 })]));
+    render(<OpenOrdersScreen outletId="outlet-1" currentStaffId={CURRENT_STAFF_ID} />);
+    await user.click(await screen.findByTestId("open-order-resume-order-c"));
+    expect(push).toHaveBeenCalledWith("/pos/counter");
+    expect(sessionStorage.getItem(`pos:counter-order:${CURRENT_STAFF_ID}`)).toBe("order-c");
   });
 });

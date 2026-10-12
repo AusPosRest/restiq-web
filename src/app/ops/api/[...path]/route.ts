@@ -26,8 +26,16 @@ async function forward(request: NextRequest, params: Promise<{ path: string[] }>
   const headers: Record<string, string> = { authorization: `Bearer ${token}` };
   const init: RequestInit = { method: request.method, headers, cache: "no-store" };
   if (request.method !== "GET" && request.method !== "HEAD") {
-    headers["content-type"] = "application/json";
-    init.body = await request.text();
+    const contentType = request.headers.get("content-type") ?? "";
+    if (contentType.startsWith("multipart/form-data")) {
+      // Publishing an agreement uploads a PDF: forward the original content-type (its boundary is
+      // part of the value) and the raw bytes - decoding as text would corrupt the file.
+      headers["content-type"] = contentType;
+      init.body = await request.arrayBuffer();
+    } else {
+      headers["content-type"] = "application/json";
+      init.body = await request.text();
+    }
   }
 
   let upstream: Response;
@@ -38,6 +46,17 @@ async function forward(request: NextRequest, params: Promise<{ path: string[] }>
   }
 
   if (upstream.status === 204) return new NextResponse(null, { status: 204 });
+
+  // An agreement's PDF is raw bytes, not a JSON envelope: pass it through with its type, inline
+  // filename and no-sniff intact so the browser's own viewer can show it.
+  const upstreamType = upstream.headers.get("content-type") ?? "";
+  if (!upstreamType.includes("application/json")) {
+    const responseHeaders: Record<string, string> = { "content-type": upstreamType || "application/octet-stream", "x-content-type-options": "nosniff", "cache-control": "private, no-store" };
+    const disposition = upstream.headers.get("content-disposition");
+    if (disposition) responseHeaders["content-disposition"] = disposition;
+    return new NextResponse(await upstream.arrayBuffer(), { status: upstream.status, headers: responseHeaders });
+  }
+
   const body: unknown = await upstream.json().catch(() => null);
   return NextResponse.json(body ?? { error: { code: "error", message: "Unexpected API response" } }, { status: upstream.status });
 }

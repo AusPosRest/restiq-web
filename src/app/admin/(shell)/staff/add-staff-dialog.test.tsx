@@ -37,7 +37,7 @@ describe("AddStaffDialog", () => {
     expect(onSubmit).not.toHaveBeenCalled();
     expect(screen.getByTestId("add-staff-first-name-error")).toBeTruthy();
     expect(screen.getByTestId("add-staff-last-name-error")).toBeTruthy();
-    expect(screen.getByTestId("add-staff-email-error")).toBeTruthy();
+    expect(screen.queryByTestId("add-staff-email-error")).toBeNull();
     expect(screen.getByTestId("add-staff-role-error")).toBeTruthy();
   });
 
@@ -65,7 +65,18 @@ describe("AddStaffDialog", () => {
     await userEvent.selectOptions(screen.getByTestId("add-staff-role"), "r-cashier");
     await userEvent.click(screen.getByTestId("add-staff-submit"));
 
-    expect(onSubmit).toHaveBeenCalledWith({ firstName: "Priya", lastName: "Nair", email: "priya@example.com", roleId: "r-cashier" });
+    expect(onSubmit).toHaveBeenCalledWith({ firstName: "Priya", lastName: "Nair", email: "priya@example.com", roleId: "r-cashier", outletIds: [] });
+  });
+
+  // CU-3: floor staff often have no email.
+  it("adds a waiter with no email", async () => {
+    const onSubmit = vi.fn();
+    render(<AddStaffDialog open roles={ROLES} onCancel={() => {}} onSubmit={onSubmit} />);
+    await userEvent.type(screen.getByTestId("add-staff-first-name"), "Raju");
+    await userEvent.type(screen.getByTestId("add-staff-last-name"), "K");
+    await userEvent.selectOptions(screen.getByTestId("add-staff-role"), "r-waiter");
+    await userEvent.click(screen.getByTestId("add-staff-submit"));
+    expect(onSubmit).toHaveBeenCalledWith({ firstName: "Raju", lastName: "K", email: "", roleId: "r-waiter", outletIds: [] });
   });
 
   it("shows a server error and stays open when the submit fails", () => {

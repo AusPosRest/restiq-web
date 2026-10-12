@@ -34,6 +34,9 @@ export interface GuestBillView {
   billNumber: number | null;
   subtotalMinor: number;
   taxMinor: number;
+  /** BillView's own breakdown (CGST/SGST, IGST or GST) - CU-24: shown split, never one lump. */
+  taxBreakdown?: Array<{ label: string; ratePercent: number; amountMinor: number }>;
+  pricesIncludeTax?: boolean;
   discountMinor: number | null;
   discountReason: string | null;
   totalMinor: number;
@@ -80,4 +83,29 @@ export function payShare(billId: string, guestId: string, input: SimulatedPaymen
  */
 export function payAll(billId: string, input: SimulatedPaymentInput): Promise<GuestBillView> {
   return guestApi<GuestBillView>(`bills/${billId}/pay-all`, { method: "POST", body: JSON.stringify(input) });
+}
+
+// Issue #220: GET /guest/v1/bills/:id/invoice - finalised bills only (409
+// `not_finalized` otherwise). The same InvoiceView pos/api.ts mirrors,
+// trimmed to what the kiosk receipt prints (AD-4: no import from app/pos).
+export interface GuestInvoiceView {
+  invoiceNumber: string | null;
+  /** restiq-backend#213: rung up while the tenant was in Test mode. */
+  testMode?: boolean;
+  title: string;
+  issuedAt: string | null;
+  currency: string;
+  seller: { legalEntityName: string; registrationLabel: string; registrationNumber: string; outletName: string; outletAddress: string };
+  lines: Array<{ name: string; quantity: number; unitPriceMinor: number; lineTotalMinor: number }>;
+  subtotalMinor: number;
+  discountMinor: number | null;
+  taxBreakdown: Array<{ label: string; ratePercent: number; amountMinor: number }>;
+  taxMinor: number;
+  totalMinor: number;
+  tenders: Array<{ method: string; amountMinor: number; createdAt: string }>;
+  footerMessage: string | null;
+}
+
+export function fetchInvoice(billId: string): Promise<GuestInvoiceView> {
+  return guestApi<GuestInvoiceView>(`bills/${billId}/invoice`);
 }

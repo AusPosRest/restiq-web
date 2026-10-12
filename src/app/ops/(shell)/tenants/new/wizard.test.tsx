@@ -16,7 +16,10 @@ vi.mock("next/link", () => ({
 type FetchCall = { path: string; method: string; body: unknown };
 
 let fetchCalls: FetchCall[] = [];
-let draftResponse: { status: number; body: unknown } = { status: 404, body: { error: { code: "not_found" } } };
+// PE-6: the API answers { draft: null } when there is no draft (it used to 404).
+let draftResponse: { status: number; body: unknown } = { status: 200, body: { draft: null } };
+let slugAnswer: (slug: string) => unknown = (slug) => ({ slug, available: true, reason: null });
+let taxAnswer: { status: number; body: unknown } = { status: 200, body: { available: true, reason: null } };
 let submitResponse: { status: number; body: unknown } = { status: 201, body: null };
 
 function jsonResponse(status: number, body: unknown): Response {
@@ -36,6 +39,8 @@ beforeEach(() => {
       if (path.startsWith("/ops/api/tenants/draft/steps/") && method === "PUT") {
         return jsonResponse(200, { updatedAt: new Date().toISOString() });
       }
+      if (path.startsWith("/ops/api/tenants/tax-number-available?")) return jsonResponse(taxAnswer.status, taxAnswer.body);
+      if (path.startsWith("/ops/api/tenant-slugs/")) return jsonResponse(200, slugAnswer(path.split("/").pop() ?? ""));
       if (path === "/ops/api/tenants" && method === "POST") return jsonResponse(submitResponse.status, submitResponse.body);
       throw new Error(`Unexpected fetch: ${method} ${path}`);
     }),
@@ -45,7 +50,8 @@ beforeEach(() => {
 afterEach(() => {
   cleanup();
   vi.unstubAllGlobals();
-  draftResponse = { status: 404, body: { error: { code: "not_found" } } };
+  draftResponse = { status: 200, body: { draft: null } };
+  taxAnswer = { status: 200, body: { available: true, reason: null } };
 });
 
 async function renderFresh() {
@@ -61,7 +67,84 @@ async function fillStep1(user: ReturnType<typeof userEvent.setup>) {
   await user.type(screen.getByTestId("onb-contact-phone"), "+91 98765 43210");
 }
 
+async function reachStep2WithGstin(user: ReturnType<typeof userEvent.setup>, gstin: string) {
+  await fillStep1(user);
+  await user.click(screen.getByTestId("onb-next"));
+  await screen.findByRole("heading", { name: "Tax & Compliance" });
+  await user.type(screen.getByTestId("onb-registration-number"), gstin);
+  await user.type(screen.getByTestId("onb-legal-entity-name"), "Spice Route Pvt Ltd");
+}
+
+describe("OnboardingWizard tax number check (PE-6)", () => {
+  it("stops on step 2 when another tenant already uses the GSTIN, without naming it", async () => {
+    taxAnswer = { status: 200, body: { available: false, reason: "taken" } };
+    const user = userEvent.setup();
+    await renderFresh();
+    await reachStep2WithGstin(user, "29abcde1234f1z5");
+    await user.click(screen.getByTestId("onb-next"));
+
+    expect((await screen.findByTestId("onb-registration-number-error")).textContent).toBe("Another restaurant on RESTIQ already uses this GSTIN.");
+    expect(screen.getByRole("heading", { name: "Tax & Compliance" })).toBeDefined();
+    const check = fetchCalls.find((call) => call.path.startsWith("/ops/api/tenants/tax-number-available?"));
+    expect(check?.path).toBe("/ops/api/tenants/tax-number-available?country=IN&number=29ABCDE1234F1Z5");
+  });
+
+  it("flags a taken number as soon as the field is left", async () => {
+    taxAnswer = { status: 200, body: { available: false, reason: "taken" } };
+    const user = userEvent.setup();
+    await renderFresh();
+    await fillStep1(user);
+    await user.click(screen.getByTestId("onb-next"));
+    await screen.findByRole("heading", { name: "Tax & Compliance" });
+    await user.type(screen.getByTestId("onb-registration-number"), "29ABCDE1234F1Z5");
+    await user.tab();
+    expect((await screen.findByTestId("onb-registration-number-error")).textContent).toContain("already uses this GSTIN");
+  });
+
+  it("moves on to step 3 when the number is free, or when the check cannot be made", async () => {
+    const user = userEvent.setup();
+    await renderFresh();
+    await reachStep2WithGstin(user, "29ABCDE1234F1Z5");
+    await user.click(screen.getByTestId("onb-next"));
+    await screen.findByRole("heading", { name: "Brands & Outlets" });
+    cleanup();
+
+    taxAnswer = { status: 500, body: { error: { code: "error", message: "down" } } };
+    await renderFresh();
+    await reachStep2WithGstin(user, "29ABCDE1234F1Z5");
+    await user.click(screen.getByTestId("onb-next"));
+    await screen.findByRole("heading", { name: "Brands & Outlets" });
+  });
+});
+
 describe("OnboardingWizard", () => {
+  it("checks the subdomain on blur and says whether it is free, taken or not allowed (D14)", async () => {
+    const user = userEvent.setup();
+    await renderFresh();
+    expect(screen.getByTestId("onb-slug-note").textContent).toContain("Leave blank");
+
+    await user.type(screen.getByTestId("onb-slug"), "BayLeaf");
+    expect((screen.getByTestId("onb-slug") as HTMLInputElement).value).toBe("bayleaf");
+    await user.tab();
+    await waitFor(() => expect(screen.getByTestId("onb-slug-note").textContent).toContain("bayleaf.idelta.com.au is available"));
+    expect(fetchCalls.some((c) => c.path === "/ops/api/tenant-slugs/bayleaf")).toBe(true);
+
+    slugAnswer = (slug) => ({ slug, available: false, reason: "taken" });
+    await user.clear(screen.getByTestId("onb-slug"));
+    await user.type(screen.getByTestId("onb-slug"), "spice");
+    await user.tab();
+    await waitFor(() => expect(screen.getByTestId("onb-slug-note").textContent).toContain("already used by another restaurant"));
+
+    // A badly formed name is refused on the spot and never sent to the API.
+    const before = fetchCalls.length;
+    await user.clear(screen.getByTestId("onb-slug"));
+    await user.type(screen.getByTestId("onb-slug"), "a");
+    await user.tab();
+    expect(screen.getByTestId("onb-slug-error").textContent).toContain("3 to 32");
+    expect(fetchCalls.length).toBe(before);
+    slugAnswer = (slug) => ({ slug, available: true, reason: null });
+  });
+
   it("renders step 1 fresh when no draft exists", async () => {
     await renderFresh();
     expect(screen.getByRole("heading", { name: "Business Details" })).toBeDefined();
@@ -233,5 +316,47 @@ describe("OnboardingWizard", () => {
     // Issue #85: the accept link must be visible and carry the raw token.
     expect(screen.getByTestId("invite-link-url").textContent).toContain(`/admin/invite/${"a".repeat(64)}`);
     expect(screen.getByTestId("onb-success-tenants-link").getAttribute("href")).toBe("/ops/tenants");
+  });
+
+  const STEPS_1_TO_3 = {
+    "1": { companyName: "Spice Route", registeredAddress: "a", contactName: "Asha Rao", contactEmail: "asha@d.example", contactPhone: "1" },
+    "2": { country: "IN", registrationNumber: "29ABCDE1234F1Z5", legalEntityName: "L", taxProfile: "India GST - CGST/SGST split" },
+    "3": { brandName: "SR", outlets: [{ name: "O1", address: "A", type: "dine_in", timezone: "Asia/Kolkata" }] },
+  };
+
+  // PE-5: a resumed draft never saved step 5 - the owner invite starts from the step 1 contact, like a fresh run.
+  it("prefills the owner invite from the primary contact when a draft is resumed", async () => {
+    draftResponse = { status: 200, body: { draft: { steps: { ...STEPS_1_TO_3, "4": { plan: "standard", billingPeriod: "monthly" } }, updatedAt: new Date().toISOString() } } };
+    const user = userEvent.setup();
+    render(<OnboardingWizard />);
+    await screen.findByTestId("onb-resume-prompt");
+    await user.click(screen.getByTestId("onb-resume"));
+    await screen.findByTestId("onb-submit");
+    expect((screen.getByTestId("onb-owner-email") as HTMLInputElement).value).toBe("asha@d.example");
+    expect((screen.getByTestId("onb-owner-first-name") as HTMLInputElement).value).toBe("Asha");
+    expect((screen.getByTestId("onb-owner-last-name") as HTMLInputElement).value).toBe("Rao");
+  });
+
+  // restiq-backend#213: the "Test tenant" switch on the plan step goes out as testMode on submit.
+  it("provisions a Test tenant when the Test tenant switch is on", async () => {
+    draftResponse = { status: 200, body: { draft: { steps: STEPS_1_TO_3, updatedAt: new Date().toISOString() } } };
+    submitResponse = {
+      status: 201,
+      body: { tenant: { id: "t-1", name: "Spice Route", status: "provisioning" }, invite: { email: "asha@d.example", expiresAt: new Date().toISOString(), inviteToken: "a".repeat(64) } },
+    };
+    const user = userEvent.setup();
+    render(<OnboardingWizard />);
+    await screen.findByTestId("onb-resume-prompt");
+    await user.click(screen.getByTestId("onb-resume"));
+    await user.click(await screen.findByTestId("onb-plan-standard"));
+    const toggle = screen.getByTestId("onb-test-mode");
+    expect(toggle.getAttribute("aria-checked")).toBe("false");
+    await user.click(toggle);
+    await user.click(screen.getByTestId("onb-next"));
+    await user.click(await screen.findByTestId("onb-submit"));
+    await screen.findByTestId("onb-success");
+    const submit = fetchCalls.find((call) => call.path === "/ops/api/tenants" && call.method === "POST");
+    expect(submit?.body).toMatchObject({ testMode: true, subscription: { plan: "standard", billingPeriod: "monthly" } });
+    expect((submit?.body as { subscription: Record<string, unknown> }).subscription).not.toHaveProperty("testMode");
   });
 });

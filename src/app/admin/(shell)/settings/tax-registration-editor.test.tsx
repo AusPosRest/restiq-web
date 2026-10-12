@@ -62,7 +62,7 @@ describe("TaxRegistrationEditor", () => {
     expect(screen.getByTestId("tax-registration-loading")).toBeTruthy();
 
     await screen.findByTestId("tax-registration-form");
-    expect(screen.getByTestId("tax-registration-country").textContent).toBe("IN");
+    expect(screen.getByTestId("tax-registration-country").textContent).toBe("India");
     expect(screen.getByTestId("tax-registration-type").textContent).toBe("GSTIN");
     expect((screen.getByTestId("tax-registration-number") as HTMLInputElement).value).toBe("27ABCDE1234F1Z5");
     expect((screen.getByTestId("tax-registration-legal-entity-name") as HTMLInputElement).value).toBe("Acme Foods Pvt Ltd");
@@ -71,6 +71,15 @@ describe("TaxRegistrationEditor", () => {
     expect(screen.queryByTestId("tax-registration-gst-registered")).toBeNull();
     // But the GST rate shows for IN too, since IN is always gstRegistered.
     expect((screen.getByTestId("tax-gst-rate") as HTMLInputElement).value).toBe("5");
+  });
+
+  it("PE-10: an Australian business sees no FSSAI or composition-scheme fields", async () => {
+    stubFetch({ get: { ...TAX_REGISTRATION, country: "AU", registrationType: "abn", registrationNumber: "51824753556", fssaiLicense: null } });
+    renderEditor();
+    await screen.findByTestId("tax-registration-form");
+    expect(screen.getByTestId("tax-registration-country").textContent).toBe("Australia");
+    expect(screen.queryByTestId("tax-registration-fssai-license")).toBeNull();
+    expect(screen.queryByTestId("tax-registration-composition-scheme")).toBeNull();
   });
 
   it("round-trips the GST rate through a merge-PUT and hides it once GST Registered is unchecked", async () => {

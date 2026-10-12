@@ -10,18 +10,8 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import { Button } from "@/components/ui/button";
 import { InviteLinkChip } from "../invite-link";
 import { BusinessStep, OutletsStep, OwnerInviteStep, SubscriptionStep, TaxStep } from "./steps";
-import {
-  STEP_COUNT,
-  STEPS,
-  StepErrors,
-  StepKey,
-  WizardData,
-  dataFromDraft,
-  emptyWizardData,
-  firstIncompleteStep,
-  toSubmitPayload,
-  validateStep,
-} from "./wizard-state";
+import { STEP_COUNT, STEPS, StepErrors, StepKey, TaxData, WizardData, dataFromDraft, normalizedTaxNumber, emptyWizardData, firstIncompleteStep, toSubmitPayload, validateStep, keepUnfixedErrors, prefillOwner } from "./wizard-state";
+import { DATE_LOCALE, formatDate, formatDateTime } from "@/lib/datetime";
 
 const AUTOSAVE_DEBOUNCE_MS = 800;
 
@@ -45,6 +35,23 @@ function stepPayload(data: WizardData, step: number): object {
   return data[STEPS[step - 1].key];
 }
 
+// PE-6: a GSTIN / ABN another tenant already uses is caught on step 2, not
+// only at submit. A failed check lets the operator carry on; submit checks again.
+async function taxNumberTaken(tax: TaxData): Promise<boolean> {
+  try {
+    const query = new URLSearchParams({ country: tax.country, number: normalizedTaxNumber(tax.registrationNumber) });
+    const res = await api(`tenants/tax-number-available?${query}`);
+    if (!res.ok) return false;
+    return ((await res.json()) as { reason: string | null }).reason === "taken";
+  } catch {
+    return false;
+  }
+}
+
+function taxNumberTakenMessage(tax: TaxData): string {
+  return `Another restaurant on RESTIQ already uses this ${tax.country === "IN" ? "GSTIN" : "ABN"}.`;
+}
+
 export function OnboardingWizard() {
   const [phase, setPhase] = useState<Phase>({ name: "loading" });
   const [data, setData] = useState<WizardData>(emptyWizardData);
@@ -52,6 +59,7 @@ export function OnboardingWizard() {
   const [errors, setErrors] = useState<StepErrors>({});
   const [draftStatus, setDraftStatus] = useState<DraftStatus>({ state: "idle" });
   const [submitting, setSubmitting] = useState(false);
+  const [checkingTax, setCheckingTax] = useState(false);
   const [submitError, setSubmitError] = useState<string | null>(null);
   const debounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const dataRef = useRef(data);
@@ -65,8 +73,10 @@ export function OnboardingWizard() {
       try {
         const res = await api("tenants/draft");
         if (cancelled) return;
-        if (res.ok) {
-          const body = (await res.json()) as { draft: { steps: Record<string, unknown>; updatedAt: string } };
+        // PE-6: no draft is { draft: null }, not a 404.
+        const body = res.ok ? ((await res.json()) as { draft: { steps: Record<string, unknown>; updatedAt: string } | null }) : null;
+        if (cancelled) return;
+        if (body?.draft) {
           setPhase({ name: "resume-prompt", draftUpdatedAt: body.draft.updatedAt, draftData: dataFromDraft(body.draft.steps) });
           return;
         }
@@ -111,6 +121,8 @@ export function OnboardingWizard() {
 
   function updateSection<K extends StepKey>(key: K, value: WizardData[K]): void {
     setData((current) => ({ ...current, [key]: value }));
+    // A fixed field loses its error as you type, instead of waiting for Next.
+    setErrors((current) => (Object.keys(current).length === 0 ? current : keepUnfixedErrors(current, validateStep(step, { ...dataRef.current, [key]: value }))));
     scheduleAutosave(step);
   }
 
@@ -122,6 +134,15 @@ export function OnboardingWizard() {
       else delete next[field];
       return next;
     });
+    if (step === 2 && field === "registrationNumber" && !stepErrors.registrationNumber) {
+      const tax = dataRef.current.tax;
+      void taxNumberTaken(tax).then((taken) => {
+        // Ignore an answer for a number that has since been edited.
+        if (taken && dataRef.current.tax.registrationNumber === tax.registrationNumber) {
+          setErrors((current) => ({ ...current, registrationNumber: taxNumberTakenMessage(tax) }));
+        }
+      });
+    }
   }
 
   function goToStep(target: number): void {
@@ -129,13 +150,24 @@ export function OnboardingWizard() {
     void saveStep(step);
     setErrors({});
     setSubmitError(null);
+    // The owner is usually step 1's primary contact - start the invite from there.
+    if (target === 5) setData((current) => ({ ...current, ownerInvite: prefillOwner(current.ownerInvite, current.business) }));
     setStep(target);
   }
 
-  function onNext(): void {
+  async function onNext(): Promise<void> {
     const stepErrors = validateStep(step, data);
     setErrors(stepErrors);
     if (Object.keys(stepErrors).length > 0) return;
+    if (step === 2) {
+      setCheckingTax(true);
+      const taken = await taxNumberTaken(data.tax);
+      setCheckingTax(false);
+      if (taken) {
+        setErrors({ registrationNumber: taxNumberTakenMessage(data.tax) });
+        return;
+      }
+    }
     goToStep(step + 1);
   }
 
@@ -145,8 +177,10 @@ export function OnboardingWizard() {
 
   function onResume(): void {
     if (phase.name !== "resume-prompt") return;
-    setData(phase.draftData);
-    setStep(firstIncompleteStep(phase.draftData));
+    // PE-5: the owner invite is never saved as its own step until it is edited - start it from the step 1 contact, as a fresh run does.
+    const resumed = { ...phase.draftData, ownerInvite: prefillOwner(phase.draftData.ownerInvite, phase.draftData.business) };
+    setData(resumed);
+    setStep(firstIncompleteStep(resumed));
     setPhase({ name: "editing" });
   }
 
@@ -207,17 +241,18 @@ export function OnboardingWizard() {
         <h1 className="font-headline mt-6 text-3xl font-semibold">{phase.tenantName} is provisioned</h1>
         <p className="mt-3 text-muted-foreground">
           Tenant, outlets, system roles, tax profile and a sample menu were created together. The tenant stays in{" "}
-          <span className="font-semibold text-status-pending">provisioning</span> until the owner&apos;s first device syncs.
+          <span className="font-semibold text-status-pending">provisioning</span> until its first sale, or until the owner presses Go live.
         </p>
         <div className="mx-auto mt-8 flex max-w-md items-start gap-4 rounded-lg border border-border bg-card p-5 text-left">
           <MailCheck className="mt-0.5 size-5 shrink-0 text-primary" aria-hidden="true" />
-          <div>
+          {/* min-w-0 lets the long invite link truncate inside the card instead of pushing past it. */}
+          <div className="min-w-0 flex-1">
             <p className="text-sm font-semibold">Owner invite pending</p>
             <p className="mt-1 text-sm text-muted-foreground" data-testid="onb-success-invite-email">
               {phase.inviteEmail}
             </p>
             <p className="mt-1 text-xs text-muted-foreground">
-              Expires {new Date(phase.inviteExpiresAt).toLocaleDateString()}
+              Expires {formatDate(phase.inviteExpiresAt)}
             </p>
             <InviteLinkChip token={phase.inviteToken} />
           </div>
@@ -250,7 +285,7 @@ export function OnboardingWizard() {
         <h1 className="font-headline text-2xl font-semibold">Resume onboarding draft?</h1>
         <p className="mt-3 text-muted-foreground">
           You have an unfinished tenant onboarding draft, last saved{" "}
-          {new Date(phase.draftUpdatedAt).toLocaleString()}. Drafts never create a tenant until final submit.
+          {formatDateTime(phase.draftUpdatedAt)}. Drafts never create a tenant until final submit.
         </p>
         <div className="mt-8 flex items-center gap-4">
           <Button data-testid="onb-resume" onClick={onResume}>
@@ -335,7 +370,7 @@ export function OnboardingWizard() {
           </div>
           <span data-testid="onb-draft-status" className="font-label shrink-0 rounded-md bg-accent px-2.5 py-1 text-xs font-semibold uppercase tracking-wider text-muted-foreground">
             {draftStatus.state === "saved"
-              ? `Draft · saved ${new Date(draftStatus.at).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })}`
+              ? `Draft · saved ${new Date(draftStatus.at).toLocaleTimeString(DATE_LOCALE, { hour: "2-digit", minute: "2-digit" })}`
               : draftStatus.state === "error"
                 ? "Draft · not saved"
                 : "Draft"}
@@ -373,7 +408,13 @@ export function OnboardingWizard() {
               onFieldBlur={onFieldBlur}
             />
           ) : step === 4 ? (
-            <SubscriptionStep data={data.subscription} errors={errors} onChange={(value) => updateSection("subscription", value)} />
+            <SubscriptionStep
+              data={data.subscription}
+              errors={errors}
+              country={data.tax.country}
+              outletCount={data.brandsOutlets.outlets.length}
+              onChange={(value) => updateSection("subscription", value)}
+            />
           ) : (
             <OwnerInviteStep data={data.ownerInvite} errors={errors} onChange={(value) => updateSection("ownerInvite", value)} onFieldBlur={onFieldBlur} />
           )}
@@ -382,20 +423,20 @@ export function OnboardingWizard() {
         <footer className="mt-10 flex items-center justify-between border-t border-border/60 pt-6">
           <div>
             {step > 1 ? (
-              <Button variant="outline" data-testid="onb-back" onClick={onBack}>
+              <Button type="button" variant="outline" data-testid="onb-back" onClick={onBack}>
                 Back
               </Button>
             ) : null}
           </div>
           <div className="flex items-center gap-4">
             {step < STEP_COUNT ? (
-              <Button data-testid="onb-next" onClick={onNext}>
+              <Button type="button" data-testid="onb-next" disabled={checkingTax} onClick={() => void onNext()}>
                 {step === 1 ? "Next Step" : `Continue to ${STEPS[step].title}`}
               </Button>
             ) : (
               <>
                 <span className="text-sm text-muted-foreground">Tenant creation ready</span>
-                <Button data-testid="onb-submit" disabled={submitting} onClick={() => void onSubmit()}>
+                <Button type="button" data-testid="onb-submit" disabled={submitting} onClick={() => void onSubmit()}>
                   {submitting ? "Provisioning..." : "Send Invite & Finish"}
                 </Button>
               </>

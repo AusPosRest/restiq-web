@@ -141,7 +141,7 @@ describe("BumpedViewScreen", () => {
     renderScreen();
 
     await vi.waitFor(() => expect(screen.getByTestId("kds-bumped-empty")).toBeTruthy());
-    expect(screen.getByTestId("kds-tab-subtitle").textContent).toBe("Done tickets — recall one if a plate comes back");
+    expect(screen.getByTestId("kds-tab-subtitle").textContent).toBe("Bumped tickets — recall one if a plate comes back");
   });
 
   it("recalls a bumped ticket with a single tap, no confirmation, and it drops off the list on the next poll", async () => {

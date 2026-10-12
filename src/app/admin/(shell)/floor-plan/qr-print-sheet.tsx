@@ -25,26 +25,31 @@ export function QrPrintSheet({ cards, template }: Readonly<{ cards: readonly Pri
     // Off-canvas on screen (not display:none) so every <img> is laid out and
     // decoded before window.print(): Chrome's print preview can otherwise
     // paint a display:none image as an empty box. Restored to flow in print.
-    <div data-testid="qr-print-sheet" className="fixed top-0 -left-full w-full print:static print:w-auto" aria-hidden="true">
+    // CU-8: black text on the white page, and as many cards per row as fit (it printed two per A4 page).
+    <div data-testid="qr-print-sheet" className="fixed top-0 -left-full w-full text-black print:static print:w-auto" aria-hidden="true">
+      {/* PE-20: A4 with small margins, so "Save as PDF" gives one sheet of several cards per page. */}
+      <style>{"@page{size:A4;margin:10mm}"}</style>
       {(template.heading || template.instruction) && (
         <div data-testid="qr-print-sheet-header" className="mb-6 text-center">
           {template.heading && <h1 className="text-xl font-semibold">{template.heading}</h1>}
-          {template.instruction && <p className="text-sm text-muted-foreground">{template.instruction}</p>}
+          {template.instruction && <p className="text-sm text-neutral-700">{template.instruction}</p>}
         </div>
       )}
+      <div data-testid="qr-print-grid" className="grid gap-4" style={{ gridTemplateColumns: `repeat(auto-fill, minmax(${qrPx + 32}px, 1fr))` }}>
       {cards.map((card) => (
         <div
           key={card.table.id}
           data-testid={`qr-print-card-${card.table.id}`}
-          className="mb-6 flex flex-col items-center gap-2 break-inside-avoid border-b border-dashed border-border/60 pb-6 text-center last:border-0"
+          className="flex flex-col items-center gap-2 break-inside-avoid rounded-lg border border-dashed border-neutral-400 p-4 text-center"
         >
-          {template.showFloorName && <p className="text-xs uppercase tracking-wide text-muted-foreground">{card.floorName}</p>}
-          {template.showTableLabel && <p className="text-lg font-semibold">{card.table.label}</p>}
+          {template.showFloorName && <p className="text-xs uppercase tracking-wide text-neutral-700">{card.floorName}</p>}
+          {template.showTableLabel && <p className="text-2xl font-bold text-black">{card.table.label}</p>}
           {/* eslint-disable-next-line @next/next/no-img-element -- a data: URL, not something next/image's optimizer can (or needs to) handle */}
           <img src={card.qrDataUrl} alt={`Self-order QR code for ${card.table.label}`} width={qrPx} height={qrPx} />
-          {template.showUrl && <p className="text-xs">{card.url}</p>}
+          {template.showUrl && <p className="break-all text-[10px] text-neutral-700">{card.url}</p>}
         </div>
       ))}
+      </div>
     </div>
   );
 }

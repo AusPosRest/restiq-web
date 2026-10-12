@@ -83,6 +83,7 @@ export type {
   PosModifierView,
   RawOrder,
 } from "./orders/[orderId]/order-taking-state";
+import type { ComboSelection } from "@/lib/combo";
 import type { AddOrderLineInput, OrderView, PosMenuView, RawOrder } from "./orders/[orderId]/order-taking-state";
 import { toOrderView } from "./orders/[orderId]/order-taking-state";
 
@@ -100,6 +101,11 @@ export function startOrder(outletId: string, tableId: string): Promise<RawOrder>
  * audited (actor + reason) same as other mutations, but it isn't one of
  * CAP-8's six manager-gated actions, so no PIN and no required reason.
  */
+/** CU-26: ends a table's abandoned QR guest session so the next guests start fresh (POST /pos/v1/tables/:id/close-session). */
+export function closeTableSession(tableId: string): Promise<{ closed: true }> {
+  return posApi<{ closed: true }>(`tables/${encodeURIComponent(tableId)}/close-session`, { method: "POST" });
+}
+
 export function transferOrder(orderId: string, newOwnerStaffId: string, reason?: string): Promise<RawOrder> {
   return posApi<RawOrder>(`orders/${orderId}/transfer`, {
     method: "POST",
@@ -115,6 +121,15 @@ export function fetchMenu(): Promise<PosMenuView> {
 /** POST /pos/v1/orders/:id/lines - rejected server-side (not just client-validated) if a modifier group's min/max is violated (SPEC CAP-3 success criterion). Attribution (which staff member added it) is resolved server-side from the bearer token, never sent from the client. `menu` is optional - see this file's header. */
 export function addOrderLine(orderId: string, input: AddOrderLineInput, menu?: Pick<PosMenuView, "items">): Promise<OrderView> {
   return posApi<RawOrder>(`orders/${orderId}/lines`, { method: "POST", body: JSON.stringify(input) }).then((raw) => toOrderView(raw, menu));
+}
+
+/** restiq-backend#160: a combo with its picks, added as one priced line. */
+export function addComboLine(
+  orderId: string,
+  input: { comboId: string; quantity: number; selections: ComboSelection[] },
+  menu?: Pick<PosMenuView, "items">,
+): Promise<OrderView> {
+  return posApi<RawOrder>(`orders/${orderId}/combos`, { method: "POST", body: JSON.stringify(input) }).then((raw) => toOrderView(raw, menu));
 }
 
 export function updateOrderLineQuantity(orderId: string, lineId: string, quantity: number, menu?: Pick<PosMenuView, "items">): Promise<OrderView> {
@@ -146,6 +161,22 @@ export function sendOrderToKitchen(orderId: string, menu?: Pick<PosMenuView, "it
 
 export function removeOrderLine(orderId: string, lineId: string, menu?: Pick<PosMenuView, "items">): Promise<OrderView> {
   return posApi<RawOrder>(`orders/${orderId}/lines/${lineId}`, { method: "DELETE" }).then((raw) => toOrderView(raw, menu));
+}
+
+/** restiq-backend#210 (CU-15): takes back a line the kitchen already has - a manager PIN and reason are checked server-side. */
+export function voidOrderLine(orderId: string, lineId: string, managerPin: string, reason: string, menu?: Pick<PosMenuView, "items">): Promise<OrderView> {
+  return posApi<RawOrder>(`orders/${orderId}/lines/${lineId}/void`, { method: "POST", body: JSON.stringify({ managerPin, reason }) }).then((raw) =>
+    toOrderView(raw, menu),
+  );
+}
+
+/** restiq-backend#210 (PE-16/CU-27): throws away an order with nothing on it. 409 `order_not_empty` once anything is on it. */
+export function discardOrder(orderId: string): Promise<null> {
+  return posApi<null>(`orders/${orderId}`, { method: "DELETE" });
+}
+
+export function fetchOrder(orderId: string, menu?: Pick<PosMenuView, "items">): Promise<OrderView> {
+  return posApi<RawOrder>(`orders/${orderId}`).then((raw) => toOrderView(raw, menu));
 }
 
 /**
@@ -287,6 +318,44 @@ export function getAttendanceToday(outletId: string): Promise<AttendanceView> {
   return posApi<AttendanceView>(`outlets/${encodeURIComponent(outletId)}/attendance`);
 }
 
+// --- Payment history (issue #253 web / #158 backend): every tender taken at
+// the outlet today (the outlet's local calendar day, same rule as
+// attendance), newest first, with per-method totals. Tenders only - refunds
+// are a separate ledger and are not in this list.
+export type PaymentHistoryMethod = "cash" | "upi_manual" | "upi_intent" | "upi_qr" | "card_online" | "card_terminal" | "external";
+
+export interface PaymentHistoryEntry {
+  id: string;
+  billId: string;
+  billNumber: number | null;
+  orderId: string;
+  tableLabel: string | null;
+  tokenNumber: number | null;
+  method: PaymentHistoryMethod;
+  amountMinor: number;
+  reference: string | null;
+  takenBy: { staffId: string; name: string } | null;
+  createdAt: string;
+}
+
+export interface PaymentMethodTotal {
+  method: PaymentHistoryMethod;
+  count: number;
+  amountMinor: number;
+}
+
+export interface PaymentHistoryView {
+  outletId: string;
+  /** YYYY-MM-DD in the outlet's timezone. */
+  date: string;
+  asOf: string;
+  currency: string;
+  totalMinor: number;
+  count: number;
+  byMethod: PaymentMethodTotal[];
+  payments: PaymentHistoryEntry[];
+}
+
 // --- CAP-7 Bill & Settle (story 8, issue #53 web / #59 backend). See
 // orders/[orderId]/settle/bill-state.ts's file header for the full
 // reconciliation reasoning (restiq-web#98) against the real, merged
@@ -301,7 +370,7 @@ export type {
   PendingTender,
   PostableTenderMethod,
 } from "./orders/[orderId]/settle/bill-state";
-import type { FinalizeBillInput, BillView } from "./orders/[orderId]/settle/bill-state";
+import type { BillTenderMethod, FinalizeBillInput, BillView } from "./orders/[orderId]/settle/bill-state";
 
 /**
  * Create-or-fetch the Bill for an order. `POST orders/:orderId/bill`
@@ -374,6 +443,8 @@ export interface InvoiceLineView {
   quantity: number;
   unitPriceMinor: number;
   lineTotalMinor: number;
+  /** restiq-backend#160: a combo's picks ("2× Garlic naan"), printed under it. Empty or absent for a plain item. */
+  components?: string[];
 }
 
 export interface InvoiceTaxBreakdownView {
@@ -385,12 +456,16 @@ export interface InvoiceTaxBreakdownView {
 export interface InvoiceTenderView {
   method: string;
   amountMinor: number;
+  /** An external tender's reference / bill number (restiq-backend#146). */
+  reference?: string | null;
   createdAt: string;
 }
 
 export interface InvoiceCreditNoteView {
   id: string;
   amountMinor: number;
+  /** How the money went back; null on a note issued before this was recorded (restiq-backend#221). */
+  method: BillTenderMethod | null;
   reason: string;
   createdAt: string;
 }
@@ -401,13 +476,20 @@ export interface InvoiceCreditNoteView {
 // `tenders`/`creditNotes` are always empty. Finalized bills are unchanged.
 export interface InvoiceView {
   invoiceNumber: string | null;
+  /** restiq-backend#213: rung up while the tenant was in Test mode - print "not a valid tax invoice". */
+  testMode?: boolean;
   status?: "open" | "finalized";
-  title: "Tax Invoice" | "Invoice" | "Receipt" | "Bill";
+  title: "Tax Invoice" | "Bill of Supply" | "Invoice" | "Receipt" | "Bill";
   /** null for an open (pro-forma) bill - it is issued at finalize. */
   issuedAt: string | null;
   currency: string;
   seller: InvoiceSellerView;
   lines: InvoiceLineView[];
+  /** IN GST invoice only (restiq-backend#212): SAC 996331 and the seller's GSTIN state. Absent on older print-job snapshots. */
+  sacCode?: string | null;
+  placeOfSupply?: string | null;
+  /** The counter token the customer was called by; null for a table order. */
+  tokenNumber?: number | null;
   subtotalMinor: number;
   discountMinor: number | null;
   discountReason: string | null;
@@ -434,6 +516,8 @@ export interface PrintJobView {
   payload: InvoiceView;
   createdAt: string;
   printedAt: string | null;
+  /** restiq-backend#210: on the POST response only - false when no printer will pick the job up. */
+  printerAvailable?: boolean;
 }
 
 // --- Device topology (issue #210 / restiq-backend#134). Each call names this

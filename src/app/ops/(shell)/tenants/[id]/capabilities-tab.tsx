@@ -1,98 +1,46 @@
 "use client";
 
-// Capability toggles: confirm-with-reason first, then optimistic flip with
-// rollback + failure toast if the write is rejected (EXPERIENCE.md O5 note).
-import { useState } from "react";
-import { opsApi, OpsApiError } from "../../api";
-import { ConfirmReasonDialog } from "../../confirm-reason-dialog";
-import { useToast } from "../../toast";
+// What each outlet has switched on (restiq-backend#191). Read-only: these are
+// the owner's switches (Settings > Capabilities) and the ones QR ordering,
+// the kiosk and menu photos actually obey. The old tenant-level toggles
+// wrote a table nothing read, so they are gone.
+import type { TenantDetail } from "../../api";
 
 export const CAPABILITY_LABELS: Record<string, string> = {
-  tables_floor_plan: "Tables and floor plan",
-  kot_kds: "KOT and KDS",
-  coursing: "Coursing",
-  aggregators: "Aggregators",
-  reservations: "Reservations",
-  self_order_qr: "Self-order QR",
+  qr_ordering: "QR ordering",
+  kiosk: "Kiosk",
+  token_queue: "Token queue",
+  menu_photos: "Menu photos",
 };
 
-export function CapabilitiesTab({
-  tenantId,
-  capabilities,
-}: Readonly<{ tenantId: string; capabilities: Array<{ key: string; enabled: boolean }> }>) {
-  const toast = useToast();
-  const [enabledByKey, setEnabledByKey] = useState<Record<string, boolean>>(() =>
-    Object.fromEntries(capabilities.map((capability) => [capability.key, capability.enabled])),
-  );
-  const [pending, setPending] = useState<{ key: string; enabled: boolean } | null>(null);
+// Same keys and defaults the owner's Settings > Capabilities shows (copied, not
+// imported - AD-4): a missing row is off, except menu_photos, which is opt-out.
+const KNOWN_KEYS = ["qr_ordering", "kiosk", "token_queue", "menu_photos"] as const;
+const DEFAULT_ON = new Set<string>(["menu_photos"]);
 
-  function apply(key: string, enabled: boolean, reason: string) {
-    setPending(null);
-    // Optimistic: flip now, roll back if the API rejects it.
-    setEnabledByKey((current) => ({ ...current, [key]: enabled }));
-    void opsApi(`tenants/${tenantId}/capabilities/${key}`, {
-      method: "PUT",
-      body: JSON.stringify({ enabled, reason }),
-    }).catch((error: unknown) => {
-      setEnabledByKey((current) => ({ ...current, [key]: !enabled }));
-      toast({
-        kind: "error",
-        message:
-          error instanceof OpsApiError && error.message
-            ? `${CAPABILITY_LABELS[key] ?? key}: ${error.message}`
-            : `${CAPABILITY_LABELS[key] ?? key} could not be updated.`,
-        onRetry: () => apply(key, enabled, reason),
-      });
-    });
-  }
+export function withDefaults(rows: ReadonlyArray<{ key: string; enabled: boolean }>): Array<{ key: string; enabled: boolean }> {
+  const stored = new Map(rows.map((row) => [row.key, row.enabled]));
+  const known = KNOWN_KEYS.map((key) => ({ key, enabled: stored.get(key) ?? DEFAULT_ON.has(key) }));
+  return [...known, ...rows.filter((row) => !(KNOWN_KEYS as readonly string[]).includes(row.key))];
+}
 
+export function CapabilitiesTab({ outlets }: Readonly<{ outlets: TenantDetail["outlets"] }>) {
   return (
-    <div className="max-w-2xl rounded-lg border border-border/40 bg-card" data-testid="capabilities-list">
-      <ul className="divide-y divide-border/40">
-        {capabilities.map(({ key }) => {
-          const enabled = enabledByKey[key] ?? false;
-          return (
-            <li key={key} className="flex items-center justify-between gap-4 px-5 py-4">
-              <div>
-                <p className="text-sm font-medium">{CAPABILITY_LABELS[key] ?? key}</p>
-                <p className="mt-0.5 text-xs text-muted-foreground">{enabled ? "Enabled" : "Disabled"}</p>
-              </div>
-              <button
-                type="button"
-                role="switch"
-                aria-checked={enabled}
-                aria-label={CAPABILITY_LABELS[key] ?? key}
-                data-testid={`capability-toggle-${key}`}
-                onClick={() => setPending({ key, enabled: !enabled })}
-                className={`relative h-6 w-11 shrink-0 rounded-full transition-colors focus:outline-none focus-visible:ring-2 focus-visible:ring-ring ${
-                  enabled ? "bg-primary" : "bg-accent"
-                }`}
-              >
-                <span
-                  aria-hidden="true"
-                  className={`absolute top-0.5 size-5 rounded-full bg-foreground transition-all ${enabled ? "left-[22px]" : "left-0.5"}`}
-                />
-              </button>
-            </li>
-          );
-        })}
-      </ul>
-
-      <ConfirmReasonDialog
-        open={pending !== null}
-        title={`${pending?.enabled ? "Enable" : "Disable"} ${pending ? (CAPABILITY_LABELS[pending.key] ?? pending.key) : ""}`}
-        description={
-          pending?.enabled
-            ? "The feature becomes available to this tenant immediately."
-            : "The feature is switched off for this tenant immediately."
-        }
-        verb={pending?.enabled ? "Enable" : "Disable"}
-        destructive={pending ? !pending.enabled : false}
-        onCancel={() => setPending(null)}
-        onConfirm={(reason) => {
-          if (pending) apply(pending.key, pending.enabled, reason);
-        }}
-      />
+    <div className="grid max-w-2xl gap-4" data-testid="capabilities-list">
+      <p className="text-sm text-muted-foreground">The owner switches these per outlet in Settings &gt; Capabilities.</p>
+      {outlets.map((outlet) => (
+        <section key={outlet.id} className="rounded-lg border border-border/40 bg-card" data-testid={`capabilities-outlet-${outlet.id}`}>
+          <h2 className="border-b border-border/40 px-5 py-3 text-sm font-semibold">{outlet.name}</h2>
+          <ul className="divide-y divide-border/40">
+              {withDefaults(outlet.capabilities).map(({ key, enabled }) => (
+                <li key={key} className="flex items-center justify-between gap-4 px-5 py-3" data-testid={`capability-${outlet.id}-${key}`}>
+                  <span className="text-sm">{CAPABILITY_LABELS[key] ?? key}</span>
+                  <span className={`text-xs font-semibold ${enabled ? "text-status-healthy" : "text-muted-foreground"}`}>{enabled ? "On" : "Off"}</span>
+                </li>
+              ))}
+          </ul>
+        </section>
+      ))}
     </div>
   );
 }

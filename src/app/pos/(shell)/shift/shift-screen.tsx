@@ -16,11 +16,10 @@ import { LoadErrorPanel, Skeleton } from "./data-states";
 import { LogMovementDialog } from "./log-movement-dialog";
 import { OpenShiftForm } from "./open-shift-form";
 import { formatMinor } from "./shift-state";
+import { usePosCurrency } from "./use-pos-currency";
+import { DATE_LOCALE } from "@/lib/datetime";
 
-// The real backend's ShiftView carries no tenant-currency field to read -
-// same convention as CAP-4's menu management (menu-management.tsx's
-// CURRENCY constant).
-const CURRENCY = "INR";
+// The tenant's currency (PE-10) - ShiftView carries none, see use-pos-currency.ts.
 
 function useShift(outletId: string) {
   const [attempt, setAttempt] = useState(0);
@@ -51,6 +50,7 @@ function useShift(outletId: string) {
 }
 
 export function ShiftScreen({ outletId }: Readonly<{ outletId: string }>) {
+  const currency = usePosCurrency();
   const { loading, failed, shift, retry, setShift } = useShift(outletId);
   const [openBusy, setOpenBusy] = useState(false);
   const [openError, setOpenError] = useState<string | null>(null);
@@ -104,19 +104,19 @@ export function ShiftScreen({ outletId }: Readonly<{ outletId: string }>) {
 
       {!loading && failed && <LoadErrorPanel testId="shift-load-error" message="The shift status couldn't be loaded." onRetry={retry} />}
 
-      {!loading && !failed && !shift && <OpenShiftForm busy={openBusy} error={openError} onOpen={(minor) => void handleOpenShift(minor)} />}
+      {!loading && !failed && !shift && <OpenShiftForm currency={currency} busy={openBusy} error={openError} onOpen={(minor) => void handleOpenShift(minor)} />}
 
       {!loading && !failed && shift && (
         <div data-testid="shift-dashboard" className="flex flex-1 flex-col gap-6">
           <div className="flex flex-wrap items-center gap-6 rounded-lg border border-border/40 bg-card px-5 py-4">
             <div>
               <p className="text-xs text-muted-foreground">Opened</p>
-              <p className="font-semibold">{new Date(shift.openedAt).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })}</p>
+              <p className="font-semibold">{new Date(shift.openedAt).toLocaleTimeString(DATE_LOCALE, { hour: "2-digit", minute: "2-digit" })}</p>
             </div>
             <div>
               <p className="text-xs text-muted-foreground">Starting float</p>
               <p className="tabular-nums font-semibold" data-testid="shift-opening-float">
-                {formatMinor(shift.floatMinor, CURRENCY)}
+                {formatMinor(shift.floatMinor, currency)}
               </p>
             </div>
           </div>
@@ -128,11 +128,12 @@ export function ShiftScreen({ outletId }: Readonly<{ outletId: string }>) {
             </Button>
           </div>
 
-          <CashMovementLog movements={shift.cashMovements} currency={CURRENCY} />
+          <CashMovementLog movements={shift.cashMovements} currency={currency} />
         </div>
       )}
 
       <LogMovementDialog
+        currency={currency}
         open={movementOpen}
         busy={movementBusy}
         error={movementError}

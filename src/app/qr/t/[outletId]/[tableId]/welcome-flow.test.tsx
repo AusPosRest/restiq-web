@@ -49,6 +49,17 @@ describe("WelcomeFlow", () => {
     expect(JSON.parse(init.body as string)).toEqual({ outletId: "o1", tableId: "t1", name: "Rahul", phone: "9876543210" });
   });
 
+  it("CU-22/PE-24: names the restaurant and table, and says why a short phone number isn't accepted", async () => {
+    render(<WelcomeFlow outletId="o1" tableId="t1" welcome={{ restaurantName: "Spice Garden", outletName: "Indiranagar", tableLabel: "T3" }} />);
+    expect(screen.getByTestId("qr-welcome-identity").textContent).toBe("Spice GardenIndiranagar · Table T3");
+
+    expect(screen.queryByTestId("qr-phone-hint")).toBeNull();
+    await userEvent.type(screen.getByLabelText("Phone number"), "12345");
+    expect(screen.getByTestId("qr-phone-hint").textContent).toBe("Enter your 10-digit mobile number.");
+    await userEvent.type(screen.getByLabelText("Phone number"), "67890");
+    expect(screen.queryByTestId("qr-phone-hint")).toBeNull();
+  });
+
   it("disables the start submit until name and a 10-digit phone are entered", async () => {
     render(<WelcomeFlow outletId="o1" tableId="t1" />);
     const submit = screen.getByTestId("qr-start-submit") as HTMLButtonElement;
@@ -78,7 +89,7 @@ describe("WelcomeFlow", () => {
     await userEvent.click(screen.getByTestId("qr-start-submit"));
 
     expect(await screen.findByTestId("qr-join-form")).toBeTruthy();
-    expect(screen.getByTestId("qr-join-notice").textContent).toMatch(/already has an order going/i);
+    expect(screen.getByTestId("qr-join-notice").textContent).toMatch(/started ordering in the last 30 minutes/i);
     expect(screen.queryByTestId("qr-start-error")).toBeNull();
     // The name carries over into the join form rather than being lost.
     expect((screen.getByLabelText("Your name") as HTMLInputElement).value).toBe("Rahul");

@@ -7,6 +7,7 @@
 // keeps the same same-origin-fetch shape. Mirrors src/app/qr/api/[...path]/
 // route.ts and src/app/pos/api/[...path]/route.ts minus the cookie/token step.
 import { NextRequest, NextResponse } from "next/server";
+import { clientIpHeaders } from "@/lib/client-ip-headers";
 
 const SEGMENT = /^[a-z0-9_-]+$/i;
 
@@ -21,7 +22,9 @@ async function forward(request: NextRequest, params: Promise<{ path: string[] }>
     return NextResponse.json({ error: { code: "misconfigured", message: "NEXT_PUBLIC_API_URL is not set" } }, { status: 500 });
   }
 
-  const headers: Record<string, string> = {};
+  // restiq-backend#209 (SE-32): enrolment attempts are limited per browser address - without this every
+  // browser shared this server's one bucket, so ten bad codes from anyone blocked all enrolments.
+  const headers: Record<string, string> = { ...clientIpHeaders(request) };
   const init: RequestInit = { method: request.method, headers, cache: "no-store" };
   if (request.method !== "GET" && request.method !== "HEAD") {
     headers["content-type"] = "application/json";

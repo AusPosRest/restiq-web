@@ -6,9 +6,13 @@
 // directly).
 import { describe, expect, it } from "vitest";
 import type { OrderLineView } from "../order-taking-state";
+import type { BillTenderView } from "../settle/bill-state";
 import {
   canRefundBill,
   computeRefundTotals,
+  defaultRefundChoice,
+  refundMethodFor,
+  refundMethodLabel,
   hasRefundSelection,
   setLineQuantity,
   toggleLineSelected,
@@ -20,6 +24,8 @@ function makeLine(overrides: Partial<OrderLineView> = {}): OrderLineView {
     id: "line-butter-naan",
     itemId: "item-butter-naan",
     itemName: "Butter Naan",
+    comboId: null,
+    components: [],
     variantId: null,
     variantName: null,
     quantity: 2,
@@ -27,6 +33,9 @@ function makeLine(overrides: Partial<OrderLineView> = {}): OrderLineView {
     modifiers: [],
     lineTotalMinor: 12000,
     addedByStaffId: "staff-1",
+    addedByStaffName: null,
+    note: null,
+    sentToKitchen: true,
     seatNumber: null,
     ...overrides,
   };
@@ -73,6 +82,15 @@ describe("computeRefundTotals", () => {
     expect(totals.totalMinor).toBe(6300);
   });
 
+  it("pro-rates by the bill's discount and stored tax, like the credit note will (restiq-backend#221)", () => {
+    const line = makeLine({ quantity: 1, unitPriceMinor: 10000 });
+    // Bill: 13333 subtotal, 1000 discount, 616 tax.
+    const bill = { subtotalMinor: 13333, discountMinor: 1000, taxMinor: 616, pricesIncludeTax: false };
+    expect(computeRefundTotals([line], { [line.id]: 1 }, bill)).toMatchObject({ subtotalMinor: 9249, taxReversalMinor: 462, totalMinor: 9711 });
+    // Tax-inclusive (AU): the total is the subtotal alone.
+    expect(computeRefundTotals([line], { [line.id]: 1 }, { ...bill, pricesIncludeTax: true }).totalMinor).toBe(9249);
+  });
+
   it("folds a line's selected modifiers into its refundable unit price", () => {
     const line = makeLine({
       quantity: 1,
@@ -113,5 +131,29 @@ describe("canRefundBill", () => {
   it("only allows refunding a finalized bill", () => {
     expect(canRefundBill({ status: "finalized" })).toBe(true);
     expect(canRefundBill({ status: "open" })).toBe(false);
+  });
+});
+
+describe("refund method (restiq-web#353)", () => {
+  const tender = (method: BillTenderView["method"], amountMinor: number): BillTenderView => ({ id: method, method, amountMinor, createdAt: "2026-08-24T14:22:00.000Z" });
+
+  it("defaults to the largest tender's kind, earliest on a tie, and cash for a bill with no tenders", () => {
+    expect(defaultRefundChoice([tender("cash", 100), tender("upi_qr", 900)])).toBe("upi");
+    expect(defaultRefundChoice([tender("card_terminal", 500), tender("cash", 500)])).toBe("card");
+    expect(defaultRefundChoice([tender("external", 10)])).toBe("external");
+    expect(defaultRefundChoice([])).toBe("cash");
+  });
+
+  it("sends the bill's own method when it matches the choice, else the manual one", () => {
+    const tenders = [tender("card_online", 900), tender("cash", 100)];
+    expect(refundMethodFor("card", tenders)).toBe("card_online");
+    expect(refundMethodFor("cash", tenders)).toBe("cash");
+    expect(refundMethodFor("upi", tenders)).toBe("upi_manual");
+    expect(refundMethodFor("card", [])).toBe("card_terminal");
+  });
+
+  it("labels an older note with no method as not recorded", () => {
+    expect(refundMethodLabel("cash")).toBe("Cash");
+    expect(refundMethodLabel(null)).toBe("Not recorded");
   });
 });

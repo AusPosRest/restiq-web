@@ -11,12 +11,10 @@
 // cart shows no pill at all rather than a hollow "0 items" one.
 import Link from "next/link";
 import { useCartSummary } from "./cart-summary";
-
-const CURRENCY_SYMBOLS: Record<string, string> = { INR: "₹" };
+import { formatPrice } from "@/lib/money";
 
 function formatTotal(totalMinor: number, currency: string): string {
-  const symbol = CURRENCY_SYMBOLS[currency] ?? `${currency} `;
-  return `${symbol}${(totalMinor / 100).toFixed(0)}`;
+  return formatPrice(totalMinor, currency);
 }
 
 export interface CartPillProps {

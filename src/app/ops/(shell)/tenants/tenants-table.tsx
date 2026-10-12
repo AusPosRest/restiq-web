@@ -6,6 +6,7 @@ import { ArrowDown, ArrowUp, Plus, Store, X } from "lucide-react";
 import Link from "next/link";
 import { usePathname, useRouter, useSearchParams } from "next/navigation";
 import { useRef, useState } from "react";
+import { TestModeBadge } from "@/components/test-mode-badge";
 import { Button } from "@/components/ui/button";
 import { TenantListResult } from "../api";
 import { LoadErrorPanel, Skeleton } from "../data-states";
@@ -27,6 +28,7 @@ import {
   withFilter,
   withSort,
 } from "./table-state";
+import { DATE_LOCALE } from "@/lib/datetime";
 
 const PAGE_SIZE = 25;
 const SEARCH_DEBOUNCE_MS = 350;
@@ -72,17 +74,19 @@ function SortHeader({
   query,
   onSort,
   testId,
+  className = "",
 }: Readonly<{
   label: string;
   column: TableQuery["sort"];
   query: TableQuery;
   onSort: (column: TableQuery["sort"]) => void;
   testId: string;
+  className?: string;
 }>) {
   const active = query.sort === column;
   const Icon = query.order === "asc" ? ArrowUp : ArrowDown;
   return (
-    <th aria-sort={active ? (query.order === "asc" ? "ascending" : "descending") : "none"} className="px-4 text-left">
+    <th aria-sort={active ? (query.order === "asc" ? "ascending" : "descending") : "none"} className={`px-4 text-left ${className}`}>
       <button
         type="button"
         data-testid={testId}
@@ -150,7 +154,8 @@ export function TenantsTable() {
         </Button>
       </div>
 
-      <div className="mt-6 rounded-lg border border-border/40 bg-card p-4">
+      {/* No filters over an empty list - nothing to narrow down yet. */}
+      <div className="mt-6 rounded-lg border border-border/40 bg-card p-4" hidden={!filtered && data?.total === 0}>
         <div className="flex flex-wrap items-center gap-3">
           <input
             type="search"
@@ -231,12 +236,13 @@ export function TenantsTable() {
             <thead>
               <tr className="h-12 border-b border-border/40">
                 <SortHeader label="Tenant" column="name" query={query} onSort={(column) => navigate(withSort(query, column))} testId="tenants-sort-name" />
-                <th className="font-label px-4 text-left text-xs font-semibold uppercase tracking-wider text-muted-foreground">Country</th>
-                <th className="font-label px-4 text-right text-xs font-semibold uppercase tracking-wider text-muted-foreground">Outlets</th>
+                {/* PE-27: on a phone the secondary columns step aside so Plan, Status and Health stay in view. */}
+                <th className="font-label hidden px-4 text-left text-xs font-semibold uppercase tracking-wider text-muted-foreground sm:table-cell">Country</th>
+                <th className="font-label hidden px-4 text-right text-xs font-semibold uppercase tracking-wider text-muted-foreground sm:table-cell">Outlets</th>
                 <th className="font-label px-4 text-left text-xs font-semibold uppercase tracking-wider text-muted-foreground">Plan</th>
                 <th className="font-label px-4 text-left text-xs font-semibold uppercase tracking-wider text-muted-foreground">Status</th>
                 <th className="font-label px-4 text-left text-xs font-semibold uppercase tracking-wider text-muted-foreground">Health</th>
-                <SortHeader label="Created" column="createdAt" query={query} onSort={(column) => navigate(withSort(query, column))} testId="tenants-sort-created" />
+                <SortHeader label="Created" column="createdAt" query={query} onSort={(column) => navigate(withSort(query, column))} testId="tenants-sort-created" className="hidden sm:table-cell" />
               </tr>
             </thead>
             <tbody>
@@ -262,18 +268,23 @@ export function TenantsTable() {
                     }}
                     className="h-12 cursor-pointer border-b border-border/20 transition-colors last:border-b-0 hover:bg-accent focus:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-ring"
                   >
-                    <td className="px-4 font-medium">{tenant.name}</td>
-                    <td className="px-4 text-muted-foreground">{tenant.country}</td>
-                    <td className="px-4 text-right tabular-nums">{tenant.outletCount}</td>
-                    <td className="px-4 text-muted-foreground">{tenant.plan}</td>
+                    <td className="px-4 font-medium">
+                      <span className="flex items-center gap-2">
+                        {tenant.name}
+                        {tenant.testMode && <TestModeBadge testId={`tenants-test-badge-${tenant.id}`} />}
+                      </span>
+                    </td>
+                    <td className="hidden px-4 text-muted-foreground sm:table-cell">{tenant.country}</td>
+                    <td className="hidden px-4 text-right tabular-nums sm:table-cell">{tenant.outletCount}</td>
+                    <td className="px-4 text-muted-foreground">{tenant.plan.charAt(0).toUpperCase() + tenant.plan.slice(1)}</td>
                     <td className="px-4">
                       <StatusBadge status={tenant.status} />
                     </td>
                     <td className="px-4">
                       <StatusBadge status={tenant.health} />
                     </td>
-                    <td className="px-4 tabular-nums text-muted-foreground">
-                      {new Date(tenant.createdAt).toLocaleDateString(undefined, { day: "numeric", month: "short", year: "numeric" })}
+                    <td className="hidden px-4 tabular-nums text-muted-foreground sm:table-cell">
+                      {new Date(tenant.createdAt).toLocaleDateString(DATE_LOCALE, { day: "numeric", month: "short", year: "numeric" })}
                     </td>
                   </tr>
                 ))}

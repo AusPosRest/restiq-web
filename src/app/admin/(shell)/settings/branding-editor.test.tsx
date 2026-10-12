@@ -126,36 +126,13 @@ describe("BrandingEditor", () => {
     expect(screen.getByTestId("branding-save")).toHaveProperty("disabled", false);
   });
 
-  it("rejects a logo file that isn't an accepted type", async () => {
+
+  it("offers only the logo URL - an uploaded file could never be saved (walkthrough fix)", async () => {
     stubFetch();
     renderEditor();
     await screen.findByTestId("branding-form");
-
-    // userEvent.upload honors the input's `accept` attribute and silently
-    // drops a non-matching file before firing change (mirroring real browser
-    // file-picker filtering) - a wrong-type file has to be forced in via a
-    // raw change event to exercise the component's own validation instead.
-    const input = screen.getByTestId("branding-logo-input") as HTMLInputElement;
-    const badFile = new File(["x"], "logo.jpg", { type: "image/jpeg" });
-    Object.defineProperty(input, "files", { value: [badFile], configurable: true });
-    input.dispatchEvent(new Event("change", { bubbles: true }));
-
-    expect((await screen.findByTestId("branding-logo-error")).textContent).toContain("SVG or PNG");
-  });
-
-  it("previews a picked logo file without putting it in the saved draft (backend caps logoUrl at 2048 chars)", async () => {
-    stubFetch();
-    renderEditor();
-    await screen.findByTestId("branding-form");
-
-    const input = screen.getByTestId("branding-logo-input") as HTMLInputElement;
-    const goodFile = new File(["<svg></svg>"], "logo.svg", { type: "image/svg+xml" });
-    await userEvent.upload(input, goodFile);
-
-    const logo = await screen.findByTestId("receipt-preview-logo");
-    expect((logo as HTMLImageElement).src).toContain("data:");
-    // The picked file only ever previews - it never becomes the saved Logo URL value.
-    expect((screen.getByTestId("branding-logo-url") as HTMLInputElement).value).toBe("");
+    expect(screen.queryByTestId("branding-logo-input")).toBeNull();
+    expect(screen.getByTestId("branding-logo-url")).toBeTruthy();
   });
 
   it("blocks Save with an inline error when a pasted Logo URL exceeds the backend's 2048-char cap", async () => {

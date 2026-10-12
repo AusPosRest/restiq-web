@@ -1,40 +1,51 @@
 "use client";
 
-// T4/T4a Menu Management item list: 86 toggle per row, dine-in/delivery price
-// columns. Price is fetched per item (GET .../price?channel=X - the only
-// price read the real backend exposes, see menu-state.ts's file header) once
-// the row mounts; an item with variants shows "Varies by variant" instead of
-// fetching every variant's price for every list row.
+// T4/T4a Menu Management item list: Available switch per row, one price column
+// (dine-in channel; no delivery price, #272). Prices come inline on the item
+// list (restiq-backend#211, SE-20) - no request per row. An item with variants
+// shows its price range; one the till and QR can't sell says so (CU-23).
 import { GripVertical } from "lucide-react";
-import { useEffect, useState } from "react";
-import { fetchCurrentPrice } from "../../api";
+import { PaginationControls, usePagination } from "@/components/pagination";
 import { EightySixToggle } from "./eighty-six-toggle";
-import { formatPriceMinor, ItemView } from "./menu-state";
+import { formatPriceMinor, ItemView, unsellableNote } from "./menu-state";
 
 export function MenuTable({
   items,
   currency,
+  filterKey,
   onSelect,
   onAvailabilityChanged,
-}: Readonly<{ items: ItemView[]; currency: string; onSelect: (item: ItemView) => void; onAvailabilityChanged: (itemId: string, available: boolean) => void }>) {
+}: Readonly<{
+  items: ItemView[];
+  currency: string;
+  /** Changes whenever the category/search filter changes, so the pager returns to page 1 (issue #255). */
+  filterKey?: string;
+  onSelect: (item: ItemView) => void;
+  onAvailabilityChanged: (itemId: string, available: boolean) => void;
+}>) {
+  const pager = usePagination(items, filterKey);
   return (
-    <table data-testid="menu-table" className="w-full text-sm">
-      <thead className="text-left text-xs font-semibold uppercase tracking-wider text-muted-foreground">
+    <>
+    <table data-testid="menu-table" className="w-full table-fixed text-sm">
+      {/* Fixed column widths (CU-4): a "Sold out" pill must not shift the columns. */}
+      <thead className="sticky top-0 z-10 bg-card text-left text-xs font-semibold uppercase tracking-wider text-muted-foreground">
         <tr className="h-12 border-b border-border/40">
-          <th className="w-6" />
+          {/* PE-27: on a phone the drag handle and Variants step aside so Available stays in view. */}
+          <th className="hidden w-9 sm:table-cell" />
           <th className="px-3">Item</th>
-          <th className="px-3 text-right">Dine-in</th>
-          <th className="px-3 text-right">Delivery</th>
-          <th className="px-3">Variants</th>
-          <th className="px-3 text-center">86&apos;d</th>
+          <th className="w-36 px-3 text-right">Price</th>
+          <th className="hidden w-44 px-3 sm:table-cell">Variants</th>
+          <th className="w-24 px-3 text-center">Available</th>
         </tr>
       </thead>
       <tbody>
-        {items.map((item) => (
+        {pager.items.map((item) => (
           <MenuTableRow key={item.id} item={item} currency={currency} onSelect={onSelect} onAvailabilityChanged={onAvailabilityChanged} />
         ))}
       </tbody>
     </table>
+    <PaginationControls pager={pager} testId="menu-pagination" />
+    </>
   );
 }
 
@@ -43,25 +54,27 @@ function MenuTableRow({
   currency,
   onSelect,
   onAvailabilityChanged,
-}: Readonly<{ item: ItemView; currency: string; onSelect: (item: ItemView) => void; onAvailabilityChanged: (itemId: string, available: boolean) => void }>) {
+}: Readonly<{
+  item: ItemView;
+  currency: string;
+  onSelect: (item: ItemView) => void;
+  onAvailabilityChanged: (itemId: string, available: boolean) => void;
+}>) {
   const hasVariants = item.variants.length > 0;
-  const [price, setPrice] = useState<{ dineInPriceMinor: number | null; deliveryPriceMinor: number | null }>({
-    dineInPriceMinor: null,
-    deliveryPriceMinor: null,
-  });
-
-  useEffect(() => {
-    if (hasVariants) return;
-    let cancelled = false;
-    Promise.all([fetchCurrentPrice(item.id, { channel: "dine_in" }), fetchCurrentPrice(item.id, { channel: "delivery" })])
-      .then(([dineIn, delivery]) => {
-        if (!cancelled) setPrice({ dineInPriceMinor: dineIn?.priceMinor ?? null, deliveryPriceMinor: delivery?.priceMinor ?? null });
-      })
-      .catch(() => undefined);
-    return () => {
-      cancelled = true;
-    };
-  }, [item.id, hasVariants]);
+  const money = (minor: number) => formatPriceMinor(minor, item.currency ?? currency);
+  const variantPrices = item.variants.flatMap((v) => (v.priceMinor === null ? [] : [v.priceMinor]));
+  const low = Math.min(...variantPrices);
+  const high = Math.max(...variantPrices);
+  const price = !hasVariants
+    ? item.priceMinor === null
+      ? "-"
+      : money(item.priceMinor)
+    : variantPrices.length === 0
+      ? "-"
+      : low === high
+        ? money(low)
+        : `${money(low)} – ${money(high)}`;
+  const note = unsellableNote(item);
 
   return (
     <tr
@@ -75,30 +88,47 @@ function MenuTableRow({
         !item.available ? "opacity-60" : ""
       }`}
     >
-      <td className="pl-3 text-muted-foreground">
+      <td className="hidden pl-3 text-muted-foreground sm:table-cell">
         <GripVertical className="size-4" aria-hidden="true" />
       </td>
       <td className="px-3">
         <div className="flex items-center gap-2">
-          <p className="font-medium">{item.name}</p>
-          {!item.available && (
-            <span data-testid={`menu-item-row-${item.id}-86-badge`} className="rounded-full bg-status-error/15 px-2 py-0.5 text-xs text-status-error">
-              86&apos;d
+          {item.photoUrl ? (
+            // eslint-disable-next-line @next/next/no-img-element -- owner-supplied https or data: URLs, not something next/image's optimizer can handle
+            <img data-testid={`menu-item-row-${item.id}-photo`} src={item.photoUrl} alt="" loading="lazy" className="size-9 shrink-0 rounded-md object-cover" />
+          ) : (
+            <span aria-hidden="true" className="flex size-9 shrink-0 items-center justify-center rounded-md bg-muted text-xs font-semibold text-muted-foreground">
+              {item.name.charAt(0).toUpperCase()}
             </span>
           )}
+          <div className="min-w-0">
+            <div className="flex items-center gap-2">
+              <p className="truncate font-medium">{item.name}</p>
+              {!item.available && (
+                <span data-testid={`menu-item-row-${item.id}-86-badge`} className="shrink-0 rounded-full bg-status-error/15 px-2 py-0.5 text-xs text-status-error">
+                  Sold out
+                </span>
+              )}
+            </div>
+            {note && (
+              <p data-testid={`menu-item-row-${item.id}-unsellable`} className="text-xs text-status-warning">
+                {note}
+              </p>
+            )}
+          </div>
         </div>
       </td>
-      <td className="px-3 text-right tabular-nums">
-        {hasVariants ? <span className="text-xs text-muted-foreground">Varies</span> : price.dineInPriceMinor === null ? "-" : formatPriceMinor(price.dineInPriceMinor, currency)}
+      <td data-testid={`menu-item-row-${item.id}-price`} className="px-3 text-right tabular-nums">
+        {price}
       </td>
-      <td className="px-3 text-right tabular-nums">
-        {hasVariants ? <span className="text-xs text-muted-foreground">Varies</span> : price.deliveryPriceMinor === null ? "-" : formatPriceMinor(price.deliveryPriceMinor, currency)}
-      </td>
-      <td className="px-3">
+      <td className="hidden px-3 sm:table-cell">
         {hasVariants ? (
           <div className="flex flex-wrap gap-1">
             {item.variants.map((variant) => (
-              <span key={variant.id} className="rounded-full bg-accent px-2 py-0.5 text-xs text-muted-foreground">
+              <span
+                key={variant.id}
+                className={`rounded-full px-2 py-0.5 text-xs ${variant.priceMinor === null ? "bg-status-warning/15 text-status-warning" : "bg-accent text-muted-foreground"}`}
+              >
                 {variant.name}
               </span>
             ))}

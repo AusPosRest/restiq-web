@@ -25,6 +25,13 @@ describe("checkAvailability", () => {
     expect(result).toEqual({ kind: "available" });
   });
 
+  it("asks about the table itself when given one, and reports a busy table (CU-21)", async () => {
+    const fetchMock = vi.fn().mockResolvedValue(upstreamJson(200, { available: false, reason: "table_busy" }));
+    vi.stubGlobal("fetch", fetchMock);
+    expect(await checkAvailability("o1", "t1")).toEqual({ kind: "unavailable", reason: "table_busy" });
+    expect(fetchMock).toHaveBeenCalledWith(`${API_URL}/guest/v1/outlets/o1/availability?tableId=t1`, expect.anything());
+  });
+
   it("reports unavailable with the reason when qr_ordering is disabled", async () => {
     vi.stubGlobal("fetch", vi.fn().mockResolvedValue(upstreamJson(200, { available: false, reason: "qr_ordering_disabled" })));
     expect(await checkAvailability("o1")).toEqual({ kind: "unavailable", reason: "qr_ordering_disabled" });

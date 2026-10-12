@@ -59,7 +59,9 @@ slot established by issue #66.
   documented zero-station edge case). `?reselect=1` forces the picker again
   - that's what the header's "Change station" control links to.
 - `src/app/kds/(shell)/kds-header.tsx` - the shared quiet header every mode
-  renders: current station/mode title, Station/Expo/Bumped/All-Day nav,
+  renders: current station/mode title, the Cook/Serve/Done/Counts nav
+  (plain-language labels as of issue #184 - the kitchen terms Station /
+  Expo / Bumped / All-Day now lead each tab's subtitle instead),
   Change station, Sign out. Bumped
   (`src/app/kds/(shell)/bumped/page.tsx`) is still a real route rendering a
   `ComingSoon` placeholder - inert until story 4 (issue #71) replaces it.
@@ -214,12 +216,14 @@ read as a loud badge, and none of the four tabs said what it was for.
   that red treatment, for an active ticket that actually needs attention.
 - **Per-tab subtitles live in one map in the shell, not per page.**
   `kds-header.tsx`'s `TAB_SUBTITLES` (keyed by `KdsMode`) renders a
-  `data-testid="kds-tab-subtitle"` line under the nav row on every screen:
-  Station - "Tickets for this station, oldest first — bump when plated";
-  Expo - "Everything across stations that's ready to go out"; Bumped -
-  "Done tickets — recall one if a plate comes back"; All-Day - "Counts of
-  everything fired today". One map keeps the four modes' copy from
-  drifting the way the original, unexplained nav did.
+  `data-testid="kds-tab-subtitle"` line under the nav row on every screen.
+  As of issue #184 the tab labels are the plain question each view answers
+  and the subtitle leads with the kitchen term: Cook - "Station queue —
+  tickets for this station, oldest first; bump when plated"; Serve -
+  "Expo — orders by table; send out when every station is ready"; Done -
+  "Bumped tickets — recall one if a plate comes back"; Counts - "All-day
+  summary — how many of each item is cooking right now". One map keeps the
+  four modes' copy from drifting the way the original, unexplained nav did.
 
 ## Integration points for later stories
 

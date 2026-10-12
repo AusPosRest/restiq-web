@@ -7,6 +7,8 @@ function order(overrides: Partial<OpenOrderEntry> = {}): OpenOrderEntry {
     origin: "table",
     tableLabel: "table-9",
     ownerStaffId: "staff-priya",
+    ownerName: "Priya",
+    tokenNumber: null,
     status: "open",
     openedAt: new Date().toISOString(),
     itemCount: 0,
@@ -27,6 +29,12 @@ function rawOrder(overrides: Partial<RawOpenOrder> = {}): RawOpenOrder {
     ...overrides,
   };
 }
+
+describe("originLabel - counter token (CU-14)", () => {
+  it("shows the customer's token number on a counter order", () => {
+    expect(originLabel(order({ origin: "counter", tableLabel: null, tokenNumber: 23 }))).toBe("Counter · Token #23");
+  });
+});
 
 describe("toOpenOrderEntry", () => {
   it("maps a table order using the real tableLabel, never the raw table id (regression for #96)", () => {

@@ -10,6 +10,12 @@ const inOneHour = Math.floor(Date.now() / 1000) + 3600;
 const oneHourAgo = Math.floor(Date.now() / 1000) - 3600;
 
 describe("decideAdminRoute", () => {
+  it("allows the password-reset pages and their route handlers without a session", () => {
+    for (const path of ["/admin/forgot-password", "/admin/reset-password", "/admin/auth/forgot-password", "/admin/auth/reset-password"]) {
+      expect(decideAdminRoute(path, "?token=rst_abc", undefined)).toEqual({ allow: true });
+    }
+  });
+
   it("allows an invite acceptance link of any token without a session", () => {
     expect(decideAdminRoute("/admin/invite/abc123", "", undefined)).toEqual({ allow: true });
     expect(decideAdminRoute("/admin/invite/abc123", "", fakeToken(oneHourAgo))).toEqual({ allow: true });

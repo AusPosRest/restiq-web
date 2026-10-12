@@ -35,55 +35,73 @@ export interface DeviceView {
   status: string;
   enrolledAt: string;
   revokedAt: string | null;
+  /** Names the enrol response carries (walkthrough fix), so screens never show raw ids. Absent on devices enrolled before it. */
+  tenantName?: string | null;
+  outletName?: string | null;
 }
 
 const FINGERPRINT_KEY = "device:hardwareKeyFingerprint";
 const DEVICE_KEY = "device:enrolled";
 
-// Device identity lives in sessionStorage, NOT localStorage, so it is scoped
-// to ONE browser TAB rather than shared across the whole origin (issue #104).
-// That is the "one page = one device" model: open two tabs and each enrols
-// independently - a POS tab and a KDS tab can run side by side on the same
-// machine. sessionStorage survives reloads within the tab (fine for an
-// always-open kiosk screen) and clears when the tab closes - closing the tab
-// unplugs that device, re-enrol with a fresh code to bring it back.
-function tabStore(): Storage | null {
-  try {
-    return window.sessionStorage;
-  } catch {
-    // Storage unavailable (private mode, disabled) - callers fall back.
-    return null;
+// Device identity is kept twice (restiq-web#343, CU-9):
+//  - this TAB's own copy in sessionStorage, read first, so two tabs on one
+//    machine can still be two devices (issue #104 - a POS tab beside a KDS tab);
+//  - a lasting copy in localStorage, so a till stays a till after the tab is
+//    closed, the browser restarts or the tablet reboots. A fresh tab with no
+//    copy of its own picks this up - the last device enrolled in this browser.
+// (The simulator gives each frame its own *.localhost origin since #339, so
+// frames never share either store.) Un-enrolling clears both.
+function stores(): Storage[] {
+  const found: Storage[] = [];
+  for (const get of [() => window.sessionStorage, () => window.localStorage]) {
+    try {
+      found.push(get());
+    } catch {
+      // Storage unavailable (private mode, disabled) - skip it.
+    }
+  }
+  return found;
+}
+
+function readKey(key: string): string | null {
+  for (const store of stores()) {
+    try {
+      const value = store.getItem(key);
+      if (value) return value;
+    } catch {
+      // getItem can throw even when the store exists (security policy) - try the next one.
+    }
+  }
+  return null;
+}
+
+function writeKey(key: string, value: string): void {
+  for (const store of stores()) {
+    try {
+      store.setItem(key, value);
+    } catch {
+      // Best-effort - quota or policy; the other store may still hold it.
+    }
   }
 }
 
 /**
- * This tab's hardware identity in the prototype - honest naming, not a real
- * device key. Generated once per tab with crypto.randomUUID() and persisted
- * for the tab's lifetime, so re-enrolling within the same tab (e.g. after a
- * revoke) reuses the same value.
+ * This browser's hardware identity in the prototype - honest naming, not a
+ * real device key. Generated once with crypto.randomUUID() and kept (see
+ * above), so re-enrolling the same till (e.g. after a revoke) reuses it.
  */
 export function getOrCreateFingerprint(): string {
+  const existing = readKey(FINGERPRINT_KEY);
+  if (existing) return existing;
   const generated = `web-${crypto.randomUUID()}`;
-  const store = tabStore();
-  if (!store) return generated;
-  try {
-    const existing = store.getItem(FINGERPRINT_KEY);
-    if (existing) return existing;
-    store.setItem(FINGERPRINT_KEY, generated);
-    return generated;
-  } catch {
-    // getItem/setItem can throw even when the store object exists (quota,
-    // security policy) - enrolment still works, just not stable across reload.
-    return generated;
-  }
+  writeKey(FINGERPRINT_KEY, generated);
+  return generated;
 }
 
 export function readStoredDevice(): DeviceView | null {
-  const store = tabStore();
-  if (!store) return null;
+  const raw = readKey(DEVICE_KEY);
+  if (!raw) return null;
   try {
-    const raw = store.getItem(DEVICE_KEY);
-    if (!raw) return null;
     return JSON.parse(raw) as DeviceView;
   } catch {
     return null;
@@ -93,12 +111,28 @@ export function readStoredDevice(): DeviceView | null {
 export function writeStoredDevice(device: DeviceView): void {
   // Best-effort - the tab still shows the enrolled state this session even if
   // the write fails, it just won't survive a reload.
-  tabStore()?.setItem(DEVICE_KEY, JSON.stringify(device));
+  writeKey(DEVICE_KEY, JSON.stringify(device));
 }
 
-/** Clears only this tab's stored identity. Server-side revocation stays an ops/admin job - see device-screen.tsx's un-enrol microcopy. */
+/** Clears this device's stored identity (tab and lasting copy). Server-side revocation stays an ops/admin job - see device-screen.tsx's un-enrol microcopy. */
 export function clearStoredDevice(): void {
-  tabStore()?.removeItem(DEVICE_KEY);
+  for (const store of stores()) {
+    try {
+      store.removeItem(DEVICE_KEY);
+    } catch {
+      // Nothing to clear if storage never worked.
+    }
+  }
+}
+
+/** The kiosk attract screen for an enrolled kiosk device (issue #214). */
+export function kioskAttractPath(outletId: string, deviceId: string): string {
+  return `/qr/kiosk/${encodeURIComponent(outletId)}?device=${encodeURIComponent(deviceId)}`;
+}
+
+/** True when this browser tab is enrolled as a kiosk - the guest screens switch to kiosk mode (issue #214). */
+export function isKioskTab(): boolean {
+  return readStoredDevice()?.type === "kiosk";
 }
 
 export type ContinueTarget = { kind: "redirect"; path: string } | { kind: "unsupported" };
@@ -111,10 +145,17 @@ export type ContinueTarget = { kind: "redirect"; path: string } | { kind: "unsup
  * the same links admin/(shell)/devices/devices-table.tsx builds (not imported
  * across route trees, AD-4).
  */
-export function continueTargetFor(device: Pick<DeviceView, "id" | "tenantId" | "type">): ContinueTarget {
-  const login = `/pos/login?device=${encodeURIComponent(device.id)}&tenant=${encodeURIComponent(device.tenantId)}`;
+export function continueTargetFor(device: Pick<DeviceView, "id" | "tenantId" | "type" | "outletId" | "tenantName">): ContinueTarget {
+  // The PIN pad also learns this device's outlet (no outlet chooser) and the restaurant's name.
+  const params = new URLSearchParams({ device: device.id, tenant: device.tenantId });
+  if (device.outletId) params.set("outlet", device.outletId);
+  if (device.tenantName) params.set("name", device.tenantName);
+  const login = `/pos/login?${params.toString()}`;
   if (device.type === "pos") return { kind: "redirect", path: login };
-  if (device.type === "kds") return { kind: "redirect", path: "/kds" };
+  // The kiosk (issue #214) is a guest-realm screen: no staff PIN, the enrolled device is the identity.
+  if (device.type === "kiosk" && device.outletId) return { kind: "redirect", path: kioskAttractPath(device.outletId, device.id) };
+  // A KDS signs in through the same PIN pad, bound to its restaurant - plain /kds had no tenant to sign in against.
+  if (device.type === "kds") return { kind: "redirect", path: `${login}&next=${encodeURIComponent("/kds")}` };
   if (device.type === "printer") return { kind: "redirect", path: `${login}&next=${encodeURIComponent("/pos/printer")}` };
   if (device.type === "terminal") return { kind: "redirect", path: `${login}&next=${encodeURIComponent("/pos/terminal")}` };
   return { kind: "unsupported" };

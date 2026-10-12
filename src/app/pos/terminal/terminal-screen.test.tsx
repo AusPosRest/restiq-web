@@ -34,7 +34,7 @@ function jsonResponse(body: unknown, status = 200): Response {
 }
 
 /** One pending intent, and a simulate endpoint that echoes the posted outcome back as a settled intent. */
-function stubTerminal(pending: PaymentIntentView[]) {
+function stubTerminal(pending: PaymentIntentView[], approved: Partial<PaymentIntentView> = { status: "succeeded", tenderId: "tender-1" }) {
   const fetchMock = vi.fn<(input: RequestInfo | URL, init?: RequestInit) => Promise<Response>>((input, init) => {
     const url = String(input);
     if (url.includes("outlets/outlet-1/payment-intents")) return Promise.resolve(jsonResponse(pending));
@@ -47,7 +47,7 @@ function stubTerminal(pending: PaymentIntentView[]) {
           intent(simulate[1], {
             amountMinor: source.amountMinor,
             currency: source.currency,
-            ...(outcome === "success" ? { status: "succeeded", tenderId: "tender-1" } : { status: "failed", failureReason: "declined" }),
+            ...(outcome === "success" ? approved : { status: "failed", failureReason: "declined" }),
           }),
         ),
       );
@@ -96,6 +96,16 @@ describe("TerminalScreen", () => {
 
     await chooseCards();
     expect(screen.getByTestId("terminal-method-tap")).toBeTruthy();
+  });
+
+  it("tells the cashier to refund a card that went through after the bill was already paid (restiq-backend#208)", async () => {
+    stubTerminal([intent("pi-late", { amountMinor: 100 })], { status: "succeeded", tenderId: null, failureReason: "late_capture_refund_due" });
+    render(<TerminalScreen outletId="outlet-1" outletName="One - BLR" />);
+
+    await screen.findByTestId("terminal-request-pi-late");
+    await chooseCards();
+    await userEvent.click(screen.getByTestId("terminal-method-tap"));
+    await waitFor(() => expect(screen.getByTestId("terminal-refund-due").textContent).toContain("refund this card payment"), SETTLED);
   });
 
   it("shows the oldest amount and a contactless tap under the floor limit approves with no PIN", async () => {

@@ -186,3 +186,16 @@ the allocation per tender before the manager PIN step.
 the cashier is accountable for, and rounds badly on small partial refunds).
 **Consequences:** One more field on an existing DTO; the credit note stays
 the record even if a provider refund fails (exception filed).
+
+## ADR-013 - 2026-10-11 - Simulated devices are top-level windows, not frames
+
+**Context:** the simulator's iframe canvas put each device on its own `sim-<id>.localhost` origin, a different site from the page. Every session cookie is `SameSite=lax`, which browsers drop when set inside a cross-site frame, so no device could sign in (PE-26 / CU-25).
+**Decision:** each device opens with `window.open` on its own origin, top-level, so lax cookies work unchanged. The simulator page keeps only the device list (Focus, Close, Re-open, Remove, status). Session cookies are not loosened to `SameSite=None`.
+**Consequences:** no side-by-side canvas; the browser's own window management replaces it. Pop-up blockers must allow the simulator page (the page says so when a window is blocked).
+
+## ADR-014 - 2026-10-11 - Test mode is per tenant and read from the API
+
+**Context:** demo tenants need simulated payments and mail on a server where the simulator is off, and must be visibly marked (restiq-backend#213).
+**Decision:** the web never decides Test mode itself; it reads `testMode` from `GET /admin/v1/tenant`, `GET /pos/v1/tenant`, the ops tenant views and each invoice. A failed lookup shows no badge.
+**Consequences:** one extra small request per console header mount. The invoice's own `testMode` keeps an old test invoice marked after the tenant goes Live.
+

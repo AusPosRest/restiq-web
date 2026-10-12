@@ -8,6 +8,7 @@
 import { AlertTriangle, Radio, RefreshCw } from "lucide-react";
 import { usePathname, useRouter, useSearchParams } from "next/navigation";
 import { useEffect, useState } from "react";
+import { PaginationControls, usePagination } from "@/components/pagination";
 import { Button } from "@/components/ui/button";
 import { SyncHealthRow } from "../api";
 import { LoadErrorPanel, Skeleton } from "../data-states";
@@ -15,6 +16,7 @@ import { StatusBadge } from "../status-badge";
 import { formatClockSkew, formatLag } from "./format";
 import { clearFilter, FILTER_LABELS, FILTER_VALUES, parseSyncHealthQuery, toApiParams, toUrlParams, withFilter } from "./table-state";
 import { useLiveSyncHealth } from "./use-live-sync-health";
+import { formatDateTime } from "@/lib/datetime";
 
 const SELECT_CLASSES =
   "h-9 rounded-lg border border-border bg-input px-2.5 text-sm text-foreground focus:outline-none focus-visible:ring-2 focus-visible:ring-ring";
@@ -40,7 +42,7 @@ function UpdatedAgo({ generatedAt }: Readonly<{ generatedAt: string }>) {
 }
 
 function LastContactCell({ row }: Readonly<{ row: SyncHealthRow }>) {
-  const absolute = row.lastContactAt ? new Date(row.lastContactAt).toLocaleString() : null;
+  const absolute = row.lastContactAt ? formatDateTime(row.lastContactAt) : null;
   const relative = row.lastContactAt ? formatLag(row.lagSeconds) : "Never contacted";
 
   if (row.severity !== "silent") {
@@ -79,6 +81,7 @@ export function SyncHealthTable() {
   const filtered = query.filter !== "";
   const emptyFiltered = !loading && data && rows.length === 0 && filtered;
   const trueEmpty = !loading && data && rows.length === 0 && !filtered;
+  const pager = usePagination(rows, query.filter);
 
   return (
     <section className="flex flex-1 flex-col">
@@ -200,7 +203,7 @@ export function SyncHealthTable() {
                   </tr>
                 ))}
               {!loading &&
-                rows.map((row) => (
+                pager.items.map((row) => (
                   <tr
                     key={row.deviceId}
                     data-testid={`sync-health-row-${row.deviceId}`}
@@ -234,6 +237,7 @@ export function SyncHealthTable() {
             </tbody>
           </table>
         )}
+        {!loading && <PaginationControls pager={pager} testId="sync-health-pagination" />}
 
         {trueEmpty && (
           <div className="flex flex-col items-center gap-3 px-8 py-16 text-center" data-testid="sync-health-empty">

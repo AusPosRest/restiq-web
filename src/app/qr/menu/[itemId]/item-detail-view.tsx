@@ -153,7 +153,12 @@ export function ItemDetailView({ itemId }: Readonly<{ itemId: string }>) {
   return (
     <main data-testid="qr-item-detail" className="relative flex min-h-screen flex-1 flex-col pb-36">
       <div className="relative flex h-40 shrink-0 items-center justify-center bg-muted" aria-hidden="true">
-        <span className="font-headline text-5xl font-bold text-muted-foreground">{initialLetterTile(item.name)}</span>
+        {item.photoUrl ? (
+          // eslint-disable-next-line @next/next/no-img-element -- owner-supplied https or data: URL (issue #218)
+          <img data-testid="qr-item-photo" src={item.photoUrl} alt="" className="size-full object-cover" />
+        ) : (
+          <span className="font-headline text-5xl font-bold text-muted-foreground">{initialLetterTile(item.name)}</span>
+        )}
       </div>
       <button
         type="button"

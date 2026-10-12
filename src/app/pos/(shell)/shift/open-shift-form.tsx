@@ -12,7 +12,8 @@ export function OpenShiftForm({
   busy,
   error,
   onOpen,
-}: Readonly<{ busy: boolean; error: string | null; onOpen: (openingFloatMinor: number) => void }>) {
+  currency = "INR",
+}: Readonly<{ busy: boolean; error: string | null; onOpen: (openingFloatMinor: number) => void; currency?: string }>) {
   const [digits, setDigits] = useState("");
   const validationError = validateOpeningFloat(digits);
 
@@ -26,6 +27,7 @@ export function OpenShiftForm({
       <AmountKeypad
         testId="open-shift-keypad"
         digits={digits}
+        currency={currency}
         disabled={busy}
         onDigit={(digit) => setDigits((current) => appendDigit(current, digit))}
         onBackspace={() => setDigits((current) => current.slice(0, -1))}

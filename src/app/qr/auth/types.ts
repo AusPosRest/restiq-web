@@ -32,7 +32,8 @@ export type TableSessionStatus = "open" | "settled" | "closed";
 export interface TableSessionView {
   sessionId: string;
   status: TableSessionStatus;
-  table: TableSummary;
+  // null for a kiosk session (issue #214 / restiq-backend#138).
+  table: TableSummary | null;
   outletId: string;
   guests: GuestSummary[];
   createdAt: string;
@@ -43,6 +44,14 @@ export interface TableSessionView {
 export type GuestStartResult = {
   token: string;
   pin: string;
+  session: TableSessionView;
+};
+
+//   POST /guest/v1/kiosk/sessions { outletId, deviceId } (public, restiq-backend#138) ->
+//     201 { token, session: TableSessionView (table: null) }
+//     404 not_found (unknown/revoked/non-kiosk/other-outlet device), 403 kiosk_disabled
+export type KioskStartResult = {
+  token: string;
   session: TableSessionView;
 };
 

@@ -88,7 +88,7 @@ function makeFinalizedBill(overrides: Partial<BillView> = {}): BillView {
 }
 
 let bill: BillView;
-let refundRequests: Array<{ lines?: { orderLineId: string; quantity: number }[]; reason: string; managerPin: string }>;
+let refundRequests: Array<{ lines?: { orderLineId: string; quantity: number }[]; reason: string; managerPin: string; method?: string }>;
 
 function stubFetch(options: { rejectPin?: string } = {}) {
   refundRequests = [];
@@ -102,7 +102,7 @@ function stubFetch(options: { rejectPin?: string } = {}) {
     if (key === `GET bills/${BILL_ID}`) return Promise.resolve(jsonResponse(bill));
 
     if (key === `POST bills/${BILL_ID}/refund`) {
-      const body = JSON.parse(String(init?.body)) as { lines?: { orderLineId: string; quantity: number }[]; reason: string; managerPin: string };
+      const body = JSON.parse(String(init?.body)) as { lines?: { orderLineId: string; quantity: number }[]; reason: string; managerPin: string; method?: string };
       refundRequests.push(body);
 
       if (options.rejectPin && body.managerPin === options.rejectPin) {
@@ -127,6 +127,7 @@ function stubFetch(options: { rejectPin?: string } = {}) {
             subtotalMinor,
             taxMinor,
             totalMinor: subtotalMinor + taxMinor,
+            method: body.method ?? null,
             createdAt: "2026-08-25T10:00:00.000Z",
             lines: lines.map((l) => {
               const line = order.lines.find((candidate) => candidate.id === l.orderLineId)!;
@@ -229,7 +230,8 @@ describe("RefundView - manager PIN gate", () => {
 
     await waitFor(() => expect(screen.queryByTestId("manager-pin-dialog")).toBeNull());
     expect(refundRequests).toHaveLength(1);
-    expect(refundRequests[0]).toMatchObject({ reason: "Customer complaint", managerPin: "1234" });
+    // Defaults to how the bill was mostly paid - cash here (restiq-web#353).
+    expect(refundRequests[0]).toMatchObject({ reason: "Customer complaint", managerPin: "1234", method: "cash" });
   });
 
   it("keeps a rejected PIN from proceeding - the refund never lands and the config panel stays put", async () => {
@@ -285,6 +287,51 @@ describe("RefundView - successful refund", () => {
       return (init?.method === "PATCH" || init?.method === "PUT") && url.includes("/bill");
     });
     expect(mutatingBillCalls).toHaveLength(0);
+  });
+});
+
+describe("RefundView - refund method (restiq-web#353)", () => {
+  async function approveRefund() {
+    await userEvent.click(screen.getByTestId("refund-line-select-line-naan"));
+    await userEvent.click(screen.getByTestId("process-refund"));
+    const dialog = await screen.findByTestId("manager-pin-dialog");
+    for (const digit of "1234") {
+      await userEvent.click(within(dialog).getByTestId(`manager-pin-dialog-digit-${digit}`));
+    }
+    await userEvent.selectOptions(within(dialog).getByTestId("manager-pin-dialog-reason-select"), "customer-complaint");
+    await userEvent.click(within(dialog).getByTestId("manager-pin-dialog-confirm"));
+    await screen.findByTestId("credit-note-result");
+  }
+
+  it("defaults to the bill's largest tender and sends its own method", async () => {
+    bill = makeFinalizedBill({
+      tenders: [
+        { id: "tender-1", method: "cash", amountMinor: 10000, createdAt: "2026-08-24T14:22:00.000Z" },
+        { id: "tender-2", method: "card_online", amountMinor: 65600, createdAt: "2026-08-24T14:22:00.000Z" },
+      ],
+    });
+    stubFetch();
+    render(<RefundView orderId={ORDER_ID} billId={BILL_ID} />);
+
+    await screen.findByTestId("refund-config-panel");
+    expect(screen.getByTestId("refund-method-card")).toHaveProperty("checked", true);
+    await approveRefund();
+
+    expect(refundRequests[0].method).toBe("card_online");
+    expect(screen.getByTestId("credit-note-method").textContent).toBe("Refunded by: Card (online)");
+  });
+
+  it("lets the cashier pick another method", async () => {
+    bill = makeFinalizedBill();
+    stubFetch();
+    render(<RefundView orderId={ORDER_ID} billId={BILL_ID} />);
+
+    await screen.findByTestId("refund-config-panel");
+    await userEvent.click(screen.getByTestId("refund-method-upi"));
+    await approveRefund();
+
+    expect(refundRequests[0].method).toBe("upi_manual");
+    expect(screen.getByTestId("credit-note-method").textContent).toBe("Refunded by: UPI");
   });
 });
 

@@ -5,7 +5,9 @@
 // for never leaves this module. Mirrors the fetch-then-degrade pattern in
 // src/app/qr/t/[outletId]/[tableId]/availability.ts.
 //   POST ops/v1/auth/login {email,password} -> { token, operator }
+//   GET  ops/v1/tenants    -> { tenants: [{ name, testMode, ... }] }
 //   GET  ops/v1/devices    -> { devices: DeviceListItem[], nextCursor, total }
+// restiq-web#346 (PE-30): /demo shows only tenants in Test mode - their devices and their logins.
 export interface LandingDevice {
   id: string;
   tenantId: string;
@@ -13,23 +15,28 @@ export interface LandingDevice {
   type: string;
   status: string;
   tenantName: string;
+  outletId: string | null;
   outletName: string | null;
 }
 
 export type LandingDevicesResult =
-  | { kind: "available"; devices: LandingDevice[] }
+  | { kind: "available"; devices: LandingDevice[]; testTenantNames: string[] }
   | { kind: "unavailable" };
 
-// pos/kiosk terminals sign in at the shared POS PIN pad; kds shares that
+// pos terminals sign in at the shared POS PIN pad; kds shares that
 // auth realm at its own route; other device types (cds - customer display)
 // have no standalone login surface to open. A revoked device is never
-// openable regardless of type. pos/kiosk carry `?device=&tenant=` so the PIN
+// openable regardless of type. pos carries `?device=&tenant=` so the PIN
 // pad can bind itself to this device's tenant (issue #150,
 // src/app/pos/terminal-binding.ts) instead of relying on POS_TENANT_ID.
-export function deviceOpenHref(device: Pick<LandingDevice, "id" | "tenantId" | "type" | "status">): string | null {
+export function deviceOpenHref(device: Pick<LandingDevice, "id" | "tenantId" | "type" | "status" | "outletId">): string | null {
   if (device.status === "revoked") return null;
-  if (device.type === "pos" || device.type === "kiosk") {
+  if (device.type === "pos") {
     return `/pos/login?device=${encodeURIComponent(device.id)}&tenant=${encodeURIComponent(device.tenantId)}`;
+  }
+  // The kiosk (issue #214) is a guest-realm screen bound to its outlet - no PIN pad.
+  if (device.type === "kiosk") {
+    return device.outletId ? `/qr/kiosk/${encodeURIComponent(device.outletId)}?device=${encodeURIComponent(device.id)}` : null;
   }
   if (device.type === "kds") return "/kds";
   // The simulated receipt printer (issue #172) is a POS-realm screen: it signs in at the PIN pad, then drains the outlet's spool.
@@ -58,18 +65,23 @@ export async function fetchLandingDevices(): Promise<LandingDevicesResult> {
 
     // ponytail: one page at the API's max page size rather than a cursor
     // loop - fine for a demo-scale fleet; add pagination if it outgrows 100.
-    const devicesRes = await fetch(`${apiUrl}/ops/v1/devices?limit=100`, {
-      headers: { authorization: `Bearer ${loginBody.token}` },
-      cache: "no-store",
-    });
+    const headers = { authorization: `Bearer ${loginBody.token}` };
+    const tenantsRes = await fetch(`${apiUrl}/ops/v1/tenants?limit=100`, { headers, cache: "no-store" });
+    if (!tenantsRes.ok) return { kind: "unavailable" };
+    const tenantsBody = (await tenantsRes.json().catch(() => null)) as { tenants?: { id: string; name: string; testMode?: boolean }[] } | null;
+    if (!tenantsBody?.tenants) return { kind: "unavailable" };
+    const testTenants = tenantsBody.tenants.filter((tenant) => tenant.testMode === true);
+    const testTenantIds = new Set(testTenants.map((tenant) => tenant.id));
+
+    const devicesRes = await fetch(`${apiUrl}/ops/v1/devices?limit=100`, { headers, cache: "no-store" });
     if (!devicesRes.ok) return { kind: "unavailable" };
     const body = (await devicesRes.json().catch(() => null)) as { devices?: LandingDevice[] } | null;
     if (!body?.devices) return { kind: "unavailable" };
 
-    const devices = [...body.devices].sort(
+    const devices = body.devices.filter((device) => testTenantIds.has(device.tenantId)).sort(
       (a, b) => a.tenantName.localeCompare(b.tenantName) || a.label.localeCompare(b.label),
     );
-    return { kind: "available", devices };
+    return { kind: "available", devices, testTenantNames: testTenants.map((tenant) => tenant.name) };
   } catch {
     return { kind: "unavailable" };
   }

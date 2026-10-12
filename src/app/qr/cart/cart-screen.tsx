@@ -19,8 +19,11 @@
 // STATUS_ROUTE below).
 import { Minus, Plus, Trash2 } from "lucide-react";
 import Link from "next/link";
+import { useRouter } from "next/navigation";
 import { useState } from "react";
 import { GuestApiError } from "../api-client";
+import { KioskPay } from "../kiosk/kiosk-pay";
+import { endKioskSession, isKioskTab } from "../kiosk-session";
 import {
   fetchCart,
   placeOrder,
@@ -57,6 +60,9 @@ const CHECKOUT_ROUTE = "/qr/checkout";
 export function CartScreen({ myGuestId }: Readonly<{ myGuestId: string }>) {
   const poll = useCartPoll();
   const [placedOrder, setPlacedOrder] = useState<PlacedOrderView | null>(null);
+  // The cart's currency at the moment of placing - the emptied cart that
+  // polls afterwards no longer carries the tenant's (issue #220).
+  const [placedCurrency, setPlacedCurrency] = useState("INR");
   // Set when this guest's own "Place order" tap raced another guest's and
   // lost - the backend's real response for that race is 400 `empty_cart`
   // (the cart the loser tried to place had already been consumed by the
@@ -68,7 +74,7 @@ export function CartScreen({ myGuestId }: Readonly<{ myGuestId: string }>) {
   // state, but there's no reason to wait for the next tick.
   const [sessionEndedByPlacement, setSessionEndedByPlacement] = useState(false);
 
-  if (placedOrder) return <PlacedConfirmation order={placedOrder} />;
+  if (placedOrder) return <PlacedConfirmation order={placedOrder} currency={placedCurrency} />;
   if (placedElsewhere) return <OrderPlacedElsewhere />;
   if (poll.sessionClosed || sessionEndedByPlacement) return <SessionEndedPanel />;
   if (poll.loading) return <LoadingSkeleton />;
@@ -82,7 +88,10 @@ export function CartScreen({ myGuestId }: Readonly<{ myGuestId: string }>) {
       myGuestId={myGuestId}
       stale={poll.stale}
       onUpdate={poll.applyUpdate}
-      onPlaced={setPlacedOrder}
+      onPlaced={(order) => {
+        setPlacedCurrency(poll.data?.currency ?? "INR");
+        setPlacedOrder(order);
+      }}
       onPlacedElsewhere={() => setPlacedElsewhere(true)}
       onSessionEnded={() => setSessionEndedByPlacement(true)}
     />
@@ -180,7 +189,11 @@ function CartLoaded({
 
   return (
     <main data-testid="cart-screen" className="flex min-h-screen flex-1 flex-col px-6 pb-40 pt-8">
-      <h1 className="font-headline text-2xl font-semibold text-foreground">Your table&apos;s order</h1>
+      {/* CU-22: a way back to the menu without the phone's back button. */}
+      <Link href={MENU_ROUTE} data-testid="cart-add-more" className="mb-3 self-start text-sm font-medium text-primary underline-offset-2 hover:underline">
+        ← Add more items
+      </Link>
+      <h1 className="font-headline text-2xl font-semibold text-foreground">{isKioskTab() ? "Your order" : "Your table's order"}</h1>
 
       {stale ? (
         <p data-testid="cart-stale-note" className="mt-2 text-xs text-muted-foreground">
@@ -206,6 +219,7 @@ function CartLoaded({
                 guest={guest}
                 currency={cart.currency}
                 own={guest.guestId === myGuestId}
+                kiosk={isKioskTab()}
                 busyLineId={busyLineId}
                 onIncrement={increment}
                 onDecrement={decrement}
@@ -222,11 +236,15 @@ function CartLoaded({
           </p>
         ) : null}
         <div className="flex items-baseline justify-between">
-          <span className="text-sm font-medium text-muted-foreground">Table total</span>
+          <span className="text-sm font-medium text-muted-foreground">{isKioskTab() ? "Total" : "Table total"}</span>
           <span data-testid="cart-total" className="font-headline text-2xl font-bold tabular-nums text-foreground">
             {formatMinor(cart.totalMinor, cart.currency)}
           </span>
         </div>
+        {/* PE-24: no surprise on the bill - Indian GST is added on top, Australian GST is already in the price. */}
+        <p data-testid="cart-tax-note" className="text-right text-xs text-muted-foreground">
+          {cart.currency === "AUD" ? "Prices include GST" : "Plus applicable taxes, shown on your bill"}
+        </p>
         <button
           type="button"
           data-testid="cart-place-order"
@@ -246,6 +264,7 @@ function GuestGroup({
   guest,
   currency,
   own,
+  kiosk = false,
   busyLineId,
   onIncrement,
   onDecrement,
@@ -254,6 +273,8 @@ function GuestGroup({
   guest: TableCartView["guests"][number];
   currency: string;
   own: boolean;
+  /** PE-29: a kiosk has one customer and no table - no "who added this" chip. */
+  kiosk?: boolean;
   busyLineId: string | null;
   onIncrement: (line: CartLineView) => void;
   onDecrement: (line: CartLineView) => void;
@@ -262,7 +283,7 @@ function GuestGroup({
   return (
     <section data-testid={`cart-guest-${guest.guestId}`} className="rounded-xl border border-border bg-card p-4">
       <div className="flex items-center justify-between">
-        <GuestChip name={guest.guestName} mine={own} />
+        {kiosk ? <span /> : <GuestChip name={guest.guestName} mine={own} />}
         <span data-testid={`cart-guest-subtotal-${guest.guestId}`} className="text-sm font-semibold tabular-nums text-foreground">
           {formatMinor(guest.subtotalMinor, currency)}
         </span>
@@ -323,6 +344,11 @@ function CartLineRow({
         </p>
         {line.modifiers.length > 0 ? (
           <p className="text-xs text-muted-foreground">{line.modifiers.map((m) => m.name).join(", ")}</p>
+        ) : null}
+        {line.components && line.components.length > 0 ? (
+          <p data-testid={`cart-line-components-${line.id}`} className="text-xs text-muted-foreground">
+            {line.components.join(" · ")}
+          </p>
         ) : null}
       </div>
       <span data-testid={`cart-line-total-${line.id}`} className="text-sm font-semibold tabular-nums text-foreground">
@@ -396,14 +422,26 @@ function EmptyState() {
 // per-guest line summary straight from the response body PlacedOrderView
 // carries, per EXPERIENCE.md's "Place order is the surface's biggest
 // commitment".
-function PlacedConfirmation({ order }: Readonly<{ order: PlacedOrderView }>) {
+function PlacedConfirmation({ order, currency }: Readonly<{ order: PlacedOrderView; currency: string }>) {
   const groups = groupPlacedOrderLinesByGuest(order);
+  // A kiosk order (issue #214) has no table - the token number is what the
+  // counter calls out, so it is the headline. It is paid here by card
+  // (KioskPay, issue #220) or at the counter.
+  const kiosk = order.tokenNumber != null;
   return (
     <main data-testid="cart-placed" className="flex min-h-screen flex-1 flex-col items-center px-6 pb-12 pt-16 text-center">
       <h1 className="font-headline text-2xl font-semibold text-foreground">Sent to the kitchen</h1>
+      {kiosk && (
+        <div data-testid="cart-placed-token" className="mt-6 rounded-2xl border border-border bg-card px-10 py-6">
+          <p className="font-label text-xs font-semibold uppercase tracking-[0.3em] text-muted-foreground">Your number</p>
+          <p className="mt-1 font-headline text-6xl font-bold tabular-nums text-primary">{order.tokenNumber}</p>
+          <p className="mt-2 text-sm text-muted-foreground">Collect your order when your number is called.</p>
+        </div>
+      )}
       <p data-testid="cart-placed-order-id" className="mt-2 text-sm text-muted-foreground">
         Order #{order.orderId.slice(-6).toUpperCase()}
       </p>
+      {order.tokenNumber != null && <KioskPay orderId={order.orderId} tokenNumber={order.tokenNumber} currency={currency} />}
 
       <div className="mt-8 flex w-full max-w-sm flex-col gap-4 text-left">
         {groups.map((group) => (
@@ -427,10 +465,25 @@ function PlacedConfirmation({ order }: Readonly<{ order: PlacedOrderView }>) {
       </div>
 
       <div className="mt-8 flex gap-3">
-        <RequestBillLink orderId={order.orderId} />
+        {kiosk ? <KioskDoneButton /> : <RequestBillLink orderId={order.orderId} />}
         <TrackOrderLink />
       </div>
     </main>
+  );
+}
+
+// Ends this kiosk session and returns to the attract screen for the next guest.
+function KioskDoneButton() {
+  const router = useRouter();
+  return (
+    <button
+      type="button"
+      data-testid="cart-kiosk-done"
+      onClick={() => void endKioskSession().then((home) => router.replace(home))}
+      className="rounded-lg bg-primary px-4 py-2.5 text-sm font-semibold text-primary-foreground focus-visible:outline focus-visible:outline-2 focus-visible:outline-ring"
+    >
+      Done
+    </button>
   );
 }
 

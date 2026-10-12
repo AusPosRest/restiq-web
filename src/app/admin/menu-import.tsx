@@ -5,24 +5,30 @@
 // draft, per-field edits PATCH that same draft, and commit is the one write
 // that turns it into real menu items (and, server-side, completes the
 // go-live checklist's menu_import step).
-import { PartyPopper, UploadCloud } from "lucide-react";
+import { PartyPopper, Trash2, UploadCloud } from "lucide-react";
 import Link from "next/link";
-import { useRef, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { Button } from "@/components/ui/button";
-import { commitMenuImport, MenuImportCommitResult, updateMenuImportItem, uploadMenuImport } from "./api";
+import { AdminApiError, commitMenuImport, fetchLatestMenuImport, MenuImportCommitResult, removeMenuImportItem, updateMenuImportItem, uploadMenuImport } from "./api";
 import {
   canCommit,
   CONFIDENCE_LABEL,
   confidenceLevel,
+  DUPLICATE_LABEL,
+  DuplicateReason,
+  draftDuplicates,
+  duplicateReasons,
   isAcceptedMenuFile,
   majorStringToPriceMinor,
   MENU_IMPORT_ACCEPT,
+  MenuImportDraft,
   MenuImportItem,
   priceMinorToMajorString,
   reviewedCount,
+  showsConfidence,
 } from "./menu-import-state";
 
-const UPLOAD_ERROR = "That file type isn't supported. Upload a CSV, XLSX spreadsheet, a photo (JPG/PNG) or a PDF of your menu.";
+const UPLOAD_ERROR = "Upload your menu as a CSV or XLSX spreadsheet. Photos and PDFs can't be read yet - download the sample spreadsheet below to get started.";
 const GENERIC_FAILURE = "Something went wrong. Check your connection and try again.";
 
 const CONFIDENCE_CLASS: Record<ReturnType<typeof confidenceLevel>, string> = {
@@ -33,17 +39,50 @@ const CONFIDENCE_CLASS: Record<ReturnType<typeof confidenceLevel>, string> = {
 
 type Phase = "dropzone" | "uploading" | "review" | "committing" | "success";
 
-export function MenuImport() {
+// onCommitted: set when opened as the Menu page's dialog (issue #239), which
+// closes and reloads instead of showing the success screen. fromSetup: opened
+// from the go-live checklist, so success goes back there; otherwise to the menu.
+// resume (PE-11): offer the tenant's open draft, which the server keeps until commit.
+export function MenuImport({
+  onCommitted,
+  fromSetup = false,
+  resume = false,
+}: Readonly<{ onCommitted?: (itemCount: number) => void; fromSetup?: boolean; resume?: boolean }>) {
   const [phase, setPhase] = useState<Phase>("dropzone");
   const [uploadError, setUploadError] = useState<string | null>(null);
   const [importId, setImportId] = useState<string | null>(null);
   const [items, setItems] = useState<MenuImportItem[]>([]);
   const [reviewed, setReviewed] = useState<Set<string>>(new Set());
   const [commitError, setCommitError] = useState<string | null>(null);
+  const [duplicates, setDuplicates] = useState<Map<string, DuplicateReason>>(new Map());
   const [commitResult, setCommitResult] = useState<MenuImportCommitResult | null>(null);
   const [toast, setToast] = useState<string | null>(null);
   const [dragOver, setDragOver] = useState(false);
+  const [openDraft, setOpenDraft] = useState<MenuImportDraft | null>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
+
+  useEffect(() => {
+    if (!resume) return;
+    let cancelled = false;
+    // A failed lookup just means no offer; the dropzone still works.
+    fetchLatestMenuImport()
+      .then(({ draft }) => {
+        if (!cancelled && draft && draft.items.length > 0) setOpenDraft(draft);
+      })
+      .catch(() => undefined);
+    return () => {
+      cancelled = true;
+    };
+  }, [resume]);
+
+  function openForReview(draft: MenuImportDraft) {
+    setImportId(draft.importId);
+    setItems(draft.items);
+    setReviewed(new Set());
+    setDuplicates(draftDuplicates(draft.items));
+    setOpenDraft(null);
+    setPhase("review");
+  }
 
   function flashToast(message: string) {
     setToast(message);
@@ -58,11 +97,7 @@ export function MenuImport() {
     setUploadError(null);
     setPhase("uploading");
     try {
-      const draft = await uploadMenuImport(file);
-      setImportId(draft.importId);
-      setItems(draft.items);
-      setReviewed(new Set());
-      setPhase("review");
+      openForReview(await uploadMenuImport(file));
     } catch (error) {
       setUploadError(error instanceof Error ? error.message : GENERIC_FAILURE);
       setPhase("dropzone");
@@ -87,13 +122,35 @@ export function MenuImport() {
 
   // Optimistic per EXPERIENCE.md's routine-edit pattern: apply locally first,
   // then reconcile with the backend's fresh draft, rolling back on failure.
+  function clearDuplicate(itemId: string) {
+    setDuplicates((current) => {
+      const next = new Map(current);
+      next.delete(itemId);
+      return next;
+    });
+  }
+
+  async function handleRemove(itemId: string) {
+    if (!importId) return;
+    try {
+      const draft = await removeMenuImportItem(importId, itemId);
+      setItems(draft.items);
+      setDuplicates(draftDuplicates(draft.items));
+    } catch {
+      flashToast("That row couldn't be removed. Try again.");
+    }
+  }
+
   async function handleFieldEdit(itemId: string, field: "name" | "shortName" | "category" | "priceMinor", value: string | number) {
+    // Renaming or re-categorising is how the owner fixes a clash, so drop its flag.
+    if (field === "name" || field === "category") clearDuplicate(itemId);
     const previousItems = items;
     setItems((current) => current.map((item) => (item.id === itemId ? { ...item, [field]: value } : item)));
     if (!importId) return;
     try {
       const draft = await updateMenuImportItem(importId, itemId, field, value);
       setItems(draft.items);
+      setDuplicates(draftDuplicates(draft.items));
     } catch {
       setItems(previousItems);
       flashToast("That edit didn't save. Try again.");
@@ -106,10 +163,15 @@ export function MenuImport() {
     setPhase("committing");
     try {
       const result = await commitMenuImport(importId);
+      if (onCommitted) {
+        onCommitted(result.items.length);
+        return;
+      }
       setCommitResult(result);
       setPhase("success");
     } catch (error) {
       setCommitError(error instanceof Error ? error.message : GENERIC_FAILURE);
+      if (error instanceof AdminApiError && error.code === "duplicate_items") setDuplicates(duplicateReasons(error.details));
       setPhase("review");
     }
   }
@@ -123,8 +185,8 @@ export function MenuImport() {
         <PartyPopper className="size-8 text-status-active" aria-hidden="true" />
         <h2 className="font-headline text-xl font-semibold">Your menu is in!</h2>
         <p className="text-sm text-muted-foreground">{commitResult?.items.length ?? items.length} items were added to your menu.</p>
-        <Button asChild data-testid="menu-import-success-onboarding-link" className="mt-4">
-          <Link href="/admin/onboarding">Back to setup</Link>
+        <Button asChild data-testid={fromSetup ? "menu-import-success-onboarding-link" : "menu-import-success-menu-link"} className="mt-4">
+          {fromSetup ? <Link href="/admin/onboarding">Back to setup</Link> : <Link href="/admin/menu">Go to your menu</Link>}
         </Button>
       </div>
     );
@@ -135,8 +197,24 @@ export function MenuImport() {
       <div className="space-y-4">
         <div>
           <h1 className="font-headline text-xl font-semibold">Import your menu</h1>
-          <p className="text-sm text-muted-foreground">Upload a spreadsheet, photo or PDF and we&apos;ll draft your menu for you to check.</p>
+          <p className="text-sm text-muted-foreground">Upload a spreadsheet and we&apos;ll draft your menu for you to check.</p>
         </div>
+        {openDraft && phase === "dropzone" && (
+          <div
+            data-testid="menu-import-resume"
+            className="flex flex-wrap items-center justify-between gap-3 rounded-lg border border-primary/40 bg-primary/5 px-4 py-3"
+          >
+            <div>
+              <p className="text-sm font-semibold">Continue your import</p>
+              <p className="text-sm text-muted-foreground">
+                {openDraft.fileName} - {openDraft.items.length} {openDraft.items.length === 1 ? "item" : "items"}, not on your menu yet.
+              </p>
+            </div>
+            <Button data-testid="menu-import-resume-continue" onClick={() => openForReview(openDraft)}>
+              Continue
+            </Button>
+          </div>
+        )}
         <div
           data-testid="menu-import-dropzone"
           role="button"
@@ -161,7 +239,7 @@ export function MenuImport() {
         >
           <UploadCloud className="size-8 text-muted-foreground" aria-hidden="true" />
           <p className="text-sm font-medium">{phase === "uploading" ? "Reading your menu..." : "Drag a file here, or click to browse"}</p>
-          <p className="text-xs text-muted-foreground">CSV, XLSX, photo (JPG/PNG) or PDF</p>
+          <p className="text-xs text-muted-foreground">CSV or XLSX spreadsheet (photos and PDFs can&apos;t be read yet)</p>
         </div>
         <p className="mt-3 text-center text-xs text-muted-foreground">
           New to this?{" "}
@@ -219,6 +297,13 @@ export function MenuImport() {
 
   const reviewedTotal = reviewedCount(reviewed, items);
   const commitEnabled = canCommit(reviewed, items) && phase === "review";
+  const confidenceShown = showsConfidence(items);
+  const onMenu = items.filter((item) => duplicates.get(item.id) === "on_menu");
+
+  // PE-11: one click for the rows already on the menu, instead of one per row.
+  async function removeOnMenu() {
+    for (const item of onMenu) await handleRemove(item.id);
+  }
 
   return (
     <div className="space-y-4">
@@ -229,6 +314,18 @@ export function MenuImport() {
         </p>
       </div>
 
+      {onMenu.length > 0 && (
+        <div role="status" data-testid="menu-import-duplicates-banner" className="flex flex-wrap items-center justify-between gap-3 rounded-lg border border-status-error/40 bg-status-error/10 px-4 py-3 text-sm">
+          <p>
+            {onMenu.length} item{onMenu.length === 1 ? " is" : "s are"} already on your menu and can&apos;t be added again. Rename {onMenu.length === 1 ? "it" : "them"}, or
+            leave {onMenu.length === 1 ? "it" : "them"} out.
+          </p>
+          <Button variant="secondary" size="sm" data-testid="menu-import-remove-duplicates" disabled={phase === "committing"} onClick={() => void removeOnMenu()}>
+            Leave out {onMenu.length === 1 ? "that item" : `those ${onMenu.length} items`}
+          </Button>
+        </div>
+      )}
+
       <div className="overflow-x-auto rounded-xl border border-border">
         <table data-testid="menu-import-table" className="w-full text-sm">
           <thead className="bg-muted text-left text-xs font-semibold uppercase tracking-wider text-muted-foreground">
@@ -238,14 +335,18 @@ export function MenuImport() {
               <th className="px-4 py-3">Kitchen name</th>
               <th className="px-4 py-3">Category</th>
               <th className="px-4 py-3">Price</th>
-              <th className="px-4 py-3">Confidence</th>
+              {confidenceShown && <th className="px-4 py-3">Confidence</th>}
+              <th className="px-2 py-3">
+                <span className="sr-only">Remove</span>
+              </th>
             </tr>
           </thead>
           <tbody>
             {items.map((item) => {
               const overall = confidenceLevel(item.confidence.overall);
+              const duplicate = duplicates.get(item.id);
               return (
-                <tr key={item.id} data-testid={`menu-import-row-${item.id}`} className="border-t border-border align-top">
+                <tr key={item.id} data-testid={`menu-import-row-${item.id}`} className={`border-t border-border align-top ${duplicate ? "bg-status-error/10" : ""}`}>
                   <td className="px-4 py-3">
                     <input
                       type="checkbox"
@@ -263,6 +364,11 @@ export function MenuImport() {
                       confidence={item.confidence.name}
                       onCommit={(value) => void handleFieldEdit(item.id, "name", value)}
                     />
+                    {duplicate && (
+                      <p data-testid={`menu-import-row-${item.id}-duplicate`} className="mt-1 text-xs font-medium text-status-error">
+                        {DUPLICATE_LABEL[duplicate]}
+                      </p>
+                    )}
                   </td>
                   <td className="px-4 py-3">
                     <EditableCell
@@ -301,13 +407,27 @@ export function MenuImport() {
                       <ConfidenceHint testId={`menu-import-row-${item.id}-price-confidence`} score={item.confidence.price} />
                     </div>
                   </td>
-                  <td className="px-4 py-3">
-                    <span
-                      data-testid={`menu-import-row-${item.id}-confidence`}
-                      className={`inline-flex items-center rounded-full border px-2.5 py-0.5 text-xs font-medium ${CONFIDENCE_CLASS[overall]}`}
+                  {confidenceShown && (
+                    <td className="px-4 py-3">
+                      <span
+                        data-testid={`menu-import-row-${item.id}-confidence`}
+                        className={`inline-flex items-center rounded-full border px-2.5 py-0.5 text-xs font-medium ${CONFIDENCE_CLASS[overall]}`}
+                      >
+                        {CONFIDENCE_LABEL[overall]}
+                      </span>
+                    </td>
+                  )}
+                  <td className="px-2 py-3">
+                    <button
+                      type="button"
+                      data-testid={`menu-import-row-${item.id}-remove`}
+                      aria-label={`Remove ${item.name || "this item"} from this import`}
+                      disabled={phase === "committing"}
+                      onClick={() => void handleRemove(item.id)}
+                      className="rounded-md p-1.5 text-muted-foreground hover:bg-accent hover:text-status-error focus:outline-none focus-visible:ring-2 focus-visible:ring-ring disabled:opacity-50"
                     >
-                      {CONFIDENCE_LABEL[overall]}
-                    </span>
+                      <Trash2 className="size-4" aria-hidden="true" />
+                    </button>
                   </td>
                 </tr>
               );
@@ -323,9 +443,16 @@ export function MenuImport() {
       )}
 
       <div className="flex items-center justify-between gap-4">
-        <p data-testid="menu-import-reviewed-count" className="text-sm text-muted-foreground">
-          {reviewedTotal}/{items.length} reviewed
-        </p>
+        <div className="flex items-center gap-3">
+          <p data-testid="menu-import-reviewed-count" className="text-sm text-muted-foreground">
+            {reviewedTotal}/{items.length} reviewed
+          </p>
+          {reviewedTotal < items.length && (
+            <Button variant="secondary" size="sm" data-testid="menu-import-mark-all" onClick={() => setReviewed(new Set(items.map((item) => item.id)))}>
+              Mark all reviewed
+            </Button>
+          )}
+        </div>
         <Button
           data-testid="menu-import-commit"
           disabled={!commitEnabled}
@@ -361,7 +488,7 @@ function EditableCell({
         onBlur={(event) => {
           if (event.target.value !== value) onCommit(event.target.value);
         }}
-        className="w-full min-w-32 rounded-md border border-border bg-input px-2 py-1 focus:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+        className="w-full min-w-44 rounded-md border border-border bg-input px-2 py-1 focus:outline-none focus-visible:ring-2 focus-visible:ring-ring"
       />
       <ConfidenceHint testId={`${testId}-confidence`} score={confidence} />
     </div>

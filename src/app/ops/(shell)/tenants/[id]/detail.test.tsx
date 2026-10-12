@@ -32,6 +32,8 @@ function tenantDetail(overrides: Partial<TenantDetail["tenant"]> = {}): TenantDe
       status: "active",
       plan: "standard",
       billingPeriod: "monthly",
+      testMode: false,
+      liveSince: "2026-01-01T00:00:00.000Z",
       brandingTokens: {},
       region: "ap-south-1",
       createdAt: "2026-01-01T00:00:00.000Z",
@@ -42,7 +44,6 @@ function tenantDetail(overrides: Partial<TenantDetail["tenant"]> = {}): TenantDe
     outlets: [],
     rolesCount: 0,
     ownerInvite: null,
-    capabilities: [],
   };
 }
 
@@ -230,5 +231,47 @@ describe("TenantDetailPage lifecycle actions", () => {
     renderPage(tenantDetail({ status: "active" }));
     await screen.findByTestId("tenant-detail");
     expect(screen.getByTestId("overview-gst").textContent).toContain("Not applicable");
+  });
+
+  // restiq-backend#213: Test / Live mode - badge, confirmation with reason + checkbox, and the API's refusal surfaced.
+  describe("Test / Live mode", () => {
+    it("badges a Test tenant and switches it to Live after the confirmation", async () => {
+      const fetchMock = renderPage(tenantDetail({ testMode: true, liveSince: null }), (url) => {
+        if (url.endsWith(`/ops/api/tenants/${TENANT_ID}/mode`)) return jsonResponse({ tenant: { id: TENANT_ID, testMode: false, liveSince: "2026-10-11T00:00:00.000Z" } });
+        return undefined;
+      });
+      await screen.findByTestId("tenant-detail");
+      expect(screen.getByTestId("tenant-detail-test-badge").textContent).toBe("Test");
+
+      await userEvent.click(screen.getByTestId("tenant-mode-switch"));
+      expect(screen.getByTestId("confirm-dialog").textContent).toContain("Simulated card and QR payments stop working");
+      await userEvent.type(screen.getByTestId("confirm-reason"), "Signed up");
+      expect((screen.getByTestId("confirm-submit") as HTMLButtonElement).disabled).toBe(true);
+      await userEvent.click(screen.getByTestId("confirm-checkbox"));
+      await userEvent.click(screen.getByTestId("confirm-submit"));
+
+      await waitFor(() => {
+        expect(fetchMock.mock.calls.some(([url]) => (url as string).endsWith(`/ops/api/tenants/${TENANT_ID}/mode`))).toBe(true);
+      });
+      const call = fetchMock.mock.calls.find(([url]) => (url as string).endsWith(`/ops/api/tenants/${TENANT_ID}/mode`))!;
+      expect(JSON.parse((call[1] as RequestInit).body as string)).toEqual({ mode: "live", reason: "Signed up" });
+      expect(await screen.findByTestId("toast-success")).toBeTruthy();
+    });
+
+    it("shows no badge for a Live tenant and explains why it can't go back to Test", async () => {
+      renderPage(tenantDetail(), (url) => {
+        if (url.endsWith(`/ops/api/tenants/${TENANT_ID}/mode`)) {
+          return jsonResponse({ error: { code: "tenant_has_live_sales", message: "This tenant has real sales since it went Live, so it cannot go back to Test mode" } }, 409);
+        }
+        return undefined;
+      });
+      await screen.findByTestId("tenant-detail");
+      expect(screen.queryByTestId("tenant-detail-test-badge")).toBeNull();
+      await userEvent.click(screen.getByTestId("tenant-mode-switch"));
+      await userEvent.type(screen.getByTestId("confirm-reason"), "Demo");
+      await userEvent.click(screen.getByTestId("confirm-checkbox"));
+      await userEvent.click(screen.getByTestId("confirm-submit"));
+      expect((await screen.findByTestId("toast-error")).textContent).toContain("real sales");
+    });
   });
 });

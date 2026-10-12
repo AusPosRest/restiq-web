@@ -1,11 +1,9 @@
 // Role permission matrix (T7): read-only reference - roles are seeded, not
-// editable here (EXPERIENCE.md T7 pattern). Sourced from the static
-// SYSTEM_ROLE_PERMISSIONS reference in staff-state.ts, not from `roles`
-// prop's own fields, because GET /admin/v1/roles returns only {id, name,
-// isSystem} with no permission metadata to render - see staff-state.ts's
-// file header for why.
+// editable here (EXPERIENCE.md T7 pattern). Each cell is the role's own
+// `permissions` from GET /admin/v1/roles - what the API enforces (#169) -
+// with the static table in staff-state.ts as the fallback for an older API.
 import { Check, X } from "lucide-react";
-import { ROLE_PERMISSION_CATALOG, roleHasPermission, type RoleView } from "./staff-state";
+import { ROLE_PERMISSION_CATALOG, roleGrants, type RoleView } from "./staff-state";
 
 export function PermissionMatrix({ roles }: Readonly<{ roles: readonly RoleView[] }>) {
   return (
@@ -31,7 +29,7 @@ export function PermissionMatrix({ roles }: Readonly<{ roles: readonly RoleView[
               <tr key={permission.key} data-testid={`permission-row-${permission.key}`} className="h-11 border-b border-border/20 last:border-b-0">
                 <td className="px-4">{permission.label}</td>
                 {roles.map((role) => {
-                  const granted = roleHasPermission(role.name, permission.key);
+                  const granted = roleGrants(role, permission.key);
                   return (
                     <td key={role.id} className="px-4 text-center" data-testid={`permission-cell-${permission.key}-${role.id}`}>
                       {granted ? (
