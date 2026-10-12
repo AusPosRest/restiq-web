@@ -78,9 +78,11 @@ import { useTerminalIntent } from "../orders/[orderId]/settle/use-terminal-inten
 import { PosHeader } from "../components/pos-header";
 import { TokenBadge } from "./token-badge";
 import { openDrawerForTenders } from "@/lib/desktop";
+import { useShiftOpen } from "../(shell)/shift/use-shift-open";
 
 export function CounterView({ outletId, currentStaffId }: Readonly<{ outletId: string; currentStaffId: string }>) {
   const menuLoad = usePosLoad<PosMenuView>("menu");
+  const shiftOpen = useShiftOpen(outletId);
   const [order, setOrder] = useState<OrderView | null>(null);
   const [orderStarting, setOrderStarting] = useState(true);
   const [orderError, setOrderError] = useState(false);
@@ -114,15 +116,25 @@ export function CounterView({ outletId, currentStaffId }: Readonly<{ outletId: s
   // Keyed on the order id: finalizing and starting the next counter order
   // swaps in a brand new id, remounting CounterLoaded fresh rather than
   // hand-resetting every piece of its ring-up-in-progress state.
-  return <CounterLoaded key={order.id} menu={menuLoad.data} initialOrder={order} currentStaffId={currentStaffId} onStartNextOrder={beginNewOrder} />;
+  return (
+    <CounterLoaded
+      key={order.id}
+      menu={menuLoad.data}
+      initialOrder={order}
+      currentStaffId={currentStaffId}
+      shiftOpen={shiftOpen}
+      onStartNextOrder={beginNewOrder}
+    />
+  );
 }
 
 function CounterLoaded({
   menu,
   initialOrder,
   currentStaffId,
+  shiftOpen,
   onStartNextOrder,
-}: Readonly<{ menu: PosMenuView; initialOrder: OrderView; currentStaffId: string; onStartNextOrder: () => void }>) {
+}: Readonly<{ menu: PosMenuView; initialOrder: OrderView; currentStaffId: string; shiftOpen: boolean | null; onStartNextOrder: () => void }>) {
   const [order, setOrder] = useState(initialOrder);
   const [bill, setBill] = useState<BillView | null>(null);
   const [billLoading, setBillLoading] = useState(true);
@@ -453,6 +465,7 @@ function CounterLoaded({
                   onSendToTerminal={terminal.send}
                   terminalBusy={terminal.busy}
                   changeMinor={cashChangeMinor(totalMinor, bill, pendingTenders)}
+                  cashLocked={shiftOpen === false}
                 />
               )}
             </div>
