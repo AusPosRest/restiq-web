@@ -260,6 +260,10 @@ function PaymentsView({
         </KpiStatCard>
       </div>
 
+      {/* PE-27: eleven columns can't fit a phone - say the table scrolls. */}
+      <p className="mb-2 text-xs text-muted-foreground sm:hidden" data-testid="payments-scroll-hint">
+        Swipe the table sideways to see every column.
+      </p>
       <div className="overflow-x-auto rounded-lg border border-border/40 bg-card">
         {data.items.length === 0 ? (
           <div data-testid="payments-empty" className="flex flex-col items-center gap-2 px-8 py-16 text-center">

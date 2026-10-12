@@ -1,6 +1,7 @@
 import { cleanup, render, screen, waitFor } from "@testing-library/react";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { PrinterScreen } from "./printer-screen";
+import { ThermalReceipt } from "./thermal-receipt";
 import type { InvoiceView, PrintJobView } from "../api";
 
 const INVOICE: InvoiceView = {
@@ -98,5 +99,14 @@ describe("PrinterScreen", () => {
     render(<PrinterScreen outletId="outlet-1" outletName="One - BLR" />);
 
     await waitFor(() => expect(screen.getByTestId("printer-status").textContent).toContain("Reconnecting"));
+  });
+
+  // restiq-backend#213: the printed slip of a Test-mode bill says it is not a tax invoice.
+  it("prints the Test-mode line on a Test-mode bill only", () => {
+    render(<ThermalReceipt invoice={{ ...INVOICE, testMode: true }} printedAt="2026-09-09T00:00:00.000Z" />);
+    expect(screen.getByTestId("thermal-test-mode").textContent).toBe("Test mode - not a valid tax invoice");
+    cleanup();
+    render(<ThermalReceipt invoice={INVOICE} printedAt="2026-09-09T00:00:00.000Z" />);
+    expect(screen.queryByTestId("thermal-test-mode")).toBeNull();
   });
 });

@@ -30,11 +30,12 @@ export function MenuTable({
       {/* Fixed column widths (CU-4): a "Sold out" pill must not shift the columns. */}
       <thead className="sticky top-0 z-10 bg-card text-left text-xs font-semibold uppercase tracking-wider text-muted-foreground">
         <tr className="h-12 border-b border-border/40">
-          <th className="w-9" />
+          {/* PE-27: on a phone the drag handle and Variants step aside so Available stays in view. */}
+          <th className="hidden w-6 sm:table-cell" />
           <th className="px-3">Item</th>
-          <th className="w-36 px-3 text-right">Price</th>
-          <th className="w-44 px-3">Variants</th>
-          <th className="w-24 px-3 text-center">Available</th>
+          <th className="px-3 text-right">Price</th>
+          <th className="hidden px-3 sm:table-cell">Variants</th>
+          <th className="px-3 text-center">Available</th>
         </tr>
       </thead>
       <tbody>
@@ -87,7 +88,7 @@ function MenuTableRow({
         !item.available ? "opacity-60" : ""
       }`}
     >
-      <td className="pl-3 text-muted-foreground">
+      <td className="hidden pl-3 text-muted-foreground sm:table-cell">
         <GripVertical className="size-4" aria-hidden="true" />
       </td>
       <td className="px-3">
@@ -120,7 +121,7 @@ function MenuTableRow({
       <td data-testid={`menu-item-row-${item.id}-price`} className="px-3 text-right tabular-nums">
         {price}
       </td>
-      <td className="px-3">
+      <td className="hidden px-3 sm:table-cell">
         {hasVariants ? (
           <div className="flex flex-wrap gap-1">
             {item.variants.map((variant) => (

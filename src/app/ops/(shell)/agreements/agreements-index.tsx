@@ -81,9 +81,12 @@ export function AgreementsIndex() {
       <p className="mt-1 text-sm text-muted-foreground">
         Publish a new version of the platform agreement. Every tenant owner is asked to sign the current version; earlier versions stay on record.
       </p>
-      <p className="mt-1 text-sm text-muted-foreground" data-testid="agreements-first-hint">
-        Publish version 1 before onboarding the first restaurant, so its owner can sign when they first sign in.
-      </p>
+      {/* PE-1: only while nothing is published - above a "Publish version 2" form it contradicts itself. */}
+      {data?.versions.length === 0 && (
+        <p className="mt-1 text-sm text-muted-foreground" data-testid="agreements-first-hint">
+          Publish version 1 before onboarding the first restaurant, so its owner can sign when they first sign in.
+        </p>
+      )}
 
       <form
         className="mt-6 max-w-3xl rounded-lg border border-border/40 bg-card p-5"
@@ -104,7 +107,7 @@ export function AgreementsIndex() {
               data-testid="agreement-title"
               value={title}
               maxLength={200}
-              placeholder="e.g. Restiq Platform Services Agreement"
+              placeholder="e.g. RESTIQ Platform Services Agreement"
               onChange={(event) => setTitle(event.target.value)}
               className={FIELD_CLASSES}
             />

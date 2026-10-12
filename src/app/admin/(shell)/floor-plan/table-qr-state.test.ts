@@ -1,5 +1,5 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
-import { guestOrderUrl, qrPngFilename, qrSheetHtml, qrZipPngFilename, renderTableQrPng, slug } from "./table-qr-state";
+import { guestOrderUrl, qrPngFilename, qrSheetHtml, qrZipPngFilename, renderTableQrPng, slug, wrapText } from "./table-qr-state";
 import { defaultQrSheetTemplate } from "./qr-sheet-template";
 
 const TEMPLATE = defaultQrSheetTemplate("Indiranagar Diner");
@@ -112,7 +112,7 @@ describe("renderTableQrPng", () => {
     const fillText = vi.fn();
     const drawImage = vi.fn();
     const toDataURL = vi.fn(() => "data:image/png;base64,COMPOSITE");
-    const context = { fillStyle: "", font: "", textAlign: "", textBaseline: "", fillRect: vi.fn(), fillText, drawImage };
+    const context = { fillStyle: "", font: "", textAlign: "", textBaseline: "", fillRect: vi.fn(), fillText, drawImage, measureText: (text: string) => ({ width: text.length * 10 }) };
     vi.spyOn(HTMLCanvasElement.prototype, "getContext").mockReturnValue(context as unknown as CanvasRenderingContext2D);
     vi.spyOn(HTMLCanvasElement.prototype, "toDataURL").mockImplementation(toDataURL);
     return { fillText, drawImage, toDataURL };
@@ -165,5 +165,26 @@ describe("renderTableQrPng", () => {
     const texts = fillText.mock.calls.map((call) => call[0]);
     expect(texts).not.toContain("Ground Floor");
     expect(texts).toContain("T1");
+  });
+});
+
+// PE-20 / CU-8: the long table link on a downloaded PNG was clipped at both edges.
+describe("wrapText", () => {
+  const measure = (text: string) => text.length * 10;
+
+  it("keeps short text on one line", () => {
+    expect(wrapText("T1", 100, measure)).toEqual(["T1"]);
+  });
+
+  it("breaks a long URL into lines that each fit", () => {
+    const url = "http://bay-leaf.localhost:3105/qr/t/01a12afd-0a44-72cd-a839-75e12aaaaaaa/01a12afd-0a44-72cd-a839-75e12bbbbbbb";
+    const lines = wrapText(url, 300, measure);
+    expect(lines.length).toBeGreaterThan(1);
+    expect(lines.every((line) => measure(line) <= 300)).toBe(true);
+    expect(lines.join("")).toBe(url);
+  });
+
+  it("breaks words at spaces", () => {
+    expect(wrapText("Scan to view the menu", 120, measure)).toEqual(["Scan to view", "the menu"]);
   });
 });

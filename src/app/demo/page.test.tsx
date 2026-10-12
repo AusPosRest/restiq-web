@@ -1,6 +1,6 @@
 import { cleanup, render, screen, within } from "@testing-library/react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
-import { DEMO_STAFF } from "../demo-logins";
+import { DEMO_OWNER, DEMO_STAFF } from "../demo-logins";
 import Home from "./page";
 
 const API_URL = "https://api.example.test";
@@ -19,13 +19,22 @@ const DEVICES = [
   { id: "d-revoked", tenantId: "tenant-bayleaf", label: "POS-OLD", type: "pos", status: "revoked", tenantName: "Bay Leaf Kitchens", outletName: null },
 ];
 
-function stubDevicesFetch() {
+// Both demo restaurants are in Test mode; a Live one ("Real Diner") must never show up on /demo.
+const TENANTS = [
+  { id: "tenant-spice", name: "Spice Route Hospitality", testMode: true },
+  { id: "tenant-bayleaf", name: "Bay Leaf Kitchens", testMode: true },
+  { id: "tenant-real", name: "Real Diner", testMode: false },
+];
+const LIVE_DEVICE = { id: "d-live", tenantId: "tenant-real", label: "POS-LIVE", type: "pos", status: "active", tenantName: "Real Diner", outletName: "Main" };
+
+function stubDevicesFetch(tenants = TENANTS) {
   vi.stubGlobal(
     "fetch",
     vi
       .fn()
       .mockResolvedValueOnce(jsonResponse(200, { token: "t-1" }))
-      .mockResolvedValueOnce(jsonResponse(200, { devices: DEVICES, nextCursor: null, total: DEVICES.length })),
+      .mockResolvedValueOnce(jsonResponse(200, { tenants, nextCursor: null, total: tenants.length }))
+      .mockResolvedValueOnce(jsonResponse(200, { devices: [...DEVICES, LIVE_DEVICE], nextCursor: null, total: DEVICES.length + 1 })),
   );
 }
 
@@ -34,6 +43,7 @@ describe("Landing page", () => {
     process.env.NEXT_PUBLIC_API_URL = API_URL;
     process.env.DEMO_OPS_EMAIL = "admin@restiq.example";
     process.env.DEMO_OPS_PASSWORD = "OpsDemo2026!";
+    delete process.env.DEMO_PAGES;
   });
   afterEach(() => {
     vi.unstubAllGlobals();
@@ -54,16 +64,56 @@ describe("Landing page", () => {
     expect(guest?.querySelector("a")?.getAttribute("href")).toContain("/qr/t/");
   });
 
-  it("makes each credential value a copy button", async () => {
+  // PE-30 Blocker: the platform operator login is never published.
+  it("never shows a platform operator login", async () => {
+    stubDevicesFetch();
+    const { container } = render(await Home());
+    const opsCard = within(screen.getByTestId("landing-card-/ops/login"));
+    expect(opsCard.queryByRole("button")).toBeNull();
+    expect(opsCard.getByText("Operators sign in with their own account")).toBeTruthy();
+    expect(container.textContent).not.toContain("admin@restiq.example");
+    expect(container.textContent).not.toContain(process.env.DEMO_OPS_PASSWORD);
+  });
+
+  it("makes the demo owner login copyable while its restaurant is in Test mode", async () => {
     stubDevicesFetch();
     render(await Home());
-    const emailCopy = within(screen.getByTestId("landing-card-/ops/login")).getByTestId("landing-copy-Email");
-    expect(emailCopy.tagName).toBe("BUTTON");
-    expect(emailCopy.getAttribute("aria-label")).toContain("admin@restiq.example");
-    const ownerCard = within(screen.getByTestId("landing-card-/admin/login"));
-    expect(ownerCard.getByRole("button", { name: "Copy Email: anita@bayleaf.example" })).toBeTruthy();
-    expect(ownerCard.getByRole("button", { name: "Copy Password: BayLeaf#2026Demo" })).toBeTruthy();
-    expect(ownerCard.getByRole("link", { name: /Open owner console/ }).getAttribute("href")).toBe("/admin/login");
+    const owner = within(screen.getByTestId("landing-owner-login"));
+    expect(owner.getByRole("button", { name: `Copy Email: ${DEMO_OWNER.email}` })).toBeTruthy();
+    expect(owner.getByRole("button", { name: `Copy Password: ${DEMO_OWNER.password}` })).toBeTruthy();
+    expect(within(screen.getByTestId("landing-card-/admin/login")).getByRole("link", { name: /Open owner console/ }).getAttribute("href")).toBe("/admin/login");
+  });
+
+  it("lists only Test-mode tenants' logins and devices", async () => {
+    stubDevicesFetch(TENANTS.map((tenant) => (tenant.name === "Bay Leaf Kitchens" ? { ...tenant, testMode: false } : tenant)));
+    render(await Home());
+    expect(screen.getByTestId("landing-owner-login-none")).toBeTruthy();
+    for (const staff of DEMO_STAFF) {
+      expect(Boolean(screen.queryByTestId(`landing-staff-${staff.name}`))).toBe(staff.tenant === "Spice Route Hospitality");
+    }
+    expect(screen.queryByTestId("landing-device-d-kiosk")).toBeNull();
+    expect(screen.queryByTestId("landing-device-d-live")).toBeNull();
+    expect(screen.getByTestId("landing-device-d-pos")).toBeTruthy();
+  });
+
+  it("shows no logins at all when the platform can't say which tenants are in Test mode", async () => {
+    vi.stubGlobal("fetch", vi.fn().mockRejectedValue(new TypeError("network down")));
+    render(await Home());
+    expect(screen.getByTestId("landing-owner-login-none")).toBeTruthy();
+    expect(screen.getByTestId("landing-staff-none")).toBeTruthy();
+  });
+
+  it("is a 404 in production unless DEMO_PAGES=on", async () => {
+    vi.stubEnv("NODE_ENV", "production");
+    try {
+      await expect(Home()).rejects.toThrow(/NEXT_HTTP_ERROR_FALLBACK;404|NEXT_NOT_FOUND/);
+      vi.stubEnv("DEMO_PAGES", "on");
+      stubDevicesFetch();
+      render(await Home());
+      expect(screen.getByTestId("landing-surfaces")).toBeTruthy();
+    } finally {
+      vi.unstubAllEnvs();
+    }
   });
 
   it("lists live devices sorted by tenant, with Open links mapped by type and revoked devices skipped", async () => {
@@ -119,6 +169,6 @@ describe("Landing page", () => {
     stubDevicesFetch();
     render(await Home());
     expect(screen.queryByText("PIN 1234")).toBeNull();
-    expect(screen.getByText("See the staff logins table below")).toBeTruthy();
+    expect(screen.getByText("Staff PINs are in the table below")).toBeTruthy();
   });
 });

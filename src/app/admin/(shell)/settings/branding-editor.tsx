@@ -24,7 +24,7 @@ import {
   MAX_LOGO_URL_LENGTH,
   normalizeBranding,
 } from "./branding-state";
-import { ReceiptPreview } from "./receipt-preview";
+import { ReceiptPreview, type PreviewTenant } from "./receipt-preview";
 
 const COLOR_FIELDS: Array<{ key: keyof Pick<BrandingTokens, "primaryColor" | "secondaryColor" | "accentColor" | "surfaceColor">; label: string }> = [
   { key: "primaryColor", label: "Primary" },
@@ -66,6 +66,8 @@ function BrandingForm({ initial }: Readonly<{ initial: BrandingTokens }>) {
   const [saved, setSaved] = useState<BrandingTokens>(initial);
   const [saving, setSaving] = useState(false);
   const pushToast = useToast();
+  // PE-8: the preview speaks in the restaurant's own name and currency. Until it loads, a neutral sample.
+  const tenant = useAdminLoad<PreviewTenant>("tenant").data;
 
   const dirty = !brandingEqual(draft, saved);
   const logoUrlTooLong = draft.logoUrl !== null && draft.logoUrl.length > MAX_LOGO_URL_LENGTH;
@@ -217,7 +219,7 @@ function BrandingForm({ initial }: Readonly<{ initial: BrandingTokens }>) {
 
       <div>
         <h2 className="font-headline mb-2 text-sm font-semibold text-muted-foreground">Live Preview</h2>
-        <ReceiptPreview tokens={draft} currency={currency} />
+        <ReceiptPreview tokens={draft} tenant={tenant} />
       </div>
     </div>
   );

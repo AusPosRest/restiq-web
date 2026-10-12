@@ -128,7 +128,6 @@ export async function renderTableQrPng(table: { label: string }, floorName: stri
   const padding = 40;
   const canvas = document.createElement("canvas");
   canvas.width = QR_DOWNLOAD_PX;
-  canvas.height = headerRows.length * rowHeight + padding + QR_DOWNLOAD_PX + padding + footerRows.length * rowHeight;
 
   // Checked (and the plain QR returned) before touching Image at all - an
   // environment where 2d canvas contexts aren't available (jsdom without the
@@ -136,6 +135,18 @@ export async function renderTableQrPng(table: { label: string }, floorName: stri
   // there's no point starting a load that would never resolve.
   const ctx = canvas.getContext("2d");
   if (!ctx) return qrDataUrl;
+
+  // PE-20 / CU-8: a long table link ran off both edges - every row now wraps to the image width.
+  const maxWidth = QR_DOWNLOAD_PX - padding * 2;
+  const lines = (rows: Array<{ text: string; font: string }>) =>
+    rows.flatMap((row) => {
+      ctx.font = row.font;
+      return wrapText(row.text, maxWidth, (text) => ctx.measureText(text).width).map((text) => ({ text, font: row.font }));
+    });
+  const headerLines = lines(headerRows);
+  const footerLines = lines(footerRows);
+  // Setting the height resets the context, so it comes after measuring and before drawing.
+  canvas.height = headerLines.length * rowHeight + padding + QR_DOWNLOAD_PX + padding + footerLines.length * rowHeight;
 
   const qrImage = await loadImage(qrDataUrl);
   ctx.fillStyle = "#ffffff";
@@ -145,21 +156,44 @@ export async function renderTableQrPng(table: { label: string }, floorName: stri
   ctx.textBaseline = "middle";
 
   let y = rowHeight / 2;
-  for (const row of headerRows) {
+  for (const row of headerLines) {
     ctx.font = row.font;
     ctx.fillText(row.text, canvas.width / 2, y);
     y += rowHeight;
   }
 
-  const qrY = headerRows.length * rowHeight + padding;
+  const qrY = headerLines.length * rowHeight + padding;
   ctx.drawImage(qrImage, 0, qrY, QR_DOWNLOAD_PX, QR_DOWNLOAD_PX);
 
   y = qrY + QR_DOWNLOAD_PX + padding + rowHeight / 2;
-  for (const row of footerRows) {
+  for (const row of footerLines) {
     ctx.font = row.font;
     ctx.fillText(row.text, canvas.width / 2, y);
     y += rowHeight;
   }
 
   return canvas.toDataURL("image/png");
+}
+
+/** Splits `text` into lines no wider than `maxWidth` - at spaces where it can, mid-word (a URL) where it must. */
+export function wrapText(text: string, maxWidth: number, measure: (text: string) => number): string[] {
+  const out: string[] = [];
+  let line = "";
+  for (const char of text) {
+    const next = line + char;
+    if (line && measure(next) > maxWidth) {
+      const space = line.lastIndexOf(" ");
+      if (space > 0 && char !== " ") {
+        out.push(line.slice(0, space));
+        line = line.slice(space + 1) + char;
+      } else {
+        out.push(line.trimEnd());
+        line = char === " " ? "" : char;
+      }
+    } else {
+      line = next;
+    }
+  }
+  if (line) out.push(line);
+  return out;
 }

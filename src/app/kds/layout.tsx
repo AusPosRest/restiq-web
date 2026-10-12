@@ -54,8 +54,8 @@ export default async function KdsLayout({
     <div
       className={`${hankenGrotesk.variable} ${inter.variable} ${publicSans.variable} kds-theme flex min-h-screen flex-1 flex-col bg-background text-foreground antialiased`}
     >
-      {/* SE-18: a kitchen display reports in like a till, so Devices shows it online. */}
-      {display && <DeviceHeartbeat />}
+      {/* PE-25: the kitchen display reports in like the till, so Sync Health stops calling it "Never contacted". */}
+      {display ? <DeviceHeartbeat /> : null}
       {display ? <KdsOutletProvider outlet={display.outlet}>{children}</KdsOutletProvider> : <SignedOutNotice />}
     </div>
   );

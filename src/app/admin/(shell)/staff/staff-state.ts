@@ -79,8 +79,8 @@ export function validateAddStaffForm(form: AddStaffForm, roles: readonly RoleVie
   const errors: AddStaffErrors = {};
   if (!form.firstName.trim()) errors.firstName = "First name is required.";
   if (!form.lastName.trim()) errors.lastName = "Last name is required.";
-  if (!form.email.trim()) errors.email = "Email is required.";
-  else if (!EMAIL_PATTERN.test(form.email.trim())) errors.email = "Enter a valid email address.";
+  // CU-3: most floor staff have no email - it is optional; only a typed one must be valid.
+  if (form.email.trim() && !EMAIL_PATTERN.test(form.email.trim())) errors.email = "Enter a valid email address.";
   if (!form.roleId || !roles.some((role) => role.id === form.roleId)) errors.roleId = "Choose one of the six system roles.";
   return errors;
 }

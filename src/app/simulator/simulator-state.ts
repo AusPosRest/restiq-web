@@ -1,13 +1,13 @@
-// Pure state/logic for the /simulator infinite canvas (issue #294): a tester
-// drops many real RESTIQ screens onto one pannable, zoomable canvas. A plain
-// same-origin iframe shares sessionStorage/localStorage/cookies with every
-// other frame, so a POS till, KDS and kiosk would all be the same enrolled
-// device (see device/device-state.ts) with the same staff login - frameSrc()
-// below fixes that locally by giving each frame its own *.localhost origin.
-// Kept free of React, same pure/UI split as floor-plan-state.ts, so the
-// camera and layout math is unit-testable without a DOM.
+// Pure state/logic for /simulator (issue #294, rebuilt for restiq-web#346).
+// Each simulated device opens in its own browser window (window.open), on
+// its own sim-<id>.localhost origin. A top-level window on its own origin
+// keeps its own storage and its own SameSite=lax session cookies, so a POS
+// till, KDS and owner console really are separate devices with separate
+// logins. (The old iframe canvas could not sign in: browsers drop lax
+// cookies set inside a cross-site frame - PE-26 / CU-25.)
+// Kept free of React so it is unit-testable without a DOM.
 
-export interface FramePreset {
+export interface DevicePreset {
   key: string;
   label: string;
   path: string;
@@ -15,14 +15,12 @@ export interface FramePreset {
   height: number;
 }
 
-// Label -> path, default frame size (SPEC: issue #294). Each device frame is
-// a fresh device (issue #339), so it opens /device to enter the enrolment code
-// for that device type; /device then routes to the till, KDS, kiosk, printer
-// or terminal screen itself. Guest QR/owner/
-// platform entries reuse the exact routes the landing page (page.tsx)
-// already links to, not reimplemented.
-export const PRESETS: readonly FramePreset[] = [
-  { key: "device-enrol", label: "Device enrol", path: "/device", width: 390, height: 844 },
+// Label -> path, window size. Each device preset is a fresh device (issue
+// #339), so it opens /device to enter the enrolment code for that device
+// type; /device then routes to the till, KDS, kiosk, printer or terminal
+// screen itself.
+export const PRESETS: readonly DevicePreset[] = [
+  { key: "owner-console", label: "Owner console", path: "/admin/login", width: 1280, height: 800 },
   { key: "pos-till", label: "POS till", path: "/device", width: 1024, height: 768 },
   { key: "kds", label: "KDS", path: "/device", width: 1280, height: 720 },
   { key: "kiosk", label: "Kiosk", path: "/device", width: 768, height: 1024 },
@@ -39,129 +37,39 @@ export const PRESETS: readonly FramePreset[] = [
     width: 390,
     height: 844,
   },
-  { key: "owner-console", label: "Owner console", path: "/admin/login", width: 1280, height: 800 },
+  { key: "mail-inbox", label: "Mail inbox", path: "/ops/inbox", width: 1024, height: 768 },
   { key: "platform-console", label: "Platform console", path: "/ops/login", width: 1280, height: 800 },
 ];
 
-export const CUSTOM_FRAME_SIZE = { width: 480, height: 640 };
+export const CUSTOM_DEVICE_SIZE = { width: 480, height: 640 };
 
-export interface Frame {
+export interface SimDevice {
   id: string;
   label: string;
   path: string;
-  x: number;
-  y: number;
   width: number;
   height: number;
 }
 
-export interface Camera {
-  x: number;
-  y: number;
-  scale: number;
-}
-
-export interface SimulatorLayout {
-  frames: Frame[];
-  camera: Camera;
-}
-
-export const MIN_FRAME_WIDTH = 240;
-export const MIN_FRAME_HEIGHT = 320;
-export const MIN_SCALE = 0.1;
-export const MAX_SCALE = 2;
-
-export function createDefaultLayout(): SimulatorLayout {
-  return { frames: [], camera: { x: 0, y: 0, scale: 1 } };
-}
-
 function generateId(): string {
   if (typeof crypto !== "undefined" && typeof crypto.randomUUID === "function") return crypto.randomUUID();
-  // Fallback for environments without crypto.randomUUID (very old browsers).
-  return `frame-${Date.now()}-${Math.random().toString(36).slice(2)}`;
+  return `dev${Date.now().toString(36)}${Math.random().toString(36).slice(2)}`;
 }
 
-export function clampScale(scale: number): number {
-  return Math.min(MAX_SCALE, Math.max(MIN_SCALE, scale));
+export function createDevice(preset: Pick<DevicePreset, "label" | "path" | "width" | "height">): SimDevice {
+  return { id: generateId(), label: preset.label, path: preset.path, width: preset.width, height: preset.height };
 }
 
-/** New frames land at the centre of the current view, offset a little per existing frame so repeats don't stack exactly. */
-export function addFrame(
-  layout: SimulatorLayout,
-  preset: Pick<FramePreset, "label" | "path" | "width" | "height">,
-  viewport: { width: number; height: number },
-): SimulatorLayout {
-  const { camera, frames } = layout;
-  // Empty canvas: centre in view. Otherwise sit to the right of the rightmost frame, top-aligned with the first.
-  const GAP = 40;
-  const last = frames.reduce((a, f) => (f.x + f.width > a.x + a.width ? f : a), frames[0]);
-  const x = last ? last.x + last.width + GAP : (viewport.width / 2 - camera.x) / camera.scale - preset.width / 2;
-  const y = last ? frames[0].y : (viewport.height / 2 - camera.y) / camera.scale - preset.height / 2;
-  const frame: Frame = {
-    id: generateId(),
-    label: preset.label,
-    path: preset.path,
-    width: preset.width,
-    height: preset.height,
-    x,
-    y,
-  };
-  return { ...layout, frames: [...frames, frame] };
+/** "POS till", "POS till 2", ... - repeats are numbered so the list tells them apart. */
+export function nextLabel(devices: readonly SimDevice[], base: string): string {
+  const taken = new Set(devices.map((device) => device.label));
+  if (!taken.has(base)) return base;
+  let n = 2;
+  while (taken.has(`${base} ${n}`)) n += 1;
+  return `${base} ${n}`;
 }
 
-export function removeFrame(layout: SimulatorLayout, id: string): SimulatorLayout {
-  return { ...layout, frames: layout.frames.filter((frame) => frame.id !== id) };
-}
-
-export function moveFrame(layout: SimulatorLayout, id: string, x: number, y: number): SimulatorLayout {
-  return { ...layout, frames: layout.frames.map((frame) => (frame.id === id ? { ...frame, x, y } : frame)) };
-}
-
-export function resizeFrame(layout: SimulatorLayout, id: string, width: number, height: number): SimulatorLayout {
-  const clampedWidth = Math.max(MIN_FRAME_WIDTH, width);
-  const clampedHeight = Math.max(MIN_FRAME_HEIGHT, height);
-  return {
-    ...layout,
-    frames: layout.frames.map((frame) => (frame.id === id ? { ...frame, width: clampedWidth, height: clampedHeight } : frame)),
-  };
-}
-
-export function clearFrames(layout: SimulatorLayout): SimulatorLayout {
-  return { ...layout, frames: [] };
-}
-
-export function setCamera(layout: SimulatorLayout, camera: Camera): SimulatorLayout {
-  return { ...layout, camera };
-}
-
-/** Zooms to nextScale (clamped) while keeping the world point under (screenX, screenY) fixed on screen. */
-export function zoomAt(camera: Camera, screenX: number, screenY: number, nextScale: number): Camera {
-  const scale = clampScale(nextScale);
-  const worldX = (screenX - camera.x) / camera.scale;
-  const worldY = (screenY - camera.y) / camera.scale;
-  return { x: screenX - worldX * scale, y: screenY - worldY * scale, scale };
-}
-
-export function panCamera(camera: Camera, dx: number, dy: number): Camera {
-  return { ...camera, x: camera.x + dx, y: camera.y + dy };
-}
-
-/** Camera that fits every frame's bounding box into the viewport with padding. Empty layout -> the default camera. */
-export function fitAll(frames: readonly Frame[], viewport: { width: number; height: number }, padding = 48): Camera {
-  if (frames.length === 0) return { x: 0, y: 0, scale: 1 };
-  const minX = Math.min(...frames.map((frame) => frame.x));
-  const minY = Math.min(...frames.map((frame) => frame.y));
-  const maxX = Math.max(...frames.map((frame) => frame.x + frame.width));
-  const maxY = Math.max(...frames.map((frame) => frame.y + frame.height));
-  const boundsWidth = maxX - minX;
-  const boundsHeight = maxY - minY;
-  const scale = clampScale(Math.min((viewport.width - padding * 2) / boundsWidth, (viewport.height - padding * 2) / boundsHeight));
-  const centerX = minX + boundsWidth / 2;
-  const centerY = minY + boundsHeight / 2;
-  return { x: viewport.width / 2 - centerX * scale, y: viewport.height / 2 - centerY * scale, scale };
-}
-
-/** Same-origin path only, so the custom-URL box can't be used to embed a cross-origin page in the canvas. */
+/** Same-origin path only, so the custom box can't open an arbitrary site. */
 export function validateCustomPath(input: string): { ok: true; path: string } | { ok: false; error: string } {
   const trimmed = input.trim();
   if (!trimmed) return { ok: false, error: "Enter a path." };
@@ -178,67 +86,59 @@ export function isLocalHostname(hostname: string): boolean {
 }
 
 /**
- * Each *.localhost host is its own origin, so every frame gets its own
- * storage and cookies - i.e. its own device and login - while browsers
- * still resolve *.localhost to loopback, no DNS/hosts-file setup needed.
- * Hosted deployments can't mint subdomains on demand, so there frames stay
- * same-origin (path unchanged).
+ * Each *.localhost host is its own origin, so every device window gets its
+ * own storage and cookies - its own device and login - while browsers still
+ * resolve *.localhost to loopback, with no DNS or hosts-file setup. Hosted
+ * deployments can't mint subdomains on demand, so there the windows stay
+ * same-origin (path unchanged) and share one login.
  */
-export function frameSrc(
-  path: string,
-  frameId: string,
-  location: { protocol: string; hostname: string; port: string },
-): string {
+export function deviceUrl(path: string, deviceId: string, location: { protocol: string; hostname: string; port: string }): string {
   if (!isLocalHostname(location.hostname)) return path;
-  const sanitized = frameId.slice(0, 8).toLowerCase().replace(/[^a-z0-9]/g, "");
-  const label = sanitized ? `sim-${sanitized}` : "sim-frame";
+  const sanitized = deviceId.slice(0, 8).toLowerCase().replace(/[^a-z0-9]/g, "");
+  const label = sanitized ? `sim-${sanitized}` : "sim-device";
   const port = location.port ? `:${location.port}` : "";
   return `${location.protocol}//${label}.localhost${port}${path}`;
 }
 
-const STORAGE_KEY = "restiq:simulator:v1";
+/** The window name: re-opening a device reuses its window instead of stacking a new one. */
+export function windowName(deviceId: string): string {
+  return `restiq-sim-${deviceId.replace(/[^a-z0-9-]/gi, "")}`;
+}
 
-function isFrame(value: unknown): value is Frame {
+/** window.open features for a device of this size. */
+export function windowFeatures(device: Pick<SimDevice, "width" | "height">): string {
+  return `popup,width=${Math.round(device.width)},height=${Math.round(device.height)}`;
+}
+
+const STORAGE_KEY = "restiq:simulator:v2";
+
+function isDevice(value: unknown): value is SimDevice {
   if (typeof value !== "object" || value === null) return false;
-  const f = value as Record<string, unknown>;
+  const d = value as Record<string, unknown>;
   return (
-    typeof f.id === "string" &&
-    typeof f.label === "string" &&
-    typeof f.path === "string" &&
-    typeof f.x === "number" &&
-    typeof f.y === "number" &&
-    typeof f.width === "number" &&
-    typeof f.height === "number"
+    typeof d.id === "string" &&
+    typeof d.label === "string" &&
+    typeof d.path === "string" &&
+    typeof d.width === "number" &&
+    typeof d.height === "number"
   );
 }
 
-function isCamera(value: unknown): value is Camera {
-  if (typeof value !== "object" || value === null) return false;
-  const c = value as Record<string, unknown>;
-  return typeof c.x === "number" && typeof c.y === "number" && typeof c.scale === "number";
-}
-
-function isLayout(value: unknown): value is SimulatorLayout {
-  if (typeof value !== "object" || value === null) return false;
-  const l = value as Record<string, unknown>;
-  return Array.isArray(l.frames) && l.frames.every(isFrame) && isCamera(l.camera);
-}
-
-export function loadLayout(): SimulatorLayout {
+export function loadDevices(): SimDevice[] {
   try {
     const raw = window.localStorage.getItem(STORAGE_KEY);
-    if (!raw) return createDefaultLayout();
-    const parsed = JSON.parse(raw);
-    return isLayout(parsed) ? parsed : createDefaultLayout();
+    if (!raw) return [];
+    const parsed: unknown = JSON.parse(raw);
+    return Array.isArray(parsed) && parsed.every(isDevice) ? parsed : [];
   } catch {
-    return createDefaultLayout();
+    return [];
   }
 }
 
-export function saveLayout(layout: SimulatorLayout): void {
+export function saveDevices(devices: readonly SimDevice[]): void {
   try {
-    window.localStorage.setItem(STORAGE_KEY, JSON.stringify(layout));
+    window.localStorage.setItem(STORAGE_KEY, JSON.stringify(devices));
   } catch {
-    // Best-effort - the canvas still works for this session, just won't persist.
+    // Best-effort - the list still works for this session, it just won't persist.
   }
 }

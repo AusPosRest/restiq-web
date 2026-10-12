@@ -3,6 +3,7 @@
 // the right - so nothing jumps when switching modes.
 import Link from "next/link";
 import { LockTillButton } from "./lock-till-button";
+import { TenantTestBadge } from "@/components/tenant-test-badge";
 
 const HREF = { counter: "/pos/counter", tables: "/pos/table-map" } as const;
 
@@ -44,7 +45,10 @@ export function PosHeader({
   return (
     <header className="flex flex-wrap items-center gap-x-4 gap-y-2 border-b border-border/60 px-4 py-3 sm:px-6">
       <div className="shrink-0">
-        <p className="font-headline whitespace-nowrap text-lg font-bold text-primary">RESTIQ POS</p>
+        <p className="font-headline flex items-center gap-2 whitespace-nowrap text-lg font-bold text-primary">
+          RESTIQ POS
+          <TenantTestBadge endpoint="/pos/api/tenant" testId="pos-test-badge" />
+        </p>
         <p className="font-label text-xs font-semibold uppercase tracking-wider text-muted-foreground">{subtitle}</p>
       </div>
       <ModeToggle current={mode} />

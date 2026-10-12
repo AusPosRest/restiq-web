@@ -25,7 +25,7 @@ function completeData() {
     brandName: "Spice Route",
     outlets: [{ name: "Indiranagar", address: "100 Feet Road", type: "dine_in", timezone: "Asia/Kolkata" }],
   };
-  data.subscription = { plan: "enterprise", billingPeriod: "monthly" };
+  data.subscription = { plan: "enterprise", billingPeriod: "monthly", testMode: false };
   data.ownerInvite = { email: "owner@spiceroute.example", firstName: "Arjun", lastName: "Mehta" };
   return data;
 }

@@ -1,5 +1,6 @@
 import { LogOut } from "lucide-react";
 import { MobileNav } from "@/components/mobile-nav";
+import { TenantTestBadge } from "@/components/tenant-test-badge";
 import { AgreementBanner } from "./agreement-banner";
 import { OutletProvider } from "./outlet-context";
 import { OutletSwitcher } from "./outlet-switcher";
@@ -47,7 +48,10 @@ export default function AdminShellLayout({
                 <SidebarNav />
                 {signOut}
               </MobileNav>
-              <OutletSwitcher />
+              <div className="flex items-center gap-3">
+                <TenantTestBadge endpoint="/admin/api/tenant" testId="admin-test-badge" />
+                <OutletSwitcher />
+              </div>
             </header>
             <AgreementBanner />
             <main className="flex-1 p-4 sm:p-6 lg:p-8">{children}</main>

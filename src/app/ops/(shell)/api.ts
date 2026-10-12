@@ -37,6 +37,8 @@ export interface TenantListItem {
   plan: string;
   outletCount: number;
   health: string;
+  /** restiq-backend#213 */
+  testMode: boolean;
   createdAt: string;
 }
 
@@ -67,6 +69,9 @@ export interface TenantDetail {
     status: string;
     plan: string;
     billingPeriod: string;
+    /** restiq-backend#213: Test mode - simulated payments and email, left out of the platform figures. */
+    testMode: boolean;
+    liveSince: string | null;
     brandingTokens: Record<string, string>;
     region: string;
     createdAt: string;

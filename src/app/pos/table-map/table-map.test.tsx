@@ -215,7 +215,8 @@ describe("TableMap", () => {
     expect(screen.queryByTestId("transfer-ownership-dialog")).toBeNull();
     expect(push).not.toHaveBeenCalled();
     // only the initial table-map GET happened - no transfer request was fired.
-    expect(fetchMock).toHaveBeenCalledTimes(1);
+    // (the header's TEST-badge lookup, restiq-web#346, is not a table request)
+    expect(fetchMock.mock.calls.filter(([url]) => !String(url).endsWith("/pos/api/tenant"))).toHaveLength(1);
   });
 });
 

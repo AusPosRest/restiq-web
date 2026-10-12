@@ -217,6 +217,19 @@ describe("BillInvoiceView - footerMessage", () => {
     expect(screen.getByTestId("invoice-footer-message").textContent).toBe("Follow us @restiqfoods");
   });
 
+  // restiq-backend#213: a bill rung up in Test mode is marked on the invoice itself.
+  it("marks a Test-mode bill as not a valid tax invoice, and a live one not at all", async () => {
+    stubFetch(() => jsonResponse(inInvoice({ testMode: true })));
+    render(<BillInvoiceView billId={BILL_ID} />);
+    expect((await screen.findByTestId("invoice-test-mode")).textContent).toBe("Test mode - not a valid tax invoice");
+    cleanup();
+
+    stubFetch(() => jsonResponse(inInvoice({ testMode: false })));
+    render(<BillInvoiceView billId={BILL_ID} />);
+    await screen.findByTestId("bill-invoice-view");
+    expect(screen.queryByTestId("invoice-test-mode")).toBeNull();
+  });
+
   it("renders nothing when footerMessage is null", async () => {
     stubFetch(() => jsonResponse(inInvoice({ footerMessage: null })));
     render(<BillInvoiceView billId={BILL_ID} />);

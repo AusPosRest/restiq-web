@@ -214,7 +214,7 @@ function StationRow({
             onChange={(event) => handlePrinterChange(event.target.value)}
             className={FIELD_CLASS}
           >
-            <option value={NO_PRINTER}>No printer selected</option>
+            <option value={NO_PRINTER}>None</option>
             {printers.map((printer) => (
               <option key={printer.id} value={printer.id}>
                 {printer.name}
@@ -361,7 +361,7 @@ function AddStationForm({
             onChange={(event) => handlePrinterChange(event.target.value)}
             className={FIELD_CLASS}
           >
-            <option value={NO_PRINTER}>No printer selected</option>
+            <option value={NO_PRINTER}>None</option>
             {printers.map((printer) => (
               <option key={printer.id} value={printer.id}>
                 {printer.name}

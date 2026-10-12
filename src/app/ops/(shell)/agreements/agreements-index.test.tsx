@@ -76,6 +76,8 @@ describe("AgreementsIndex", () => {
     expect(screen.getByTestId("agreement-expand-1").textContent).not.toContain("current");
     expect(screen.getByTestId("agreement-signatures-1").textContent).toBe("3");
     expect(screen.getByTestId("agreement-publish").textContent).toBe("Publish version 3");
+    // PE-1: the "publish version 1 first" hint is gone once a version exists.
+    expect(screen.queryByTestId("agreements-first-hint")).toBeNull();
 
     await userEvent.click(screen.getByTestId("agreement-expand-1"));
     expect((await screen.findByTestId("agreement-viewer")).getAttribute("src")).toBe(`/ops/api/agreements/${V1.id}/file`);
@@ -87,6 +89,7 @@ describe("AgreementsIndex", () => {
     renderIndex();
     await screen.findByTestId("agreements-empty");
     expect(screen.getByTestId("agreement-publish").textContent).toBe("Publish version 1");
+    expect(screen.getByTestId("agreements-first-hint")).toBeTruthy();
   });
 
   it("publishes through the reason dialog with title, reason and the PDF, previewed first, then refreshes the list", async () => {
