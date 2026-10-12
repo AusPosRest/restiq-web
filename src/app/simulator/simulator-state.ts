@@ -39,6 +39,8 @@ export const PRESETS: readonly DevicePreset[] = [
   },
   { key: "mail-inbox", label: "Mail inbox", path: "/ops/inbox", width: 1024, height: 768 },
   { key: "platform-console", label: "Platform console", path: "/ops/login", width: 1280, height: 800 },
+  // #318: emails the mail simulator kept (needs restiq-backend MAIL_PROVIDER=simulator).
+  { key: "mail-inbox", label: "Mail inbox", path: "/simulator/inbox", width: 480, height: 800 },
 ];
 
 export const CUSTOM_DEVICE_SIZE = { width: 480, height: 640 };
