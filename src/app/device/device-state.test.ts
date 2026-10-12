@@ -56,9 +56,10 @@ describe("isCodeComplete", () => {
   });
 });
 
-describe("sessionStorage-backed helpers", () => {
+describe("storage-backed helpers", () => {
   beforeEach(() => {
     window.sessionStorage.clear();
+    window.localStorage.clear();
   });
   afterEach(() => {
     vi.restoreAllMocks();
@@ -84,6 +85,20 @@ describe("sessionStorage-backed helpers", () => {
     expect(readStoredDevice()).toEqual(DEVICE);
     clearStoredDevice();
     expect(readStoredDevice()).toBeNull();
+  });
+
+  it("stays enrolled after the tab is closed - a new tab finds the device and keeps the fingerprint (CU-9)", () => {
+    const fingerprint = getOrCreateFingerprint();
+    writeStoredDevice(DEVICE);
+    window.sessionStorage.clear(); // the tab is gone; a new one starts empty
+    expect(readStoredDevice()).toEqual(DEVICE);
+    expect(getOrCreateFingerprint()).toBe(fingerprint);
+  });
+
+  it("lets a tab keep its own device beside another tab's (issue #104)", () => {
+    writeStoredDevice({ ...DEVICE, id: "kds-device" });
+    window.sessionStorage.setItem("device:enrolled", JSON.stringify(DEVICE));
+    expect(readStoredDevice()).toEqual(DEVICE);
   });
 
   it("returns null for malformed stored JSON instead of throwing", () => {

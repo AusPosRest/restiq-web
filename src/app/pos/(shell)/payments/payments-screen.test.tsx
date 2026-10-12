@@ -48,7 +48,7 @@ describe("PaymentsScreen", () => {
     render(<PaymentsScreen outletId={OUTLET_ID} />);
 
     expect(await screen.findByTestId("pos-payments-content")).toBeTruthy();
-    expect(screen.getByTestId("pos-payments-summary").textContent).toBe("3 payments · ₹420.00 · 2026-09-16");
+    expect(screen.getByTestId("pos-payments-summary").textContent).toBe("3 payments · ₹420.00 · 16 Sept 2026");
     expect(screen.getByTestId("pos-payments-total-cash").textContent).toContain("₹210.00");
     expect(screen.getByTestId("pos-payments-total-external").textContent).toContain("External");
 

@@ -118,14 +118,38 @@ export function pendingTenderedMinor(tenders: readonly PendingTender[]): number 
   return tenders.reduce((sum, tender) => sum + tender.amountMinor, 0);
 }
 
-/** subtotal + tax - discount, mirroring bill-core.ts's `toBillView`/`commitFinalize` math exactly. `pendingDiscountMinor` lets the settle screen preview the total for a discount that hasn't been submitted yet (an already-finalized bill's own `discountMinor` always wins once it's non-null). */
+/** round(numerator / denominator), half away from zero - the backend's tax.ts roundHalfUp, integer-only. */
+// BigInt(...) rather than 1n literals: the web build targets below ES2020.
+const ZERO = BigInt(0);
+const TWO = BigInt(2);
+const BASIS_POINTS = BigInt(10_000);
+
+function roundHalfUp(numerator: bigint, denominator: bigint): bigint {
+  if (numerator < ZERO) return -roundHalfUp(-numerator, denominator);
+  return (numerator * TWO + denominator) / (denominator * TWO);
+}
+
+/**
+ * The payable total, mirroring the backend's finalize maths (restiq-backend#207):
+ * GST is charged on the discounted value - net = subtotal - discount, and each
+ * breakdown component (CGST, SGST, IGST) is round(net x rate) on its own, so
+ * CGST always equals SGST. Inclusive pricing (AU) never adds tax on top, and a
+ * bill with no rated breakdown (composition scheme, older bills) keeps its own
+ * taxMinor. `pendingDiscountMinor` previews a discount not yet submitted (a
+ * finalized bill's own `discountMinor` wins once it's non-null).
+ */
 export function billTotalMinor(
-  bill: Pick<BillView, "subtotalMinor" | "taxMinor" | "discountMinor" | "pricesIncludeTax">,
+  bill: Pick<BillView, "subtotalMinor" | "taxMinor" | "discountMinor" | "pricesIncludeTax" | "taxBreakdown">,
   pendingDiscountMinor = 0,
 ): number {
   const discountMinor = bill.discountMinor ?? pendingDiscountMinor;
-  // Mirrors bill-core.ts's computeTotalMinor: inclusive pricing (AU) never adds tax on top (issue #156).
-  return (bill.pricesIncludeTax ? bill.subtotalMinor : bill.subtotalMinor + bill.taxMinor) - discountMinor;
+  const netMinor = bill.subtotalMinor - discountMinor;
+  if (bill.pricesIncludeTax) return netMinor;
+  const rated = (bill.taxBreakdown ?? []).filter((line) => line.ratePercent > 0);
+  if (rated.length === 0) return netMinor + bill.taxMinor;
+  const net = BigInt(netMinor);
+  const taxMinor = rated.reduce((sum, line) => sum + roundHalfUp(net * BigInt(Math.round(line.ratePercent * 100)), BASIS_POINTS), ZERO);
+  return Number(net + taxMinor);
 }
 
 /** Finalize is disabled until the pending tenders exactly cover the total - `bill-core.ts`'s `commitFinalize` rejects any other sum with a 400 `tender_mismatch`, this mirrors that gate client-side, same posture as `order-taking-state.ts`'s `canSendToKitchen`. */

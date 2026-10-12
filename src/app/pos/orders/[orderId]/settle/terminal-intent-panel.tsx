@@ -59,7 +59,7 @@ export function TerminalIntentPanel({ intent, currency, busy, onCancel, onDismis
       )}
       {phase === "retry" && (
         <Button variant="outline" data-testid="intent-retry" onClick={onDismiss}>
-          Try again
+          Choose how to pay
         </Button>
       )}
     </section>

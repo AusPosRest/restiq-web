@@ -22,7 +22,7 @@
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useState } from "react";
-import { startOrder, transferOrder, PosApiError } from "../api";
+import { closeTableSession, startOrder, transferOrder, PosApiError } from "../api";
 import { LoadErrorPanel, Skeleton } from "../data-states";
 import { usePosLoad } from "../use-pos-load";
 import {
@@ -70,7 +70,7 @@ function TableMapLoaded({
 }: Readonly<{ initial: TableMapEntry[]; outletId: string; currentStaffId: string; currentStaffName: string; onReload: () => void }>) {
   const router = useRouter();
   const [tables, setTables] = useState(initial);
-  const [pendingTransfer, setPendingTransfer] = useState<{ tableId: string; orderId: string; tableLabel: string; ownerId: string } | null>(null);
+  const [pendingTransfer, setPendingTransfer] = useState<{ tableId: string; orderId: string; tableLabel: string; ownerName: string } | null>(null);
   const [busy, setBusy] = useState(false);
   const [actionError, setActionError] = useState<string | null>(null);
 
@@ -86,7 +86,7 @@ function TableMapLoaded({
       setBusy(true);
       startOrder(outletId, tableId)
         .then((order) => {
-          setTables((prev) => prev.map((t) => (t.id === tableId ? { ...t, status: "occupied", order: { id: order.id, ownerStaffId: order.ownerId } } : t)));
+          setTables((prev) => prev.map((t) => (t.id === tableId ? { ...t, status: "occupied", order: { id: order.id, ownerStaffId: order.ownerId, ownerName: order.ownerName ?? null } } : t)));
           router.push(`/pos/orders/${order.id}`);
         })
         .catch((error: unknown) => setActionError(errorMessage(error, "Couldn't start an order for this table.")))
@@ -100,15 +100,28 @@ function TableMapLoaded({
     }
 
     // transfer_required - never a silent open, per SPEC CAP-2 success criterion.
-    setPendingTransfer({ tableId, orderId: action.orderId, tableLabel: table.label, ownerId: action.ownerId });
+    setPendingTransfer({ tableId, orderId: action.orderId, tableLabel: table.label, ownerName: table.order?.ownerName ?? "another staff member" });
   }
+
+  // CU-26: a QR guest session left open on a table with no order blocks the next guests - staff can end it.
+  function handleResetTable(table: TableMapEntry) {
+    if (!window.confirm(`Reset table ${table.label}? The guests' QR session there ends and the next guests start a new one.`)) return;
+    setBusy(true);
+    setActionError(null);
+    closeTableSession(table.id)
+      .then(() => setTables((prev) => prev.map((t) => (t.id === table.id ? { ...t, guestSessionOpen: false } : t))))
+      .catch((error: unknown) => setActionError(errorMessage(error, "Couldn't reset this table.")))
+      .finally(() => setBusy(false));
+  }
+
+  const abandonedSessions = tables.filter((t) => t.guestSessionOpen && t.status === "empty");
 
   function handleTransferConfirm(reason: string) {
     if (!pendingTransfer) return;
     setBusy(true);
     transferOrder(pendingTransfer.orderId, currentStaffId, reason || undefined)
       .then((order) => {
-        setTables((prev) => prev.map((t) => (t.id === pendingTransfer.tableId ? { ...t, order: { id: order.id, ownerStaffId: order.ownerId } } : t)));
+        setTables((prev) => prev.map((t) => (t.id === pendingTransfer.tableId ? { ...t, order: { id: order.id, ownerStaffId: order.ownerId, ownerName: order.ownerName ?? null } } : t)));
         setPendingTransfer(null);
         router.push(`/pos/orders/${pendingTransfer.orderId}`);
       })
@@ -156,6 +169,24 @@ function TableMapLoaded({
           </div>
         )}
 
+        {abandonedSessions.length > 0 && (
+          <section data-testid="table-map-guest-sessions" className="flex flex-wrap items-center gap-3 rounded-lg border border-border bg-card px-4 py-3 text-sm">
+            <span className="text-muted-foreground">QR guests joined but haven&apos;t ordered:</span>
+            {abandonedSessions.map((table) => (
+              <button
+                key={table.id}
+                type="button"
+                data-testid={`table-reset-${table.id}`}
+                disabled={busy}
+                onClick={() => handleResetTable(table)}
+                className="rounded-md border border-border px-3 py-1.5 text-xs font-semibold text-foreground hover:bg-accent disabled:opacity-50"
+              >
+                Reset table {table.label}
+              </button>
+            ))}
+          </section>
+        )}
+
         {groups.map((group) => (
           <section key={group.floorId} data-testid={`floor-group-${group.floorId}`} className="flex flex-col gap-3">
             <h2 className="font-label text-sm font-semibold uppercase tracking-wider text-muted-foreground">{group.floorName}</h2>
@@ -175,7 +206,7 @@ function TableMapLoaded({
           <TransferOwnershipDialog
             open
             originLabel={`Table ${pendingTransfer.tableLabel}`}
-            ownerName={pendingTransfer.ownerId}
+            ownerName={pendingTransfer.ownerName}
             busy={busy}
             onCancel={() => setPendingTransfer(null)}
             onConfirm={handleTransferConfirm}

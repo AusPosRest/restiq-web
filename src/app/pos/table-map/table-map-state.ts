@@ -54,12 +54,18 @@ export interface RawTableMapEntry {
   status: TableStatus;
   orderId: string | null;
   ownerId: string | null;
+  /** restiq-backend#210: the owner's name; optional for an older backend. */
+  ownerName?: string | null;
+  /** restiq-backend#210 (CU-26): a QR guest session is still open on this table. */
+  guestSessionOpen?: boolean;
 }
 
 export interface TableOrderSummary {
   id: string;
   /** Raw owner id - no staff-name lookup exists server-side yet, see file header. */
   ownerStaffId: string;
+  /** The owner's name, or null when unknown - never shown as a raw id (SE-22). */
+  ownerName: string | null;
 }
 
 export interface TableMapEntry {
@@ -70,6 +76,7 @@ export interface TableMapEntry {
   seatCapacity: number;
   status: TableStatus;
   order: TableOrderSummary | null;
+  guestSessionOpen: boolean;
 }
 
 export function toTableMapEntry(raw: RawTableMapEntry): TableMapEntry {
@@ -80,7 +87,8 @@ export function toTableMapEntry(raw: RawTableMapEntry): TableMapEntry {
     label: raw.label,
     seatCapacity: raw.seatCapacity,
     status: raw.status,
-    order: raw.orderId !== null && raw.ownerId !== null ? { id: raw.orderId, ownerStaffId: raw.ownerId } : null,
+    order: raw.orderId !== null && raw.ownerId !== null ? { id: raw.orderId, ownerStaffId: raw.ownerId, ownerName: raw.ownerName ?? null } : null,
+    guestSessionOpen: raw.guestSessionOpen ?? false,
   };
 }
 

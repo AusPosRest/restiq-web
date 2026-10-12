@@ -29,6 +29,9 @@ function makeLine(overrides: Partial<OrderLineView> = {}): OrderLineView {
     modifiers: [],
     lineTotalMinor: 12000,
     addedByStaffId: "staff-1",
+    addedByStaffName: null,
+    note: null,
+    sentToKitchen: true,
     seatNumber: null,
     ...overrides,
   };

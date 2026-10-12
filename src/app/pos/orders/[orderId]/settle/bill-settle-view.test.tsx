@@ -152,6 +152,14 @@ describe("BillSettleView - loading", () => {
     }
   });
 
+  it("explains whose order it is when the bill can't be opened (SE-23)", async () => {
+    stubFetch({
+      [`POST orders/${ORDER_ID}/bill`]: () => jsonResponse({ error: { code: "not_owner", message: "This order belongs to Asha. Take it over first to make changes." } }, 403),
+    });
+    render(<BillSettleView orderId={ORDER_ID} />);
+    await waitFor(() => expect(screen.getByTestId("bill-settle-error").textContent).toContain("This order belongs to Asha"));
+  });
+
   it("shows the error state on a genuine 409 (an order closed with no bill ever created)", async () => {
     stubFetch({
       [`POST orders/${ORDER_ID}/bill`]: () => jsonResponse({ error: { code: "conflict", message: "This order is already closed" } }, 409),
@@ -448,6 +456,27 @@ describe("BillSettleView - card terminal (issue #188)", () => {
     await userEvent.click(screen.getByTestId("finalize-bill"));
     await screen.findByTestId("bill-finalised-panel");
     expect(fetchMock.mock.calls.some(([input, init]) => String(input).includes("bills/bill-1/finalize") && init?.method === "POST")).toBe(true);
+  });
+
+  it("brings back a card payment already waiting on the terminal after a reload, with its Cancel (PE-22/CU-13)", async () => {
+    stubFetch({ "GET outlets/outlet-1/payment-intents": () => jsonResponse([pending]), "GET payment-intents/pi-1": () => jsonResponse(pending) });
+    render(<BillSettleView orderId={ORDER_ID} />);
+    const panel = await screen.findByTestId("intent-panel");
+    expect(panel.getAttribute("data-phase")).toBe("showing");
+    expect(screen.getByTestId("intent-cancel")).toBeTruthy();
+  });
+
+  it("shows the server's plain reason when there is no card terminal, and keeps the other ways to pay (PE-22)", async () => {
+    const message = "No card terminal is set up for this till. Take the card on your own machine and record it as External, or choose Cash or UPI.";
+    stubFetch({ "POST bills/bill-1/intents": () => jsonResponse({ error: { code: "no_terminal", message } }, 409) });
+    render(<BillSettleView orderId={ORDER_ID} />);
+    await screen.findByTestId("bill-summary");
+    await userEvent.click(screen.getByTestId("tender-method-card_terminal"));
+    await userEvent.click(screen.getByTestId("tender-fill-remaining"));
+
+    await waitFor(() => expect(screen.getByTestId("intent-error").textContent).toBe(message));
+    expect(screen.queryByTestId("intent-panel")).toBeNull();
+    expect(screen.getByTestId("tender-method-cash")).toBeTruthy();
   });
 
   it("keeps Finalise disabled while the terminal is still waiting, and a declined card offers a retry with the bill untouched", async () => {

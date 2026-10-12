@@ -103,7 +103,7 @@ describe("StationQueueScreen", () => {
   it("separates ADD-ON batches and strikes through voided lines, from a real-shaped response", async () => {
     const withAddOnAndVoid = ticket({
       lines: [
-        { id: "l1", orderLineId: "ol1", itemId: "i1", itemName: "Tandoori Roti", variantName: null, quantity: 2, seatNumber: 1, modifiers: [], addOnBatch: 0, voided: false },
+        { id: "l1", orderLineId: "ol1", itemId: "i1", itemName: "Tandoori Roti", variantName: null, quantity: 2, seatNumber: 1, modifiers: [], addOnBatch: 0, voided: false, note: "less spicy" },
         { id: "l2", orderLineId: "ol2", itemId: "i2", itemName: "Paneer Tikka", variantName: null, quantity: 1, seatNumber: null, modifiers: [{ id: "m1", name: "Extra spicy" }], addOnBatch: 0, voided: true },
         { id: "l3", orderLineId: "ol3", itemId: "i3", itemName: "Garlic Naan", variantName: null, quantity: 1, seatNumber: null, modifiers: [], addOnBatch: 1, voided: false },
       ],
@@ -118,6 +118,9 @@ describe("StationQueueScreen", () => {
     expect(screen.getByTestId("kds-line-l2").querySelector("div")?.className).toContain("line-through");
     expect(screen.getByTestId("kds-line-l1-seat").textContent).toContain("S1");
     expect(screen.queryByTestId("kds-line-l2-seat")).toBeNull();
+    // CU-12: the till's special instructions reach the cook.
+    expect(screen.getByTestId("kds-line-l1-note").textContent).toBe("Note: less spicy");
+    expect(screen.queryByTestId("kds-line-l3-note")).toBeNull();
   });
 
   it("renders the RECALLED banner as real data from ticket.recalled, not local UI memory", async () => {

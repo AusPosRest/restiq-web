@@ -1,7 +1,9 @@
 // Shared POS header (issue #335): the switch shows the current mode and links to the other.
 import { cleanup, render, screen } from "@testing-library/react";
-import { afterEach, describe, expect, it } from "vitest";
+import { afterEach, describe, expect, it, vi } from "vitest";
 import { ModeToggle, PosHeader } from "./pos-header";
+
+vi.mock("next/navigation", () => ({ useRouter: () => ({ replace: vi.fn() }) }));
 
 afterEach(() => cleanup());
 
@@ -27,6 +29,9 @@ describe("ModeToggle", () => {
       </PosHeader>,
     );
     expect(screen.getByText("Table Map")).toBeTruthy();
+    // PE-19: the till can be locked, and the shift screens reached, from here.
+    expect(screen.getByTestId("pos-lock-till").textContent).toContain("Lock");
+    expect(screen.getByTestId("pos-header-more").getAttribute("href")).toBe("/pos/shift");
     expect(screen.getByTestId("pos-mode-tables").dataset.active).toBe("true");
     expect(screen.getByTestId("extra-action")).toBeTruthy();
   });

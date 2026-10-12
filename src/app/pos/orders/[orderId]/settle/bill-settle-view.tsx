@@ -46,6 +46,8 @@ interface BillLanded {
   attempt: number;
   bill: BillView | null;
   failed: boolean;
+  /** The server's own words when it refused (SE-23: e.g. whose order this is), else null. */
+  message: string | null;
 }
 
 /** Same "landed keyed by attempt" shape use-pos-load.ts's hook uses - `fetchOrCreateBill` is a POST, not a GET, so it can't just reuse that hook directly, but retry/loading derive the same way (no synchronous setState in the effect body). */
@@ -57,10 +59,11 @@ function useBill(orderId: string) {
     let cancelled = false;
     fetchOrCreateBill(orderId)
       .then((value) => {
-        if (!cancelled) setLanded({ attempt, bill: value, failed: false });
+        if (!cancelled) setLanded({ attempt, bill: value, failed: false, message: null });
       })
-      .catch(() => {
-        if (!cancelled) setLanded({ attempt, bill: null, failed: true });
+      .catch((error: unknown) => {
+        const message = error instanceof PosApiError && error.status >= 400 && error.status < 500 ? error.message : null;
+        if (!cancelled) setLanded({ attempt, bill: null, failed: true, message });
       });
     return () => {
       cancelled = true;
@@ -72,6 +75,7 @@ function useBill(orderId: string) {
     loading: current === null,
     failed: current?.failed ?? false,
     bill: current?.bill ?? null,
+    message: current?.message ?? null,
     retry: () => setAttempt((n) => n + 1),
   };
 }
@@ -83,7 +87,7 @@ export function BillSettleView({ orderId }: Readonly<{ orderId: string }>) {
 
   if (menuLoad.loading || orderLoad.loading || billLoad.loading) return <LoadingShell />;
   if (billLoad.failed || !billLoad.bill) {
-    return <LoadErrorPanel testId="bill-settle-error" message="Couldn't load this bill." onRetry={billLoad.retry} />;
+    return <LoadErrorPanel testId="bill-settle-error" message={billLoad.message ?? "Couldn't load this bill."} onRetry={billLoad.retry} />;
   }
   if (menuLoad.failed || !menuLoad.data || orderLoad.failed || !orderLoad.data) {
     return (
@@ -116,11 +120,15 @@ function BillSettleLoaded({
   const [changeGiven, setChangeGiven] = useState(0);
   // Card terminal (issue #188): once the terminal approves, the tender is
   // already on the server - re-read the bill rather than inventing it here.
-  const terminal = useTerminalIntent(bill.id, () => {
-    getBill(bill.id)
-      .then(setBill)
-      .catch(() => undefined);
-  });
+  const terminal = useTerminalIntent(
+    bill.id,
+    () => {
+      getBill(bill.id)
+        .then(setBill)
+        .catch(() => undefined);
+    },
+    rawOrder.outletId,
+  );
 
   const order = toOrderView(rawOrder, menu);
   const readOnly = isBillReadOnly(bill);

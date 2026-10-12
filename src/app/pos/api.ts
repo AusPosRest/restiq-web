@@ -101,6 +101,11 @@ export function startOrder(outletId: string, tableId: string): Promise<RawOrder>
  * audited (actor + reason) same as other mutations, but it isn't one of
  * CAP-8's six manager-gated actions, so no PIN and no required reason.
  */
+/** CU-26: ends a table's abandoned QR guest session so the next guests start fresh (POST /pos/v1/tables/:id/close-session). */
+export function closeTableSession(tableId: string): Promise<{ closed: true }> {
+  return posApi<{ closed: true }>(`tables/${encodeURIComponent(tableId)}/close-session`, { method: "POST" });
+}
+
 export function transferOrder(orderId: string, newOwnerStaffId: string, reason?: string): Promise<RawOrder> {
   return posApi<RawOrder>(`orders/${orderId}/transfer`, {
     method: "POST",
@@ -156,6 +161,22 @@ export function sendOrderToKitchen(orderId: string, menu?: Pick<PosMenuView, "it
 
 export function removeOrderLine(orderId: string, lineId: string, menu?: Pick<PosMenuView, "items">): Promise<OrderView> {
   return posApi<RawOrder>(`orders/${orderId}/lines/${lineId}`, { method: "DELETE" }).then((raw) => toOrderView(raw, menu));
+}
+
+/** restiq-backend#210 (CU-15): takes back a line the kitchen already has - a manager PIN and reason are checked server-side. */
+export function voidOrderLine(orderId: string, lineId: string, managerPin: string, reason: string, menu?: Pick<PosMenuView, "items">): Promise<OrderView> {
+  return posApi<RawOrder>(`orders/${orderId}/lines/${lineId}/void`, { method: "POST", body: JSON.stringify({ managerPin, reason }) }).then((raw) =>
+    toOrderView(raw, menu),
+  );
+}
+
+/** restiq-backend#210 (PE-16/CU-27): throws away an order with nothing on it. 409 `order_not_empty` once anything is on it. */
+export function discardOrder(orderId: string): Promise<null> {
+  return posApi<null>(`orders/${orderId}`, { method: "DELETE" });
+}
+
+export function fetchOrder(orderId: string, menu?: Pick<PosMenuView, "items">): Promise<OrderView> {
+  return posApi<RawOrder>(`orders/${orderId}`).then((raw) => toOrderView(raw, menu));
 }
 
 /**
@@ -486,6 +507,8 @@ export interface PrintJobView {
   payload: InvoiceView;
   createdAt: string;
   printedAt: string | null;
+  /** restiq-backend#210: on the POST response only - false when no printer will pick the job up. */
+  printerAvailable?: boolean;
 }
 
 // --- Device topology (issue #210 / restiq-backend#134). Each call names this

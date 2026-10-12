@@ -43,25 +43,9 @@
 //    is gone - `canSendToKitchen`/the send-to-kitchen UI now gate on
 //    `status === "open"` directly, real data the backend already enforces
 //    the same way (orders.service.ts's `FORWARD_TRANSITIONS`).
-//  - `specialInstructions` has no backing column anywhere in `OrderLine` -
-//    dropped from the read side (`OrderLineView`) so nothing ever displays a
-//    value the backend can't have actually stored. The write-side capture
-//    (`ModifierSheetConfirmValue.specialInstructions`, `AddOrderLineInput.
-//    specialInstructions`) is left in place unreconciled - CAP-6's counter
-//    screen (`counter-view.tsx`) shares both of those types and is
-//    out-of-scope here (see spec-2-3-2-4's boundaries); the value is simply
-//    accepted and silently dropped server-side today
-//    (`ValidationPipe({whitelist:true})`), same latent gap that already
-//    existed before this pass, just not this story's to close.
-//  - `OrderView.ownerStaffName` is kept as a field name (rather than renamed
-//    to `ownerStaffId`) purely because `counter-view.tsx` (CAP-6, also out of
-//    scope per spec-2-3-2-4's boundaries) reads `order.ownerStaffName`
-//    directly and isn't touched by this pass - the *value* behind that name
-//    is now real (the raw owner id, honestly reported), not a fabricated
-//    one, satisfying the "never a fabricated real value" rule even though
-//    the field name is a legacy holdover. order-taking-view.tsx (in scope)
-//    applies its own "You" substitution on top of that raw id at render
-//    time, same as open-orders-screen.tsx.
+//  - (restiq-backend#210) the order now also carries ownerName, and each
+//    line addedByStaffName, note (special instructions) and sentToKitchen -
+//    screens show names (or "You"), never raw staff ids.
 //
 // RECONCILED (2026-09-02, restiq-backend#96) - `OrderView` (every one of
 // this file's endpoints - get/lines/status/transfer, plus open-orders and
@@ -148,7 +132,13 @@ export interface RawOrderLine {
   quantity: number;
   unitPriceMinor: number;
   seatNumber: number | null;
-  addedByStaffId: string;
+  addedByStaffId: string | null;
+  /** restiq-backend#210: the adder's name (null for a guest line); optional for an older backend. */
+  addedByStaffName?: string | null;
+  /** restiq-backend#210: special instructions typed on the till. */
+  note?: string | null;
+  /** restiq-backend#210: true once the kitchen has this line. Older backends: absent - treated as sent once the order is. */
+  sentToKitchen?: boolean;
   createdAt: string;
   modifiers: RawOrderLineModifier[];
 }
@@ -161,6 +151,8 @@ export interface RawOrder {
   /** The DiningTable's real label for a dine-in order; `null` for a counter order - see file header. */
   tableLabel: string | null;
   ownerId: string;
+  /** restiq-backend#210: the owner's display name; optional for an older backend. */
+  ownerName?: string | null;
   status: "open" | "sent" | "closed";
   tokenNumber: number | null;
   createdAt: string;
@@ -191,8 +183,14 @@ export interface OrderLineView {
   unitPriceMinor: number;
   modifiers: OrderLineModifierView[];
   lineTotalMinor: number;
-  /** Raw staff id - no staff-name lookup exists server-side yet, see file header. */
-  addedByStaffId: string;
+  /** Raw staff id - compare with the viewer's own id to show "You". Null on a guest (QR) line. */
+  addedByStaffId: string | null;
+  /** The adder's name from the server (restiq-backend#210), or null when unknown. */
+  addedByStaffName: string | null;
+  /** Special instructions for the kitchen ("less spicy"), or null. */
+  note: string | null;
+  /** True once the kitchen has this line - it can then only be voided with a manager PIN (CU-15). */
+  sentToKitchen: boolean;
   /** Optional seat/cover metadata (restiq-web#120: no longer gates send-to-kitchen, and not rendered on this screen); `null` means unassigned. */
   seatNumber: number | null;
 }
@@ -204,8 +202,10 @@ export interface OrderView {
   /** The real DiningTable label (e.g. "T1") for a dine-in order; `null` for a counter order - see file header. */
   tableLabel: string | null;
   status: "open" | "sent" | "closed";
-  /** Raw owner id, kept under this legacy field name for `counter-view.tsx`'s sake - see file header. */
-  ownerStaffName: string;
+  /** Raw owner id - compare with the viewer's own id. Null for a QR order no staff member has taken over yet. */
+  ownerStaffId: string | null;
+  /** The owner's name (restiq-backend#210); null when the server didn't send one. */
+  ownerName: string | null;
   lines: OrderLineView[];
   /** Sum of every line's total. Tax breakdown is CAP-7 Bill & Settle's job, not this screen's - no rate is fabricated here. */
   totalMinor: number;
@@ -238,7 +238,14 @@ function componentLabel(child: RawOrderLine, parent: RawOrderLine, menu?: Pick<P
   return `${perCombo > 1 ? `${perCombo}× ` : ""}${resolveItemName(menu, itemId)}${extras.length ? ` (${extras.join(", ")})` : ""}`;
 }
 
-export function toOrderLineView(raw: RawOrderLine, menu?: Pick<PosMenuView, "items">, children: readonly RawOrderLine[] = []): OrderLineView {
+export function toOrderLineView(
+  raw: RawOrderLine,
+  menu?: Pick<PosMenuView, "items">,
+  children: readonly RawOrderLine[] = [],
+  orderSent = false,
+): OrderLineView {
+  // An older backend has no per-line flag: fall back to the order's status.
+  const sent = raw.sentToKitchen ?? orderSent;
   const modifiers = raw.modifiers.map((modifier) => ({ modifierId: modifier.modifierId, name: modifier.name, priceMinor: modifier.priceMinor }));
   if (raw.comboId) {
     const lineTotalMinor = children.reduce((sum, child) => sum + rawLineTotal(child), rawLineTotal(raw));
@@ -255,6 +262,9 @@ export function toOrderLineView(raw: RawOrderLine, menu?: Pick<PosMenuView, "ite
       modifiers: [],
       lineTotalMinor,
       addedByStaffId: raw.addedByStaffId,
+      addedByStaffName: raw.addedByStaffName ?? null,
+      note: raw.note ?? null,
+      sentToKitchen: sent || children.some((child) => child.sentToKitchen === true),
       seatNumber: raw.seatNumber,
     };
   }
@@ -272,6 +282,9 @@ export function toOrderLineView(raw: RawOrderLine, menu?: Pick<PosMenuView, "ite
     modifiers,
     lineTotalMinor: raw.quantity * computeUnitTotalMinor(raw.unitPriceMinor, modifiers),
     addedByStaffId: raw.addedByStaffId,
+    addedByStaffName: raw.addedByStaffName ?? null,
+    note: raw.note ?? null,
+    sentToKitchen: sent,
     seatNumber: raw.seatNumber,
   };
 }
@@ -279,13 +292,17 @@ export function toOrderLineView(raw: RawOrderLine, menu?: Pick<PosMenuView, "ite
 /** `menu` is optional so callers with no menu in scope (e.g. table-map's `startOrder`/`transferOrder`, which never render a line's item/variant name) still get a usable mapping - names simply fall back to raw ids in that case. */
 export function toOrderView(raw: RawOrder, menu?: Pick<PosMenuView, "items">): OrderView {
   // A combo's picks are shown inside the combo's own line.
-  const lines = raw.lines.filter((line) => !line.parentLineId).map((line) => toOrderLineView(line, menu, raw.lines.filter((child) => child.parentLineId === line.id)));
+  const orderSent = raw.status !== "open";
+  const lines = raw.lines
+    .filter((line) => !line.parentLineId)
+    .map((line) => toOrderLineView(line, menu, raw.lines.filter((child) => child.parentLineId === line.id), orderSent));
   return {
     id: raw.id,
     tableId: raw.tableId,
     tableLabel: raw.tableLabel,
     status: raw.status,
-    ownerStaffName: raw.ownerId,
+    ownerStaffId: raw.ownerId,
+    ownerName: raw.ownerName ?? null,
     tokenNumber: raw.tokenNumber,
     lines,
     totalMinor: computeOrderTotalMinor(lines),
@@ -302,8 +319,8 @@ export interface AddOrderLineInput {
   variantId?: string;
   quantity: number;
   modifierIds: string[];
-  /** Accepted client-side but not persisted server-side - see file header ("specialInstructions has no backing column"). Left in place only because `counter-view.tsx`/`modifier-sheet.tsx` share this type and are out of this reconciliation's scope. */
-  specialInstructions?: string;
+  /** Special instructions for the kitchen - stored on the line since restiq-backend#210 (CU-12). */
+  note?: string;
 }
 
 // --- Money formatting. AD-4 (app/pos may not import from app/admin/app/ops)
@@ -427,7 +444,19 @@ export function computeOrderTotalMinor(lines: readonly OrderLineView[]): number 
 // on `OrderLineView` (still real wire data, see file header) but no longer
 // gates anything here.
 
-/** Gates the "Send to kitchen" action - disabled, never hidden, same EXPERIENCE.md convention as ModifierSheet's confirm button. Real `Order.status` is forward-only (open->sent->closed, orders.service.ts's `FORWARD_TRANSITIONS`), so "not yet sent" is exactly `status === "open"` - no fabricated `firedAt` timestamp needed. */
+/** Lines the kitchen doesn't have yet - restiq-backend#210: items added after the first send wait for Send to kitchen too (CU-15). */
+export function unsentLineCount(order: Pick<OrderView, "lines">): number {
+  return order.lines.filter((line) => !line.sentToKitchen).length;
+}
+
+/** Gates the "Send to kitchen" action - disabled, never hidden, same EXPERIENCE.md convention as ModifierSheet's confirm button. */
 export function canSendToKitchen(order: Pick<OrderView, "lines" | "status">): boolean {
-  return order.lines.length > 0 && order.status === "open";
+  return order.status !== "closed" && unsentLineCount(order) > 0;
+}
+
+/** "You" for the viewer, else the server-sent name; never a raw id (SE-22). */
+export function staffLabel(staffId: string | null, name: string | null, currentStaffId: string): string {
+  if (staffId === null) return "Guest";
+  if (staffId === currentStaffId) return "You";
+  return name ?? "Another staff member";
 }

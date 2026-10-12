@@ -59,6 +59,8 @@ export interface TicketLineView {
   modifiers: TicketLineModifierView[];
   addOnBatch: number;
   voided: boolean;
+  /** restiq-backend#210 (CU-12): special instructions typed on the till ("less spicy"). Optional for an older backend. */
+  note?: string | null;
 }
 
 export interface TicketView {

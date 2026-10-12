@@ -2,6 +2,7 @@
 // same bar - title, Counter/Tables switch, then the screen's own actions on
 // the right - so nothing jumps when switching modes.
 import Link from "next/link";
+import { LockTillButton } from "./lock-till-button";
 
 const HREF = { counter: "/pos/counter", tables: "/pos/table-map" } as const;
 
@@ -47,7 +48,18 @@ export function PosHeader({
         <p className="font-label text-xs font-semibold uppercase tracking-wider text-muted-foreground">{subtitle}</p>
       </div>
       <ModeToggle current={mode} />
-      <div className="ml-auto flex flex-wrap items-center gap-3">{children}</div>
+      <div className="ml-auto flex flex-wrap items-center gap-3">
+        {children}
+        {/* PE-19: shift, payments, status and clock-out live in the /pos shell; Lock signs out to the PIN pad. */}
+        <Link
+          href="/pos/shift"
+          data-testid="pos-header-more"
+          className="rounded-lg px-2 py-1.5 text-xs font-semibold text-muted-foreground transition-colors hover:bg-accent hover:text-foreground focus:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+        >
+          Shift &amp; more
+        </Link>
+        <LockTillButton />
+      </div>
     </header>
   );
 }

@@ -62,6 +62,7 @@ describe("MenuView", () => {
     vi.unstubAllGlobals();
     push.mockClear();
     sessionStorage.clear();
+    localStorage.clear();
     cleanup();
   });
 
