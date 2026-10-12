@@ -4,22 +4,12 @@
 // is illustrative display copy only - plans have no money model until the
 // subscription story.
 import { Check, Plus, Trash2 } from "lucide-react";
+import { useState } from "react";
 import { Button } from "@/components/ui/button";
+import { opsApi, type PlanPriceView } from "../../api";
+import { useOpsLoad } from "../../use-ops-load";
 import { FieldError, SelectField, TextAreaField, TextField, ToggleField } from "./fields";
-import {
-  BrandsOutletsData,
-  BusinessData,
-  CountryCode,
-  DEFAULT_GST_RATE,
-  OUTLET_TYPES,
-  OwnerInviteData,
-  StepErrors,
-  SubscriptionData,
-  TAX_PROFILES,
-  TaxData,
-  TIMEZONES,
-  emptyOutlet,
-} from "./wizard-state";
+import { BrandsOutletsData, BusinessData, CountryCode, DEFAULT_GST_RATE, OUTLET_TYPES, OwnerInviteData, StepErrors, SubscriptionData, TAX_PROFILES, TaxData, SLUG_PATTERN, TIMEZONES, emptyOutlet, PLAN_CURRENCY_SYMBOL, annualDiscountPercent, planPrice, recommendedPlan } from "./wizard-state";
 
 interface StepProps<T> {
   data: T;
@@ -33,6 +23,63 @@ function SectionHeading({ children }: { children: React.ReactNode }) {
     <h3 className="font-label border-b border-border/60 pb-2 text-xs font-semibold uppercase tracking-wider text-muted-foreground">
       {children}
     </h3>
+  );
+}
+
+const BASE_DOMAIN = process.env.NEXT_PUBLIC_BASE_DOMAIN ?? "idelta.com.au";
+
+type SlugStatus = { slug: string; available: boolean; reason: "taken" | "reserved" | "invalid" | null } | "checking" | "unknown" | null;
+
+/** Where the restaurant will live, and whether that name is free. Informational: the API checks again on submit. */
+function SubdomainField({ slug, error, onChange, onFieldBlur }: Readonly<{ slug: string; error: string | undefined; onChange: (slug: string) => void; onFieldBlur: (field: string) => void }>) {
+  const [status, setStatus] = useState<SlugStatus>(null);
+  const clean = slug.trim().toLowerCase();
+
+  async function check() {
+    onFieldBlur("slug");
+    if (!clean || !SLUG_PATTERN.test(clean)) return setStatus(null);
+    setStatus("checking");
+    try {
+      setStatus(await opsApi<Exclude<SlugStatus, string | null>>(`tenant-slugs/${encodeURIComponent(clean)}`));
+    } catch {
+      setStatus("unknown");
+    }
+  }
+
+  const note =
+    status === "checking"
+      ? "Checking..."
+      : status === "unknown"
+        ? "Could not check this name - it will be checked when you finish."
+        : status && status.available
+          ? `${clean}.${BASE_DOMAIN} is available.`
+          : status
+            ? status.reason === "taken"
+              ? "That subdomain is already used by another restaurant."
+              : "That subdomain is not allowed. Choose another."
+            : clean && !error
+              ? `Will live at ${clean}.${BASE_DOMAIN}`
+              : `Leave blank to make one from the company name. It cannot be changed later.`;
+  const bad = status !== null && typeof status === "object" && !status.available;
+
+  return (
+    <div>
+      <TextField
+        id="onb-slug"
+        label="Subdomain (optional)"
+        placeholder="e.g. bayleaf"
+        value={slug}
+        error={error}
+        onChange={(value) => {
+          setStatus(null);
+          onChange(value.toLowerCase());
+        }}
+        onBlur={() => void check()}
+      />
+      <p data-testid="onb-slug-note" role="status" className={`mt-1.5 text-xs ${bad ? "text-status-error" : "text-muted-foreground"}`}>
+        {note}
+      </p>
+    </div>
   );
 }
 
@@ -51,6 +98,7 @@ export function BusinessStep({ data, errors, onChange, onFieldBlur }: StepProps<
           onChange={(companyName) => set({ companyName })}
           onBlur={() => onFieldBlur("companyName")}
         />
+        <SubdomainField slug={data.slug} error={errors.slug} onChange={(slug) => set({ slug })} onFieldBlur={onFieldBlur} />
         <TextAreaField
           id="onb-registered-address"
           label="Registered Address"
@@ -144,7 +192,7 @@ export function TaxStep({ data, errors, onChange, onFieldBlur }: StepProps<TaxDa
       <TextField
         id="onb-registration-number"
         label={isIndia ? "GSTIN" : "ABN"}
-        placeholder={isIndia ? "29ABCDE1234F1Z5" : "11-digit ABN"}
+        placeholder={isIndia ? "15-character GSTIN" : "11-digit ABN"}
         value={data.registrationNumber}
         error={errors.registrationNumber}
         onChange={(registrationNumber) => set({ registrationNumber })}
@@ -324,29 +372,36 @@ const PLANS = [
   {
     value: "standard" as const,
     name: "Standard",
-    tagline: "Essential features for single-location quick service restaurants.",
-    monthly: 49,
+    tagline: "For a single outlet.",
     features: ["Up to 3 POS devices per outlet", "Basic menu management", "Standard end-of-day reporting", "Email support (24hr SLA)"],
   },
   {
     value: "enterprise" as const,
     name: "Enterprise",
-    tagline: "Advanced fleet management for multi-location franchises.",
-    monthly: 129,
-    recommended: true,
+    tagline: "For two or more outlets and franchises.",
     features: ["Unlimited POS devices", "Centralized multi-location menus", "Real-time analytics API", "Advanced inventory syncing", "24/7 priority phone support"],
   },
 ];
 
-export function SubscriptionStep({ data, errors, onChange }: Omit<StepProps<SubscriptionData>, "onFieldBlur">) {
+export function SubscriptionStep({
+  data,
+  errors,
+  onChange,
+  country,
+  outletCount,
+}: Omit<StepProps<SubscriptionData>, "onFieldBlur"> & { country: CountryCode; outletCount: number }) {
   const annual = data.billingPeriod === "annual";
+  const recommended = recommendedPlan(outletCount);
+  // Plan prices are edited on the Plans page (restiq-backend#201); until they load, cards read "Price on quote".
+  const prices = useOpsLoad<{ prices: PlanPriceView[] }>("plan-prices").data?.prices ?? [];
+  const discount = annualDiscountPercent(prices, country);
   return (
     <div className="space-y-6">
       <div role="radiogroup" aria-label="Billing period" className="inline-flex rounded-lg border border-border bg-muted p-1">
         {(
           [
             { value: "monthly", label: "Monthly billing" },
-            { value: "annual", label: "Annual billing · -20%" },
+            { value: "annual", label: discount > 0 ? `Annual billing (save ${discount}%)` : "Annual billing" },
           ] as const
         ).map(({ value, label }) => (
           <button
@@ -368,7 +423,7 @@ export function SubscriptionStep({ data, errors, onChange }: Omit<StepProps<Subs
       <div className="grid gap-5 lg:grid-cols-2">
         {PLANS.map((plan) => {
           const selected = data.plan === plan.value;
-          const price = annual ? Math.round(plan.monthly * 0.8) : plan.monthly;
+          const price = planPrice(prices, plan.value, country, annual);
           return (
             <button
               key={plan.value}
@@ -381,7 +436,7 @@ export function SubscriptionStep({ data, errors, onChange }: Omit<StepProps<Subs
                 selected ? "border-primary bg-primary/5" : "border-border bg-muted/40 hover:border-primary/50"
               }`}
             >
-              {plan.recommended ? (
+              {plan.value === recommended ? (
                 <span className="font-label absolute -top-3 left-6 rounded-md bg-primary px-2 py-1 text-xs font-semibold uppercase tracking-wider text-primary-foreground">
                   Recommended
                 </span>
@@ -389,8 +444,14 @@ export function SubscriptionStep({ data, errors, onChange }: Omit<StepProps<Subs
               <span className="font-headline text-lg font-semibold">{plan.name}</span>
               <span className="mt-1 text-sm text-muted-foreground">{plan.tagline}</span>
               <span className="font-headline mt-4 text-3xl font-semibold">
-                A${price}
-                <span className="font-sans text-sm font-normal text-muted-foreground"> / outlet / month</span>
+                {price === null ? (
+                  <span data-testid={`onb-plan-${plan.value}-price`}>Price on quote</span>
+                ) : (
+                  <>
+                    <span data-testid={`onb-plan-${plan.value}-price`}>{PLAN_CURRENCY_SYMBOL[country]}{Number.isInteger(price) ? price : price.toFixed(2)}</span>
+                    <span className="font-sans text-sm font-normal text-muted-foreground"> / outlet / month</span>
+                  </>
+                )}
               </span>
               <ul className="mt-5 space-y-2.5">
                 {plan.features.map((feature) => (

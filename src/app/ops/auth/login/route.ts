@@ -2,6 +2,7 @@
 // httpOnly cookie - the token never reaches client-side JS. The API base
 // comes from the environment only (house rule: no hostnames in source).
 import { NextResponse } from "next/server";
+import { clientIpHeaders } from "@/lib/client-ip-headers";
 import { OPS_SESSION_COOKIE, OPS_SESSION_MAX_AGE_SECONDS } from "@/lib/ops-session";
 
 interface LoginResponse {
@@ -29,7 +30,7 @@ export async function POST(request: Request): Promise<NextResponse> {
   try {
     upstream = await fetch(`${apiUrl}/ops/v1/auth/login`, {
       method: "POST",
-      headers: { "content-type": "application/json" },
+      headers: { "content-type": "application/json", ...clientIpHeaders(request) },
       body: JSON.stringify({ email, password }),
       cache: "no-store",
     });

@@ -24,7 +24,7 @@ function formatClockTime(iso: string): string {
 /**
  * Static "Bumped hh:mm · took m:ss" (issue #134) - replaces the live
  * ageing clock on a done ticket, which had no reason to keep counting once
- * the ticket was bumped. `took` reuses `formatElapsed`'s exact "m:ss"
+ * the ticket was bumped. `took` reuses `formatElapsed`'s exact h/m/s
  * format, fed the fixed `bumpedAt` instant instead of a ticking `now`, so
  * the figure is computed once and never changes again.
  */

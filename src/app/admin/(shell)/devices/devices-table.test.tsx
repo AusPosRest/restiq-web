@@ -62,7 +62,7 @@ describe("DevicesTable", () => {
           device({ id: "kds-1", type: "kds" }),
           device({ id: "printer-1", type: "printer" }),
           device({ id: "terminal-1", type: "terminal" }),
-          device({ id: "kiosk-1", type: "kiosk" }),
+          device({ id: "kiosk-1", type: "kiosk", outletId: "out-1" }),
           device({ id: "cds-1", type: "cds" }),
           device({ id: "gone-1", type: "pos", status: "revoked" }),
         ]}
@@ -74,9 +74,11 @@ describe("DevicesTable", () => {
     expect(screen.getByTestId("device-open-printer-1").textContent).toContain("Open printer");
     expect(screen.getByTestId("device-open-terminal-1").getAttribute("href")).toBe("/pos/login?device=terminal-1&tenant=tenant-1&next=%2Fpos%2Fterminal");
     expect(screen.getByTestId("device-open-terminal-1").textContent).toContain("Open terminal");
-    // Kiosk and customer display have no web surface yet.
+    expect(screen.getByTestId("device-open-kiosk-1").getAttribute("href")).toBe("/qr/kiosk/out-1?device=kiosk-1");
+    expect(screen.getByTestId("device-open-kiosk-1").textContent).toContain("Open kiosk");
+    expect(screen.getByTestId("device-qr-kiosk-1")).toBeTruthy();
+    // The customer display has no web surface yet.
     expect(screen.queryByTestId("device-open-cds-1")).toBeNull();
-    expect(screen.queryByTestId("device-open-kiosk-1")).toBeNull();
     expect(screen.queryByTestId("device-open-gone-1")).toBeNull();
   });
 
@@ -91,6 +93,26 @@ describe("DevicesTable", () => {
     expect(screen.getByTestId("device-qr-dialog-url").textContent).toBe(url);
     const { default: QRCode } = await import("qrcode");
     expect(QRCode.toDataURL).toHaveBeenCalledWith(url, expect.anything());
+  });
+
+  it("offers Remove on every enrolled row - surface or not - never on a revoked one, and reports the device (issue #215)", () => {
+    const onRemove = vi.fn();
+    render(
+      <DevicesTable
+        devices={[device({ id: "pos-1", type: "pos" }), device({ id: "kiosk-1", type: "kiosk" }), device({ id: "gone-1", type: "pos", status: "revoked" })]}
+        onRemove={onRemove}
+      />,
+    );
+    expect(screen.getByTestId("device-remove-kiosk-1")).toBeTruthy();
+    expect(screen.queryByTestId("device-remove-gone-1")).toBeNull();
+
+    fireEvent.click(screen.getByTestId("device-remove-pos-1"));
+    expect(onRemove).toHaveBeenCalledWith(expect.objectContaining({ id: "pos-1" }));
+  });
+
+  it("shows no Remove buttons when the parent cannot revoke", () => {
+    render(<DevicesTable devices={[device({ id: "pos-1", type: "pos" })]} />);
+    expect(screen.queryByTestId("device-remove-pos-1")).toBeNull();
   });
 
   it("shows an empty state with no devices", () => {

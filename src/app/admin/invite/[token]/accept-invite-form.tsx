@@ -4,6 +4,7 @@ import { Mail } from "lucide-react";
 import { useRouter } from "next/navigation";
 import { useState } from "react";
 import { Button } from "@/components/ui/button";
+import { PasswordInput } from "@/components/password-input";
 
 const FIELD_ERROR_LENGTH = "Password must be at least 10 characters.";
 const FIELD_ERROR_MISMATCH = "Passwords do not match.";
@@ -88,27 +89,31 @@ export function AcceptInviteForm({ token }: { token: string }) {
         <label htmlFor="admin-invite-password" className="font-label text-xs font-semibold uppercase tracking-wider text-muted-foreground">
           Create password
         </label>
-        <input
+        <PasswordInput
           id="admin-invite-password"
           data-testid="admin-accept-invite-password"
+          toggleTestId="admin-accept-invite-password-toggle"
           name="password"
-          type="password"
           autoComplete="new-password"
           required
           aria-invalid={fieldError !== null || undefined}
+          aria-describedby="admin-invite-password-rule"
           className="w-full rounded-lg border border-border bg-input px-4 py-3 text-sm text-foreground focus:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 focus-visible:ring-offset-card"
         />
+        <p id="admin-invite-password-rule" className="text-xs text-muted-foreground">
+          At least 10 characters.
+        </p>
       </div>
 
       <div className="space-y-2">
         <label htmlFor="admin-invite-confirm-password" className="font-label text-xs font-semibold uppercase tracking-wider text-muted-foreground">
           Confirm password
         </label>
-        <input
+        <PasswordInput
           id="admin-invite-confirm-password"
           data-testid="admin-accept-invite-confirm-password"
+          toggleTestId="admin-accept-invite-confirm-password-toggle"
           name="confirm-password"
-          type="password"
           autoComplete="new-password"
           required
           aria-invalid={fieldError !== null || undefined}

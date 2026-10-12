@@ -94,7 +94,7 @@ describe("AllDaySummaryScreen", () => {
     renderScreen();
 
     await vi.waitFor(() => expect(screen.getByTestId("kds-all-day-empty")).toBeTruthy());
-    expect(screen.getByTestId("kds-tab-subtitle").textContent).toBe("Counts of everything fired today");
+    expect(screen.getByTestId("kds-tab-subtitle").textContent).toBe("All-day summary — how many of each item is cooking right now");
   });
 
   it("keeps the stale grid on screen and shows the reconnecting notice when a poll fails", async () => {

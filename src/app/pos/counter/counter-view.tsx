@@ -33,13 +33,18 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import Link from "next/link";
 import { Search } from "lucide-react";
 import { Button } from "@/components/ui/button";
+import { ComboPicker, type ComboPickerConfirmValue } from "@/components/combo-picker";
+import { combosFor, type ComboMenuView } from "@/lib/combo";
+import { PrintBillButton } from "../bills/print-bill-button";
 import {
+  addComboLine,
   addOrderLine,
   fetchOrCreateBill,
   finalizeBill,
   getBill,
   PosApiError,
   removeOrderLine,
+  sendOrderToKitchen,
   startCounterOrder,
   updateOrderLineQuantity,
   type PostableTenderMethod,
@@ -49,9 +54,12 @@ import {
 import { LoadErrorPanel, Skeleton } from "../data-states";
 import { usePosLoad } from "../use-pos-load";
 import { ModifierSheet, type ModifierSheetConfirmValue } from "../orders/[orderId]/modifier-sheet";
+import { PosComboTile } from "../orders/[orderId]/pos-combo-tile";
 import { PosItemTile } from "../orders/[orderId]/pos-item-tile";
 import {
+  canSendToKitchen,
   filterMenuItems,
+  formatPriceMinor,
   itemNeedsModifierSheet,
   orderOriginLabel,
   toOrderView,
@@ -61,12 +69,15 @@ import {
   type PosMenuView,
 } from "../orders/[orderId]/order-taking-state";
 import { BillSummary } from "../orders/[orderId]/settle/bill-summary";
+import { formatMinor } from "../(shell)/shift/shift-state";
 import { TenderKeypad } from "../orders/[orderId]/settle/tender-keypad";
 import { billTotalMinor, isBillReadOnly } from "../orders/[orderId]/settle/bill-state";
-import { canFinalizeWithElectronic, isElectronicMethod, remainingToTenderMinor } from "../orders/[orderId]/settle/electronic-tender-state";
+import { canFinalizeWithElectronic, cashChangeMinor, isElectronicMethod, remainingToTenderMinor, tendersNetOfChange } from "../orders/[orderId]/settle/electronic-tender-state";
 import { TerminalIntentPanel } from "../orders/[orderId]/settle/terminal-intent-panel";
 import { useTerminalIntent } from "../orders/[orderId]/settle/use-terminal-intent";
+import { PosHeader } from "../components/pos-header";
 import { TokenBadge } from "./token-badge";
+import { openDrawerForTenders } from "@/lib/desktop";
 
 export function CounterView({ outletId, currentStaffId }: Readonly<{ outletId: string; currentStaffId: string }>) {
   const menuLoad = usePosLoad<PosMenuView>("menu");
@@ -120,15 +131,19 @@ function CounterLoaded({
   const [selectedCategoryId, setSelectedCategoryId] = useState<string | null>(null);
   const [query, setQuery] = useState("");
   const [activeItem, setActiveItem] = useState<PosMenuItemView | null>(null);
+  const [activeCombo, setActiveCombo] = useState<ComboMenuView | null>(null);
   const [addingLine, setAddingLine] = useState(false);
   const [busyLineId, setBusyLineId] = useState<string | null>(null);
   const [actionError, setActionError] = useState<string | null>(null);
   const [pendingTenders, setPendingTenders] = useState<PendingTender[]>([]);
   const [finalizeBusy, setFinalizeBusy] = useState(false);
   const [finalizeError, setFinalizeError] = useState<string | null>(null);
+  const [changeGiven, setChangeGiven] = useState(0);
 
+  // Refreshes after add / quantity / remove / tender keep the counter on
+  // screen (#269); only the first read or a retry shows the loading shell.
   function loadBill() {
-    setBillLoading(true);
+    if (!bill) setBillLoading(true);
     setBillError(false);
     fetchOrCreateBill(order.id)
       .then(setBill)
@@ -171,6 +186,8 @@ function CounterLoaded({
   const sortedCategories = useMemo(() => [...menu.categories].sort((a, b) => a.sortOrder - b.sortOrder), [menu.categories]);
   const effectiveCategoryId = selectedCategoryId ?? sortedCategories[0]?.id ?? null;
   const visibleItems = useMemo(() => filterMenuItems(menu.items, effectiveCategoryId, query), [menu.items, effectiveCategoryId, query]);
+  const visibleCombos = useMemo(() => combosFor(menu.combos, effectiveCategoryId, query), [menu.combos, effectiveCategoryId, query]);
+  const itemsById = useMemo(() => new Map(menu.items.map((item) => [item.id, item])), [menu.items]);
   const activeCategory = sortedCategories.find((category) => category.id === effectiveCategoryId) ?? null;
 
   function submitLine(itemId: string, value: ModifierSheetConfirmValue, onSettled: () => void) {
@@ -193,6 +210,20 @@ function CounterLoaded({
         onSettled();
       })
       .catch((error: unknown) => setActionError(errorMessage(error, "Couldn't add that item to the order.")))
+      .finally(() => setAddingLine(false));
+  }
+
+  function handleConfirmCombo(value: ComboPickerConfirmValue) {
+    if (!activeCombo) return;
+    setAddingLine(true);
+    setActionError(null);
+    addComboLine(order.id, { comboId: activeCombo.id, ...value }, menu)
+      .then((updated) => {
+        setOrder(updated);
+        loadBill();
+        setActiveCombo(null);
+      })
+      .catch((error: unknown) => setActionError(errorMessage(error, "Couldn't add that combo to the order.")))
       .finally(() => setAddingLine(false));
   }
 
@@ -254,8 +285,8 @@ function CounterLoaded({
       .finally(() => setBusyLineId(null));
   }
 
-  function handleAddTender(method: PostableTenderMethod, amountMinor: number) {
-    setPendingTenders((current) => [...current, { method, amountMinor }]);
+  function handleAddTender(method: PostableTenderMethod, amountMinor: number, reference?: string) {
+    setPendingTenders((current) => [...current, { method, amountMinor, ...(reference ? { reference } : {}) }]);
   }
 
   function handleRemoveTender(index: number) {
@@ -264,10 +295,19 @@ function CounterLoaded({
 
   function handleFinalize() {
     if (!bill) return;
+    const change = cashChangeMinor(billTotalMinor(bill), bill, pendingTenders);
     setFinalizeBusy(true);
     setFinalizeError(null);
-    finalizeBill(bill.id, { tenders: pendingTenders })
-      .then(setBill)
+    // issue #306: a counter sale has no separate Send step, so Charge fires the
+    // unsent lines to the kitchen first - otherwise no ticket is ever made.
+    const fired = canSendToKitchen(order) ? sendOrderToKitchen(order.id, menu).then(setOrder) : Promise.resolve();
+    fired
+      .then(() => finalizeBill(bill.id, { tenders: tendersNetOfChange(pendingTenders, change) }))
+      .then((finalised) => {
+        setBill(finalised);
+        setChangeGiven(change);
+        openDrawerForTenders(pendingTenders);
+      })
       .catch((error: unknown) => setFinalizeError(errorMessage(error, "Couldn't finalise this bill.")))
       .finally(() => setFinalizeBusy(false));
   }
@@ -284,16 +324,9 @@ function CounterLoaded({
 
   return (
     <div data-testid="counter-view" className="flex h-dvh flex-col overflow-hidden">
-      <header className="flex flex-wrap items-center gap-x-4 gap-y-2 border-b border-border/60 px-4 py-3 sm:px-6">
-        <div>
-          <p className="font-headline text-lg font-bold text-primary">RESTIQ POS</p>
-          <p className="font-label text-xs font-semibold uppercase tracking-wider text-muted-foreground">QSR Counter</p>
-        </div>
-        <Link href="/pos/table-map" data-testid="switch-to-table-mode" className="text-sm text-primary underline-offset-4 hover:underline">
-          Switch to Table Mode
-        </Link>
+      <PosHeader subtitle="QSR Counter" mode="counter">
         {!readOnly && (
-          <div className="relative ml-auto w-80 max-w-full">
+          <div className="relative w-80 max-w-full">
             <Search className="pointer-events-none absolute left-3 top-1/2 size-4 -translate-y-1/2 text-muted-foreground" aria-hidden="true" />
             <input
               type="search"
@@ -305,13 +338,13 @@ function CounterLoaded({
             />
           </div>
         )}
-        <div className={`flex items-center gap-3 ${readOnly ? "ml-auto" : ""}`}>
+        <div className="flex items-center gap-3">
           <p data-testid="counter-cashier" className="text-sm text-muted-foreground">
             Cashier <span className="font-semibold text-foreground">{order.ownerStaffName === currentStaffId ? "You" : order.ownerStaffName}</span>
           </p>
           {typeof order.tokenNumber === "number" && <TokenBadge tokenNumber={order.tokenNumber} />}
         </div>
-      </header>
+      </PosHeader>
 
       {actionError && (
         <div role="alert" data-testid="counter-action-error" className="mx-6 mt-4 rounded-lg border border-status-alert/40 bg-card px-4 py-3 text-sm text-status-alert">
@@ -354,12 +387,15 @@ function CounterLoaded({
               <h2 className="mb-3 font-headline text-base font-semibold text-foreground">
                 {query.trim() ? "Search results" : activeCategory?.name} <span className="font-normal text-muted-foreground">· {visibleItems.length} items</span>
               </h2>
-              {visibleItems.length === 0 ? (
+              {visibleItems.length === 0 && visibleCombos.length === 0 ? (
                 <p data-testid="menu-empty" className="text-sm text-muted-foreground">
                   No items match.
                 </p>
               ) : (
                 <div data-testid="item-grid" className="grid grid-cols-[repeat(auto-fill,minmax(8.5rem,1fr))] gap-3">
+                  {visibleCombos.map((combo) => (
+                    <PosComboTile key={combo.id} combo={combo} itemsById={itemsById} currency={menu.currency} onTap={() => !addingLine && setActiveCombo(combo)} />
+                  ))}
                   {visibleItems.map((item) => (
                     <PosItemTile key={item.id} item={item} currency={menu.currency} onTap={() => item.available && handleTapItem(item)} />
                   ))}
@@ -387,6 +423,11 @@ function CounterLoaded({
             <p className="text-sm text-muted-foreground">
               {bill.tenders.length} tender{bill.tenders.length === 1 ? "" : "s"} captured · no further changes are possible.
             </p>
+            {changeGiven > 0 && (
+              <p data-testid="counter-change-due" className="font-headline text-2xl font-bold tabular-nums text-foreground">
+                Change due {formatMinor(changeGiven, menu.currency)}
+              </p>
+            )}
             <div className="flex gap-2">
               <Button size="lg" data-testid="counter-start-next-order" onClick={onStartNextOrder}>
                 Start next order
@@ -411,6 +452,7 @@ function CounterLoaded({
                   onRemoveTender={handleRemoveTender}
                   onSendToTerminal={terminal.send}
                   terminalBusy={terminal.busy}
+                  changeMinor={cashChangeMinor(totalMinor, bill, pendingTenders)}
                 />
               )}
             </div>
@@ -435,16 +477,24 @@ function CounterLoaded({
                 >
                   {finalizeBusy ? "Charging…" : "Charge"}
                 </Button>
-                <Button asChild size="lg" variant="outline" data-testid="print-bill-link">
-                  <Link href={`/pos/bills/${bill.id}/invoice`} target="_blank" rel="noopener">
-                    Print bill
-                  </Link>
-                </Button>
+                <PrintBillButton billId={bill.id} label="Print bill" testId="print-bill" size="lg" />
               </div>
             </footer>
           </div>
         )}
       </div>
+
+      {activeCombo && (
+        <ComboPicker
+          combo={activeCombo}
+          itemsById={itemsById}
+          formatPrice={(minor) => formatPriceMinor(minor, menu.currency)}
+          themeClass="pos-theme"
+          busy={addingLine}
+          onCancel={() => setActiveCombo(null)}
+          onConfirm={handleConfirmCombo}
+        />
+      )}
 
       {activeItem && (
         <ModifierSheet item={activeItem} currency={menu.currency} busy={addingLine} onCancel={() => setActiveItem(null)} onConfirm={handleConfirmModifiers} />

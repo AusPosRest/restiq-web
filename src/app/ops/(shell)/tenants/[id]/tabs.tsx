@@ -52,6 +52,8 @@ function gstStat(detail: TenantDetail): string {
   return gst.gstRatePercent != null ? `Applicable · ${gst.gstRatePercent}%` : "Applicable";
 }
 
+const REGION_LABELS: Record<string, string> = { "in-mumbai": "India (Mumbai)" };
+
 export function OverviewTab({ detail, onMutated }: Readonly<TabProps>) {
   const toast = useToast();
   const { tenant } = detail;
@@ -92,7 +94,7 @@ export function OverviewTab({ detail, onMutated }: Readonly<TabProps>) {
         <StatCard label="Outlets" value={String(detail.outlets.length)} testId="overview-outlets" />
         <StatCard label="Roles" value={String(detail.rolesCount)} testId="overview-roles" />
         <StatCard label="Plan" value={`${tenant.plan} · ${tenant.billingPeriod}`} testId="overview-plan" />
-        <StatCard label="Region" value={tenant.region} testId="overview-region" />
+        <StatCard label="Region" value={REGION_LABELS[tenant.region] ?? tenant.region} testId="overview-region" />
         <StatCard label="GST" value={gstStat(detail)} testId="overview-gst" />
       </div>
 

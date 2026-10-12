@@ -90,10 +90,11 @@ export interface TenantDetail {
     address: string;
     type: string;
     timezone: string;
+    /** The outlet's real switches (restiq-backend#191) - the owner sets them, guests and devices obey them. */
+    capabilities: Array<{ key: string; enabled: boolean }>;
   }>;
   rolesCount: number;
   ownerInvite: OwnerInvite | null;
-  capabilities: Array<{ key: string; enabled: boolean }>;
 }
 
 // --- CAP-4 device fleet.
@@ -237,4 +238,16 @@ export interface TenantAgreementsView {
   current: Omit<AgreementVersionSummary, "signatureCount"> | null;
   status: TenantAgreementStatus;
   signatures: AgreementSignatureView[];
+}
+
+// --- Plan prices (restiq-backend#201): list prices per country, edited on the Plans page.
+
+export interface PlanPriceView {
+  country: "AU" | "IN";
+  plan: "standard" | "enterprise";
+  /** Per outlet per month in minor units; null = on quote. */
+  monthlyPriceMinor: number | null;
+  annualDiscountPercent: number;
+  currency: "AUD" | "INR";
+  updatedAt: string;
 }

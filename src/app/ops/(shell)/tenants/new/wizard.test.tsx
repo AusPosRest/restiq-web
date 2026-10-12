@@ -17,6 +17,7 @@ type FetchCall = { path: string; method: string; body: unknown };
 
 let fetchCalls: FetchCall[] = [];
 let draftResponse: { status: number; body: unknown } = { status: 404, body: { error: { code: "not_found" } } };
+let slugAnswer: (slug: string) => unknown = (slug) => ({ slug, available: true, reason: null });
 let submitResponse: { status: number; body: unknown } = { status: 201, body: null };
 
 function jsonResponse(status: number, body: unknown): Response {
@@ -36,6 +37,7 @@ beforeEach(() => {
       if (path.startsWith("/ops/api/tenants/draft/steps/") && method === "PUT") {
         return jsonResponse(200, { updatedAt: new Date().toISOString() });
       }
+      if (path.startsWith("/ops/api/tenant-slugs/")) return jsonResponse(200, slugAnswer(path.split("/").pop() ?? ""));
       if (path === "/ops/api/tenants" && method === "POST") return jsonResponse(submitResponse.status, submitResponse.body);
       throw new Error(`Unexpected fetch: ${method} ${path}`);
     }),
@@ -62,6 +64,33 @@ async function fillStep1(user: ReturnType<typeof userEvent.setup>) {
 }
 
 describe("OnboardingWizard", () => {
+  it("checks the subdomain on blur and says whether it is free, taken or not allowed (D14)", async () => {
+    const user = userEvent.setup();
+    await renderFresh();
+    expect(screen.getByTestId("onb-slug-note").textContent).toContain("Leave blank");
+
+    await user.type(screen.getByTestId("onb-slug"), "BayLeaf");
+    expect((screen.getByTestId("onb-slug") as HTMLInputElement).value).toBe("bayleaf");
+    await user.tab();
+    await waitFor(() => expect(screen.getByTestId("onb-slug-note").textContent).toContain("bayleaf.idelta.com.au is available"));
+    expect(fetchCalls.some((c) => c.path === "/ops/api/tenant-slugs/bayleaf")).toBe(true);
+
+    slugAnswer = (slug) => ({ slug, available: false, reason: "taken" });
+    await user.clear(screen.getByTestId("onb-slug"));
+    await user.type(screen.getByTestId("onb-slug"), "spice");
+    await user.tab();
+    await waitFor(() => expect(screen.getByTestId("onb-slug-note").textContent).toContain("already used by another restaurant"));
+
+    // A badly formed name is refused on the spot and never sent to the API.
+    const before = fetchCalls.length;
+    await user.clear(screen.getByTestId("onb-slug"));
+    await user.type(screen.getByTestId("onb-slug"), "a");
+    await user.tab();
+    expect(screen.getByTestId("onb-slug-error").textContent).toContain("3 to 32");
+    expect(fetchCalls.length).toBe(before);
+    slugAnswer = (slug) => ({ slug, available: true, reason: null });
+  });
+
   it("renders step 1 fresh when no draft exists", async () => {
     await renderFresh();
     expect(screen.getByRole("heading", { name: "Business Details" })).toBeDefined();

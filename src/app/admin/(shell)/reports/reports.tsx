@@ -44,7 +44,8 @@ function ReportsCatalogue({ reports }: Readonly<{ reports: ReportDefinition[] }>
   const toast = useToast();
   const [exportingKey, setExportingKey] = useState<string | null>(null);
   const [destinationsOpen, setDestinationsOpen] = useState(false);
-  const groups = groupReportsByCategory(reports);
+  // Walkthrough fix: unbuilt reports (no export) said "Available once POS Core Loop is live - PENDING" to customers; only real ones show.
+  const groups = groupReportsByCategory(reports.filter((report) => report.exportFormats.length > 0));
 
   async function handleExport(reportKey: string, format: string) {
     setExportingKey(reportKey);

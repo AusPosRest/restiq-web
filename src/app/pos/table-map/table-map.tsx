@@ -33,6 +33,7 @@ import {
   type RawTableMapEntry,
   type TableMapEntry,
 } from "./table-map-state";
+import { PosHeader } from "../components/pos-header";
 import { TableTile } from "./table-shape";
 import { TransferOwnershipDialog } from "./transfer-ownership-dialog";
 
@@ -116,82 +117,71 @@ function TableMapLoaded({
   }
 
   return (
-    <div data-testid="table-map" className="flex flex-1 flex-col gap-6 p-4 sm:p-6">
+    <div data-testid="table-map" className="flex flex-1 flex-col">
       {/* Wraps on a phone (#206): the actions drop to their own row instead of squeezing the title and pushing Refresh off-screen. */}
-      <header className="flex flex-wrap items-center justify-between gap-x-4 gap-y-3">
-        <div className="shrink-0">
-          <p className="font-headline whitespace-nowrap text-xl font-bold text-primary">RESTIQ POS</p>
-          <p className="font-label text-xs font-semibold uppercase tracking-wider text-muted-foreground">Table Map</p>
-        </div>
-        <div className="flex flex-wrap items-center gap-2 sm:gap-4">
-          <p data-testid="current-staff" className="font-label w-full text-sm text-muted-foreground sm:w-auto">
-            Signed in as <span className="font-semibold text-foreground">{currentStaffName}</span>
-          </p>
-          <Link
-            href="/pos/open-orders"
-            data-testid="table-map-open-orders-link"
-            className="whitespace-nowrap rounded-md border border-border px-3 py-1.5 text-xs font-semibold uppercase tracking-wider text-muted-foreground hover:bg-accent hover:text-accent-foreground"
-          >
-            Open orders
-          </Link>
-          <Link
-            href="/pos/counter"
-            data-testid="table-map-counter-link"
-            className="whitespace-nowrap rounded-md border border-border px-3 py-1.5 text-xs font-semibold uppercase tracking-wider text-muted-foreground hover:bg-accent hover:text-accent-foreground"
-          >
-            Switch to Counter Mode
-          </Link>
-          <button
-            type="button"
-            data-testid="table-map-refresh"
-            onClick={onReload}
-            className="whitespace-nowrap rounded-md border border-border px-3 py-1.5 text-xs font-semibold uppercase tracking-wider text-muted-foreground hover:bg-accent hover:text-accent-foreground"
-          >
-            Refresh
-          </button>
-        </div>
-      </header>
+      <PosHeader subtitle="Table Map" mode="tables">
+        <p data-testid="current-staff" className="font-label w-full text-sm text-muted-foreground sm:w-auto">
+          Signed in as <span className="font-semibold text-foreground">{currentStaffName}</span>
+        </p>
+        <Link
+          href="/pos/open-orders"
+          data-testid="table-map-open-orders-link"
+          className="whitespace-nowrap rounded-md border border-border px-3 py-1.5 text-xs font-semibold uppercase tracking-wider text-muted-foreground hover:bg-accent hover:text-accent-foreground"
+        >
+          Open orders
+        </Link>
+        <button
+          type="button"
+          data-testid="table-map-refresh"
+          onClick={onReload}
+          className="whitespace-nowrap rounded-md border border-border px-3 py-1.5 text-xs font-semibold uppercase tracking-wider text-muted-foreground hover:bg-accent hover:text-accent-foreground"
+        >
+          Refresh
+        </button>
+      </PosHeader>
 
-      <div data-testid="status-legend" className="flex flex-wrap gap-4">
-        {LEGEND_STATUSES.map((status) => (
-          <LegendItem key={status} status={status} />
+      <div className="flex flex-1 flex-col gap-6 p-4 sm:p-6">
+        <div data-testid="status-legend" className="flex flex-wrap gap-4">
+          {LEGEND_STATUSES.map((status) => (
+            <LegendItem key={status} status={status} />
+          ))}
+        </div>
+
+        {actionError && (
+          <div role="alert" data-testid="table-map-action-error" className="rounded-lg border border-status-alert/40 bg-card px-4 py-3 text-sm text-status-alert">
+            {actionError}{" "}
+            <button type="button" className="underline" onClick={() => setActionError(null)}>
+              Dismiss
+            </button>
+          </div>
+        )}
+
+        {groups.map((group) => (
+          <section key={group.floorId} data-testid={`floor-group-${group.floorId}`} className="flex flex-col gap-3">
+            <h2 className="font-label text-sm font-semibold uppercase tracking-wider text-muted-foreground">{group.floorName}</h2>
+            {group.tables.length === 0 ? (
+              <p className="text-sm text-muted-foreground">No tables on this floor.</p>
+            ) : (
+              <div className="flex flex-wrap gap-4">
+                {group.tables.map((table) => (
+                  <TableTile key={table.id} table={table} onTap={() => !busy && handleTap(table.id)} />
+                ))}
+              </div>
+            )}
+          </section>
         ))}
+
+        {pendingTransfer && (
+          <TransferOwnershipDialog
+            open
+            originLabel={`Table ${pendingTransfer.tableLabel}`}
+            ownerName={pendingTransfer.ownerId}
+            busy={busy}
+            onCancel={() => setPendingTransfer(null)}
+            onConfirm={handleTransferConfirm}
+          />
+        )}
       </div>
-
-      {actionError && (
-        <div role="alert" data-testid="table-map-action-error" className="rounded-lg border border-status-alert/40 bg-card px-4 py-3 text-sm text-status-alert">
-          {actionError}{" "}
-          <button type="button" className="underline" onClick={() => setActionError(null)}>
-            Dismiss
-          </button>
-        </div>
-      )}
-
-      {groups.map((group) => (
-        <section key={group.floorId} data-testid={`floor-group-${group.floorId}`} className="flex flex-col gap-3">
-          <h2 className="font-label text-sm font-semibold uppercase tracking-wider text-muted-foreground">{group.floorName}</h2>
-          {group.tables.length === 0 ? (
-            <p className="text-sm text-muted-foreground">No tables on this floor.</p>
-          ) : (
-            <div className="flex flex-wrap gap-4">
-              {group.tables.map((table) => (
-                <TableTile key={table.id} table={table} onTap={() => !busy && handleTap(table.id)} />
-              ))}
-            </div>
-          )}
-        </section>
-      ))}
-
-      {pendingTransfer && (
-        <TransferOwnershipDialog
-          open
-          originLabel={`Table ${pendingTransfer.tableLabel}`}
-          ownerName={pendingTransfer.ownerId}
-          busy={busy}
-          onCancel={() => setPendingTransfer(null)}
-          onConfirm={handleTransferConfirm}
-        />
-      )}
     </div>
   );
 }

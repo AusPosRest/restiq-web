@@ -96,14 +96,9 @@ export function brandingEqual(a: BrandingTokens, b: BrandingTokens): boolean {
 // an already-hosted URL into the Logo URL field instead; direct upload is
 // left to whichever future story wires real asset storage (per the
 // backend's own wiki note).
-export const MAX_LOGO_PREVIEW_BYTES = 2 * 1024 * 1024; // 2MB - keeps the local preview read reasonable.
-export const ACCEPTED_LOGO_TYPES = ["image/svg+xml", "image/png"];
 // Matches the backend's UpdateBrandingDto: @MaxLength(2048).
 export const MAX_LOGO_URL_LENGTH = 2048;
 
-export function isAcceptedLogoFile(file: { type: string; size: number }): boolean {
-  return ACCEPTED_LOGO_TYPES.includes(file.type) && file.size > 0 && file.size <= MAX_LOGO_PREVIEW_BYTES;
-}
 
 /** Strips the leading "#" and upper-cases, matching the design's hex labels
  * under each swatch (e.g. "8B2028" not "#8b2028"). */

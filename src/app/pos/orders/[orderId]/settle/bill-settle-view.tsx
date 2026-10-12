@@ -18,6 +18,7 @@
 import Link from "next/link";
 import { useEffect, useState } from "react";
 import { Button } from "@/components/ui/button";
+import { PrintBillButton } from "../../../bills/print-bill-button";
 import {
   fetchOrCreateBill,
   finalizeBill,
@@ -31,12 +32,14 @@ import { LoadErrorPanel, Skeleton } from "../../../data-states";
 import { usePosLoad } from "../../../use-pos-load";
 import { orderOriginLabel, toOrderView, type PosMenuView, type RawOrder } from "../order-taking-state";
 import { BillSummary } from "./bill-summary";
+import { formatMinor } from "../../../(shell)/shift/shift-state";
 import { TenderKeypad } from "./tender-keypad";
 import { DiscountDialog } from "./discount-dialog";
 import { billTotalMinor, isBillReadOnly, type BillView } from "./bill-state";
-import { canFinalizeWithElectronic, isElectronicMethod, remainingToTenderMinor } from "./electronic-tender-state";
+import { canFinalizeWithElectronic, cashChangeMinor, isElectronicMethod, remainingToTenderMinor, tendersNetOfChange } from "./electronic-tender-state";
 import { TerminalIntentPanel } from "./terminal-intent-panel";
 import { useTerminalIntent } from "./use-terminal-intent";
+import { openDrawerForTenders } from "@/lib/desktop";
 
 interface BillLanded {
   attempt: number;
@@ -108,6 +111,7 @@ function BillSettleLoaded({
   const [pendingTenders, setPendingTenders] = useState<PendingTender[]>([]);
   const [finalizeBusy, setFinalizeBusy] = useState(false);
   const [finalizeError, setFinalizeError] = useState<string | null>(null);
+  const [changeGiven, setChangeGiven] = useState(0);
   // Card terminal (issue #188): once the terminal approves, the tender is
   // already on the server - re-read the bill rather than inventing it here.
   const terminal = useTerminalIntent(bill.id, () => {
@@ -122,8 +126,8 @@ function BillSettleLoaded({
   const remainingMinor = remainingToTenderMinor(totalMinor, bill, pendingTenders);
   const intents = terminal.intent ? [terminal.intent] : [];
 
-  function handleAddTender(method: PostableTenderMethod, amountMinor: number) {
-    setPendingTenders((current) => [...current, { method, amountMinor }]);
+  function handleAddTender(method: PostableTenderMethod, amountMinor: number, reference?: string) {
+    setPendingTenders((current) => [...current, { method, amountMinor, ...(reference ? { reference } : {}) }]);
   }
 
   function handleRemoveTender(index: number) {
@@ -131,15 +135,21 @@ function BillSettleLoaded({
   }
 
   function handleFinalize() {
+    const change = cashChangeMinor(totalMinor, bill, pendingTenders);
     setFinalizeBusy(true);
     setFinalizeError(null);
     finalizeBill(bill.id, {
       discountMinor: pendingDiscount?.amountMinor,
       discountReason: pendingDiscount?.reason,
       managerPin: pendingDiscount?.managerPin,
-      tenders: pendingTenders,
+      tenders: tendersNetOfChange(pendingTenders, change),
     })
-      .then(setBill)
+      .then((finalised) => {
+        setBill(finalised);
+        setChangeGiven(change);
+        // The drawer opens for the cash handed over, even when it all goes back as change.
+        openDrawerForTenders(pendingTenders);
+      })
       .catch((error: unknown) => setFinalizeError(errorMessage(error, "Couldn't finalise this bill.")))
       .finally(() => setFinalizeBusy(false));
   }
@@ -170,23 +180,14 @@ function BillSettleLoaded({
             <p className="text-sm text-muted-foreground">
               {bill.tenders.length} tender{bill.tenders.length === 1 ? "" : "s"} captured · no further changes are possible.
             </p>
-            <div className="mt-2 flex gap-2">
-              <Button asChild size="sm" variant="outline" data-testid="bill-finalised-back">
-                <Link href="/pos/table-map">Back to table map</Link>
-              </Button>
-              {/* CAP-9 entry point (story 10): the only way into P10 Refund &
-                  Adjustments is from here, once a bill is finalised and thus
-                  eligible for refund - see refund-view.tsx's file header.
-                  `billId` rides along in the query string because the real
-                  refund endpoint targets the Bill, not the Order, and this
-                  screen is the one place that already has it in hand. */}
-              <Button asChild size="sm" variant="outline" data-testid="bill-finalised-refund">
-                <Link href={`/pos/orders/${orderId}/refund?billId=${bill.id}`}>Refund…</Link>
-              </Button>
-              <Button asChild size="sm" variant="outline" data-testid="print-invoice-link">
-                <Link href={`/pos/bills/${bill.id}/invoice`}>Print invoice</Link>
-              </Button>
-            </div>
+            {changeGiven > 0 && (
+              <p data-testid="finalised-change-due" className="font-headline text-2xl font-bold tabular-nums text-foreground">
+                Change due {formatMinor(changeGiven, menu.currency)}
+              </p>
+            )}
+            {/* issue #226: no actions here - Back to table map, Refund… and
+                Print invoice were removed at the owner's request. Refund
+                (/pos/orders/:id/refund?billId=) has no other entry point now. */}
           </section>
         ) : (
           <div className="flex flex-1 flex-col">
@@ -202,6 +203,7 @@ function BillSettleLoaded({
                 onRemoveTender={handleRemoveTender}
                 onSendToTerminal={terminal.send}
                 terminalBusy={terminal.busy}
+                changeMinor={cashChangeMinor(totalMinor, bill, pendingTenders)}
               />
             )}
             <footer className="border-t border-border/60 p-4">
@@ -225,11 +227,7 @@ function BillSettleLoaded({
                 >
                   {finalizeBusy ? "Finalising…" : "Finalise"}
                 </Button>
-                <Button asChild size="lg" variant="outline" data-testid="print-bill-link">
-                  <Link href={`/pos/bills/${bill.id}/invoice`} target="_blank" rel="noopener">
-                    Print bill
-                  </Link>
-                </Button>
+                <PrintBillButton billId={bill.id} label="Print bill" testId="print-bill" size="lg" />
               </div>
             </footer>
           </div>

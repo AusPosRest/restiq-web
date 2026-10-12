@@ -1,5 +1,6 @@
 import { LogOut } from "lucide-react";
 import { MobileNav } from "@/components/mobile-nav";
+import { AgreementBanner } from "./agreement-banner";
 import { OutletProvider } from "./outlet-context";
 import { OutletSwitcher } from "./outlet-switcher";
 import { SidebarNav } from "./sidebar-nav";
@@ -30,7 +31,7 @@ export default function AdminShellLayout({
   return (
     <OutletProvider>
       <div className="flex min-h-screen flex-1">
-        <aside className="hidden w-60 shrink-0 flex-col border-r border-border/40 bg-card md:flex print:hidden">
+        <aside className="sticky top-0 hidden h-screen w-60 shrink-0 flex-col overflow-y-auto border-r border-border/40 bg-card md:flex print:hidden">
           <div className="px-6 py-6">
             <p className="font-headline text-2xl font-bold tracking-tight text-primary">RESTIQ</p>
             <p className="font-label mt-1 text-xs font-semibold uppercase tracking-wider text-muted-foreground">Owner Console</p>
@@ -48,6 +49,7 @@ export default function AdminShellLayout({
               </MobileNav>
               <OutletSwitcher />
             </header>
+            <AgreementBanner />
             <main className="flex-1 p-4 sm:p-6 lg:p-8">{children}</main>
           </ToastProvider>
         </div>

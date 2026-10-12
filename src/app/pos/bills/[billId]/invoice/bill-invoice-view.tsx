@@ -22,10 +22,12 @@
 import Link from "next/link";
 import { useEffect, useState } from "react";
 import { Button } from "@/components/ui/button";
-import { fetchInvoice, PosApiError, sendBillToPrinter, type InvoiceView } from "../../../api";
+import { fetchInvoice, PosApiError, type InvoiceView } from "../../../api";
+import { PrintBillButton } from "../../print-bill-button";
 import { LoadErrorPanel, Skeleton } from "../../../data-states";
 import { formatMinor } from "../../../(shell)/shift/shift-state";
 import { TENDER_METHOD_LABEL, type BillTenderMethod } from "../../../orders/[orderId]/settle/bill-state";
+import { printPage } from "@/lib/desktop";
 
 interface InvoiceLanded {
   attempt: number;
@@ -89,15 +91,11 @@ export function BillInvoiceView({ billId }: Readonly<{ billId: string }>) {
 }
 
 function InvoiceLoaded({ invoice, billId }: Readonly<{ invoice: InvoiceView; billId: string }>) {
-  // "idle" -> "sending" -> "sent" | "failed"; resets to idle so the button can be pressed again for a reprint.
-  const [sendState, setSendState] = useState<"idle" | "sending" | "sent" | "failed">("idle");
+  const [printFailed, setPrintFailed] = useState(false);
 
-  function sendToPrinter() {
-    setSendState("sending");
-    sendBillToPrinter(billId)
-      .then(() => setSendState("sent"))
-      .catch(() => setSendState("failed"))
-      .finally(() => setTimeout(() => setSendState("idle"), 2000));
+  function print() {
+    setPrintFailed(false);
+    printPage().catch(() => setPrintFailed(true));
   }
 
   return (
@@ -107,11 +105,9 @@ function InvoiceLoaded({ invoice, billId }: Readonly<{ invoice: InvoiceView; bil
           ← Back to table map
         </Link>
         <div className="flex items-center gap-2">
-          <Button size="sm" variant="outline" data-testid="invoice-send-to-printer" disabled={sendState === "sending"} onClick={sendToPrinter}>
-            {sendState === "sent" ? "Sent to printer" : sendState === "failed" ? "Couldn't send" : "Send to printer"}
-          </Button>
-          <Button size="sm" data-testid="invoice-print" onClick={() => window.print()}>
-            Print
+          <PrintBillButton billId={billId} label="Send to printer" testId="invoice-send-to-printer" />
+          <Button size="sm" data-testid="invoice-print" onClick={print}>
+            {printFailed ? "Couldn't print" : "Print"}
           </Button>
         </div>
       </div>
@@ -175,7 +171,14 @@ export function InvoiceReceipt({ invoice }: Readonly<{ invoice: InvoiceView }>) 
         <tbody>
           {invoice.lines.map((line, index) => (
             <tr key={index} data-testid={`invoice-line-${index}`}>
-              <td className="py-1">{line.name}</td>
+              <td className="py-1">
+                {line.name}
+                {line.components && line.components.length > 0 && (
+                  <span data-testid={`invoice-line-components-${index}`} className="block pl-3 text-xs text-muted-foreground">
+                    {line.components.join(" · ")}
+                  </span>
+                )}
+              </td>
               <td className="py-1 text-right tabular-nums">{line.quantity}</td>
               <td className="py-1 text-right tabular-nums">{formatMinor(line.unitPriceMinor, invoice.currency)}</td>
               <td className="py-1 text-right tabular-nums">{formatMinor(line.lineTotalMinor, invoice.currency)}</td>
@@ -224,7 +227,8 @@ export function InvoiceReceipt({ invoice }: Readonly<{ invoice: InvoiceView }>) 
             {invoice.tenders.map((tender, index) => (
               <li key={index} data-testid={`invoice-tender-${index}`} className="flex items-center justify-between">
                 <span>
-                  {tenderMethodLabel(tender.method)} · {formatIssuedAt(tender.createdAt)}
+                  {tenderMethodLabel(tender.method)}
+                  {tender.reference ? ` #${tender.reference}` : ""} · {formatIssuedAt(tender.createdAt)}
                 </span>
                 <span className="tabular-nums">{formatMinor(tender.amountMinor, invoice.currency)}</span>
               </li>

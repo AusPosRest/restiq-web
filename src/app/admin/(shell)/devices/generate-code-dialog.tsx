@@ -19,6 +19,8 @@ interface GenerateCodeDialogProps {
   open: boolean;
   onClose: () => void;
   outletId: string;
+  /** Shown so the owner knows which outlet the code enrols into (walkthrough fix). */
+  outletName?: string;
   onGenerated: (result: EnrolmentCodeResult) => void;
 }
 
@@ -26,7 +28,7 @@ export function GenerateCodeDialog(props: Readonly<GenerateCodeDialogProps>) {
   return props.open ? <DialogBody key="open" {...props} /> : null;
 }
 
-function DialogBody({ onClose, outletId, onGenerated }: Readonly<GenerateCodeDialogProps>) {
+function DialogBody({ onClose, outletId, outletName, onGenerated }: Readonly<GenerateCodeDialogProps>) {
   const toast = useToast();
   const [deviceType, setDeviceType] = useState<DeviceType>(DEVICE_TYPE_OPTIONS[0]);
   const [busy, setBusy] = useState(false);
@@ -54,7 +56,14 @@ function DialogBody({ onClose, outletId, onGenerated }: Readonly<GenerateCodeDia
           className="admin-theme fixed right-0 top-0 z-50 h-full w-full max-w-md overflow-y-auto border-l border-border/60 bg-popover p-6 text-foreground shadow-xl"
         >
           <div className="flex items-center justify-between">
-            <Dialog.Title className="font-headline text-lg font-semibold">Enrol a device</Dialog.Title>
+            <div>
+              <Dialog.Title className="font-headline text-lg font-semibold">Enrol a device</Dialog.Title>
+              {outletName && (
+                <p data-testid="generate-code-outlet-name" className="text-sm text-muted-foreground">
+                  For {outletName}
+                </p>
+              )}
+            </div>
             <Dialog.Close
               aria-label="Close"
               data-testid="generate-code-close"

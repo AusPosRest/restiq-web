@@ -1,0 +1,51 @@
+/* Motion for the marketing page (#262). All of it is off with reduced motion. */
+
+@keyframes lp-progress { from { transform: scaleX(0); } to { transform: scaleX(1); } }
+@keyframes lp-swap { from { opacity: 0; transform: translateY(12px) scale(0.985); } to { opacity: 1; transform: none; } }
+@keyframes lp-rise { from { opacity: 0; transform: translateY(22px); } to { opacity: 1; transform: none; } }
+@keyframes lp-word { from { opacity: 0; transform: translateY(0.4em); filter: blur(6px); } to { opacity: 1; transform: none; filter: none; } }
+@keyframes lp-slide { from { opacity: 0; transform: translateX(-40px) rotate(-4deg); } to { opacity: 1; } }
+@keyframes lp-line { from { opacity: 0; transform: translateX(-6px); background-color: #fde68a; } to { opacity: 1; transform: none; } }
+@keyframes lp-float { 0%, 100% { transform: translateY(0); } 50% { transform: translateY(-10px); } }
+@keyframes lp-marquee { to { transform: translateX(-50%); } }
+@keyframes lp-print { from { opacity: 0; clip-path: inset(0 0 100% 0); } to { opacity: 1; clip-path: inset(0); } }
+@keyframes lp-grow { from { transform: scaleY(0); } to { transform: scaleY(1); } }
+@keyframes lp-fill { from { transform: scaleX(0); } to { transform: scaleX(1); } }
+@keyframes lp-glow { 0%, 100% { opacity: 0.55; transform: scale(1); } 50% { opacity: 0.85; transform: scale(1.08); } }
+@keyframes lp-ring { 0% { box-shadow: 0 0 0 0 rgba(255, 255, 255, 0.7); } 100% { box-shadow: 0 0 0 12px rgba(255, 255, 255, 0); } }
+@keyframes lp-age { 0% { background: #3b82f6; } 40% { background: #facc15; } 75%, 100% { background: #ef4444; } }
+@keyframes lp-table {
+  0%, 20% { border-color: #e7e5e4; background: #fff; color: #a8a29e; }
+  25%, 45% { border-color: #10b981; background: #ecfdf5; color: #047857; }
+  50%, 70% { border-color: #f59e0b; background: #fffbeb; color: #8a4b06; }
+  75%, 95% { border-color: #3b82f6; background: #eff6ff; color: #1d4ed8; }
+}
+
+.lp-progress { animation: lp-progress 7s linear both; }
+.lp-swap { animation: lp-swap 0.5s cubic-bezier(0.2, 0.7, 0.2, 1) both; }
+.lp-word { display: inline-block; animation: lp-word 0.7s cubic-bezier(0.2, 0.7, 0.2, 1) both; animation-delay: calc(var(--i) * 60ms + 100ms); }
+.lp-fade { animation: lp-rise 0.8s cubic-bezier(0.2, 0.7, 0.2, 1) both; animation-delay: var(--d, 0ms); }
+.lp-ticket { animation: lp-slide 0.6s cubic-bezier(0.2, 0.7, 0.2, 1) both; }
+.lp-line { animation: lp-line 0.5s ease-out both; }
+.lp-float { animation: lp-float 7s ease-in-out infinite; }
+.lp-float-late { animation: lp-float 7s ease-in-out -3.5s infinite; }
+.lp-marquee { animation: lp-marquee 32s linear infinite; }
+.lp-glow { animation: lp-glow 9s ease-in-out infinite; }
+.lp-ring { animation: lp-ring 1.6s ease-out infinite; }
+.lp-age { animation: lp-age 9s linear infinite; animation-delay: calc(var(--i) * -3s); }
+.lp-table { animation: lp-table 12s steps(1) infinite; animation-delay: calc(var(--i) * -2.1s); }
+
+/* Scroll reveal: .lp-reveal fades in; children marked .lp-stagger follow in turn. */
+.lp-reveal { transition: opacity 0.8s cubic-bezier(0.2, 0.7, 0.2, 1), transform 0.8s cubic-bezier(0.2, 0.7, 0.2, 1); }
+.lp-reveal[data-state="wait"] { opacity: 0; transform: translateY(28px); }
+.lp-reveal[data-state="wait"] :is(.lp-stagger, .lp-printed, .lp-bar, .lp-bar-x) { opacity: 0; }
+.lp-reveal[data-state="in"] .lp-stagger { animation: lp-rise 0.6s cubic-bezier(0.2, 0.7, 0.2, 1) both; animation-delay: calc(var(--i, 0) * 110ms + 150ms); }
+.lp-reveal[data-state="in"] .lp-printed { animation: lp-print 0.45s steps(4) both; animation-delay: calc(var(--i, 0) * 420ms + 300ms); }
+.lp-reveal[data-state="in"] .lp-bar { transform-origin: bottom; animation: lp-grow 0.9s cubic-bezier(0.2, 0.7, 0.2, 1) both; animation-delay: calc(var(--i, 0) * 80ms + 200ms); }
+.lp-reveal[data-state="in"] .lp-bar-x { transform-origin: left; animation: lp-fill 1.4s cubic-bezier(0.2, 0.7, 0.2, 1) both; animation-delay: 200ms; }
+
+@media (prefers-reduced-motion: reduce) {
+  .lp-progress, .lp-swap, .lp-word, .lp-fade, .lp-ticket, .lp-line, .lp-float, .lp-float-late, .lp-marquee, .lp-glow, .lp-ring, .lp-age, .lp-table,
+  .lp-reveal .lp-stagger, .lp-reveal .lp-printed, .lp-reveal .lp-bar, .lp-reveal .lp-bar-x { animation: none !important; }
+  .lp-reveal { transition: none; }
+}

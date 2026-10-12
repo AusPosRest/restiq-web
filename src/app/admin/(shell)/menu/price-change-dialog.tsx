@@ -19,7 +19,8 @@ export interface PriceChangeDialogProps {
   open: boolean;
   itemLabel: string;
   currency: string;
-  current: { dineInPriceMinor: number; deliveryPriceMinor: number };
+  /** Current price in minor units. */
+  current: number;
   busy?: boolean;
   error?: string | null;
   onCancel: () => void;
@@ -47,8 +48,7 @@ function DialogBody({ itemLabel, currency, current, busy, error, onCancel, onSub
         >
           <Dialog.Title className="font-headline text-lg font-semibold">Change {itemLabel}&apos;s price</Dialog.Title>
           <Dialog.Description className="mt-1 text-sm text-muted-foreground">
-            Current: {formatPriceMinor(current.dineInPriceMinor, currency)} dine-in / {formatPriceMinor(current.deliveryPriceMinor, currency)}{" "}
-            delivery. This never overwrites that price - it creates a new version.
+            Current: {formatPriceMinor(current, currency)}. This never overwrites that price - it creates a new version.
           </Dialog.Description>
 
           <form
@@ -96,47 +96,25 @@ function DialogBody({ itemLabel, currency, current, busy, error, onCancel, onSub
               </div>
             )}
 
-            <div className="grid grid-cols-2 gap-3">
-              <div>
-                <label htmlFor="price-change-dinein" className="font-label mb-1 block text-xs font-semibold uppercase tracking-wider text-muted-foreground">
-                  Dine-in ({currency})
-                </label>
-                <input
-                  id="price-change-dinein"
-                  data-testid="price-change-dinein"
-                  type="number"
-                  step="0.01"
-                  min="0"
-                  value={form.dineIn}
-                  onChange={(event) => setForm((f) => ({ ...f, dineIn: event.target.value }))}
-                  className="w-full rounded-lg border border-border bg-input px-3 py-2 text-sm tabular-nums text-foreground focus:outline-none focus-visible:ring-2 focus-visible:ring-ring"
-                />
-                {errors.dineIn && (
-                  <p data-testid="price-change-dinein-error" className="mt-1 text-xs text-status-error">
-                    {errors.dineIn}
-                  </p>
-                )}
-              </div>
-              <div>
-                <label htmlFor="price-change-delivery" className="font-label mb-1 block text-xs font-semibold uppercase tracking-wider text-muted-foreground">
-                  Delivery ({currency})
-                </label>
-                <input
-                  id="price-change-delivery"
-                  data-testid="price-change-delivery"
-                  type="number"
-                  step="0.01"
-                  min="0"
-                  value={form.delivery}
-                  onChange={(event) => setForm((f) => ({ ...f, delivery: event.target.value }))}
-                  className="w-full rounded-lg border border-border bg-input px-3 py-2 text-sm tabular-nums text-foreground focus:outline-none focus-visible:ring-2 focus-visible:ring-ring"
-                />
-                {errors.delivery && (
-                  <p data-testid="price-change-delivery-error" className="mt-1 text-xs text-status-error">
-                    {errors.delivery}
-                  </p>
-                )}
-              </div>
+            <div>
+              <label htmlFor="price-change-dinein" className="font-label mb-1 block text-xs font-semibold uppercase tracking-wider text-muted-foreground">
+                Price ({currency})
+              </label>
+              <input
+                id="price-change-dinein"
+                data-testid="price-change-dinein"
+                type="number"
+                step="0.01"
+                min="0"
+                value={form.dineIn}
+                onChange={(event) => setForm((f) => ({ ...f, dineIn: event.target.value }))}
+                className="w-full rounded-lg border border-border bg-input px-3 py-2 text-sm tabular-nums text-foreground focus:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+              />
+              {errors.dineIn && (
+                <p data-testid="price-change-dinein-error" className="mt-1 text-xs text-status-error">
+                  {errors.dineIn}
+                </p>
+              )}
             </div>
 
             <div>

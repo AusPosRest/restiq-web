@@ -65,7 +65,7 @@ describe("AddStaffDialog", () => {
     await userEvent.selectOptions(screen.getByTestId("add-staff-role"), "r-cashier");
     await userEvent.click(screen.getByTestId("add-staff-submit"));
 
-    expect(onSubmit).toHaveBeenCalledWith({ firstName: "Priya", lastName: "Nair", email: "priya@example.com", roleId: "r-cashier" });
+    expect(onSubmit).toHaveBeenCalledWith({ firstName: "Priya", lastName: "Nair", email: "priya@example.com", roleId: "r-cashier", outletIds: [] });
   });
 
   it("shows a server error and stays open when the submit fails", () => {

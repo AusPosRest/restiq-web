@@ -58,6 +58,9 @@ export function AgreementsIndex() {
       <p className="mt-1 text-sm text-muted-foreground">
         Publish a new version of the platform agreement. Every tenant owner is asked to sign the current version; earlier versions stay on record.
       </p>
+      <p className="mt-1 text-sm text-muted-foreground" data-testid="agreements-first-hint">
+        Publish version 1 before onboarding the first restaurant, so its owner can sign when they first sign in.
+      </p>
 
       <form
         className="mt-6 max-w-3xl rounded-lg border border-border/40 bg-card p-5"

@@ -8,9 +8,11 @@
 // shared across every row (mirrors menu-table.tsx's price-change-dialog use).
 import { KeyRound, Users } from "lucide-react";
 import { Fragment } from "react";
+import { PaginationControls, usePagination } from "@/components/pagination";
 import { Button } from "@/components/ui/button";
 import { StaffPinChip } from "./pin-chip";
-import { staffFullName, type PinStatus, type RoleView, type StaffView } from "./staff-state";
+import type { OutletOption } from "./outlet-picker";
+import { outletsLabel, staffFullName, type PinStatus, type RoleView, type StaffView } from "./staff-state";
 
 const PIN_STATUS_LABELS: Record<PinStatus, string> = { active: "Active", none: "No PIN", revoked: "Revoked" };
 const PIN_STATUS_STYLES: Record<PinStatus, string> = {
@@ -31,24 +33,31 @@ export interface IssuedPinView {
 export interface StaffTableProps {
   staff: readonly StaffView[];
   roles: readonly RoleView[];
+  /** restiq-backend#197: the Outlets column shows only when there is more than one. */
+  outlets?: readonly OutletOption[];
   busyStaffId: string | null;
   issuedPin: IssuedPinView | null;
   onRoleSelected: (staffId: string, roleId: string) => void;
   onIssuePin: (staffId: string) => void;
   onRevokeRequested: (staffId: string) => void;
   onDismissIssuedPin: () => void;
+  onEditOutlets?: (staffId: string) => void;
 }
 
 export function StaffTable({
   staff,
   roles,
+  outlets = [],
   busyStaffId,
   issuedPin,
   onRoleSelected,
   onIssuePin,
   onRevokeRequested,
   onDismissIssuedPin,
+  onEditOutlets,
 }: Readonly<StaffTableProps>) {
+  const pager = usePagination(staff);
+  const showOutlets = outlets.length > 1;
   if (staff.length === 0) {
     return (
       <div data-testid="staff-empty" className="flex flex-col items-center gap-2 rounded-lg border border-dashed border-border/60 bg-card/50 px-8 py-16 text-center">
@@ -67,12 +76,13 @@ export function StaffTable({
             <th className="font-label px-4 text-left text-xs font-semibold uppercase tracking-wider text-muted-foreground">Name</th>
             <th className="font-label px-4 text-left text-xs font-semibold uppercase tracking-wider text-muted-foreground">Email</th>
             <th className="font-label px-4 text-left text-xs font-semibold uppercase tracking-wider text-muted-foreground">System Role</th>
+            {showOutlets && <th className="font-label px-4 text-left text-xs font-semibold uppercase tracking-wider text-muted-foreground">Outlets</th>}
             <th className="font-label px-4 text-left text-xs font-semibold uppercase tracking-wider text-muted-foreground">POS PIN</th>
             <th className="font-label px-4 text-left text-xs font-semibold uppercase tracking-wider text-muted-foreground">Actions</th>
           </tr>
         </thead>
         <tbody>
-          {staff.map((member) => {
+          {pager.items.map((member) => {
             const busy = busyStaffId === member.id;
             return (
               <Fragment key={member.id}>
@@ -98,6 +108,19 @@ export function StaffTable({
                       ))}
                     </select>
                   </td>
+                  {showOutlets && (
+                    <td className="px-4">
+                      <button
+                        type="button"
+                        data-testid={`staff-outlets-${member.id}`}
+                        disabled={busy}
+                        onClick={() => onEditOutlets?.(member.id)}
+                        className="text-left text-primary underline-offset-4 hover:underline disabled:opacity-50"
+                      >
+                        {outletsLabel(member.outletIds, outlets)}
+                      </button>
+                    </td>
+                  )}
                   <td className="px-4">
                     <span
                       data-testid={`staff-pin-status-${member.id}`}
@@ -114,8 +137,9 @@ export function StaffTable({
                           <KeyRound aria-hidden="true" /> Reset PIN
                         </Button>
                         <Button
-                          variant="destructive"
+                          variant="ghost"
                           size="sm"
+                          className="text-status-error hover:text-status-error"
                           data-testid={`staff-revoke-pin-${member.id}`}
                           disabled={busy}
                           onClick={() => onRevokeRequested(member.id)}
@@ -132,7 +156,7 @@ export function StaffTable({
                 </tr>
                 {issuedPin?.staffId === member.id && (
                   <tr data-testid={`staff-pin-issued-row-${member.id}`} className="border-b border-border/20 last:border-b-0">
-                    <td colSpan={5} className="px-4 py-3">
+                    <td colSpan={showOutlets ? 6 : 5} className="px-4 py-3">
                       <StaffPinChip name={issuedPin.name} pin={issuedPin.pin} onDismiss={onDismissIssuedPin} />
                     </td>
                   </tr>
@@ -142,6 +166,7 @@ export function StaffTable({
           })}
         </tbody>
       </table>
+      <PaginationControls pager={pager} testId="staff-pagination" />
     </div>
   );
 }

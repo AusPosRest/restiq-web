@@ -15,13 +15,13 @@ import { StatusBadge } from "../../status-badge";
 import { useToast } from "../../toast";
 import { useOpsLoad } from "../../use-ops-load";
 import { DevicesTable } from "../../devices/devices-table";
-import { BrandingTab } from "./branding-tab";
 import { CapabilitiesTab } from "./capabilities-tab";
 import { AgreementsTab } from "./agreements-tab";
 import { SubscriptionTab } from "./subscription-tab";
 import { OutletsTab, OverviewTab, OwnersTab } from "./tabs";
 
-const TABS = ["overview", "outlets", "devices", "subscription", "capabilities", "branding", "owners", "agreements"] as const;
+// Branding is the owner's job (Settings > Branding); ops no longer edits it (walkthrough cut).
+const TABS = ["overview", "outlets", "devices", "subscription", "capabilities", "owners", "agreements"] as const;
 export type TabKey = (typeof TABS)[number];
 
 type LifecycleAction = "activate" | "deactivate" | "reactivate" | "delete";
@@ -46,7 +46,7 @@ const LIFECYCLE_DIALOG: Record<
 > = {
   activate: {
     title: (name) => `Activate ${name}`,
-    description: "The tenant moves from provisioning to active and its owner surfaces go live.",
+    description: "The tenant moves from provisioning to active. It also goes live by itself on its first sale, or when the owner presses Go live.",
     verb: "Activate tenant",
   },
   deactivate: {
@@ -72,7 +72,6 @@ const TAB_LABELS: Record<TabKey, string> = {
   devices: "Devices",
   subscription: "Subscription",
   capabilities: "Capabilities",
-  branding: "Branding",
   owners: "Owners",
   agreements: "Agreements",
 };
@@ -189,9 +188,6 @@ export function TenantDetailPage() {
               <PlayCircle aria-hidden="true" /> Reactivate
             </Button>
           )}
-          <Button variant="destructive" data-testid="tenant-delete" onClick={() => setLifecycleAction("delete")}>
-            <Trash2 aria-hidden="true" /> Delete tenant
-          </Button>
         </div>
       </div>
 
@@ -220,12 +216,22 @@ export function TenantDetailPage() {
         {tab === "devices" && (
           <DevicesTable tenantId={tenant.id} tenantName={tenant.name} tenantOutlets={detail.outlets.map((o) => ({ id: o.id, name: o.name }))} />
         )}
-        {tab === "subscription" && <SubscriptionTab tenantId={tenant.id} />}
-        {tab === "capabilities" && <CapabilitiesTab tenantId={tenant.id} capabilities={detail.capabilities} />}
-        {tab === "branding" && <BrandingTab detail={detail} onMutated={load} />}
+        {tab === "subscription" && <SubscriptionTab tenantId={tenant.id} tenantStatus={tenant.status} />}
+        {tab === "capabilities" && <CapabilitiesTab outlets={detail.outlets} />}
         {tab === "owners" && <OwnersTab detail={detail} />}
         {tab === "agreements" && <AgreementsTab tenantId={tenant.id} />}
       </div>
+
+      {/* Danger zone: out of the header, so Delete never sits beside the everyday actions. */}
+      <section className="mt-10 flex max-w-3xl items-center justify-between gap-4 rounded-lg border border-status-critical/40 p-4" data-testid="tenant-danger-zone">
+        <div>
+          <p className="text-sm font-semibold">Delete this tenant</p>
+          <p className="text-xs text-muted-foreground">Removes {tenant.name} and all of its data for operators. This cannot be undone.</p>
+        </div>
+        <Button variant="destructive" size="sm" data-testid="tenant-delete" onClick={() => setLifecycleAction("delete")}>
+          <Trash2 aria-hidden="true" /> Delete tenant
+        </Button>
+      </section>
 
       {lifecycleAction && (
         <ConfirmReasonDialog

@@ -5,15 +5,18 @@
 // draft, per-field edits PATCH that same draft, and commit is the one write
 // that turns it into real menu items (and, server-side, completes the
 // go-live checklist's menu_import step).
-import { PartyPopper, UploadCloud } from "lucide-react";
+import { PartyPopper, Trash2, UploadCloud } from "lucide-react";
 import Link from "next/link";
 import { useRef, useState } from "react";
 import { Button } from "@/components/ui/button";
-import { commitMenuImport, MenuImportCommitResult, updateMenuImportItem, uploadMenuImport } from "./api";
+import { AdminApiError, commitMenuImport, MenuImportCommitResult, removeMenuImportItem, updateMenuImportItem, uploadMenuImport } from "./api";
 import {
   canCommit,
   CONFIDENCE_LABEL,
   confidenceLevel,
+  DUPLICATE_LABEL,
+  DuplicateReason,
+  duplicateReasons,
   isAcceptedMenuFile,
   majorStringToPriceMinor,
   MENU_IMPORT_ACCEPT,
@@ -22,7 +25,7 @@ import {
   reviewedCount,
 } from "./menu-import-state";
 
-const UPLOAD_ERROR = "That file type isn't supported. Upload a CSV, XLSX spreadsheet, a photo (JPG/PNG) or a PDF of your menu.";
+const UPLOAD_ERROR = "Upload your menu as a CSV or XLSX spreadsheet. Photos and PDFs can't be read yet - download the sample spreadsheet below to get started.";
 const GENERIC_FAILURE = "Something went wrong. Check your connection and try again.";
 
 const CONFIDENCE_CLASS: Record<ReturnType<typeof confidenceLevel>, string> = {
@@ -33,13 +36,17 @@ const CONFIDENCE_CLASS: Record<ReturnType<typeof confidenceLevel>, string> = {
 
 type Phase = "dropzone" | "uploading" | "review" | "committing" | "success";
 
-export function MenuImport() {
+// onCommitted: set when opened as the Menu page's dialog (issue #239), which
+// closes and reloads instead of showing the success screen. fromSetup: opened
+// from the go-live checklist, so success goes back there; otherwise to the menu.
+export function MenuImport({ onCommitted, fromSetup = false }: Readonly<{ onCommitted?: (itemCount: number) => void; fromSetup?: boolean }>) {
   const [phase, setPhase] = useState<Phase>("dropzone");
   const [uploadError, setUploadError] = useState<string | null>(null);
   const [importId, setImportId] = useState<string | null>(null);
   const [items, setItems] = useState<MenuImportItem[]>([]);
   const [reviewed, setReviewed] = useState<Set<string>>(new Set());
   const [commitError, setCommitError] = useState<string | null>(null);
+  const [duplicates, setDuplicates] = useState<Map<string, DuplicateReason>>(new Map());
   const [commitResult, setCommitResult] = useState<MenuImportCommitResult | null>(null);
   const [toast, setToast] = useState<string | null>(null);
   const [dragOver, setDragOver] = useState(false);
@@ -62,6 +69,7 @@ export function MenuImport() {
       setImportId(draft.importId);
       setItems(draft.items);
       setReviewed(new Set());
+      setDuplicates(new Map());
       setPhase("review");
     } catch (error) {
       setUploadError(error instanceof Error ? error.message : GENERIC_FAILURE);
@@ -87,7 +95,28 @@ export function MenuImport() {
 
   // Optimistic per EXPERIENCE.md's routine-edit pattern: apply locally first,
   // then reconcile with the backend's fresh draft, rolling back on failure.
+  function clearDuplicate(itemId: string) {
+    setDuplicates((current) => {
+      const next = new Map(current);
+      next.delete(itemId);
+      return next;
+    });
+  }
+
+  async function handleRemove(itemId: string) {
+    if (!importId) return;
+    try {
+      const draft = await removeMenuImportItem(importId, itemId);
+      setItems(draft.items);
+      clearDuplicate(itemId);
+    } catch {
+      flashToast("That row couldn't be removed. Try again.");
+    }
+  }
+
   async function handleFieldEdit(itemId: string, field: "name" | "shortName" | "category" | "priceMinor", value: string | number) {
+    // Renaming or re-categorising is how the owner fixes a clash, so drop its flag.
+    if (field === "name" || field === "category") clearDuplicate(itemId);
     const previousItems = items;
     setItems((current) => current.map((item) => (item.id === itemId ? { ...item, [field]: value } : item)));
     if (!importId) return;
@@ -106,10 +135,15 @@ export function MenuImport() {
     setPhase("committing");
     try {
       const result = await commitMenuImport(importId);
+      if (onCommitted) {
+        onCommitted(result.items.length);
+        return;
+      }
       setCommitResult(result);
       setPhase("success");
     } catch (error) {
       setCommitError(error instanceof Error ? error.message : GENERIC_FAILURE);
+      if (error instanceof AdminApiError && error.code === "duplicate_items") setDuplicates(duplicateReasons(error.details));
       setPhase("review");
     }
   }
@@ -123,8 +157,8 @@ export function MenuImport() {
         <PartyPopper className="size-8 text-status-active" aria-hidden="true" />
         <h2 className="font-headline text-xl font-semibold">Your menu is in!</h2>
         <p className="text-sm text-muted-foreground">{commitResult?.items.length ?? items.length} items were added to your menu.</p>
-        <Button asChild data-testid="menu-import-success-onboarding-link" className="mt-4">
-          <Link href="/admin/onboarding">Back to setup</Link>
+        <Button asChild data-testid={fromSetup ? "menu-import-success-onboarding-link" : "menu-import-success-menu-link"} className="mt-4">
+          {fromSetup ? <Link href="/admin/onboarding">Back to setup</Link> : <Link href="/admin/menu">Go to your menu</Link>}
         </Button>
       </div>
     );
@@ -135,7 +169,7 @@ export function MenuImport() {
       <div className="space-y-4">
         <div>
           <h1 className="font-headline text-xl font-semibold">Import your menu</h1>
-          <p className="text-sm text-muted-foreground">Upload a spreadsheet, photo or PDF and we&apos;ll draft your menu for you to check.</p>
+          <p className="text-sm text-muted-foreground">Upload a spreadsheet and we&apos;ll draft your menu for you to check.</p>
         </div>
         <div
           data-testid="menu-import-dropzone"
@@ -161,7 +195,7 @@ export function MenuImport() {
         >
           <UploadCloud className="size-8 text-muted-foreground" aria-hidden="true" />
           <p className="text-sm font-medium">{phase === "uploading" ? "Reading your menu..." : "Drag a file here, or click to browse"}</p>
-          <p className="text-xs text-muted-foreground">CSV, XLSX, photo (JPG/PNG) or PDF</p>
+          <p className="text-xs text-muted-foreground">CSV or XLSX spreadsheet (photos and PDFs can&apos;t be read yet)</p>
         </div>
         <p className="mt-3 text-center text-xs text-muted-foreground">
           New to this?{" "}
@@ -239,13 +273,17 @@ export function MenuImport() {
               <th className="px-4 py-3">Category</th>
               <th className="px-4 py-3">Price</th>
               <th className="px-4 py-3">Confidence</th>
+              <th className="px-2 py-3">
+                <span className="sr-only">Remove</span>
+              </th>
             </tr>
           </thead>
           <tbody>
             {items.map((item) => {
               const overall = confidenceLevel(item.confidence.overall);
+              const duplicate = duplicates.get(item.id);
               return (
-                <tr key={item.id} data-testid={`menu-import-row-${item.id}`} className="border-t border-border align-top">
+                <tr key={item.id} data-testid={`menu-import-row-${item.id}`} className={`border-t border-border align-top ${duplicate ? "bg-status-error/10" : ""}`}>
                   <td className="px-4 py-3">
                     <input
                       type="checkbox"
@@ -263,6 +301,11 @@ export function MenuImport() {
                       confidence={item.confidence.name}
                       onCommit={(value) => void handleFieldEdit(item.id, "name", value)}
                     />
+                    {duplicate && (
+                      <p data-testid={`menu-import-row-${item.id}-duplicate`} className="mt-1 text-xs font-medium text-status-error">
+                        {DUPLICATE_LABEL[duplicate]}
+                      </p>
+                    )}
                   </td>
                   <td className="px-4 py-3">
                     <EditableCell
@@ -308,6 +351,18 @@ export function MenuImport() {
                     >
                       {CONFIDENCE_LABEL[overall]}
                     </span>
+                  </td>
+                  <td className="px-2 py-3">
+                    <button
+                      type="button"
+                      data-testid={`menu-import-row-${item.id}-remove`}
+                      aria-label={`Remove ${item.name || "this item"} from this import`}
+                      disabled={phase === "committing"}
+                      onClick={() => void handleRemove(item.id)}
+                      className="rounded-md p-1.5 text-muted-foreground hover:bg-accent hover:text-status-error focus:outline-none focus-visible:ring-2 focus-visible:ring-ring disabled:opacity-50"
+                    >
+                      <Trash2 className="size-4" aria-hidden="true" />
+                    </button>
                   </td>
                 </tr>
               );

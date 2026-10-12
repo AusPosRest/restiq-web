@@ -4,6 +4,7 @@
 // backend guard remains the enforcement point - this adds a credential, not
 // authz.
 import { NextRequest, NextResponse } from "next/server";
+import { tenantHostHeaders } from "@/lib/tenant-host-headers";
 import { ADMIN_SESSION_COOKIE } from "@/lib/admin-session";
 
 const SEGMENT = /^[a-z0-9_-]+$/i;
@@ -24,7 +25,7 @@ async function forward(request: NextRequest, params: Promise<{ path: string[] }>
     return NextResponse.json({ error: { code: "unauthorized", message: "A valid owner session is required" } }, { status: 401 });
   }
 
-  const headers: Record<string, string> = { authorization: `Bearer ${token}` };
+  const headers: Record<string, string> = { authorization: `Bearer ${token}`, ...tenantHostHeaders(request) };
   const init: RequestInit = { method: request.method, headers, cache: "no-store" };
   if (request.method !== "GET" && request.method !== "HEAD") {
     const contentType = request.headers.get("content-type") ?? "";

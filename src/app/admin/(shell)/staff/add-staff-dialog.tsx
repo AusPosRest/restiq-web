@@ -10,6 +10,7 @@
 import { Dialog } from "radix-ui";
 import { useState } from "react";
 import { Button } from "@/components/ui/button";
+import { OutletPicker, type OutletOption } from "./outlet-picker";
 import { EMPTY_ADD_STAFF_FORM, validateAddStaffForm, type AddStaffForm, type RoleView } from "./staff-state";
 
 const INPUT_CLASSES =
@@ -19,6 +20,8 @@ const SELECT_CLASSES = `${INPUT_CLASSES} h-10`;
 export interface AddStaffDialogProps {
   open: boolean;
   roles: readonly RoleView[];
+  /** restiq-backend#197: the picker shows only when there is more than one. */
+  outlets?: readonly OutletOption[];
   busy?: boolean;
   error?: string | null;
   onCancel: () => void;
@@ -29,7 +32,7 @@ export function AddStaffDialog(props: Readonly<AddStaffDialogProps>) {
   return props.open ? <DialogBody key="open" {...props} /> : null;
 }
 
-function DialogBody({ roles, busy, error, onCancel, onSubmit }: Readonly<AddStaffDialogProps>) {
+function DialogBody({ roles, outlets = [], busy, error, onCancel, onSubmit }: Readonly<AddStaffDialogProps>) {
   const [form, setForm] = useState<AddStaffForm>(EMPTY_ADD_STAFF_FORM);
   const [touched, setTouched] = useState(false);
   const errors = validateAddStaffForm(form, roles);
@@ -135,6 +138,10 @@ function DialogBody({ roles, busy, error, onCancel, onSubmit }: Readonly<AddStaf
                 </p>
               )}
             </div>
+
+            {outlets.length > 1 && (
+              <OutletPicker outlets={outlets} value={form.outletIds} onChange={(outletIds) => setForm((f) => ({ ...f, outletIds }))} idPrefix="add-staff" />
+            )}
 
             {error && (
               <p role="alert" data-testid="add-staff-error" className="text-sm text-status-error">

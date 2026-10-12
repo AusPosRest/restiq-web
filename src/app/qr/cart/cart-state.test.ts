@@ -77,7 +77,8 @@ describe("groupPlacedOrderLinesByGuest", () => {
   }
 
   function placedOrder(lines: PlacedOrderLineView[]): PlacedOrderView {
-    return { orderId: "o1", tableId: "t1", status: "sent", source: "qr", sessionId: "s1", lines };
+    return { orderId: "o1", tableId: "t1", status: "sent", source: "qr",
+    tokenNumber: null, sessionId: "s1", lines };
   }
 
   it("groups lines under their adding guest, in first-appearance order", () => {

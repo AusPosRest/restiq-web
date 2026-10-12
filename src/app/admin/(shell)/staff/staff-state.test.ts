@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
 import {
   EMPTY_ADD_STAFF_FORM,
+  outletsLabel,
   ROLE_PERMISSION_CATALOG,
   roleHasPermission,
   staffFullName,
@@ -33,17 +34,17 @@ describe("validateAddStaffForm", () => {
   });
 
   it("rejects a malformed email", () => {
-    const errors = validateAddStaffForm({ firstName: "Priya", lastName: "Nair", email: "not-an-email", roleId: "r-cashier" }, ROLES);
+    const errors = validateAddStaffForm({ firstName: "Priya", lastName: "Nair", email: "not-an-email", roleId: "r-cashier", outletIds: [] }, ROLES);
     expect(errors.email).toBeTruthy();
   });
 
   it("rejects a roleId that isn't one of the tenant's seeded roles - no free-text roles", () => {
-    const errors = validateAddStaffForm({ firstName: "Priya", lastName: "Nair", email: "priya@example.com", roleId: "made-up-role" }, ROLES);
+    const errors = validateAddStaffForm({ firstName: "Priya", lastName: "Nair", email: "priya@example.com", roleId: "made-up-role", outletIds: [] }, ROLES);
     expect(errors.roleId).toBeTruthy();
   });
 
   it("passes for a complete form with a real role id", () => {
-    const errors = validateAddStaffForm({ firstName: "Priya", lastName: "Nair", email: "priya@example.com", roleId: "r-cashier" }, ROLES);
+    const errors = validateAddStaffForm({ firstName: "Priya", lastName: "Nair", email: "priya@example.com", roleId: "r-cashier", outletIds: [] }, ROLES);
     expect(errors).toEqual({});
   });
 });
@@ -62,5 +63,20 @@ describe("roleHasPermission", () => {
 
   it("denies everything for an unknown role name", () => {
     expect(roleHasPermission("Made Up Role", "take_orders")).toBe(false);
+  });
+});
+
+describe("outletsLabel", () => {
+  const outlets = [
+    { id: "o1", name: "Indiranagar" },
+    { id: "o2", name: "Koramangala" },
+  ];
+  it("reads Every outlet for none or an older API, and says when every assigned outlet has closed", () => {
+    expect(outletsLabel([], outlets)).toBe("Every outlet");
+    expect(outletsLabel(undefined, outlets)).toBe("Every outlet");
+    expect(outletsLabel(["gone"], outlets)).toBe("No open outlets");
+  });
+  it("names the assigned outlets", () => {
+    expect(outletsLabel(["o2", "o1"], outlets)).toBe("Indiranagar, Koramangala");
   });
 });

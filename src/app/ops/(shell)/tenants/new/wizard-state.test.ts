@@ -1,17 +1,11 @@
 import { describe, expect, it } from "vitest";
-import {
-  DEFAULT_GST_RATE,
-  dataFromDraft,
-  emptyWizardData,
-  firstIncompleteStep,
-  toSubmitPayload,
-  validateStep,
-} from "./wizard-state";
+import { DEFAULT_GST_RATE, dataFromDraft, emptyWizardData, firstIncompleteStep, toSubmitPayload, validateStep, planPrice, annualDiscountPercent, recommendedPlan, prefillOwner, keepUnfixedErrors } from "./wizard-state";
 
 function completeData() {
   const data = emptyWizardData();
   data.business = {
     companyName: "Spice Route Hospitality",
+    slug: "",
     registeredAddress: "12 MG Road, Bengaluru",
     contactName: "Arjun Mehta",
     contactEmail: "arjun@spiceroute.example",
@@ -147,6 +141,33 @@ describe("dataFromDraft", () => {
   });
 });
 
+describe("subdomain (D14)", () => {
+  it("is optional, and when given must be 3 to 32 lowercase letters, digits or hyphens", () => {
+    const data = completeData();
+    expect(validateStep(1, data)).toEqual({});
+    data.business.slug = "bayleaf";
+    expect(validateStep(1, data)).toEqual({});
+    for (const bad of ["a", "ab", "-bay", "bay-", "bay_leaf", "bay.leaf", "bay--leaf", "x".repeat(33)]) {
+      data.business.slug = bad;
+      expect(validateStep(1, data).slug, bad).toContain("3 to 32");
+    }
+  });
+
+  it("goes to the API at the top level of the payload, not inside the business details", () => {
+    const data = completeData();
+    data.business.slug = " BayLeaf ";
+    const payload = toSubmitPayload(data) as { slug?: string; business: Record<string, unknown> };
+    expect(payload.slug).toBe("bayleaf");
+    expect(payload.business).not.toHaveProperty("slug");
+    data.business.slug = "";
+    expect(toSubmitPayload(data)).not.toHaveProperty("slug");
+  });
+
+  it("is empty for a draft saved before the field existed", () => {
+    expect(dataFromDraft({ "1": { companyName: "Draft Co" } }).business.slug).toBe("");
+  });
+});
+
 describe("toSubmitPayload", () => {
   it("normalizes the registration number and omits an empty FSSAI licence", () => {
     const data = completeData();
@@ -169,5 +190,37 @@ describe("toSubmitPayload", () => {
     const payload = toSubmitPayload(data) as { tax: Record<string, unknown> };
     expect(payload.tax.gstRegistered).toBe(false);
     expect(payload.tax).not.toHaveProperty("gstRatePercent");
+  });
+});
+
+describe("walkthrough fixes (Binflow, 2026-10-08)", () => {
+  it("prices plans from the Plans page list, in the tenant's market", () => {
+    const row = (country: "AU" | "IN", plan: "standard" | "enterprise", monthlyPriceMinor: number | null, annualDiscountPercent = 20) =>
+      ({ country, plan, monthlyPriceMinor, annualDiscountPercent, currency: country === "AU" ? "AUD" : "INR", updatedAt: "" }) as const;
+    const prices = [row("AU", "standard", 4900), row("AU", "enterprise", 12900), row("IN", "standard", 49900), row("IN", "enterprise", null, 10)];
+    expect(planPrice(prices, "standard", "AU", false)).toBe(49);
+    expect(planPrice(prices, "enterprise", "AU", true)).toBe(103);
+    expect(planPrice(prices, "standard", "IN", true)).toBe(399);
+    expect(planPrice(prices, "enterprise", "IN", false)).toBeNull();
+    expect(planPrice([], "standard", "IN", false)).toBeNull();
+    expect(annualDiscountPercent(prices, "IN")).toBe(20);
+    expect(annualDiscountPercent([], "IN")).toBe(0);
+  });
+
+  it("recommends Standard for one outlet and Enterprise for more", () => {
+    expect(recommendedPlan(1)).toBe("standard");
+    expect(recommendedPlan(2)).toBe("enterprise");
+  });
+
+  it("prefills the owner from the primary contact without overwriting what was typed", () => {
+    const business = { contactName: "Ravi Kumar Rao", contactEmail: "owner@binflow.test " };
+    expect(prefillOwner({ email: "", firstName: "", lastName: "" }, business)).toEqual({ email: "owner@binflow.test", firstName: "Ravi", lastName: "Kumar Rao" });
+    expect(prefillOwner({ email: "x@y.test", firstName: "", lastName: "" }, business).email).toBe("x@y.test");
+  });
+
+  it("drops errors that have been fixed and never adds new ones", () => {
+    expect(keepUnfixedErrors({ contactPhone: "Phone number is required", contactName: "required" }, { contactName: "required", contactEmail: "bad" })).toEqual({
+      contactName: "required",
+    });
   });
 });

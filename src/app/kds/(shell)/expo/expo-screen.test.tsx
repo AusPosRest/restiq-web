@@ -192,6 +192,6 @@ describe("ExpoScreen", () => {
     renderScreen();
 
     await vi.waitFor(() => expect(screen.getByTestId("kds-expo-empty")).toBeTruthy());
-    expect(screen.getByTestId("kds-tab-subtitle").textContent).toBe("Everything across stations that's ready to go out");
+    expect(screen.getByTestId("kds-tab-subtitle").textContent).toBe("Expo — orders by table; send out when every station is ready");
   });
 });

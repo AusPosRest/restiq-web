@@ -4,7 +4,7 @@
 // story behind it so far; the rest render ComingSoon until their stories land
 // - the shell frame exists now so it doesn't get rebuilt destination by
 // destination (mirrors /ops's fix/10 placeholder-pages pattern).
-import { BarChart3, LayoutDashboard, MonitorSmartphone, Settings, Soup, Table2, Users } from "lucide-react";
+import { BarChart3, LayoutDashboard, ListChecks, MonitorSmartphone, Settings, Soup, Table2, Users } from "lucide-react";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 
@@ -16,6 +16,8 @@ const navItems = [
   { href: "/admin/staff", label: "Staff", icon: Users, testId: "admin-nav-staff" },
   { href: "/admin/reports", label: "Reports", icon: BarChart3, testId: "admin-nav-reports" },
   { href: "/admin/settings", label: "Settings", icon: Settings, testId: "admin-nav-settings" },
+  // The go-live checklist - the first screen after the invite, and the only way back to it.
+  { href: "/admin/onboarding", label: "Setup", icon: ListChecks, testId: "admin-nav-setup" },
 ];
 
 export function SidebarNav() {

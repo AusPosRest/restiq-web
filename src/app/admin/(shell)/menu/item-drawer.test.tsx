@@ -57,11 +57,9 @@ function renderDrawer(props: Partial<React.ComponentProps<typeof ItemDrawer>> = 
     <ItemDrawer
       open
       item={item()}
-      allItems={[item()]}
       categories={CATEGORIES}
       modifierGroupCatalog={[]}
       allergenCatalog={[]}
-      comboCatalog={[]}
       outlets={[]}
       selectedOutletId={null}
       defaultCategoryId="tandoor"
@@ -70,16 +68,74 @@ function renderDrawer(props: Partial<React.ComponentProps<typeof ItemDrawer>> = 
       onSaved={onSaved}
       onModifierGroupCreated={vi.fn()}
       onAllergenCreated={vi.fn()}
-      onComboCreated={vi.fn()}
       {...props}
     />,
   );
   return { onClose, onSaved };
 }
 
+describe("ItemDrawer delete (issue #248)", () => {
+  beforeEach(() => vi.unstubAllGlobals());
+  afterEach(cleanup);
+
+  it("asks for confirmation, then deletes through DELETE and hands the item back", async () => {
+    const fetchMock = stubFetch({ onPost: (url) => (url.endsWith("/admin/api/menu/items/item-1") ? new Response(null, { status: 204 }) : undefined) });
+    const onDeleted = vi.fn();
+    renderDrawer({ onDeleted });
+
+    await userEvent.click(screen.getByTestId("item-delete"));
+    expect(screen.getByTestId("item-delete-confirm").textContent).toContain("Paneer Tikka");
+    await userEvent.click(screen.getByTestId("item-delete-confirm-button"));
+
+    await waitFor(() => expect(onDeleted).toHaveBeenCalledWith(expect.objectContaining({ id: "item-1" })));
+    const call = fetchMock.mock.calls.find(([, init]) => init?.method === "DELETE");
+    expect(String(call?.[0])).toBe("/admin/api/menu/items/item-1");
+  });
+
+  it("cancelling the confirmation deletes nothing", async () => {
+    const fetchMock = stubFetch();
+    renderDrawer({ onDeleted: vi.fn() });
+
+    await userEvent.click(screen.getByTestId("item-delete"));
+    await userEvent.click(screen.getByTestId("item-delete-cancel"));
+    expect(screen.queryByTestId("item-delete-confirm")).toBeNull();
+    expect(fetchMock.mock.calls.some(([, init]) => init?.method === "DELETE")).toBe(false);
+  });
+
+  it("does not offer Delete while creating a new item", () => {
+    stubFetch();
+    renderDrawer({ item: null });
+    expect(screen.queryByTestId("item-delete")).toBeNull();
+  });
+});
+
 describe("ItemDrawer open/close and field editing", () => {
   beforeEach(() => vi.unstubAllGlobals());
   afterEach(cleanup);
+
+  it("uploads a photo resized in the browser, and removes it (issue #218)", async () => {
+    vi.stubGlobal("createImageBitmap", vi.fn().mockResolvedValue({ width: 960, height: 640, close: vi.fn() }));
+    vi.spyOn(HTMLCanvasElement.prototype, "getContext").mockReturnValue({ drawImage: vi.fn() } as unknown as CanvasRenderingContext2D);
+    const toDataUrl = vi.spyOn(HTMLCanvasElement.prototype, "toDataURL").mockReturnValue("data:image/jpeg;base64,AAAA");
+    const patches: unknown[] = [];
+    stubFetch({
+      onPost: (url, body) => {
+        if (!url.endsWith("/menu/items/item-1")) return undefined;
+        patches.push(body);
+        return jsonResponse(item({ photoUrl: (body as { photoUrl: string | null }).photoUrl }));
+      },
+    });
+    renderDrawer();
+
+    await userEvent.upload(screen.getByTestId("item-photo-input"), new File(["x"], "dosa.png", { type: "image/png" }));
+    expect((await screen.findByTestId("item-photo-preview")).getAttribute("src")).toBe("data:image/jpeg;base64,AAAA");
+    expect(toDataUrl).toHaveBeenCalledWith("image/jpeg", 0.8);
+
+    await userEvent.click(screen.getByTestId("item-photo-remove"));
+    await waitFor(() => expect(screen.queryByTestId("item-photo-preview")).toBeNull());
+    expect(patches).toEqual([{ photoUrl: "data:image/jpeg;base64,AAAA" }, { photoUrl: null }]);
+    vi.restoreAllMocks();
+  });
 
   it("does not render when closed", () => {
     stubFetch();
@@ -87,12 +143,10 @@ describe("ItemDrawer open/close and field editing", () => {
       <ItemDrawer
         open={false}
         item={null}
-        allItems={[]}
         categories={CATEGORIES}
         modifierGroupCatalog={[]}
         allergenCatalog={[]}
-        comboCatalog={[]}
-        outlets={[]}
+          outlets={[]}
         selectedOutletId={null}
         defaultCategoryId="tandoor"
         currency="INR"
@@ -100,8 +154,7 @@ describe("ItemDrawer open/close and field editing", () => {
         onSaved={vi.fn()}
         onModifierGroupCreated={vi.fn()}
         onAllergenCreated={vi.fn()}
-        onComboCreated={vi.fn()}
-      />,
+        />,
     );
     expect(screen.queryByTestId("item-drawer")).toBeNull();
   });
@@ -126,6 +179,16 @@ describe("ItemDrawer open/close and field editing", () => {
     const { onClose } = renderDrawer();
     await userEvent.click(screen.getByTestId("item-drawer-close"));
     expect(onClose).toHaveBeenCalled();
+  });
+
+  it("scrolls only the form body, keeping Save pinned outside the scroll area (issue #266)", () => {
+    stubFetch();
+    renderDrawer();
+
+    const body = screen.getByTestId("item-drawer-body");
+    expect(body.className).toContain("scrollbar-visible");
+    expect(body.className).toContain("min-h-0");
+    expect(screen.getByTestId("item-drawer").className).not.toContain("overflow-y-auto");
   });
 
   it("updates a field's value as the owner types", async () => {
@@ -156,7 +219,7 @@ describe("ItemDrawer open/close and field editing", () => {
       if (method === "GET" && url.includes("/price?")) return Promise.resolve(currentPriceResponse("item-1", "dine_in", 18000));
       return Promise.resolve(jsonResponse({}, 404));
     });
-    const { onSaved } = renderDrawer();
+    const { onSaved, onClose } = renderDrawer();
 
     const input = screen.getByTestId("item-name-input");
     await userEvent.clear(input);
@@ -164,25 +227,51 @@ describe("ItemDrawer open/close and field editing", () => {
     await userEvent.click(screen.getByTestId("item-save"));
 
     await waitFor(() => expect(onSaved).toHaveBeenCalledWith(updated));
+    expect(onClose).toHaveBeenCalled();
     const patchCall = fetchMock.mock.calls.find(([, init]) => (init as RequestInit | undefined)?.method === "PATCH");
     expect(patchCall?.[0]).toBe("/admin/api/menu/items/item-1");
     expect(JSON.parse((patchCall?.[1] as RequestInit).body as string)).toEqual({ name: "Malai Tikka", shortName: "Paneer Tikka", categoryId: "tandoor" });
   });
 
-  it("creates a new item through the create endpoint when there is no item yet", async () => {
+  it("disables Save Changes until a new item has a price", async () => {
+    stubFetch();
+    renderDrawer({ item: null });
+    await userEvent.type(screen.getByTestId("item-name-input"), "Malai Tikka");
+    await userEvent.type(screen.getByTestId("item-short-name-input"), "Malai Tikka");
+    expect(screen.getByTestId("item-save")).toHaveProperty("disabled", true);
+
+    await userEvent.type(screen.getByTestId("item-create-price"), "250");
+    expect(screen.getByTestId("item-save")).toHaveProperty("disabled", false);
+  });
+
+  it("creates a new item through the create endpoint, then posts its price with the price-change dialog's client (issue #330)", async () => {
     const created = item({ id: "item-2", name: "Malai Tikka" });
-    const fetchMock = vi.fn().mockResolvedValue(jsonResponse(created, 201));
+    const fetchMock = vi.fn((input: RequestInfo | URL, init?: RequestInit) => {
+      const url = String(input);
+      const method = init?.method ?? "GET";
+      if (method === "POST" && url === "/admin/api/menu/items") return Promise.resolve(jsonResponse(created, 201));
+      if (method === "POST" && url === "/admin/api/menu/items/item-2/prices") {
+        const body = JSON.parse(init?.body as string);
+        return Promise.resolve(
+          jsonResponse({ id: "p1", itemId: "item-2", variantId: null, channel: "dine_in", outletId: null, currency: "INR", createdAt: "2026-08-24T00:00:00.000Z", ...body }, 201),
+        );
+      }
+      return Promise.resolve(jsonResponse({ error: { code: "not_found", message: "unhandled: " + method + " " + url } }, 404));
+    });
     vi.stubGlobal("fetch", fetchMock);
     const { onSaved } = renderDrawer({ item: null });
 
     await userEvent.type(screen.getByTestId("item-name-input"), "Malai Tikka");
     await userEvent.type(screen.getByTestId("item-short-name-input"), "Malai Tikka");
+    await userEvent.type(screen.getByTestId("item-create-price"), "250");
     await userEvent.click(screen.getByTestId("item-save"));
 
     await waitFor(() => expect(onSaved).toHaveBeenCalledWith(created));
-    const [url, init] = fetchMock.mock.calls[0] as [string, RequestInit];
-    expect(url).toBe("/admin/api/menu/items");
-    expect(init.method).toBe("POST");
+    const [itemCall, priceCall] = fetchMock.mock.calls as [string, RequestInit][];
+    expect(itemCall[0]).toBe("/admin/api/menu/items");
+    expect(itemCall[1].method).toBe("POST");
+    expect(priceCall[0]).toBe("/admin/api/menu/items/item-2/prices");
+    expect(JSON.parse(priceCall[1].body as string)).toEqual({ priceMinor: 25000, currency: "INR", reason: "Initial price" });
   });
 });
 
@@ -262,11 +351,10 @@ describe("ItemDrawer price - current vs pending distinction", () => {
   beforeEach(() => vi.unstubAllGlobals());
   afterEach(cleanup);
 
-  it("fetches and shows the current dine-in and delivery price", async () => {
+  it("fetches and shows one current price - no delivery price (#272)", async () => {
     stubFetch();
     renderDrawer();
-    await waitFor(() => expect(screen.getByTestId("item-base-price-current").textContent).toContain("₹180"));
-    expect(screen.getByTestId("item-base-price-current").textContent).toContain("₹200");
+    await waitFor(() => expect(screen.getByTestId("item-base-price-current").textContent).toBe("₹180"));
     expect(screen.queryByTestId("item-base-price-pending")).toBeNull();
   });
 
@@ -305,10 +393,11 @@ describe("ItemDrawer price - current vs pending distinction", () => {
     );
 
     const priceCalls = fetchMock.mock.calls.filter(([url]) => url === "/admin/api/menu/items/item-1/prices");
-    expect(priceCalls).toHaveLength(2); // one per channel (dine_in, delivery)
+    expect(priceCalls).toHaveLength(1); // one price for every channel; RESTIQ has no delivery price (#272)
     const [, init] = priceCalls[0] as [string, RequestInit];
     const sentBody = JSON.parse(init.body as string);
-    expect(sentBody).toMatchObject({ channel: "dine_in", effectiveAt: `${futureYmd}T00:00:00.000Z`, reason: "Menu refresh" });
+    expect(sentBody).toMatchObject({ effectiveAt: `${futureYmd}T00:00:00.000Z`, reason: "Menu refresh" });
+    expect(sentBody).not.toHaveProperty("channel"); // no channel = every channel, so QR and takeaway are priced too
   });
 
   it("requires a reason before the price-change submit is enabled", async () => {
@@ -324,12 +413,12 @@ describe("ItemDrawer variants", () => {
   beforeEach(() => vi.unstubAllGlobals());
   afterEach(cleanup);
 
-  it("adds a variant through the dedicated variant endpoint", async () => {
+  it("adds a variant through the dedicated variant endpoint, keeping the drawer open (issue #333)", async () => {
     const updated = item({ variants: [{ id: "v1", name: "Half", sortOrder: 0 }] });
     const fetchMock = stubFetch({
       onPost: (url, body) => (url === "/admin/api/menu/items/item-1/variants" && (body as { name: string }).name === "Half" ? jsonResponse(updated, 201) : undefined),
     });
-    const { onSaved } = renderDrawer();
+    const { onSaved, onClose } = renderDrawer();
     await waitFor(() => screen.getByTestId("item-base-price-current"));
 
     await userEvent.type(screen.getByTestId("item-new-variant-name"), "Half");
@@ -338,5 +427,6 @@ describe("ItemDrawer variants", () => {
     await waitFor(() => expect(onSaved).toHaveBeenCalledWith(updated));
     const postCall = fetchMock.mock.calls.find(([url]) => url === "/admin/api/menu/items/item-1/variants");
     expect(postCall).toBeTruthy();
+    expect(onClose).not.toHaveBeenCalled();
   });
 });

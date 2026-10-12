@@ -52,6 +52,8 @@ export interface TicketLineView {
   itemId: string;
   itemName: string;
   variantName: string | null;
+  /** restiq-backend#160: the combo this item was picked in, so expo sends the combo out together. */
+  comboName?: string | null;
   quantity: number;
   seatNumber: number | null;
   modifiers: TicketLineModifierView[];

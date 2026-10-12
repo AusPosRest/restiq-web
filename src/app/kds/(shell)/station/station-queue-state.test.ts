@@ -36,14 +36,17 @@ describe("ageingLevel", () => {
 });
 
 describe("formatElapsed", () => {
-  it("formats mm:ss, uncapped minutes", () => {
-    expect(formatElapsed(FIRED_AT, minutesLater(0))).toBe("0:00");
-    expect(formatElapsed(FIRED_AT, FIRED_MS + 65_000)).toBe("1:05");
-    expect(formatElapsed(FIRED_AT, minutesLater(72))).toBe("72:00");
+  it("counts in seconds, then minutes, then hours (#285)", () => {
+    expect(formatElapsed(FIRED_AT, minutesLater(0))).toBe("0s");
+    expect(formatElapsed(FIRED_AT, FIRED_MS + 45_000)).toBe("45s");
+    expect(formatElapsed(FIRED_AT, FIRED_MS + 65_000)).toBe("1m 05s");
+    expect(formatElapsed(FIRED_AT, minutesLater(59) + 59_000)).toBe("59m 59s");
+    expect(formatElapsed(FIRED_AT, minutesLater(60))).toBe("1h 00m");
+    expect(formatElapsed(FIRED_AT, minutesLater(222))).toBe("3h 42m");
   });
 
-  it("floors at 0:00 rather than going negative on clock skew", () => {
-    expect(formatElapsed(FIRED_AT, FIRED_MS - 5_000)).toBe("0:00");
+  it("floors at 0s rather than going negative on clock skew", () => {
+    expect(formatElapsed(FIRED_AT, FIRED_MS - 5_000)).toBe("0s");
   });
 });
 

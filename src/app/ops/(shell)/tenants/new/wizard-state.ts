@@ -1,5 +1,6 @@
 // Pure wizard state: the five O4 steps, their field sets and validation
 // rules. No React, no fetch - unit-testable on its own.
+import type { PlanPriceView } from "../../api";
 
 export const STEP_COUNT = 5;
 
@@ -15,6 +16,8 @@ export type StepKey = (typeof STEPS)[number]["key"];
 
 export interface BusinessData {
   companyName: string;
+  /** The restaurant's subdomain, <slug>.<base domain> (D14). Optional: blank = made from the company name. */
+  slug: string;
   registeredAddress: string;
   contactName: string;
   contactEmail: string;
@@ -93,7 +96,7 @@ export function emptyOutlet(country: CountryCode): OutletData {
 
 export function emptyWizardData(): WizardData {
   return {
-    business: { companyName: "", registeredAddress: "", contactName: "", contactEmail: "", contactPhone: "" },
+    business: { companyName: "", slug: "", registeredAddress: "", contactName: "", contactEmail: "", contactPhone: "" },
     tax: {
       country: "IN",
       registrationNumber: "",
@@ -116,6 +119,8 @@ const EMAIL_PATTERN = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 const GSTIN_PATTERN = /^[0-9]{2}[A-Z]{5}[0-9]{4}[A-Z][1-9A-Z]Z[0-9A-Z]$/;
 const ABN_PATTERN = /^\d{11}$/;
 const FSSAI_PATTERN = /^\d{14}$/;
+// Same shape the API enforces for a tenant's subdomain (restiq-backend src/platform/tenant-slug.ts).
+export const SLUG_PATTERN = /^[a-z0-9][a-z0-9-]{1,30}[a-z0-9]$/;
 
 export type StepErrors = Record<string, string>;
 
@@ -134,6 +139,10 @@ export function validateBusiness(data: BusinessData): StepErrors {
     if (error) errors[field] = error;
   };
   put("companyName", required(data.companyName, "Company name"));
+  const slug = data.slug.trim().toLowerCase();
+  if (slug && (!SLUG_PATTERN.test(slug) || slug.includes("--"))) {
+    errors.slug = "Use 3 to 32 lowercase letters, digits or hyphens, starting and ending with a letter or digit";
+  }
   put("registeredAddress", required(data.registeredAddress, "Registered address"));
   put("contactName", required(data.contactName, "Contact person"));
   put("contactEmail", email(data.contactEmail, "Email address"));
@@ -239,8 +248,11 @@ export function dataFromDraft(steps: Record<string, unknown>): WizardData {
 
 /** The backend submit payload (drops UI-only empties). */
 export function toSubmitPayload(data: WizardData): Record<string, unknown> {
+  // The subdomain belongs to the tenant, not to the business details, in the API's shape.
+  const { slug, ...business } = data.business;
   return {
-    business: data.business,
+    business,
+    ...(slug.trim() ? { slug: slug.trim().toLowerCase() } : {}),
     tax: {
       country: data.tax.country,
       registrationNumber: data.tax.registrationNumber.trim().toUpperCase().replace(/\s/g, ""),
@@ -255,4 +267,41 @@ export function toSubmitPayload(data: WizardData): Record<string, unknown> {
     subscription: data.subscription,
     ownerInvite: data.ownerInvite,
   };
+}
+
+// --- Walkthrough fixes (Binflow, 2026-10-08).
+
+export const PLAN_CURRENCY_SYMBOL: Record<CountryCode, string> = { AU: "A$", IN: "₹" };
+
+/** Monthly (or annual-discounted) price per outlet in whole currency units, from the Plans page's list (restiq-backend#201); null = on quote or not loaded. */
+export function planPrice(prices: readonly PlanPriceView[], plan: "standard" | "enterprise", country: CountryCode, annual: boolean): number | null {
+  const row = prices.find((p) => p.country === country && p.plan === plan);
+  if (!row || row.monthlyPriceMinor === null) return null;
+  const monthly = row.monthlyPriceMinor / 100;
+  return annual ? Math.round((monthly * (100 - row.annualDiscountPercent)) / 100) : monthly;
+}
+
+/** The best annual saving in this market, for the billing toggle's label (0 = no annual discount). */
+export function annualDiscountPercent(prices: readonly PlanPriceView[], country: CountryCode): number {
+  return Math.max(0, ...prices.filter((p) => p.country === country).map((p) => p.annualDiscountPercent));
+}
+
+/** Standard is for one outlet; anything more is Enterprise. */
+export function recommendedPlan(outletCount: number): "standard" | "enterprise" {
+  return outletCount > 1 ? "enterprise" : "standard";
+}
+
+/** The owner is usually the primary contact from step 1 - fill only what is still blank. */
+export function prefillOwner(owner: OwnerInviteData, business: Pick<BusinessData, "contactName" | "contactEmail">): OwnerInviteData {
+  const [first = "", ...rest] = business.contactName.trim().split(/\s+/);
+  return {
+    email: owner.email || business.contactEmail.trim(),
+    firstName: owner.firstName || first,
+    lastName: owner.lastName || rest.join(" "),
+  };
+}
+
+/** Drops shown errors the user has since fixed, without surfacing new ones before Next/blur. */
+export function keepUnfixedErrors(shown: StepErrors, now: StepErrors): StepErrors {
+  return Object.fromEntries(Object.entries(shown).filter(([field]) => field in now));
 }

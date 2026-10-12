@@ -26,12 +26,16 @@ export function ageingLevel(firedAt: string, ageingThresholdMinutes: number, now
   return "new";
 }
 
-/** "MM:SS", uncapped minutes - the largest figure on a ticket (DESIGN.md), tabular-nums in the component. Floors at 0:00 for clock skew rather than showing a negative time. */
+/** Ticket age, the largest figure on a ticket (DESIGN.md), tabular-nums in the
+ * component: "45s" under a minute, "12m 05s" under an hour, "3h 42m" beyond
+ * (issue #285 - uncapped minutes read as "11148:58"). Floors at 0s for clock
+ * skew rather than showing a negative time. */
 export function formatElapsed(firedAt: string, nowMs: number): string {
   const totalSeconds = Math.max(0, Math.floor((nowMs - Date.parse(firedAt)) / 1000));
+  if (totalSeconds < 60) return `${totalSeconds}s`;
   const minutes = Math.floor(totalSeconds / 60);
-  const seconds = totalSeconds % 60;
-  return `${minutes}:${String(seconds).padStart(2, "0")}`;
+  if (minutes < 60) return `${minutes}m ${String(totalSeconds % 60).padStart(2, "0")}s`;
+  return `${Math.floor(minutes / 60)}h ${String(minutes % 60).padStart(2, "0")}m`;
 }
 
 /** Oldest-left (SPEC/DESIGN.md) - the API already returns `firedAt asc`, this is a defensive client-side guarantee, not a re-derivation. */

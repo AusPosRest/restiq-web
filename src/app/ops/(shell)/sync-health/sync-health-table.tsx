@@ -8,6 +8,7 @@
 import { AlertTriangle, Radio, RefreshCw } from "lucide-react";
 import { usePathname, useRouter, useSearchParams } from "next/navigation";
 import { useEffect, useState } from "react";
+import { PaginationControls, usePagination } from "@/components/pagination";
 import { Button } from "@/components/ui/button";
 import { SyncHealthRow } from "../api";
 import { LoadErrorPanel, Skeleton } from "../data-states";
@@ -79,6 +80,7 @@ export function SyncHealthTable() {
   const filtered = query.filter !== "";
   const emptyFiltered = !loading && data && rows.length === 0 && filtered;
   const trueEmpty = !loading && data && rows.length === 0 && !filtered;
+  const pager = usePagination(rows, query.filter);
 
   return (
     <section className="flex flex-1 flex-col">
@@ -200,7 +202,7 @@ export function SyncHealthTable() {
                   </tr>
                 ))}
               {!loading &&
-                rows.map((row) => (
+                pager.items.map((row) => (
                   <tr
                     key={row.deviceId}
                     data-testid={`sync-health-row-${row.deviceId}`}
@@ -234,6 +236,7 @@ export function SyncHealthTable() {
             </tbody>
           </table>
         )}
+        {!loading && <PaginationControls pager={pager} testId="sync-health-pagination" />}
 
         {trueEmpty && (
           <div className="flex flex-col items-center gap-3 px-8 py-16 text-center" data-testid="sync-health-empty">

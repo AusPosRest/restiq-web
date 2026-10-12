@@ -78,10 +78,6 @@ export function snapToGrid(value: number, grid: number = GRID_SNAP_PX): number {
   return Math.round(value / grid) * grid;
 }
 
-function clamp(value: number, min: number, max: number): number {
-  return Math.min(Math.max(value, min), max);
-}
-
 export interface DragOrigin {
   pointerX: number;
   pointerY: number;
@@ -94,19 +90,16 @@ export interface CanvasBounds {
   height: number;
 }
 
-/** Translates the drag origin by the pointer's movement, snaps to the grid, and clamps inside the canvas - the same rect a mouse, a touch, or a keyboard nudge all funnel through. */
-export function computeDragPosition(
-  origin: DragOrigin,
-  pointerX: number,
-  pointerY: number,
-  tableSize: { width: number; height: number },
-  canvas: CanvasBounds,
-): { x: number; y: number } {
-  const rawX = origin.tableX + (pointerX - origin.pointerX);
-  const rawY = origin.tableY + (pointerY - origin.pointerY);
-  const maxX = Math.max(0, canvas.width - tableSize.width);
-  const maxY = Math.max(0, canvas.height - tableSize.height);
-  return { x: clamp(snapToGrid(rawX), 0, maxX), y: clamp(snapToGrid(rawY), 0, maxY) };
+/**
+ * Translates the drag origin by the pointer's movement (both in canvas units),
+ * snaps to the grid, and keeps x/y >= 0. No right/bottom limit: the canvas is
+ * infinite that way (issue #237), and the backend rejects only negatives.
+ */
+export function computeDragPosition(origin: DragOrigin, pointerX: number, pointerY: number): { x: number; y: number } {
+  return {
+    x: Math.max(0, snapToGrid(origin.tableX + pointerX - origin.pointerX)),
+    y: Math.max(0, snapToGrid(origin.tableY + pointerY - origin.pointerY)),
+  };
 }
 
 // --- Overlap preview. A client-side rect check purely for immediate visual
@@ -129,6 +122,37 @@ export function rectsOverlap(a: TableRect, b: TableRect): boolean {
 /** The id of the first other table that a candidate rect overlaps, or null if it's clear. */
 export function findOverlap(candidate: TableRect, others: readonly TableRect[]): string | null {
   return others.find((other) => other.id !== candidate.id && rectsOverlap(candidate, other))?.id ?? null;
+}
+
+/**
+ * Where a dropped table settles (issue #258): where it was dropped if that's
+ * clear, else the nearest free spot beside a table it would overlap (one grid
+ * step away, never at negative x/y), else below every table. The backend
+ * rejects overlaps, so the canvas never saves one.
+ */
+export function nearestFreeSpot(candidate: TableRect, others: readonly TableRect[], gap: number = GRID_SNAP_PX): { x: number; y: number } {
+  const blockers = others.filter((other) => other.id !== candidate.id);
+  const isFree = (x: number, y: number) => x >= 0 && y >= 0 && findOverlap({ ...candidate, x, y }, blockers) === null;
+  if (isFree(candidate.x, candidate.y)) return { x: candidate.x, y: candidate.y };
+  const up = (value: number) => Math.ceil(value / gap) * gap;
+  const down = (value: number) => Math.floor(value / gap) * gap;
+  const spots = blockers.flatMap((b) => [
+    { x: up(b.x + b.width + gap), y: candidate.y },
+    { x: down(b.x - candidate.width - gap), y: candidate.y },
+    { x: candidate.x, y: down(b.y - candidate.height - gap) },
+    { x: candidate.x, y: up(b.y + b.height + gap) },
+  ]);
+  const distance = (spot: { x: number; y: number }) => Math.hypot(spot.x - candidate.x, spot.y - candidate.y);
+  const best = spots.filter((spot) => isFree(spot.x, spot.y)).sort((a, b) => distance(a) - distance(b))[0];
+  return best ?? { x: candidate.x, y: up(Math.max(0, ...blockers.map((b) => b.y + b.height)) + gap) };
+}
+
+/** The canvas area a floor needs: out to its farthest table's right/bottom edge, plus `room` beyond it. */
+export function canvasExtent(tables: readonly TableRect[], room: number): CanvasBounds {
+  return tables.reduce(
+    (extent, table) => ({ width: Math.max(extent.width, table.x + table.width + room), height: Math.max(extent.height, table.y + table.height + room) }),
+    { width: room, height: room },
+  );
 }
 
 // --- Add-table defaults. SHAPE_SIZES gives the add-table form a

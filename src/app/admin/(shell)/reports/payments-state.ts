@@ -24,11 +24,9 @@ export interface PaymentCreditNote {
   createdAt: string;
 }
 
-export interface PaymentTaxBreakdownEntry {
-  label: string;
-  ratePercent: number;
-  amountMinor: number;
-}
+import type { TaxBreakdownEntry } from "@/lib/tax-lines";
+export type { TaxLine } from "@/lib/tax-lines";
+export type PaymentTaxBreakdownEntry = TaxBreakdownEntry;
 
 export type PaymentSource = "pos" | "qr";
 
@@ -161,18 +159,7 @@ export function sourceLabel(source: PaymentSource): string {
   return source === "qr" ? "QR" : "POS";
 }
 
-export interface TaxLine {
-  label: string;
-  amountMinor: number;
-}
-
-/** Per-bill tax display: the real breakdown when the backend sent one, else one unlabelled line off `taxMinor` (the contract's `taxBreakdown?` "may be absent"). */
-export function taxLines(row: Pick<PaymentRow, "taxBreakdown" | "taxMinor">): TaxLine[] {
-  if (row.taxBreakdown && row.taxBreakdown.length > 0) {
-    return row.taxBreakdown.map((line) => ({ label: `${line.label} (${line.ratePercent}%)`, amountMinor: line.amountMinor }));
-  }
-  return [{ label: "", amountMinor: row.taxMinor }];
-}
+export { taxLines } from "@/lib/tax-lines";
 
 export function refundedMinorFor(row: Pick<PaymentRow, "creditNotes">): number {
   return row.creditNotes.reduce((sum, note) => sum + note.amountMinor, 0);

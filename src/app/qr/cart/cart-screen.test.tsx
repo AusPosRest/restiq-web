@@ -67,6 +67,7 @@ const PLACED_ORDER: PlacedOrderView = {
   tableId: "t1",
   status: "sent",
   source: "qr",
+    tokenNumber: null,
   sessionId: "s1",
   lines: [
     {

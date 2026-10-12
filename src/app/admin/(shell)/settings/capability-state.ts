@@ -16,11 +16,15 @@ export interface OutletCapabilityView {
   enabled: boolean;
 }
 
-export const KNOWN_CAPABILITY_KEYS = ["qr_ordering", "kiosk", "token_queue"] as const;
+export const KNOWN_CAPABILITY_KEYS = ["qr_ordering", "kiosk", "token_queue", "menu_photos"] as const;
+
+// Issue #230: menu_photos is opt-out - the backend treats an absent row as on
+// (restiq-backend #148), so the toggle must render on too.
+const DEFAULT_ON = new Set<string>(["menu_photos"]);
 
 export function mergeCapabilities(known: readonly string[], serverRows: readonly OutletCapabilityView[]): OutletCapabilityView[] {
   const enabledByKey = new Map(serverRows.map((row) => [row.key, row.enabled]));
-  const knownRows = known.map((key) => ({ key, enabled: enabledByKey.get(key) ?? false }));
+  const knownRows = known.map((key) => ({ key, enabled: enabledByKey.get(key) ?? DEFAULT_ON.has(key) }));
   const extraRows = serverRows.filter((row) => !known.includes(row.key));
   return [...knownRows, ...extraRows];
 }
@@ -29,12 +33,14 @@ const CAPABILITY_LABELS: Record<string, string> = {
   qr_ordering: "QR Ordering",
   kiosk: "Kiosk Mode",
   token_queue: "Token Queue",
+  menu_photos: "Menu Photos",
 };
 
 const CAPABILITY_DESCRIPTIONS: Record<string, string> = {
   qr_ordering: "Guests scan a table QR code to browse the menu and order from their phone.",
   kiosk: "A self-service ordering kiosk at the counter.",
   token_queue: "Token/queue-number display for pickup or counter service.",
+  menu_photos: "Show item photos on the POS, QR menu and kiosk. Turn off to show names only.",
 };
 
 function titleCase(key: string): string {

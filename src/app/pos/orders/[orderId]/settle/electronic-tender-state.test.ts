@@ -4,10 +4,12 @@ import type { BillView, PendingTender } from "./bill-state";
 import {
   canFinalizeWithElectronic,
   capturedElectronicMinor,
+  cashChangeMinor,
   hasPendingIntent,
   intentPanelPhase,
   isElectronicMethod,
   remainingToTenderMinor,
+  tendersNetOfChange,
   validateIntentAmount,
   validateManualUpiTender,
 } from "./electronic-tender-state";
@@ -100,6 +102,41 @@ describe("canFinalizeWithElectronic", () => {
 
   it("finalises a bill fully covered by electronic tenders with no cash keyed", () => {
     expect(canFinalizeWithElectronic(bill([tender("upi_qr", 52500)]), 52500, [], [intent("succeeded")])).toBe(true);
+  });
+});
+
+describe("cash change (issue #306)", () => {
+  it("gives change when cash goes over the total and lets the bill finalise", () => {
+    const cash: PendingTender[] = [{ method: "cash", amountMinor: 110000 }];
+    expect(cashChangeMinor(105630, bill(), cash)).toBe(4370);
+    expect(canFinalizeWithElectronic(bill(), 105630, cash, [])).toBe(true);
+  });
+
+  it("gives no change for an over-keyed UPI amount or an exact tender", () => {
+    expect(cashChangeMinor(105630, bill(), [{ method: "upi_manual", amountMinor: 110000 }])).toBe(0);
+    expect(cashChangeMinor(105630, bill(), [{ method: "cash", amountMinor: 105630 }])).toBe(0);
+    expect(canFinalizeWithElectronic(bill(), 105630, [{ method: "upi_manual", amountMinor: 110000 }], [])).toBe(false);
+  });
+
+  it("posts the cash net of change so the tenders sum to the total", () => {
+    const pending: PendingTender[] = [
+      { method: "upi_manual", amountMinor: 50000 },
+      { method: "cash", amountMinor: 1100 },
+      { method: "cash", amountMinor: 60000 },
+    ];
+    const change = cashChangeMinor(105630, bill(), pending);
+    expect(change).toBe(5470);
+    const net = tendersNetOfChange(pending, change);
+    expect(net).toEqual([
+      { method: "upi_manual", amountMinor: 50000 },
+      { method: "cash", amountMinor: 1100 },
+      { method: "cash", amountMinor: 54530 },
+    ]);
+    expect(net.reduce((sum, t) => sum + t.amountMinor, 0)).toBe(105630);
+  });
+
+  it("drops a cash tender the change uses up entirely", () => {
+    expect(tendersNetOfChange([{ method: "upi_manual", amountMinor: 1000 }, { method: "cash", amountMinor: 500 }], 500)).toEqual([{ method: "upi_manual", amountMinor: 1000 }]);
   });
 });
 

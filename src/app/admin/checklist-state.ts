@@ -32,9 +32,9 @@ export const STEP_META: Record<ChecklistStepKey, StepMeta> = {
   },
   menu_import: {
     label: "Import your menu",
-    description: "Upload a photo, PDF or spreadsheet - we will do the rest.",
+    description: "Fill in the sample spreadsheet and upload it - we will do the rest.",
     action: "link",
-    href: "/admin/menu/import",
+    href: "/admin/menu/import?from=setup",
   },
   floor_plan: {
     label: "Set up floor plan and tables",

@@ -25,10 +25,12 @@
 //    those are the Order/Menu's job (`order-taking-state.ts`), read
 //    separately by the settle screen alongside the Bill.
 
+import type { TaxBreakdownEntry } from "@/lib/tax-lines";
+
 export type BillStatus = "open" | "finalized";
 
-/** The two methods a cashier can post in the finalize call (bills.dtos.ts's `TENDER_METHODS`). */
-export type PostableTenderMethod = "cash" | "upi_manual";
+/** The methods a cashier can post in the finalize call (bills.dtos.ts's `TENDER_METHODS`). `external` (issue #224) is money taken outside RESTIQ, with its reference. */
+export type PostableTenderMethod = "cash" | "upi_manual" | "external";
 /** Every method a bill's tenders can carry (prisma's `TenderMethod`, widened by restiq-backend#130): the four electronic ones are only ever written by the server when a payment intent confirms (ADR-001). */
 export type BillTenderMethod = PostableTenderMethod | "upi_intent" | "upi_qr" | "card_online" | "card_terminal";
 
@@ -39,6 +41,7 @@ export const TENDER_METHOD_LABEL: Record<BillTenderMethod, string> = {
   upi_qr: "UPI QR",
   card_online: "Card (online)",
   card_terminal: "Card terminal",
+  external: "External",
 };
 
 /** The real, verified wire shape of one entry in `BillView.tenders` (bills.dtos.ts's `TenderView`, read directly; `paymentIntentId`/`riskAcknowledged` per restiq-backend#130). */
@@ -49,6 +52,8 @@ export interface BillTenderView {
   /** The confirmed intent an electronic tender came from; null for cash / manual UPI. Optional only for older fixtures - the backend always sends it. */
   paymentIntentId?: string | null;
   riskAcknowledged?: boolean;
+  /** An external tender's reference / bill number (restiq-backend#146); null otherwise. */
+  reference?: string | null;
   createdAt: string;
 }
 
@@ -59,6 +64,8 @@ export interface BillView {
   billNumber: number | null;
   subtotalMinor: number;
   taxMinor: number;
+  /** Per-rate tax lines (CGST/SGST for India, GST for AU), snapshotted when the bill is created (bills.dtos.ts's TaxBreakdownLineView). Optional for older fixtures. */
+  taxBreakdown?: TaxBreakdownEntry[];
   discountMinor: number | null;
   discountReason: string | null;
   /** True for tax-inclusive pricing (AU): subtotalMinor already contains taxMinor, so the payable total is subtotal - discount. Optional only for older fixtures; the backend always sends it. */
@@ -80,6 +87,8 @@ export interface BillView {
 export interface PendingTender {
   method: PostableTenderMethod;
   amountMinor: number;
+  /** Required for `external`: the outside receipt / bill number. */
+  reference?: string;
 }
 
 /** Not yet submitted either - same finalize-call-only posture as `PendingTender` (`FinalizeBillDto.discountMinor`/`discountReason`). `managerPin` is only ever present on the above-threshold path (see discount-dialog.tsx). */
