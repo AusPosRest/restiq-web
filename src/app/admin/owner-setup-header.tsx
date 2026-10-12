@@ -1,7 +1,7 @@
 "use client";
 
-// PE-32: the setup checklist and the menu import sit outside the owner console's shell; they still carry the
-// RESTIQ wordmark and greet the restaurant by name (and show TEST for a Test-mode tenant, #213).
+// PE-32: the setup checklist sits outside the owner console's shell; it still carries the
+// RESTIQ wordmark, greets the restaurant by name (and shows TEST for a Test-mode tenant, #213).
 import { TestModeBadge } from "@/components/test-mode-badge";
 import { useAdminLoad } from "./(shell)/use-admin-load";
 

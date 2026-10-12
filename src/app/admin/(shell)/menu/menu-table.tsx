@@ -31,11 +31,11 @@ export function MenuTable({
       <thead className="sticky top-0 z-10 bg-card text-left text-xs font-semibold uppercase tracking-wider text-muted-foreground">
         <tr className="h-12 border-b border-border/40">
           {/* PE-27: on a phone the drag handle and Variants step aside so Available stays in view. */}
-          <th className="hidden w-6 sm:table-cell" />
+          <th className="hidden w-9 sm:table-cell" />
           <th className="px-3">Item</th>
-          <th className="px-3 text-right">Price</th>
-          <th className="hidden px-3 sm:table-cell">Variants</th>
-          <th className="px-3 text-center">Available</th>
+          <th className="w-36 px-3 text-right">Price</th>
+          <th className="hidden w-44 px-3 sm:table-cell">Variants</th>
+          <th className="w-24 px-3 text-center">Available</th>
         </tr>
       </thead>
       <tbody>

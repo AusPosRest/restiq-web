@@ -162,6 +162,11 @@ export function validateBusiness(data: BusinessData): StepErrors {
   return errors;
 }
 
+/** The GSTIN / ABN as it is sent to the API. */
+export function normalizedTaxNumber(number: string): string {
+  return number.trim().toUpperCase().replace(/\s/g, "");
+}
+
 export function validateTax(data: TaxData): StepErrors {
   const errors: StepErrors = {};
   const number = data.registrationNumber.trim().toUpperCase();
@@ -267,7 +272,7 @@ export function toSubmitPayload(data: WizardData): Record<string, unknown> {
     ...(slug.trim() ? { slug: slug.trim().toLowerCase() } : {}),
     tax: {
       country: data.tax.country,
-      registrationNumber: data.tax.registrationNumber.trim().toUpperCase().replace(/\s/g, ""),
+      registrationNumber: normalizedTaxNumber(data.tax.registrationNumber),
       legalEntityName: data.tax.legalEntityName,
       taxProfile: data.tax.taxProfile,
       ...(data.tax.country === "IN" && data.tax.fssaiLicense.trim() ? { fssaiLicense: data.tax.fssaiLicense.trim() } : {}),
