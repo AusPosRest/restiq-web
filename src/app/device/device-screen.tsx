@@ -13,6 +13,7 @@
 // its own localStorage read behind an always-null first render.
 import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
+import { saveDeviceSecret } from "@/lib/device-secret";
 import {
   clearStoredDevice,
   continueTargetFor,
@@ -65,7 +66,9 @@ async function submitEnrol(code: string, label: string): Promise<{ device: Devic
       ...(trimmedLabel ? { label: trimmedLabel } : {}),
     }),
   });
-  const body = (await res.json().catch(() => ({}))) as ErrorBody & { device?: DeviceView; tenantName?: string | null; outletName?: string | null };
+  const body = (await res.json().catch(() => ({}))) as ErrorBody & { device?: DeviceView; tenantName?: string | null; outletName?: string | null; deviceSecret?: string };
+  // restiq-backend#209: kept for the PIN pad, which proves this till with it at sign-in.
+  if (res.ok && body.device && body.deviceSecret) saveDeviceSecret(body.device.id, body.deviceSecret);
   if (res.ok && body.device) return { device: { ...body.device, tenantName: body.tenantName ?? null, outletName: body.outletName ?? null } };
   return { errorBody: body };
 }

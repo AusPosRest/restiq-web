@@ -19,6 +19,7 @@
 import { Delete } from "lucide-react";
 import { useEffect, useRef, useState } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
+import { getDeviceSecret } from "@/lib/device-secret";
 import { clearTerminalBinding, getTabDeviceId, getTerminalBinding, saveTabDeviceId, saveTerminalBinding, type TerminalBinding } from "../terminal-binding";
 import {
   appendDigit,
@@ -111,7 +112,9 @@ async function postJson(path: string, body: unknown): Promise<SubmitResult> {
 function submitPin(pin: string, tenantId: string | undefined): Promise<SubmitResult> {
   // restiq-backend#171: an enrolled till gets its own wrong-PIN allowance.
   const deviceId = getTabDeviceId() ?? undefined;
-  return postJson("/pos/auth/login", { pin, ...(tenantId ? { tenantId } : {}), ...(deviceId ? { deviceId } : {}) });
+  // restiq-backend#209: the secret from enrolment proves this really is that till.
+  const deviceSecret = deviceId ? getDeviceSecret(deviceId) : null;
+  return postJson("/pos/auth/login", { pin, ...(tenantId ? { tenantId } : {}), ...(deviceId ? { deviceId } : {}), ...(deviceSecret ? { deviceSecret } : {}) });
 }
 
 function submitOutletSelection(pendingToken: string, outletId: string): Promise<SubmitResult> {

@@ -83,11 +83,28 @@ describe("Owner auth", () => {
     expect(response.headers.get("set-cookie")).toBeNull();
   });
 
-  it("clears the admin cookie and redirects a logout POST to the login page", async () => {
+  it("clears the admin cookie and redirects a logout POST to the login page on the same host", async () => {
     const response = await logout(new NextRequest("https://web.example.test/admin/auth/logout", { method: "POST" }));
     expect(response.status).toBe(303);
-    expect(response.headers.get("location")).toBe("https://web.example.test/admin/login");
+    // restiq-web#342 (SE-10): relative, so the browser stays on the restaurant's own address, never the internal one.
+    expect(response.headers.get("location")).toBe("/admin/login");
     expect(response.cookies.get(ADMIN_SESSION_COOKIE)).toMatchObject({ value: "", httpOnly: true, path: "/", maxAge: 0 });
     expect(response.cookies.get("ops_session")).toBeUndefined();
+  });
+
+  it("ends the owner session at the API on logout (restiq-web#342, SE-9)", async () => {
+    const fetchMock = vi.fn().mockResolvedValue(new Response(null, { status: 204 }));
+    vi.stubGlobal("fetch", fetchMock);
+    const response = await logout(new NextRequest("https://web.example.test/admin/auth/logout", { method: "POST", headers: { cookie: `${ADMIN_SESSION_COOKIE}=tok-1` } }));
+    expect(fetchMock).toHaveBeenCalledWith("https://api.example.test/admin/v1/auth/logout", expect.objectContaining({ method: "POST", headers: expect.objectContaining({ authorization: "Bearer tok-1" }) }));
+    expect(response.status).toBe(303);
+    expect(response.cookies.get(ADMIN_SESSION_COOKIE)?.value).toBe("");
+  });
+
+  it("still signs the browser out when the API is unreachable", async () => {
+    vi.stubGlobal("fetch", vi.fn().mockRejectedValue(new TypeError("network down")));
+    const response = await logout(new NextRequest("https://web.example.test/admin/auth/logout", { method: "POST", headers: { cookie: `${ADMIN_SESSION_COOKIE}=tok-1` } }));
+    expect(response.status).toBe(303);
+    expect(response.cookies.get(ADMIN_SESSION_COOKIE)?.value).toBe("");
   });
 });

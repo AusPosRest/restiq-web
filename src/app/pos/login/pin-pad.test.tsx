@@ -62,6 +62,32 @@ describe("PinPad", () => {
     expect(JSON.parse(init.body as string)).toEqual({ pin: "1234", tenantId: "tenant-9", deviceId: "dev-1" });
   });
 
+  it("proves the till with the secret it got at enrolment (restiq-backend#209)", async () => {
+    search = "device=dev-1&tenant=tenant-9";
+    window.localStorage.setItem("device:secret:dev-1", "dvs_abc");
+    const fetchMock = vi.fn().mockResolvedValue(
+      jsonResponse(200, { status: "authenticated", staff: { id: "s1", name: "Priya" }, outlet: { id: "o1", name: "Spice Route" } }),
+    );
+    vi.stubGlobal("fetch", fetchMock);
+    render(<PinPad nextPath="/pos" />);
+    await typePin("1234");
+    await waitFor(() => expect(replace).toHaveBeenCalledWith("/pos"));
+    const [, init] = fetchMock.mock.calls[0] as [string, RequestInit];
+    expect(JSON.parse(init.body as string)).toEqual({ pin: "1234", tenantId: "tenant-9", deviceId: "dev-1", deviceSecret: "dvs_abc" });
+  });
+
+  it("tells staff plainly when the till was removed (restiq-backend#209)", async () => {
+    search = "device=dev-1&tenant=tenant-9";
+    vi.stubGlobal(
+      "fetch",
+      vi.fn().mockResolvedValue(jsonResponse(403, { error: { code: "device_revoked", message: "This device was removed by the owner - set it up again with a new code" } })),
+    );
+    render(<PinPad nextPath="/pos" />);
+    await typePin("1234");
+    expect(await screen.findByText("This device was removed by the owner - set it up again with a new code")).toBeTruthy();
+    expect(replace).not.toHaveBeenCalled();
+  });
+
   it("reuses a previously saved binding with no query string, and clears it on Re-enrol", async () => {
     window.localStorage.setItem("pos:terminal-binding", JSON.stringify({ tenantId: "tenant-5", deviceId: "dev-5" }));
     vi.stubGlobal("fetch", vi.fn());
