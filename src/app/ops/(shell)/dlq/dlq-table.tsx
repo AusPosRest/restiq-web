@@ -28,6 +28,7 @@ import {
   toUrlParams,
   withFilter,
 } from "./table-state";
+import { formatDateTime } from "@/lib/datetime";
 
 const PAGE_SIZE = 25;
 
@@ -60,7 +61,7 @@ function operationLabel(row: DeadLetterView): string {
 function AgeCell({ createdAt }: Readonly<{ createdAt: string }>) {
   const [now] = useState(() => Date.now());
   const ageSeconds = Math.max(0, Math.floor((now - Date.parse(createdAt)) / 1000));
-  return <span title={new Date(createdAt).toLocaleString()}>{formatLag(ageSeconds)}</span>;
+  return <span title={formatDateTime(createdAt)}>{formatLag(ageSeconds)}</span>;
 }
 
 // A row replayed beyond the current page (bulk-by-filter can touch more ops

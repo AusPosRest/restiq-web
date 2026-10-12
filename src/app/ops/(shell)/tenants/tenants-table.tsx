@@ -27,6 +27,7 @@ import {
   withFilter,
   withSort,
 } from "./table-state";
+import { DATE_LOCALE } from "@/lib/datetime";
 
 const PAGE_SIZE = 25;
 const SEARCH_DEBOUNCE_MS = 350;
@@ -266,7 +267,7 @@ export function TenantsTable() {
                     <td className="px-4 font-medium">{tenant.name}</td>
                     <td className="px-4 text-muted-foreground">{tenant.country}</td>
                     <td className="px-4 text-right tabular-nums">{tenant.outletCount}</td>
-                    <td className="px-4 text-muted-foreground">{tenant.plan}</td>
+                    <td className="px-4 text-muted-foreground">{tenant.plan.charAt(0).toUpperCase() + tenant.plan.slice(1)}</td>
                     <td className="px-4">
                       <StatusBadge status={tenant.status} />
                     </td>
@@ -274,7 +275,7 @@ export function TenantsTable() {
                       <StatusBadge status={tenant.health} />
                     </td>
                     <td className="px-4 tabular-nums text-muted-foreground">
-                      {new Date(tenant.createdAt).toLocaleDateString(undefined, { day: "numeric", month: "short", year: "numeric" })}
+                      {new Date(tenant.createdAt).toLocaleDateString(DATE_LOCALE, { day: "numeric", month: "short", year: "numeric" })}
                     </td>
                   </tr>
                 ))}

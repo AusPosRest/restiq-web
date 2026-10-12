@@ -32,11 +32,9 @@ import { closeShift, getCurrentShift, PosApiError, type ClosedShift, type ShiftV
 import { LoadErrorPanel, Skeleton } from "../data-states";
 import { BlindCountKeypad } from "./blind-count-keypad";
 import { CloseShiftResult } from "./close-shift-result";
+import { usePosCurrency } from "../use-pos-currency";
 
-// The real backend's ShiftView carries no tenant-currency field to read -
-// same convention as CAP-4's menu management (menu-management.tsx's
-// CURRENCY constant).
-const CURRENCY = "INR";
+// The tenant's currency (PE-10) - ShiftView carries none, see use-pos-currency.ts.
 
 function useCurrentShift(outletId: string) {
   const [attempt, setAttempt] = useState(0);
@@ -66,6 +64,7 @@ function useCurrentShift(outletId: string) {
 }
 
 export function CloseShiftScreen({ outletId }: Readonly<{ outletId: string }>) {
+  const currency = usePosCurrency();
   const { loading, failed, shift, retry } = useCurrentShift(outletId);
   const [digits, setDigits] = useState("");
   const [busy, setBusy] = useState(false);
@@ -109,14 +108,14 @@ export function CloseShiftScreen({ outletId }: Readonly<{ outletId: string }>) {
   }
 
   return result ? (
-    <CloseShiftResult result={result} currency={CURRENCY} />
+    <CloseShiftResult result={result} currency={currency} />
   ) : (
     <BlindCountKeypad
       digits={digits}
       onDigitsChange={setDigits}
       busy={busy}
       error={error}
-      currency={CURRENCY}
+      currency={currency}
       onSubmit={(countedMinor) => void handleSubmit(countedMinor)}
     />
   );

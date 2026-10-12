@@ -49,6 +49,17 @@ describe("WelcomeFlow", () => {
     expect(JSON.parse(init.body as string)).toEqual({ outletId: "o1", tableId: "t1", name: "Rahul", phone: "9876543210" });
   });
 
+  it("CU-22/PE-24: names the restaurant and table, and says why a short phone number isn't accepted", async () => {
+    render(<WelcomeFlow outletId="o1" tableId="t1" welcome={{ restaurantName: "Spice Garden", outletName: "Indiranagar", tableLabel: "T3" }} />);
+    expect(screen.getByTestId("qr-welcome-identity").textContent).toBe("Spice GardenIndiranagar · Table T3");
+
+    expect(screen.queryByTestId("qr-phone-hint")).toBeNull();
+    await userEvent.type(screen.getByLabelText("Phone number"), "12345");
+    expect(screen.getByTestId("qr-phone-hint").textContent).toBe("Enter your 10-digit mobile number.");
+    await userEvent.type(screen.getByLabelText("Phone number"), "67890");
+    expect(screen.queryByTestId("qr-phone-hint")).toBeNull();
+  });
+
   it("disables the start submit until name and a 10-digit phone are entered", async () => {
     render(<WelcomeFlow outletId="o1" tableId="t1" />);
     const submit = screen.getByTestId("qr-start-submit") as HTMLButtonElement;

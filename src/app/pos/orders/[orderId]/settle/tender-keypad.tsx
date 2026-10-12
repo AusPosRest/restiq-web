@@ -30,6 +30,7 @@ import { X } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { AmountKeypad } from "../../../(shell)/shift/amount-keypad";
 import { appendDigit, digitsToMinor, formatMinor } from "../../../(shell)/shift/shift-state";
+import { cashRoundOffMinor } from "@/lib/money";
 import { TENDER_METHOD_LABEL, type BillTenderView, type PendingTender, type PostableTenderMethod } from "./bill-state";
 
 type KeypadMethod = PostableTenderMethod | "card_terminal";
@@ -56,6 +57,9 @@ export interface TenderKeypadProps {
 // delivery app, a bank transfer - recorded with that system's reference.
 const METHODS: PostableTenderMethod[] = ["cash", "upi_manual", "external"];
 
+// CU-11: one tap for the notes a customer usually hands over.
+const QUICK_NOTES_MINOR: Record<string, number[]> = { INR: [20000, 50000, 100000, 200000], AUD: [2000, 5000, 10000] };
+
 export function TenderKeypad({
   currency,
   remainingMinor,
@@ -79,6 +83,11 @@ export function TenderKeypad({
   const blocked = cashLocked && method === "cash";
   const canAdd = !blocked && amountMinor > 0 && referenceReady && (!isTerminal || (amountMinor <= remainingMinor && !terminalBusy));
   const methods: KeypadMethod[] = onSendToTerminal ? [...METHODS, "card_terminal"] : METHODS;
+  // CU-11: rupee cash is collected to the nearest rupee; the bill keeps its exact total.
+  const isCash = method === "cash";
+  const roundOffMinor = isCash ? cashRoundOffMinor(remainingMinor, currency) : 0;
+  const fillMinor = remainingMinor + roundOffMinor;
+  const quickNotes = isCash ? (QUICK_NOTES_MINOR[currency] ?? []).filter((note) => note >= fillMinor) : [];
 
   function submit(minor: number) {
     if (blocked || minor <= 0 || !referenceReady) return;
@@ -95,6 +104,13 @@ export function TenderKeypad({
         <p data-testid="tender-remaining" className="font-headline text-3xl font-bold tabular-nums text-foreground">
           {formatMinor(remainingMinor, currency)}
         </p>
+        {roundOffMinor !== 0 && remainingMinor > 0 && (
+          <p data-testid="tender-cash-rounded" className="mt-1 text-sm text-muted-foreground">
+            Cash to collect <span className="font-semibold tabular-nums text-foreground">{formatMinor(fillMinor, currency)}</span> · round off{" "}
+            {roundOffMinor < 0 ? "-" : "+"}
+            {formatMinor(Math.abs(roundOffMinor), currency)}
+          </p>
+        )}
         {changeMinor > 0 && (
           <p data-testid="tender-change-due" className="mt-1 text-lg font-semibold tabular-nums text-status-available">
             Change due {formatMinor(changeMinor, currency)}
@@ -195,10 +211,19 @@ export function TenderKeypad({
           size="sm"
           data-testid="tender-fill-remaining"
           disabled={blocked || remainingMinor <= 0 || !referenceReady || (isTerminal && terminalBusy)}
-          onClick={() => submit(remainingMinor)}
+          onClick={() => submit(fillMinor)}
         >
-          {isTerminal ? "Send exact remaining" : "Exact remaining"} · {formatMinor(remainingMinor, currency)}
+          {isTerminal ? "Send exact remaining" : "Exact remaining"} · {formatMinor(fillMinor, currency)}
         </Button>
+        {quickNotes.length > 0 && remainingMinor > 0 && (
+          <div data-testid="tender-quick-notes" className="flex flex-wrap justify-center gap-2">
+            {quickNotes.map((note) => (
+              <Button key={note} type="button" variant="outline" size="sm" data-testid={`tender-quick-note-${note}`} onClick={() => submit(note)}>
+                {formatMinor(note, currency)}
+              </Button>
+            ))}
+          </div>
+        )}
       </div>
 
       {blocked && (

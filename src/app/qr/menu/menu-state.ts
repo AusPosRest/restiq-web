@@ -26,6 +26,7 @@
 // inventing any of them.
 
 import type { ComboMenuView } from "@/lib/combo";
+import { formatPrice } from "@/lib/money";
 
 export interface MenuModifierView {
   id: string;
@@ -89,13 +90,9 @@ export interface PriceDisplay {
   currency: string;
 }
 
-const CURRENCY_SYMBOLS: Record<string, string> = { INR: "₹" };
-
-/** Menu/cart prices render whole units when even (₹340, the Q3/Q4 mocks), with paise otherwise (₹289.50). */
+/** Menu/cart prices render whole-currency-unit when whole (₹340, not ₹340.00), never rounding paise away. */
 export function formatPriceMinor(priceMinor: number, currency: string): string {
-  const symbol = CURRENCY_SYMBOLS[currency] ?? `${currency} `;
-  // PE-12: paise are shown when there are any (₹289.50), so the menu never disagrees with the bill.
-  return `${symbol}${(priceMinor / 100).toFixed(priceMinor % 100 === 0 ? 0 : 2)}`;
+  return formatPrice(priceMinor, currency);
 }
 
 /** EXPERIENCE.md State Patterns: "an empty menu category is skipped, not shown hollow." */

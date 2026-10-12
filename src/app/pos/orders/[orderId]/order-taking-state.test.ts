@@ -80,8 +80,9 @@ describe("formatPriceMinor", () => {
     expect(formatPriceMinor(28950)).toBe("₹289.50");
   });
 
-  it("falls back to the currency code for an unknown symbol", () => {
-    expect(formatPriceMinor(500, "AUD")).toBe("AUD 5");
+  it("shows A$ for AUD (PE-10) and falls back to the currency code for an unknown symbol", () => {
+    expect(formatPriceMinor(500, "AUD")).toBe("A$5");
+    expect(formatPriceMinor(500, "NZD")).toBe("NZD 5");
   });
 });
 

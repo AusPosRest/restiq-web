@@ -15,6 +15,7 @@
 // either), so this story's original percent-based Margin/Labour rendering
 // was wrong and has been corrected to match.
 
+import { DATE_LOCALE } from "@/lib/datetime";
 export interface DashboardTenant {
   outletCount: number;
   staffCount: number;
@@ -30,9 +31,21 @@ export interface FinancialMetric {
   message: string;
 }
 
+/** The outlet's own calendar day so far (PE-33/CU-7). `sales.amountMinor` is `netMinor` - bills less refunds, the same figure Reports > Payments shows as Net sales. */
+export interface OutletToday {
+  billCount: number;
+  grossMinor: number;
+  refundedMinor: number;
+  netMinor: number;
+  averageBillMinor: number;
+  openOrderCount: number;
+  byMethod: { method: string; amountMinor: number }[];
+}
+
 export interface OutletKpis {
   outletId: string;
   outletName: string;
+  today: OutletToday;
   sales: FinancialMetric;
   margin: FinancialMetric;
   labourCost: FinancialMetric;
@@ -53,9 +66,9 @@ export function formatAsOf(iso: string, now: Date = new Date(), timeZone?: strin
   // Bengaluru). Tests pin `timeZone` to "UTC" to stay deterministic.
   const then = new Date(iso);
   const day = (date: Date) => date.toLocaleDateString("en-CA", { timeZone });
-  const time = then.toLocaleTimeString("en-US", { hour: "numeric", minute: "2-digit", timeZone }).replace(/\s/g, "").toLowerCase();
+  const time = then.toLocaleTimeString(DATE_LOCALE, { hour: "numeric", minute: "2-digit", timeZone }).replace(/\s/g, "").toLowerCase();
   if (day(then) === day(now)) return time;
-  const month = then.toLocaleString("en-US", { month: "short", timeZone });
-  const date = then.toLocaleString("en-US", { day: "numeric", timeZone });
+  const month = then.toLocaleString(DATE_LOCALE, { month: "short", timeZone });
+  const date = then.toLocaleString(DATE_LOCALE, { day: "numeric", timeZone });
   return `${date} ${month}, ${time}`;
 }

@@ -14,9 +14,10 @@ import { LoadErrorPanel, Skeleton } from "../../data-states";
 import { StatusBadge } from "../../status-badge";
 import { useToast } from "../../toast";
 import { useOpsLoad } from "../../use-ops-load";
+import { DATE_LOCALE } from "@/lib/datetime";
 
 function formatDate(iso: string): string {
-  return new Date(iso).toLocaleDateString(undefined, { day: "2-digit", month: "short", year: "numeric" });
+  return new Date(iso).toLocaleDateString(DATE_LOCALE, { day: "2-digit", month: "short", year: "numeric" });
 }
 
 function formatAmount(amountMinor: string): string {

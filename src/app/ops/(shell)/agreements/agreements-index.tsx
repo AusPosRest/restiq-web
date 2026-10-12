@@ -15,6 +15,7 @@ import { ConfirmReasonDialog } from "../confirm-reason-dialog";
 import { LoadErrorPanel, Skeleton } from "../data-states";
 import { useToast } from "../toast";
 import { useOpsLoad } from "../use-ops-load";
+import { DATE_LOCALE } from "@/lib/datetime";
 
 const MAX_PDF_BYTES = 5 * 1024 * 1024;
 const FIELD_CLASSES =
@@ -22,7 +23,7 @@ const FIELD_CLASSES =
 const TH_CLASSES = "font-label px-4 text-left text-xs font-semibold uppercase tracking-wider text-muted-foreground";
 
 export function formatDateTime(iso: string): string {
-  return new Date(iso).toLocaleString(undefined, { day: "2-digit", month: "short", year: "numeric", hour: "2-digit", minute: "2-digit" });
+  return new Date(iso).toLocaleString(DATE_LOCALE, { day: "2-digit", month: "short", year: "numeric", hour: "2-digit", minute: "2-digit" });
 }
 
 export function AgreementsIndex() {

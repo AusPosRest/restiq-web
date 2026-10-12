@@ -3,8 +3,8 @@
 // T4/T4a Menu Management (CAP-4): category sidebar + item DataTable + item
 // editor drawer, all on one screen so the list never loses context
 // (EXPERIENCE.md: "item editor as a drawer, not a full-page navigation").
-// Currency defaults to INR (same convention as CAP-3's menu import) - the
-// backend's menu endpoints carry no tenant-currency field to read instead.
+// Currency is the tenant's own (PE-10), read off the outlet list - INR only
+// until the outlets have loaded.
 import { LibraryBig, Plus, Search, Soup, Upload } from "lucide-react";
 import { Dialog } from "radix-ui";
 import { useCallback, useEffect, useMemo, useState } from "react";
@@ -12,7 +12,7 @@ import { Button } from "@/components/ui/button";
 import { type DirectoryProduct, fetchAllergens, fetchCategories, fetchCombos, fetchItems, fetchModifierGroups } from "../../api";
 import { MenuImport } from "../../menu-import";
 import { LoadErrorPanel, Skeleton } from "../data-states";
-import { useOutlets } from "../outlet-context";
+import { useOutlets, useTenantCurrency } from "../outlet-context";
 import { useToast } from "../toast";
 import { useAdminLoad } from "../use-admin-load";
 import { CategorySidebar } from "./category-sidebar";
@@ -21,8 +21,6 @@ import { DirectoryDialog } from "./directory-dialog";
 import { ItemDrawer } from "./item-drawer";
 import { AllergenView, ALL_CATEGORY, CategoryView, ComboView, ItemView, ModifierGroupView, visibleItems } from "./menu-state";
 import { MenuTable } from "./menu-table";
-
-const CURRENCY = "INR";
 
 interface MenuData {
   items: ItemView[];
@@ -71,6 +69,7 @@ function useMenuData() {
 export function MenuManagement() {
   const { loading, failed, data, retry } = useMenuData();
   const { outlets, selectedOutletId } = useOutlets();
+  const currency = useTenantCurrency();
 
   const [items, setItems] = useState<ItemView[] | null>(null);
   const [categories, setCategories] = useState<CategoryView[] | null>(null);
@@ -195,7 +194,7 @@ export function MenuManagement() {
 
       {tab === "combos" ? (
         <div className="mt-4 flex flex-1">
-          <CombosPanel combos={effectiveCombos} items={effectiveItems} categories={effectiveCategories} currency={CURRENCY} onChanged={setCombos} />
+          <CombosPanel combos={effectiveCombos} items={effectiveItems} categories={effectiveCategories} currency={currency} onChanged={setCombos} />
         </div>
       ) : (
         <>
@@ -228,7 +227,7 @@ export function MenuManagement() {
               ) : (
                 <MenuTable
                   items={filtered}
-                  currency={CURRENCY}
+                  currency={currency}
                   filterKey={`${category}|${search}`}
                   onSelect={setDrawerItem}
                   onAvailabilityChanged={handleAvailabilityChanged}
@@ -250,7 +249,7 @@ export function MenuManagement() {
         outlets={outlets}
         selectedOutletId={selectedOutletId}
         defaultCategoryId={category !== ALL_CATEGORY ? category : (effectiveCategories[0]?.id ?? "")}
-        currency={CURRENCY}
+        currency={currency}
         onClose={() => setDrawerItem("closed")}
         onSaved={upsertItem}
         onDeleted={(deleted) => {

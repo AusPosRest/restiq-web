@@ -9,6 +9,7 @@ import { TenantListResult } from "./api";
 import { LoadErrorPanel, Skeleton } from "./data-states";
 import { StatusBadge } from "./status-badge";
 import { useOpsLoad } from "./use-ops-load";
+import { DATE_LOCALE } from "@/lib/datetime";
 
 interface TileConfig {
   key: string;
@@ -130,7 +131,7 @@ function RecentOnboardings() {
                       <span className="text-muted-foreground">{tenant.country}</span>
                       <StatusBadge status={tenant.status} />
                       <span className="tabular-nums text-muted-foreground">
-                        {new Date(tenant.createdAt).toLocaleDateString(undefined, { day: "numeric", month: "short" })}
+                        {new Date(tenant.createdAt).toLocaleDateString(DATE_LOCALE, { day: "numeric", month: "short" })}
                       </span>
                     </span>
                   </button>

@@ -5,11 +5,9 @@
 //
 // Contract: GET /admin/v1/reports/payments (restiq-backend#104, landing in
 // parallel with this story) - see api.ts#fetchPayments's header for the full
-// wire shape this was built against. Money carries no per-row currency field
-// (same gap CAP-4's menu prices had before a tenant-currency source
-// existed) - payments.tsx follows the admin surface's existing convention
-// (menu-management.tsx, dashboard's outlet-kpi-tiles.tsx) of a local INR
-// constant plus menu-state.ts's formatPriceMinor, not a new formatter.
+// wire shape this was built against. Every amount is in the response's
+// `currency` (the tenant's), shown to the paisa/cent with lib/money.ts's
+// formatMoney (PE-10, PE-23) - accounting figures are never rounded.
 
 export interface PaymentTender {
   method: string;
@@ -24,6 +22,7 @@ export interface PaymentCreditNote {
   createdAt: string;
 }
 
+import { localeForCurrency } from "@/lib/money";
 import type { TaxBreakdownEntry } from "@/lib/tax-lines";
 export type { TaxLine } from "@/lib/tax-lines";
 export type PaymentTaxBreakdownEntry = TaxBreakdownEntry;
@@ -60,9 +59,12 @@ export interface PaymentsTotals {
   totalMinor: number;
   tenderedMinor: number;
   refundedMinor: number;
+  /** totalMinor - refundedMinor: the same "sales" the dashboard shows (PE-33). */
+  netMinor: number;
 }
 
 export interface PaymentsResponse {
+  currency: string;
   items: PaymentRow[];
   nextCursor: string | null;
   totals: PaymentsTotals;
@@ -165,11 +167,11 @@ export function refundedMinorFor(row: Pick<PaymentRow, "creditNotes">): number {
   return row.creditNotes.reduce((sum, note) => sum + note.amountMinor, 0);
 }
 
-export function formatBillTime(iso: string, timeZone: string): string {
-  return new Date(iso).toLocaleTimeString("en-US", { timeZone, hour: "2-digit", minute: "2-digit" });
+export function formatBillTime(iso: string, timeZone: string, currency = "INR"): string {
+  return new Date(iso).toLocaleTimeString(localeForCurrency(currency), { timeZone, hour: "2-digit", minute: "2-digit" });
 }
 
 /** Appends a "load more" page onto what's already loaded - totals describe the whole filtered range on every page (not just what's loaded so far), so the latest response's totals replace the running ones rather than being summed. */
 export function appendPaymentsPage(current: PaymentsResponse, page: PaymentsResponse): PaymentsResponse {
-  return { items: [...current.items, ...page.items], nextCursor: page.nextCursor, totals: page.totals };
+  return { currency: page.currency, items: [...current.items, ...page.items], nextCursor: page.nextCursor, totals: page.totals };
 }

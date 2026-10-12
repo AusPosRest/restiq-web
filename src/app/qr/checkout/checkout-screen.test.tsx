@@ -54,6 +54,58 @@ describe("CheckoutScreen", () => {
     expect(screen.getByTestId("checkout-no-order")).toBeTruthy();
   });
 
+  it("CU-24/PE-10: splits the tax like the till, prices in the tenant's currency, and offers a receipt once paid", async () => {
+    const split = {
+      ...TWO_GUEST_BILL,
+      taxBreakdown: [
+        { label: "CGST", ratePercent: 2.5, amountMinor: 1250 },
+        { label: "SGST", ratePercent: 2.5, amountMinor: 1250 },
+      ],
+    };
+    const fetchMock = routedFetch({
+      "POST /qr/api/orders/o1/bill": () => jsonResponse(200, split),
+      "GET /qr/api/cart": () => jsonResponse(200, { currency: "INR", guests: [], totalMinor: 0 }),
+    });
+    vi.stubGlobal("fetch", fetchMock);
+    render(<CheckoutScreen orderId="o1" myGuestId="g1" />);
+    const summary = await screen.findByTestId("checkout-bill-summary");
+    expect(summary.textContent).toContain("CGST (2.5%)₹12.50");
+    expect(summary.textContent).toContain("SGST (2.5%)₹12.50");
+    expect(summary.textContent).not.toContain("Tax₹");
+    cleanup();
+
+    const paid = { ...split, status: "finalized" as const, billNumber: 12, subtotalMinor: 1500, totalMinor: 1500, taxBreakdown: [{ label: "GST", ratePercent: 10, amountMinor: 136 }], pricesIncludeTax: true };
+    const invoice = {
+      invoiceNumber: "12",
+      title: "Tax Invoice",
+      issuedAt: "2026-10-11T08:00:00.000Z",
+      currency: "AUD",
+      seller: { legalEntityName: "Harbour Pty Ltd", registrationLabel: "ABN", registrationNumber: "51824753556", outletName: "Bondi", outletAddress: "1 Beach Rd" },
+      lines: [{ name: "Flat White", quantity: 3, unitPriceMinor: 500, lineTotalMinor: 1500 }],
+      subtotalMinor: 1500,
+      discountMinor: null,
+      taxBreakdown: [{ label: "GST", ratePercent: 10, amountMinor: 136 }],
+      taxMinor: 136,
+      totalMinor: 1500,
+      tenders: [{ method: "upi_qr", amountMinor: 1500, createdAt: "2026-10-11T08:00:00.000Z" }],
+      footerMessage: null,
+    };
+    vi.stubGlobal(
+      "fetch",
+      routedFetch({
+        "POST /qr/api/orders/o1/bill": () => jsonResponse(200, paid),
+        "GET /qr/api/cart": () => jsonResponse(200, { currency: "AUD", guests: [], totalMinor: 0 }),
+        "GET /qr/api/bills/b1/invoice": () => jsonResponse(200, invoice),
+      }),
+    );
+    render(<CheckoutScreen orderId="o1" myGuestId="g1" />);
+    await screen.findByTestId("checkout-settled");
+    await waitFor(() => expect(screen.getByTestId("checkout-settled").textContent).toContain("A$15.00"));
+    await userEvent.click(screen.getByTestId("checkout-show-receipt"));
+    expect((await screen.findByTestId("kiosk-receipt")).textContent).toContain("Flat White");
+    expect(screen.getByTestId("kiosk-receipt-total").textContent).toContain("A$15.00");
+  });
+
   it("renders the same bill on a 200 (any guest re-requesting an order that already has one - restiq-backend#98 made the POST idempotent per order, resolving the create race with no client-side fallback)", async () => {
     const fetchMock = routedFetch({
       "POST /qr/api/orders/o1/bill": () => jsonResponse(200, TWO_GUEST_BILL),
@@ -64,7 +116,7 @@ describe("CheckoutScreen", () => {
 
     expect(await screen.findByTestId("checkout-bill-summary")).toBeTruthy();
     expect(screen.getByTestId("checkout-total").textContent).toBe("₹525.00");
-    expect(fetchMock.mock.calls).toHaveLength(1);
+    expect(fetchMock.mock.calls.filter(([url]) => String(url).includes("/bill"))).toHaveLength(1);
   });
 
   it("renders every guest's share, with the caller's own row emphasized and the only one offering a pay action", async () => {

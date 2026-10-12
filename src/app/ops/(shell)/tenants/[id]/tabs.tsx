@@ -10,6 +10,7 @@ import { InviteLinkChip } from "../invite-link";
 import { ConfirmReasonDialog } from "../../confirm-reason-dialog";
 import { StatusBadge } from "../../status-badge";
 import { useToast } from "../../toast";
+import { DATE_LOCALE } from "@/lib/datetime";
 
 interface TabProps {
   detail: TenantDetail;
@@ -53,6 +54,23 @@ function gstStat(detail: TenantDetail): string {
 }
 
 const REGION_LABELS: Record<string, string> = { "in-mumbai": "India (Mumbai)" };
+const REGION_COUNTRY: Record<string, string> = { "in-mumbai": "IN" };
+
+/**
+ * PE-28: where this tenant's data is hosted. v1 runs one data plane (Mumbai),
+ * so an Australian tenant really is hosted in India - say so plainly rather
+ * than leave "India (Mumbai)" looking like a mistake.
+ */
+export function regionLabel(region: string, country: string): string {
+  const label = REGION_LABELS[region] ?? region;
+  const regionCountry = REGION_COUNTRY[region];
+  return regionCountry && regionCountry !== country ? `${label} - no ${country === "AU" ? "Australian" : "local"} region yet` : label;
+}
+
+/** "standard" -> "Standard" (PE-28). */
+export function titleCase(value: string): string {
+  return value.charAt(0).toUpperCase() + value.slice(1);
+}
 
 export function OverviewTab({ detail, onMutated }: Readonly<TabProps>) {
   const toast = useToast();
@@ -93,8 +111,8 @@ export function OverviewTab({ detail, onMutated }: Readonly<TabProps>) {
       <div className="grid grid-cols-2 gap-4 xl:grid-cols-4">
         <StatCard label="Outlets" value={String(detail.outlets.length)} testId="overview-outlets" />
         <StatCard label="Roles" value={String(detail.rolesCount)} testId="overview-roles" />
-        <StatCard label="Plan" value={`${tenant.plan} · ${tenant.billingPeriod}`} testId="overview-plan" />
-        <StatCard label="Region" value={REGION_LABELS[tenant.region] ?? tenant.region} testId="overview-region" />
+        <StatCard label="Plan" value={`${titleCase(tenant.plan)} · ${titleCase(tenant.billingPeriod)}`} testId="overview-plan" />
+        <StatCard label="Data region" value={regionLabel(tenant.region, tenant.country)} testId="overview-region" />
         <StatCard label="GST" value={gstStat(detail)} testId="overview-gst" />
       </div>
 
@@ -264,7 +282,7 @@ export function OwnersTab({ detail }: Readonly<{ detail: TenantDetail }>) {
                   <StatusBadge status={ownerInvite.status} testId="owner-invite-status" />
                   <span className="text-muted-foreground">
                     {ownerInvite.status === "pending" ? "expires" : "expired"}{" "}
-                    {new Date(ownerInvite.expiresAt).toLocaleString(undefined, {
+                    {new Date(ownerInvite.expiresAt).toLocaleString(DATE_LOCALE, {
                       day: "2-digit",
                       month: "short",
                       hour: "2-digit",

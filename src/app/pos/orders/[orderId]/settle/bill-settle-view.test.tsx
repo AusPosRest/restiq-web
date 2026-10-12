@@ -302,6 +302,36 @@ describe("BillSettleView - finalize", () => {
     expect(JSON.parse(String(finalizeCall![1]?.body)).tenders).toEqual([{ method: "cash", amountMinor: 81900 }]);
   });
 
+  it("CU-11: rounds rupee cash to the nearest rupee - ₹1,000 note on a ₹890.40 bill gives ₹110 change; the exact total is posted", async () => {
+    const odd = { subtotalMinor: 84800, taxMinor: 4240, totalMinor: 89040 };
+    const fetchMock = stubFetch({
+      [`POST orders/${ORDER_ID}/bill`]: () => jsonResponse(makeBill(odd), 201),
+      "POST bills/bill-1/finalize": (init) => {
+        const body = JSON.parse(String(init?.body)) as { tenders: { method: string; amountMinor: number }[] };
+        return jsonResponse(
+          makeBill({
+            ...odd,
+            status: "finalized",
+            finalizedAt: "2026-08-25T10:05:00.000Z",
+            tenders: body.tenders.map((t, i) => ({ id: `tender-${i}`, method: t.method as "cash", amountMinor: t.amountMinor, createdAt: "2026-08-25T10:05:00.000Z" })),
+          }),
+        );
+      },
+    });
+    render(<BillSettleView orderId={ORDER_ID} />);
+    await screen.findByTestId("bill-summary");
+
+    expect(screen.getByTestId("tender-cash-rounded").textContent).toBe("Cash to collect ₹890.00 · round off -₹0.40");
+    expect(screen.getByTestId("tender-fill-remaining").textContent).toContain("₹890.00");
+    await userEvent.click(screen.getByTestId("tender-quick-note-100000"));
+    expect(screen.getByTestId("tender-change-due").textContent).toBe("Change due ₹110.00");
+
+    await userEvent.click(screen.getByTestId("finalize-bill"));
+    expect((await screen.findByTestId("finalised-change-due")).textContent).toBe("Change due ₹110.00");
+    const finalizeCall = fetchMock.mock.calls.find(([input]) => String(input).endsWith("/bills/bill-1/finalize"));
+    expect(JSON.parse(String(finalizeCall![1]?.body)).tenders).toEqual([{ method: "cash", amountMinor: 89040 }]);
+  });
+
   it("disables Finalize until pending tenders exactly cover the total, then submits discount + tenders together", async () => {
     const fetchMock = stubFetch({
       "POST bills/bill-1/finalize": (init) => {

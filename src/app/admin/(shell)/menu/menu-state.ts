@@ -15,6 +15,9 @@
 //    file's PendingPriceInfo is therefore populated only from what the UI
 //    itself just wrote in this session (see item-drawer.tsx), not fetched.
 
+import { formatPrice } from "@/lib/money";
+import { DATE_LOCALE } from "@/lib/datetime";
+
 export type PriceChannel = "dine_in" | "takeaway" | "delivery" | "qr" | "aggregator";
 
 export interface VariantView {
@@ -137,6 +140,8 @@ export interface OutletView {
   address: string;
   type: OutletType;
   timezone: string;
+  /** The tenant's currency (INR/AUD) - restiq-backend#212. */
+  currency: string;
 }
 
 /** Client-tracked only (see file header) - the price just scheduled/saved in
@@ -149,12 +154,8 @@ export interface PendingPriceInfo {
   effectiveAt: string;
 }
 
-const CURRENCY_SYMBOLS: Record<string, string> = { INR: "₹", USD: "$", AUD: "$", GBP: "£" };
-
 export function formatPriceMinor(priceMinor: number, currency: string): string {
-  const symbol = CURRENCY_SYMBOLS[currency] ?? `${currency} `;
-  // PE-12: paise are shown when there are any (₹289.50), so the menu never disagrees with the bill.
-  return `${symbol}${(priceMinor / 100).toFixed(priceMinor % 100 === 0 ? 0 : 2)}`;
+  return formatPrice(priceMinor, currency);
 }
 
 export function majorStringToPriceMinor(value: string): number | null {
@@ -164,7 +165,7 @@ export function majorStringToPriceMinor(value: string): number | null {
 }
 
 export function formatEffectiveDate(iso: string): string {
-  return new Date(iso).toLocaleDateString(undefined, { day: "numeric", month: "short" });
+  return new Date(iso).toLocaleDateString(DATE_LOCALE, { day: "numeric", month: "short" });
 }
 
 export function pendingChangeFor(

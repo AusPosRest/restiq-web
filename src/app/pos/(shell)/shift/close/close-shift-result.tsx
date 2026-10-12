@@ -5,6 +5,7 @@ import Link from "next/link";
 import { Button } from "@/components/ui/button";
 import type { ClosedShift } from "../../../api";
 import { formatMinor } from "../shift-state";
+import { DATE_LOCALE } from "@/lib/datetime";
 
 export function CloseShiftResult({ result, currency }: Readonly<{ result: ClosedShift; currency: string }>) {
   const isOverOrExact = result.overShortMinor >= 0;
@@ -14,7 +15,7 @@ export function CloseShiftResult({ result, currency }: Readonly<{ result: Closed
       <div>
         <h1 className="font-headline text-2xl font-semibold">Shift closed</h1>
         <p className="mt-1 text-sm text-muted-foreground">
-          Closed at {new Date(result.closedAt).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })}
+          Closed at {new Date(result.closedAt).toLocaleTimeString(DATE_LOCALE, { hour: "2-digit", minute: "2-digit" })}
         </p>
       </div>
 

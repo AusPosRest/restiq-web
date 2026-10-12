@@ -4,6 +4,8 @@
 // globals.css; still for reduced-motion users). Same InvoiceView the
 // invoice page renders, laid out the way a receipt printer would.
 import type { InvoiceView } from "../api";
+import { localeForCurrency } from "@/lib/money";
+import { invoiceCashRoundOff } from "../bills/invoice-round-off";
 import { formatMinor } from "../(shell)/shift/shift-state";
 import { TENDER_METHOD_LABEL, type BillTenderMethod } from "../orders/[orderId]/settle/bill-state";
 
@@ -20,13 +22,15 @@ function Row({ label, value, bold, testId }: Readonly<{ label: string; value: st
   );
 }
 
-function stamp(iso: string): string {
-  return new Date(iso).toLocaleString([], { dateStyle: "short", timeStyle: "short" });
+/** PE-7: day-first in the market's locale, never the browser's US default. */
+function stamp(iso: string, currency: string): string {
+  return new Date(iso).toLocaleString(localeForCurrency(currency), { dateStyle: "short", timeStyle: "short" });
 }
 
 export function ThermalReceipt({ invoice, printedAt }: Readonly<{ invoice: InvoiceView; printedAt: string }>) {
   const { seller, currency } = invoice;
   const discountMinor = invoice.discountMinor ?? 0;
+  const { roundOffMinor, tenders } = invoiceCashRoundOff(invoice);
   return (
     <article
       data-testid="thermal-receipt"
@@ -40,6 +44,8 @@ export function ThermalReceipt({ invoice, printedAt }: Readonly<{ invoice: Invoi
           {seller.registrationLabel}: {seller.registrationNumber}
         </p>
         {seller.fssaiLicense && <p>FSSAI: {seller.fssaiLicense}</p>}
+        {invoice.sacCode && <p>SAC: {invoice.sacCode}</p>}
+        {invoice.placeOfSupply && <p>Place of supply: {invoice.placeOfSupply}</p>}
         <p>{seller.phone}</p>
         <p>{seller.email}</p>
       </header>
@@ -49,7 +55,8 @@ export function ThermalReceipt({ invoice, printedAt }: Readonly<{ invoice: Invoi
         {invoice.status === "open" && " (unpaid)"}
       </p>
       {invoice.invoiceNumber && <p className="text-center">No. {invoice.invoiceNumber}</p>}
-      <p className="text-center">{stamp(invoice.issuedAt ?? printedAt)}</p>
+      <p className="text-center">{stamp(invoice.issuedAt ?? printedAt, currency)}</p>
+      {invoice.tokenNumber != null && <p className="text-center text-[14px] font-bold">Token #{invoice.tokenNumber}</p>}
       <Rule />
       {invoice.lines.map((line, index) => (
         <div key={index} data-testid={`thermal-line-${index}`}>
@@ -63,11 +70,17 @@ export function ThermalReceipt({ invoice, printedAt }: Readonly<{ invoice: Invoi
       {invoice.title !== "Receipt" &&
         invoice.taxBreakdown.map((tax, index) => <Row key={index} label={`${tax.label} ${tax.ratePercent}%`} value={formatMinor(tax.amountMinor, currency)} />)}
       <Row label="TOTAL" value={formatMinor(invoice.totalMinor, currency)} bold testId="thermal-total" />
+      {roundOffMinor !== 0 && (
+        <>
+          <Row label="Round off" value={`${roundOffMinor < 0 ? "-" : "+"}${formatMinor(Math.abs(roundOffMinor), currency)}`} testId="thermal-round-off" />
+          <Row label="AMOUNT PAID" value={formatMinor(invoice.totalMinor + roundOffMinor, currency)} bold />
+        </>
+      )}
       {invoice.pricesIncludeTax && <p className="text-neutral-600">Prices include tax</p>}
-      {invoice.tenders.length > 0 && (
+      {tenders.length > 0 && (
         <>
           <Rule />
-          {invoice.tenders.map((tender, index) => (
+          {tenders.map((tender, index) => (
             <Row key={index} label={TENDER_METHOD_LABEL[tender.method as BillTenderMethod] ?? tender.method} value={formatMinor(tender.amountMinor, currency)} />
           ))}
         </>

@@ -14,6 +14,7 @@
 // `riskAcknowledged`, `method` widens to the full TenderMethod) when it
 // merges. bill-state.ts's `BillTenderMethod` is left untouched here - W4
 // widens it in the same change that reconciles this header.
+import { cashRoundOffMinor } from "@/lib/money";
 import { isActiveIntent, type PaymentIntentView } from "@/lib/payment-intent";
 import { pendingTenderedMinor, type BillView, type PendingTender } from "./bill-state";
 
@@ -64,22 +65,35 @@ export function canFinalizeWithElectronic(
   totalMinor: number,
   pendingTenders: readonly PendingTender[],
   intents: readonly PaymentIntentView[],
+  currency = "",
 ): boolean {
   if (bill.status !== "open" || hasPendingIntent(intents)) return false;
   if (pendingTenders.length === 0 && capturedElectronicMinor(bill) === 0) return false;
-  return remainingToTenderMinor(totalMinor, bill, pendingTenders) === 0 || cashChangeMinor(totalMinor, bill, pendingTenders) > 0;
+  return remainingToTenderMinor(totalMinor, bill, pendingTenders) === 0 || cashSettlement(totalMinor, bill, pendingTenders, currency).covers;
+}
+
+function pendingCashMinor(pendingTenders: readonly PendingTender[]): number {
+  return pendingTenders.reduce((sum, tender) => (tender.method === "cash" ? sum + tender.amountMinor : sum), 0);
 }
 
 /**
- * Change to hand back (issue #306): how far the tenders go over the total,
- * when the cash keyed covers it. 0 when nothing is over, or when the excess
- * is more than the cash (an over-keyed UPI/external amount is a mistake to
- * fix, not change to give).
+ * The cash leg of a bill: what the cash has to cover once every other tender
+ * is counted, rounded to the nearest rupee for INR (CU-11 - nobody hands
+ * back 60 paise), whether the keyed cash covers it, and the change. An
+ * over-keyed UPI/external amount (other tenders already past the total) is
+ * a mistake to fix, never change to give.
  */
-export function cashChangeMinor(totalMinor: number, bill: Pick<BillView, "tenders">, pendingTenders: readonly PendingTender[]): number {
-  const over = -remainingToTenderMinor(totalMinor, bill, pendingTenders);
-  const cash = pendingTenders.reduce((sum, tender) => (tender.method === "cash" ? sum + tender.amountMinor : sum), 0);
-  return over > 0 && over <= cash ? over : 0;
+function cashSettlement(totalMinor: number, bill: Pick<BillView, "tenders">, pendingTenders: readonly PendingTender[], currency: string): { covers: boolean; changeMinor: number } {
+  const cash = pendingCashMinor(pendingTenders);
+  const dueBeforeCash = remainingToTenderMinor(totalMinor, bill, pendingTenders) + cash;
+  if (cash === 0 || dueBeforeCash < 0) return { covers: false, changeMinor: 0 };
+  const cashDue = dueBeforeCash + cashRoundOffMinor(dueBeforeCash, currency);
+  return { covers: cash >= cashDue, changeMinor: Math.max(0, cash - cashDue) };
+}
+
+/** Change to hand back (issue #306), against the rupee-rounded cash due for INR (CU-11) - see cashSettlement. */
+export function cashChangeMinor(totalMinor: number, bill: Pick<BillView, "tenders">, pendingTenders: readonly PendingTender[], currency = ""): number {
+  return cashSettlement(totalMinor, bill, pendingTenders, currency).changeMinor;
 }
 
 /** The tenders finalize posts: change taken back off the cash, last cash tender first, so they sum to the total exactly (bill-core refuses any other sum). */
@@ -92,6 +106,14 @@ export function tendersNetOfChange(pendingTenders: readonly PendingTender[], cha
     return { ...tender, amountMinor: tender.amountMinor - taken };
   });
   return net.reverse().filter((tender) => tender.amountMinor > 0);
+}
+
+/** The tenders finalize posts: the cash adjusted (change taken off, or a rupee round-off added back) so everything sums to the exact bill total, which is all bill-core accepts. */
+export function tendersForFinalize(totalMinor: number, bill: Pick<BillView, "tenders">, pendingTenders: readonly PendingTender[]): PendingTender[] {
+  const over = -remainingToTenderMinor(totalMinor, bill, pendingTenders);
+  if (over >= 0) return tendersNetOfChange(pendingTenders, over);
+  const lastCash = pendingTenders.map((tender) => tender.method).lastIndexOf("cash");
+  return pendingTenders.map((tender, index) => (index === lastCash ? { ...tender, amountMinor: tender.amountMinor - over } : tender));
 }
 
 /** The amount a new QR asks for: whole remaining figure by default (split-tender cashiers key a smaller one). */

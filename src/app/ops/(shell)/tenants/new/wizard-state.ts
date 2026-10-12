@@ -90,6 +90,16 @@ export const DEFAULT_GST_RATE: Record<CountryCode, string> = {
   AU: "10",
 };
 
+/**
+ * PE-9: the outlet's timezone as the country allows it. The first outlet is
+ * created before the country is picked (Asia/Kolkata), and an AU select
+ * can't show that value, so it displayed Sydney while saving Kolkata - both
+ * the select and the payload read the timezone through this instead.
+ */
+export function timezoneFor(country: CountryCode, timezone: string): string {
+  return TIMEZONES[country].includes(timezone) ? timezone : TIMEZONES[country][0];
+}
+
 export function emptyOutlet(country: CountryCode): OutletData {
   return { name: "", address: "", type: "", timezone: TIMEZONES[country][0] };
 }
@@ -259,11 +269,15 @@ export function toSubmitPayload(data: WizardData): Record<string, unknown> {
       legalEntityName: data.tax.legalEntityName,
       taxProfile: data.tax.taxProfile,
       ...(data.tax.country === "IN" && data.tax.fssaiLicense.trim() ? { fssaiLicense: data.tax.fssaiLicense.trim() } : {}),
-      compositionScheme: data.tax.compositionScheme,
+      // Composition is an Indian GST scheme only (PE-10).
+      compositionScheme: data.tax.country === "IN" && data.tax.compositionScheme,
       gstRegistered: data.tax.gstApplicable,
       ...(data.tax.gstApplicable ? { gstRatePercent: Number(data.tax.gstRatePercent) } : {}),
     },
-    brandsOutlets: data.brandsOutlets,
+    brandsOutlets: {
+      ...data.brandsOutlets,
+      outlets: data.brandsOutlets.outlets.map((outlet) => ({ ...outlet, timezone: timezoneFor(data.tax.country, outlet.timezone) })),
+    },
     subscription: data.subscription,
     ownerInvite: data.ownerInvite,
   };

@@ -2,13 +2,13 @@
 // have more than one"). Renders whenever there's more than one outlet, even
 // while every metric is still the no-data state - the table structure itself
 // is real, only the figures are pending POS Core Loop.
-import { formatPriceMinor } from "../menu/menu-state";
+import { formatMoney } from "@/lib/money";
 import type { FinancialMetric, OutletKpis } from "./dashboard-state";
 
 const NO_DATA = "No sales yet today";
 
 function cell(metric: FinancialMetric): string {
-  return metric.hasData ? formatPriceMinor(metric.amountMinor, metric.currency) : NO_DATA;
+  return metric.hasData ? formatMoney(metric.amountMinor, metric.currency) : NO_DATA;
 }
 
 export function OutletComparisonTable({ outlets }: Readonly<{ outlets: readonly OutletKpis[] }>) {

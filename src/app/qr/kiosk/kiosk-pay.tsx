@@ -14,6 +14,7 @@ import { createPortal } from "react-dom";
 import { GuestApiError } from "../api-client";
 import { formatMinor } from "../cart/cart-state";
 import { createOrFetchBill, fetchInvoice, payAll, type GuestBillView, type GuestInvoiceView } from "../checkout/checkout-api";
+import { DATE_LOCALE } from "@/lib/datetime";
 
 const TRAY_ID = "kiosk-receipt-tray";
 const TENDER_LABEL: Record<string, string> = { card_terminal: "Card", card_online: "Card", cash: "Cash", upi_manual: "UPI", upi_intent: "UPI", upi_qr: "UPI" };
@@ -164,8 +165,9 @@ function Row({ label, value, bold, testId }: Readonly<{ label: string; value: st
 }
 
 // An 80 mm-style thermal strip: white paper, black monospace, dashed rules,
-// the token number big enough to read across the counter.
-function KioskReceipt({ invoice, tokenNumber }: Readonly<{ invoice: GuestInvoiceView; tokenNumber: number }>) {
+// the token number big enough to read across the counter. Also the table
+// diner's receipt after checkout (CU-24), where there is no token.
+export function KioskReceipt({ invoice, tokenNumber = null }: Readonly<{ invoice: GuestInvoiceView; tokenNumber?: number | null }>) {
   const money = (amountMinor: number) => formatMinor(amountMinor, invoice.currency);
   const ref = useRef<HTMLElement>(null);
   // The slot sits below the kiosk screen, usually under the fold - bring the paper into view as it feeds.
@@ -192,10 +194,12 @@ function KioskReceipt({ invoice, tokenNumber }: Readonly<{ invoice: GuestInvoice
       <p className="text-center font-bold">
         {invoice.title} {invoice.invoiceNumber}
       </p>
-      {invoice.issuedAt && <p className="text-center">{new Date(invoice.issuedAt).toLocaleString([], { dateStyle: "short", timeStyle: "short" })}</p>}
-      <p data-testid="kiosk-receipt-token" className="my-2 text-center text-[28px] font-bold leading-8">
-        #{tokenNumber}
-      </p>
+      {invoice.issuedAt && <p className="text-center">{new Date(invoice.issuedAt).toLocaleString(DATE_LOCALE, { dateStyle: "short", timeStyle: "short" })}</p>}
+      {tokenNumber != null && (
+        <p data-testid="kiosk-receipt-token" className="my-2 text-center text-[28px] font-bold leading-8">
+          #{tokenNumber}
+        </p>
+      )}
       <Rule />
       {invoice.lines.map((line, index) => (
         <Row key={index} label={`${line.quantity} x ${line.name}`} value={money(line.lineTotalMinor)} />

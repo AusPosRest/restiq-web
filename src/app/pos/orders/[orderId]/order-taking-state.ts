@@ -58,6 +58,7 @@
 // never the other way round.
 
 import type { ComboMenuView } from "@/lib/combo";
+import { formatPrice } from "@/lib/money";
 
 export interface PosMenuVariantView {
   id: string;
@@ -328,13 +329,9 @@ export interface AddOrderLineInput {
 // the shape is identical - the pos realm's own small copy, same convention
 // already established by shift-state.ts#formatMinor.
 
-const CURRENCY_SYMBOLS: Record<string, string> = { INR: "₹" };
-
-/** Menu/order prices render whole units when even (₹340, the P3/P4 mocks), with paise otherwise (₹289.50). */
+/** Menu/order prices render whole-currency-unit when whole (₹340, not ₹340.00), never rounding paise away. */
 export function formatPriceMinor(priceMinor: number, currency = "INR"): string {
-  const symbol = CURRENCY_SYMBOLS[currency] ?? `${currency} `;
-  // PE-12: paise are shown when there are any (₹289.50), so the menu never disagrees with the bill.
-  return `${symbol}${(priceMinor / 100).toFixed(priceMinor % 100 === 0 ? 0 : 2)}`;
+  return formatPrice(priceMinor, currency);
 }
 
 // --- Grid filtering (category tabs + search). A non-empty search query

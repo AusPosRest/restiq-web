@@ -5,15 +5,25 @@
 // branding-editor.tsx) passed in, so it updates on every keystroke/color
 // pick, before any save call.
 import type { CSSProperties } from "react";
+import { formatMoney } from "@/lib/money";
 import type { BrandingTokens } from "./branding-state";
 
-const MOCK_LINE_ITEMS = [
-  { name: "Paneer Tikka", qty: 1, price: "₹280.00" },
-  { name: "Butter Naan", qty: 3, price: "₹90.00" },
-  { name: "Dal Makhani", qty: 1, price: "₹220.00" },
-];
+// Sample lines in the tenant's own currency (PE-10); line and total amounts are computed, never typed in.
+const MOCK_LINE_ITEMS: Record<string, { name: string; qty: number; unitMinor: number }[]> = {
+  INR: [
+    { name: "Paneer Tikka", qty: 1, unitMinor: 28000 },
+    { name: "Butter Naan", qty: 3, unitMinor: 3000 },
+    { name: "Dal Makhani", qty: 1, unitMinor: 22000 },
+  ],
+  AUD: [
+    { name: "Chicken Parmigiana", qty: 1, unitMinor: 2800 },
+    { name: "Flat White", qty: 2, unitMinor: 500 },
+  ],
+};
 
-export function ReceiptPreview({ tokens, logoUrl }: Readonly<{ tokens: BrandingTokens; logoUrl?: string | null }>) {
+export function ReceiptPreview({ tokens, logoUrl, currency = "INR" }: Readonly<{ tokens: BrandingTokens; logoUrl?: string | null; currency?: string }>) {
+  const lines = MOCK_LINE_ITEMS[currency] ?? MOCK_LINE_ITEMS.INR;
+  const totalMinor = lines.reduce((sum, line) => sum + line.qty * line.unitMinor, 0);
   const style: CSSProperties = {
     backgroundColor: tokens.surfaceColor,
     borderRadius: tokens.cornerRadiusPx,
@@ -46,12 +56,12 @@ export function ReceiptPreview({ tokens, logoUrl }: Readonly<{ tokens: BrandingT
       </div>
 
       <ul className="mt-3 space-y-1">
-        {MOCK_LINE_ITEMS.map((line) => (
+        {lines.map((line) => (
           <li key={line.name} className="flex justify-between gap-2 text-xs">
             <span>
               {line.qty}x {line.name}
             </span>
-            <span className="tabular-nums">{line.price}</span>
+            <span className="tabular-nums">{formatMoney(line.qty * line.unitMinor, currency)}</span>
           </li>
         ))}
       </ul>
@@ -59,7 +69,7 @@ export function ReceiptPreview({ tokens, logoUrl }: Readonly<{ tokens: BrandingT
       <div className="mt-3 flex justify-between border-t pt-2 text-sm font-semibold" style={{ borderColor: tokens.accentColor, color: tokens.secondaryColor }}>
         <span>TOTAL</span>
         <span className="tabular-nums" data-testid="receipt-preview-total">
-          ₹671.50
+          {formatMoney(totalMinor, currency)}
         </span>
       </div>
 

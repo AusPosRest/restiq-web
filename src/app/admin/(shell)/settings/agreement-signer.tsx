@@ -14,12 +14,13 @@ import { AdminApiError, agreementFileUrl, AgreementSignatureView, OwnerAgreement
 import { LoadErrorPanel, Skeleton } from "../data-states";
 import { useToast } from "../toast";
 import { useAdminLoad } from "../use-admin-load";
+import { DATE_LOCALE } from "@/lib/datetime";
 
 const FIELD_CLASS =
   "w-full rounded-lg border border-border bg-input px-3 py-2 text-sm text-foreground placeholder:text-muted-foreground/60 focus:outline-none focus-visible:ring-2 focus-visible:ring-ring";
 
 function formatDateTime(iso: string): string {
-  return new Date(iso).toLocaleString(undefined, { day: "2-digit", month: "short", year: "numeric", hour: "2-digit", minute: "2-digit" });
+  return new Date(iso).toLocaleString(DATE_LOCALE, { day: "2-digit", month: "short", year: "numeric", hour: "2-digit", minute: "2-digit" });
 }
 
 export function AgreementSigner() {

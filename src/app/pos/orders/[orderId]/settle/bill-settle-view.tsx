@@ -36,7 +36,7 @@ import { formatMinor } from "../../../(shell)/shift/shift-state";
 import { TenderKeypad } from "./tender-keypad";
 import { DiscountDialog } from "./discount-dialog";
 import { billTotalMinor, isBillReadOnly, type BillView } from "./bill-state";
-import { canFinalizeWithElectronic, cashChangeMinor, isElectronicMethod, remainingToTenderMinor, tendersNetOfChange } from "./electronic-tender-state";
+import { canFinalizeWithElectronic, cashChangeMinor, isElectronicMethod, remainingToTenderMinor, tendersForFinalize } from "./electronic-tender-state";
 import { TerminalIntentPanel } from "./terminal-intent-panel";
 import { useTerminalIntent } from "./use-terminal-intent";
 import { openDrawerForTenders } from "@/lib/desktop";
@@ -145,14 +145,14 @@ function BillSettleLoaded({
   }
 
   function handleFinalize() {
-    const change = cashChangeMinor(totalMinor, bill, pendingTenders);
+    const change = cashChangeMinor(totalMinor, bill, pendingTenders, menu.currency);
     setFinalizeBusy(true);
     setFinalizeError(null);
     finalizeBill(bill.id, {
       discountMinor: pendingDiscount?.amountMinor,
       discountReason: pendingDiscount?.reason,
       managerPin: pendingDiscount?.managerPin,
-      tenders: tendersNetOfChange(pendingTenders, change),
+      tenders: tendersForFinalize(totalMinor, bill, pendingTenders),
     })
       .then((finalised) => {
         setBill(finalised);
@@ -213,7 +213,7 @@ function BillSettleLoaded({
                 onRemoveTender={handleRemoveTender}
                 onSendToTerminal={terminal.send}
                 terminalBusy={terminal.busy}
-                changeMinor={cashChangeMinor(totalMinor, bill, pendingTenders)}
+                changeMinor={cashChangeMinor(totalMinor, bill, pendingTenders, menu.currency)}
                 cashLocked={shiftOpen === false}
               />
             )}
@@ -233,7 +233,7 @@ function BillSettleLoaded({
                   size="lg"
                   className="flex-1"
                   data-testid="finalize-bill"
-                  disabled={!canFinalizeWithElectronic(bill, totalMinor, pendingTenders, intents) || finalizeBusy}
+                  disabled={!canFinalizeWithElectronic(bill, totalMinor, pendingTenders, intents, menu.currency) || finalizeBusy}
                   onClick={handleFinalize}
                 >
                   {finalizeBusy ? "Finalising…" : "Finalise"}

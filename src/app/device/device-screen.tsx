@@ -26,6 +26,7 @@ import {
   writeStoredDevice,
   type DeviceView,
 } from "./device-state";
+import { formatDateTime } from "@/lib/datetime";
 
 interface ErrorBody {
   code?: string;
@@ -249,7 +250,7 @@ function DeviceCard({
           </dd>
           <dt className="text-muted-foreground">Enrolled</dt>
           <dd data-testid="device-card-enrolled-at" className="text-right text-foreground">
-            {new Date(device.enrolledAt).toLocaleString()}
+            {formatDateTime(device.enrolledAt)}
           </dd>
           <dt className="text-muted-foreground">Status</dt>
           <dd data-testid="device-card-status" className="text-right text-foreground">

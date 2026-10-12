@@ -9,6 +9,7 @@ import {
   intentPanelPhase,
   isElectronicMethod,
   remainingToTenderMinor,
+  tendersForFinalize,
   tendersNetOfChange,
   validateIntentAmount,
   validateManualUpiTender,
@@ -137,6 +138,35 @@ describe("cash change (issue #306)", () => {
 
   it("drops a cash tender the change uses up entirely", () => {
     expect(tendersNetOfChange([{ method: "upi_manual", amountMinor: 1000 }, { method: "cash", amountMinor: 500 }], 500)).toEqual([{ method: "upi_manual", amountMinor: 1000 }]);
+  });
+});
+
+describe("rupee cash round-off (CU-11)", () => {
+  it("gives change against the bill rounded to the nearest rupee: Rs 890.40, Rs 1000 given -> Rs 110 back", () => {
+    const cash: PendingTender[] = [{ method: "cash", amountMinor: 100000 }];
+    expect(cashChangeMinor(89040, bill(), cash, "INR")).toBe(11000);
+    expect(canFinalizeWithElectronic(bill(), 89040, cash, [], "INR")).toBe(true);
+  });
+
+  it("lets Rs 890 in cash settle a Rs 890.40 bill, and Rs 891 a Rs 890.60 one", () => {
+    expect(canFinalizeWithElectronic(bill(), 89040, [{ method: "cash", amountMinor: 89000 }], [], "INR")).toBe(true);
+    expect(cashChangeMinor(89040, bill(), [{ method: "cash", amountMinor: 89000 }], "INR")).toBe(0);
+    expect(canFinalizeWithElectronic(bill(), 89060, [{ method: "cash", amountMinor: 89000 }], [], "INR")).toBe(false);
+    expect(canFinalizeWithElectronic(bill(), 89060, [{ method: "cash", amountMinor: 89100 }], [], "INR")).toBe(true);
+  });
+
+  it("never rounds AUD or a non-cash tender", () => {
+    expect(canFinalizeWithElectronic(bill(), 1995, [{ method: "cash", amountMinor: 1900 }], [], "AUD")).toBe(false);
+    expect(canFinalizeWithElectronic(bill(), 89040, [{ method: "upi_manual", amountMinor: 89000 }], [], "INR")).toBe(false);
+  });
+
+  it("posts tenders that sum to the exact bill total - the server never sees the round-off", () => {
+    expect(tendersForFinalize(89040, bill(), [{ method: "cash", amountMinor: 100000 }])).toEqual([{ method: "cash", amountMinor: 89040 }]);
+    expect(tendersForFinalize(89040, bill(), [{ method: "cash", amountMinor: 89000 }])).toEqual([{ method: "cash", amountMinor: 89040 }]);
+    expect(tendersForFinalize(89060, bill(), [{ method: "upi_manual", amountMinor: 50000 }, { method: "cash", amountMinor: 39100 }])).toEqual([
+      { method: "upi_manual", amountMinor: 50000 },
+      { method: "cash", amountMinor: 39060 },
+    ]);
   });
 });
 
