@@ -29,6 +29,16 @@ describe("GuestTableEntryPage", () => {
     expect(screen.queryByTestId("qr-join-form")).toBeNull();
   });
 
+  it("tells the diner up front that staff already have an order on this table, before any cart (CU-21)", async () => {
+    vi.stubGlobal("fetch", vi.fn().mockResolvedValue(upstreamJson(200, { available: false, reason: "table_busy" })));
+
+    const ui = await GuestTableEntryPage({ params: Promise.resolve({ outletId: "o1", tableId: "t1" }) });
+    render(ui);
+
+    expect(screen.getByTestId("qr-table-busy").textContent).toContain("ask your server");
+    expect(screen.queryByTestId("qr-start-form")).toBeNull();
+  });
+
   it("renders the unavailable page (never a raw error) when the outlet can't be found", async () => {
     vi.stubGlobal("fetch", vi.fn().mockResolvedValue(upstreamJson(200, { available: false, reason: "not_found" })));
 

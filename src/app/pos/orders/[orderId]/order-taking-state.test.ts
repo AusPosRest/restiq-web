@@ -77,6 +77,7 @@ describe("formatPriceMinor", () => {
   it("renders whole-currency-unit amounts, no decimals", () => {
     expect(formatPriceMinor(34000)).toBe("₹340");
     expect(formatPriceMinor(0)).toBe("₹0");
+    expect(formatPriceMinor(28950)).toBe("₹289.50");
   });
 
   it("falls back to the currency code for an unknown symbol", () => {

@@ -287,6 +287,32 @@ describe("MenuImport review", () => {
     expect(screen.getByTestId("menu-import-table")).toBeTruthy();
   });
 
+  it("flags rows already on the menu as soon as the draft arrives, and leaves them out in one click (PE-11)", async () => {
+    const draft = { ...DRAFT, items: [draftItem({ id: "1", duplicate: "on_menu" }), draftItem({ id: "2", name: "Kebab", duplicate: null })] };
+    const fetchMock = vi
+      .fn()
+      .mockResolvedValueOnce(jsonResponse(draft, 201))
+      .mockResolvedValueOnce(jsonResponse({ ...draft, items: [draft.items[1]] }));
+    vi.stubGlobal("fetch", fetchMock);
+    await uploadAndReachReview();
+
+    expect(screen.getByTestId("menu-import-row-1-duplicate").textContent).toBe("Already on your menu");
+    expect(screen.getByTestId("menu-import-duplicates-banner").textContent).toContain("1 item is already on your menu");
+    await userEvent.click(screen.getByTestId("menu-import-remove-duplicates"));
+    await waitFor(() => expect(screen.queryByTestId("menu-import-row-1")).toBeNull());
+    expect(screen.queryByTestId("menu-import-duplicates-banner")).toBeNull();
+  });
+
+  it("marks every row reviewed in one click, and hides the confidence column for a plain spreadsheet (PE-11)", async () => {
+    vi.stubGlobal("fetch", vi.fn().mockResolvedValue(jsonResponse({ ...DRAFT, items: [draftItem({ id: "1" }), draftItem({ id: "2", name: "Kebab" })] }, 201)));
+    await uploadAndReachReview();
+
+    expect(screen.queryByTestId("menu-import-row-1-confidence")).toBeNull();
+    await userEvent.click(screen.getByTestId("menu-import-mark-all"));
+    expect(screen.getByTestId("menu-import-reviewed-count").textContent).toBe("2/2 reviewed");
+    expect((screen.getByTestId("menu-import-commit") as HTMLButtonElement).disabled).toBe(false);
+  });
+
   it("flags rows already on the menu and lets the owner remove them from the import (issue #247)", async () => {
     const fetchMock = vi
       .fn()

@@ -9,11 +9,12 @@ import { LibraryBig, Plus, Search, Soup, Upload } from "lucide-react";
 import { Dialog } from "radix-ui";
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { Button } from "@/components/ui/button";
-import { fetchAllergens, fetchCategories, fetchCombos, fetchItems, fetchModifierGroups } from "../../api";
+import { type DirectoryProduct, fetchAllergens, fetchCategories, fetchCombos, fetchItems, fetchModifierGroups } from "../../api";
 import { MenuImport } from "../../menu-import";
 import { LoadErrorPanel, Skeleton } from "../data-states";
 import { useOutlets } from "../outlet-context";
 import { useToast } from "../toast";
+import { useAdminLoad } from "../use-admin-load";
 import { CategorySidebar } from "./category-sidebar";
 import { CombosPanel } from "./combos-panel";
 import { DirectoryDialog } from "./directory-dialog";
@@ -83,9 +84,9 @@ export function MenuManagement() {
   const [importOpen, setImportOpen] = useState(false);
   const pushToast = useToast();
   const [directoryOpen, setDirectoryOpen] = useState(false);
-  // Issue #330: the list only ever fetches an item's price once, on mount - an
-  // override here keeps the row in sync right after the drawer changes it.
-  const [priceOverrides, setPriceOverrides] = useState<Record<string, number>>({});
+  // PE-13: no "Browse directory" while the platform catalog is empty - it would open an empty dialog.
+  const directory = useAdminLoad<{ products: DirectoryProduct[] }>("menu/directory");
+  const directoryEmpty = directory.data?.products.length === 0;
 
   const effectiveItems = useMemo(() => items ?? data?.items ?? [], [items, data]);
   const effectiveCategories = useMemo(() => categories ?? data?.categories ?? [], [categories, data]);
@@ -159,9 +160,11 @@ export function MenuManagement() {
           </p>
         </div>
         <div className={`flex flex-wrap gap-2 ${tab === "combos" ? "hidden" : ""}`}>
-          <Button variant="secondary" data-testid="menu-browse-directory" onClick={() => setDirectoryOpen(true)}>
-            <LibraryBig aria-hidden="true" /> Browse directory
-          </Button>
+          {!directoryEmpty && (
+            <Button variant="secondary" data-testid="menu-browse-directory" onClick={() => setDirectoryOpen(true)}>
+              <LibraryBig aria-hidden="true" /> Browse directory
+            </Button>
+          )}
           <Button variant="secondary" data-testid="menu-import-link" onClick={() => setImportOpen(true)}>
             <Upload aria-hidden="true" /> Import
           </Button>
@@ -221,13 +224,12 @@ export function MenuManagement() {
 
             <div data-testid="menu-list-scroll" className="flex-1 overflow-auto rounded-lg border border-border/40 bg-card md:max-h-[max(20rem,calc(100dvh-17rem))]">
               {filtered.length === 0 ? (
-                <EmptyState filtered={filteredOrSearched} onClearFilters={() => { setCategory(ALL_CATEGORY); setSearch(""); }} onImport={() => setImportOpen(true)} onAddItem={() => setDrawerItem(null)} onBrowseDirectory={() => setDirectoryOpen(true)} />
+                <EmptyState filtered={filteredOrSearched} onClearFilters={() => { setCategory(ALL_CATEGORY); setSearch(""); }} onImport={() => setImportOpen(true)} onAddItem={() => setDrawerItem(null)} onBrowseDirectory={directoryEmpty ? undefined : () => setDirectoryOpen(true)} />
               ) : (
                 <MenuTable
                   items={filtered}
                   currency={CURRENCY}
                   filterKey={`${category}|${search}`}
-                  priceOverrides={priceOverrides}
                   onSelect={setDrawerItem}
                   onAvailabilityChanged={handleAvailabilityChanged}
                 />
@@ -259,7 +261,6 @@ export function MenuManagement() {
         }}
         onModifierGroupCreated={(group) => setModifierGroups([...effectiveModifierGroups, group])}
         onAllergenCreated={(allergen) => setAllergens([...effectiveAllergens, allergen])}
-        onPriceChanged={(itemId, priceMinor) => setPriceOverrides((current) => ({ ...current, [itemId]: priceMinor }))}
       />
 
       <ImportDialog open={importOpen} onClose={() => setImportOpen(false)} onCommitted={handleImported} />
@@ -303,7 +304,7 @@ function EmptyState({
   onImport,
   onAddItem,
   onBrowseDirectory,
-}: Readonly<{ filtered: boolean; onClearFilters: () => void; onImport: () => void; onAddItem: () => void; onBrowseDirectory: () => void }>) {
+}: Readonly<{ filtered: boolean; onClearFilters: () => void; onImport: () => void; onAddItem: () => void; onBrowseDirectory?: () => void }>) {
   return (
     <div className="flex flex-col items-center gap-3 px-8 py-16 text-center">
       <Soup className="size-8 text-muted-foreground" aria-hidden="true" />
@@ -317,11 +318,15 @@ function EmptyState({
       ) : (
         <div data-testid="menu-empty">
           <p className="font-headline text-lg font-medium">Your menu is empty</p>
-          <p className="mt-1 text-sm text-muted-foreground">Pick items from the product directory, import a menu, or add your first item.</p>
+          <p className="mt-1 text-sm text-muted-foreground">
+            {onBrowseDirectory ? "Pick items from the product directory, import a menu, or add your first item." : "Import a menu, or add your first item."}
+          </p>
           <div className="mt-3 flex flex-wrap justify-center gap-2">
-            <Button variant="secondary" size="sm" data-testid="menu-empty-directory" onClick={onBrowseDirectory}>
-              Browse directory
-            </Button>
+            {onBrowseDirectory && (
+              <Button variant="secondary" size="sm" data-testid="menu-empty-directory" onClick={onBrowseDirectory}>
+                Browse directory
+              </Button>
+            )}
             <Button variant="secondary" size="sm" data-testid="menu-empty-import" onClick={onImport}>
               Import menu
             </Button>

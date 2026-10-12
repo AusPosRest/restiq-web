@@ -5,17 +5,33 @@
 // that's how restiq-backend actually exposes them (PUT replace-set for
 // modifier groups/allergens, POST/DELETE per variant, its own price endpoint).
 
-import { ItemView } from "./menu-state";
+import { ItemView, VegMarker } from "./menu-state";
 
 export interface ItemDraft {
   name: string;
   shortName: string;
   categoryId: string;
+  /** "" = not marked (PE-13: FSSAI veg / non-veg marker). */
+  vegMarker: VegMarker | "";
 }
 
 export function itemDraftFromView(item: ItemView | null, defaultCategoryId: string): ItemDraft {
-  if (!item) return { name: "", shortName: "", categoryId: defaultCategoryId };
-  return { name: item.name, shortName: item.shortName, categoryId: item.categoryId };
+  if (!item) return { name: "", shortName: "", categoryId: defaultCategoryId, vegMarker: "" };
+  return { name: item.name, shortName: item.shortName, categoryId: item.categoryId, vegMarker: item.vegMarker ?? "" };
+}
+
+/** CU-1: the kitchen ticket name follows the item name until the owner edits it themselves. */
+export function withName(draft: ItemDraft, name: string, shortNameEdited: boolean): ItemDraft {
+  return { ...draft, name, shortName: shortNameEdited ? draft.shortName : name };
+}
+
+/** PE-13: a price field's problem in words (never a silently disabled button), or undefined when fine. */
+export function priceError(value: string): string | undefined {
+  if (!value.trim()) return "Enter a price.";
+  const major = Number.parseFloat(value);
+  if (!Number.isFinite(major)) return "Enter a valid price.";
+  if (major < 0) return "Price can't be negative.";
+  return undefined;
 }
 
 export interface ItemDraftErrors {

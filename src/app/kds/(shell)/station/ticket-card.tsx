@@ -24,7 +24,8 @@ const BUMPED_FRAME_CLASSES = "border-border bg-card";
 function TicketLineRow({ line }: Readonly<{ line: TicketLineView }>) {
   return (
     <li data-testid={`kds-line-${line.id}`} className={line.voided ? "text-ticket-urgent" : "text-foreground"}>
-      <div className={`flex items-baseline gap-2 text-base ${line.voided ? "line-through decoration-2" : ""}`}>
+      {/* CU-19: dish names read from a couple of metres away. */}
+      <div className={`flex items-baseline gap-2 text-lg font-semibold ${line.voided ? "line-through decoration-2" : ""}`}>
         <span className="font-headline font-bold tabular-nums">{line.quantity}</span>
         <span className="flex-1">
           {line.itemName}

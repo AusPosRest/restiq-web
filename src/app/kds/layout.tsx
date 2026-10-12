@@ -2,6 +2,7 @@ import type { Metadata } from "next";
 import { Hanken_Grotesk, Inter, Public_Sans } from "next/font/google";
 import { cookies } from "next/headers";
 import { parsePosStaffDisplay, POS_STAFF_COOKIE } from "@/lib/pos-session";
+import { DeviceHeartbeat } from "../pos/device-heartbeat";
 import { KdsOutletProvider } from "./kds-outlet-context";
 import { SignedOutNotice } from "./signed-out-notice";
 
@@ -53,6 +54,8 @@ export default async function KdsLayout({
     <div
       className={`${hankenGrotesk.variable} ${inter.variable} ${publicSans.variable} kds-theme flex min-h-screen flex-1 flex-col bg-background text-foreground antialiased`}
     >
+      {/* SE-18: a kitchen display reports in like a till, so Devices shows it online. */}
+      {display && <DeviceHeartbeat />}
       {display ? <KdsOutletProvider outlet={display.outlet}>{children}</KdsOutletProvider> : <SignedOutNotice />}
     </div>
   );

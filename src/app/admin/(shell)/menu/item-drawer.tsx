@@ -17,15 +17,18 @@ import {
   createModifierGroup,
   CreateItemInput,
   deleteMenuItem,
-  fetchCurrentPrice,
+  fetchFloorPlan,
+  NewVariantInput,
   removeVariant as apiRemoveVariant,
   replaceItemAllergens,
   replaceItemModifierGroups,
+  setItemStation,
   setOutletAvailability,
   clearOutletAvailability,
   updateMenuItem,
 } from "../../api";
-import { itemDraftFromView, ItemDraft, toggleId, validateItemDraft } from "./item-drawer-state";
+import type { StationView } from "../floor-plan/floor-plan-state";
+import { itemDraftFromView, ItemDraft, priceError as priceInputError, toggleId, validateItemDraft, withName } from "./item-drawer-state";
 import {
   AllergenView,
   CategoryView,
@@ -37,7 +40,9 @@ import {
   OutletView,
   PendingPriceInfo,
   pendingChangeFor,
+  unsellableNote,
   validateModifierGroup,
+  VegMarker,
 } from "./menu-state";
 import { PriceChangeDialog } from "./price-change-dialog";
 import type { PriceScheduleForm } from "./price-schedule-state";
@@ -86,8 +91,30 @@ export interface ItemDrawerProps {
   onDeleted?: (item: ItemView) => void;
   onModifierGroupCreated: (group: ModifierGroupView) => void;
   onAllergenCreated: (allergen: AllergenView) => void;
-  /** Issue #330: so the list row's price isn't stale until reload. */
-  onPriceChanged?: (itemId: string, priceMinor: number) => void;
+}
+
+interface DraftVariant {
+  name: string;
+  price: string;
+}
+
+// The selected outlet's kitchen stations (PE-21), from the floor plan - the
+// item's route; the same-named station is used at every other outlet.
+function useStations(outletId: string | null): StationView[] {
+  const [stations, setStations] = useState<StationView[]>([]);
+  useEffect(() => {
+    if (!outletId) return;
+    let cancelled = false;
+    fetchFloorPlan(outletId)
+      .then((plan) => {
+        if (!cancelled) setStations(plan.stations);
+      })
+      .catch(() => undefined);
+    return () => {
+      cancelled = true;
+    };
+  }, [outletId]);
+  return stations;
 }
 
 export function ItemDrawer(props: Readonly<ItemDrawerProps>) {
@@ -108,7 +135,6 @@ function DrawerBody({
   onDeleted,
   onModifierGroupCreated,
   onAllergenCreated,
-  onPriceChanged,
 }: Readonly<ItemDrawerProps>) {
   const isCreate = item === null;
   const [draft, setDraft] = useState<ItemDraft>(() => itemDraftFromView(item, defaultCategoryId || categories[0]?.id || ""));
@@ -125,12 +151,24 @@ function DrawerBody({
   const [priceBusy, setPriceBusy] = useState(false);
   const [priceError, setPriceError] = useState<string | null>(null);
   const [pending, setPending] = useState<PendingPriceInfo[]>([]);
-  // One price per line (#272): the dine-in channel price, keyed by variant id or "base".
-  const [currentPrices, setCurrentPrices] = useState<Record<string, number>>({});
+  // CU-1: the kitchen ticket name copies the name until edited; PE-13: errors wait until a field was left or Save was tried.
+  const [shortNameEdited, setShortNameEdited] = useState(!isCreate);
+  const [touched, setTouched] = useState<Record<string, boolean>>({});
+  const [attempted, setAttempted] = useState(false);
+  const show = (field: string) => attempted || touched[field] === true;
+  const touch = (field: string) => setTouched((t) => ({ ...t, [field]: true }));
+  // CU-1: portions (Half/Full) with their prices right on the Add form.
+  const [newVariants, setNewVariants] = useState<DraftVariant[]>([]);
+  const [stationId, setStationId] = useState(item?.stationId ?? "");
+  const stations = useStations(selectedOutletId ?? outlets[0]?.id ?? null);
 
   const errors = validateItemDraft(draft);
-  const createPriceMinor = isCreate ? majorStringToPriceMinor(createPriceMajor) : null;
-  const canSave = Object.keys(errors).length === 0 && (!isCreate || createPriceMinor !== null);
+  const createPriceError = isCreate && newVariants.length === 0 ? priceInputError(createPriceMajor) : undefined;
+  const variantErrors = newVariants.map((v) => (!v.name.trim() ? "Name this portion." : priceInputError(v.price)));
+  const createPriceMinor = isCreate && newVariants.length === 0 ? majorStringToPriceMinor(createPriceMajor) : null;
+  const canSave = Object.keys(errors).length === 0 && !createPriceError && variantErrors.every((e) => !e);
+  const priceOf = (variantId: string | null): number | null =>
+    variantId === null ? (liveItem?.priceMinor ?? null) : (liveItem?.variants.find((v) => v.id === variantId)?.priceMinor ?? null);
 
   async function handleDelete() {
     if (!liveItem) return;
@@ -145,30 +183,8 @@ function DrawerBody({
     }
   }
 
-  useEffect(() => {
-    if (!liveItem) return;
-    let cancelled = false;
-    const lines: Array<string | null> = [null, ...liveItem.variants.map((v) => v.id)];
-    Promise.all(
-      lines.map(async (variantId) => {
-        const price = await fetchCurrentPrice(liveItem.id, { channel: "dine_in", variantId: variantId ?? undefined });
-        return [variantId, price] as const;
-      }),
-    )
-      .then((results) => {
-        if (cancelled) return;
-        const map: Record<string, number> = {};
-        for (const [variantId, price] of results) map[variantId ?? "base"] = price?.priceMinor ?? 0;
-        setCurrentPrices(map);
-      })
-      .catch(() => undefined);
-    return () => {
-      cancelled = true;
-    };
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [liveItem?.id, liveItem?.variants.length]);
-
   async function handleSave() {
+    setAttempted(true);
     if (!canSave) return;
     setSaving(true);
     setSaveError(null);
@@ -178,20 +194,35 @@ function DrawerBody({
           categoryId: draft.categoryId,
           name: draft.name,
           shortName: draft.shortName,
+          ...(draft.vegMarker ? { vegMarker: draft.vegMarker } : {}),
+          ...(stationId ? { stationId } : {}),
+          ...(newVariants.length > 0
+            ? { variants: newVariants.map((v) => ({ name: v.name.trim(), priceMinor: majorStringToPriceMinor(v.price) ?? 0, currency })) }
+            : {}),
           modifierGroupIds: selectedGroupIds,
           allergenIds: selectedAllergenIds,
         };
         const created = await createMenuItem(input);
-        try {
-          // Same client the price-change dialog uses (handlePriceSubmit below): no
-          // variantId (base price), no channel (every channel), effective now.
-          await createItemPrice(created.id, { priceMinor: createPriceMinor ?? 0, currency, reason: "Initial price" });
-        } catch (error) {
-          setSaveError(error instanceof Error ? error.message : "The item saved, but its price didn't - set it from the drawer.");
+        if (createPriceMinor === null) {
+          onSaved(created);
+        } else {
+          try {
+            // Same client the price-change dialog uses (handlePriceSubmit below): no
+            // variantId (base price), no channel (every channel), effective now.
+            await createItemPrice(created.id, { priceMinor: createPriceMinor, currency, reason: "Initial price" });
+            onSaved({ ...created, priceMinor: createPriceMinor, currency });
+          } catch (error) {
+            setSaveError(error instanceof Error ? error.message : "The item saved, but its price didn't - set it from the drawer.");
+            onSaved(created);
+          }
         }
-        onSaved(created);
       } else {
-        const updated = await updateMenuItem(item!.id, { name: draft.name, shortName: draft.shortName, categoryId: draft.categoryId });
+        const updated = await updateMenuItem(item!.id, {
+          name: draft.name,
+          shortName: draft.shortName,
+          categoryId: draft.categoryId,
+          vegMarker: draft.vegMarker || null,
+        });
         setLiveItem(updated);
         onSaved(updated);
       }
@@ -243,14 +274,30 @@ function DrawerBody({
     }
   }
 
-  async function handleAddVariant(name: string) {
-    if (!liveItem || !name.trim()) return;
+  async function handleAddVariant(input: NewVariantInput): Promise<boolean> {
+    if (!liveItem) return false;
     try {
-      const updated = await apiAddVariant(liveItem.id, name.trim());
+      const updated = await apiAddVariant(liveItem.id, { ...input, currency });
+      setLiveItem(updated);
+      onSaved(updated);
+      return true;
+    } catch (error) {
+      setSaveError(error instanceof Error ? error.message : "That variant didn't save. Try again.");
+      return false;
+    }
+  }
+
+  async function handleStation(next: string) {
+    const previous = stationId;
+    setStationId(next);
+    if (!liveItem) return;
+    try {
+      const updated = await setItemStation(liveItem.id, next || null);
       setLiveItem(updated);
       onSaved(updated);
     } catch (error) {
-      setSaveError(error instanceof Error ? error.message : "That variant didn't save. Try again.");
+      setStationId(previous);
+      setSaveError(error instanceof Error ? error.message : "That kitchen station didn't save. Try again.");
     }
   }
 
@@ -316,9 +363,13 @@ function DrawerBody({
           { variantId: priceLine.variantId, channel, priceMinor, currency, effectiveAt },
         ]);
       } else {
-        setCurrentPrices((current) => ({ ...current, [priceLine.variantId ?? "base"]: priceMinor }));
-        // The list table only ever shows the base (no-variant) price (menu-table.tsx).
-        if (priceLine.variantId === null) onPriceChanged?.(liveItem.id, priceMinor);
+        const variantId = priceLine.variantId;
+        const updated: ItemView =
+          variantId === null
+            ? { ...liveItem, priceMinor, currency }
+            : { ...liveItem, variants: liveItem.variants.map((v) => (v.id === variantId ? { ...v, priceMinor } : v)) };
+        setLiveItem(updated);
+        onSaved(updated);
       }
       setPriceLine(null);
     } catch (error) {
@@ -361,10 +412,11 @@ function DrawerBody({
                 id="item-name"
                 data-testid="item-name-input"
                 value={draft.name}
-                onChange={(event) => setDraft((d) => ({ ...d, name: event.target.value }))}
+                onChange={(event) => setDraft((d) => withName(d, event.target.value, shortNameEdited))}
+                onBlur={() => touch("name")}
                 className={FIELD_CLASS}
               />
-              {errors.name && (
+              {errors.name && show("name") && (
                 <p data-testid="item-name-error" className="mt-1 text-xs text-status-error">
                   {errors.name}
                 </p>
@@ -379,10 +431,15 @@ function DrawerBody({
                 id="item-short-name"
                 data-testid="item-short-name-input"
                 value={draft.shortName}
-                onChange={(event) => setDraft((d) => ({ ...d, shortName: event.target.value }))}
+                onChange={(event) => {
+                  setShortNameEdited(true);
+                  setDraft((d) => ({ ...d, shortName: event.target.value }));
+                }}
+                onBlur={() => touch("shortName")}
                 className={FIELD_CLASS}
               />
-              {errors.shortName && (
+              <p className="mt-1 text-xs text-muted-foreground">Printed on kitchen tickets. Starts as the item name.</p>
+              {errors.shortName && show("shortName") && (
                 <p data-testid="item-short-name-error" className="mt-1 text-xs text-status-error">
                   {errors.shortName}
                 </p>
@@ -408,10 +465,50 @@ function DrawerBody({
               </select>
             </div>
 
-            {isCreate && (
+            <div className="grid grid-cols-2 gap-3">
+              <div>
+                <label htmlFor="item-veg-marker" className={LABEL_CLASS}>
+                  Veg / non-veg
+                </label>
+                <select
+                  id="item-veg-marker"
+                  data-testid="item-veg-marker-select"
+                  value={draft.vegMarker}
+                  onChange={(event) => setDraft((d) => ({ ...d, vegMarker: event.target.value as VegMarker | "" }))}
+                  className={FIELD_CLASS}
+                >
+                  <option value="">Not marked</option>
+                  <option value="veg">Veg</option>
+                  <option value="non_veg">Non-veg</option>
+                </select>
+              </div>
+              {stations.length > 0 && (
+                <div>
+                  <label htmlFor="item-station" className={LABEL_CLASS}>
+                    Kitchen station
+                  </label>
+                  <select
+                    id="item-station"
+                    data-testid="item-station-select"
+                    value={stationId}
+                    onChange={(event) => void handleStation(event.target.value)}
+                    className={FIELD_CLASS}
+                  >
+                    <option value="">{`${stations[0]?.name ?? "First station"} (default)`}</option>
+                    {stations.map((station) => (
+                      <option key={station.id} value={station.id}>
+                        {station.name}
+                      </option>
+                    ))}
+                  </select>
+                </div>
+              )}
+            </div>
+
+            {isCreate && newVariants.length === 0 && (
               <div>
                 <label htmlFor="item-create-price" className={LABEL_CLASS}>
-                  Price ({currency})
+                  Price ({currency}) *
                 </label>
                 <input
                   id="item-create-price"
@@ -421,8 +518,77 @@ function DrawerBody({
                   step="0.01"
                   value={createPriceMajor}
                   onChange={(event) => setCreatePriceMajor(event.target.value)}
+                  onBlur={() => touch("price")}
                   className={FIELD_CLASS}
                 />
+                {createPriceError && show("price") && (
+                  <p data-testid="item-create-price-error" className="mt-1 text-xs text-status-error">
+                    {createPriceError}
+                  </p>
+                )}
+              </div>
+            )}
+
+            {isCreate && (
+              <div data-testid="item-create-variants">
+                <p className={LABEL_CLASS}>Portions (optional)</p>
+                <p className="text-xs text-muted-foreground">Sell it as Half / Full or Small / Large, each with its own price.</p>
+                <ul className="mt-2 space-y-2">
+                  {newVariants.map((variant, index) => (
+                    <li key={index} className="flex items-start gap-2">
+                      <div className="flex-1">
+                        <input
+                          aria-label={`Portion ${index + 1} name`}
+                          data-testid={`item-create-variant-${index}-name`}
+                          placeholder="e.g. Half"
+                          value={variant.name}
+                          onChange={(event) => setNewVariants((vs) => vs.map((v, i) => (i === index ? { ...v, name: event.target.value } : v)))}
+                          className={FIELD_CLASS}
+                        />
+                      </div>
+                      <div className="w-28">
+                        <input
+                          aria-label={`Portion ${index + 1} price (${currency})`}
+                          data-testid={`item-create-variant-${index}-price`}
+                          type="number"
+                          min="0"
+                          step="0.01"
+                          placeholder="Price"
+                          value={variant.price}
+                          onChange={(event) => setNewVariants((vs) => vs.map((v, i) => (i === index ? { ...v, price: event.target.value } : v)))}
+                          className={FIELD_CLASS}
+                        />
+                      </div>
+                      <button
+                        type="button"
+                        data-testid={`item-create-variant-${index}-remove`}
+                        aria-label={`Remove portion ${index + 1}`}
+                        onClick={() => setNewVariants((vs) => vs.filter((_, i) => i !== index))}
+                        className="rounded-md p-2 text-muted-foreground hover:text-status-error focus:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+                      >
+                        ✕
+                      </button>
+                      {attempted && variantErrors[index] && (
+                        <p data-testid={`item-create-variant-${index}-error`} className="sr-only" role="alert">
+                          {variantErrors[index]}
+                        </p>
+                      )}
+                    </li>
+                  ))}
+                </ul>
+                {attempted && variantErrors.some(Boolean) && (
+                  <p data-testid="item-create-variants-error" className="mt-1 text-xs text-status-error">
+                    Give every portion a name and a price.
+                  </p>
+                )}
+                <button
+                  type="button"
+                  data-testid="item-create-add-variant"
+                  onClick={() => setNewVariants((vs) => [...vs, { name: "", price: vs.length === 0 ? createPriceMajor : "" }])}
+                  className="mt-2 text-sm font-medium text-primary hover:underline"
+                >
+                  + Add portion
+                </button>
               </div>
             )}
 
@@ -474,9 +640,8 @@ function DrawerBody({
               <VariantsSection
                 item={liveItem}
                 currency={currency}
-                currentPrices={currentPrices}
                 pending={pending}
-                onAddVariant={(name) => void handleAddVariant(name)}
+                onAddVariant={handleAddVariant}
                 onRemoveVariant={(id) => void handleRemoveVariant(id)}
                 onOpenPriceChange={setPriceLine}
               />
@@ -534,8 +699,8 @@ function DrawerBody({
               ) : (
                 <span />
               )}
-              <Button data-testid="item-save" disabled={!canSave || saving || deleting} onClick={() => void handleSave()}>
-                {saving ? "Saving..." : "Save Changes"}
+              <Button data-testid="item-save" disabled={saving || deleting} onClick={() => void handleSave()}>
+                {saving ? "Saving..." : isCreate ? "Add item" : "Save changes"}
               </Button>
             </div>
           </div>
@@ -547,7 +712,7 @@ function DrawerBody({
           open
           itemLabel={priceLine.label}
           currency={currency}
-          current={currentPrices[priceLine.variantId ?? "base"] ?? 0}
+          current={priceOf(priceLine.variantId) ?? 0}
           busy={priceBusy}
           error={priceError}
           onCancel={() => {
@@ -564,7 +729,6 @@ function DrawerBody({
 function VariantsSection({
   item,
   currency,
-  currentPrices,
   pending,
   onAddVariant,
   onRemoveVariant,
@@ -572,26 +736,58 @@ function VariantsSection({
 }: Readonly<{
   item: ItemView;
   currency: string;
-  currentPrices: Record<string, number>;
   pending: PendingPriceInfo[];
-  onAddVariant: (name: string) => void;
+  onAddVariant: (input: NewVariantInput) => Promise<boolean>;
   onRemoveVariant: (id: string) => void;
   onOpenPriceChange: (line: PriceLine) => void;
 }>) {
   const [newVariantName, setNewVariantName] = useState("");
+  const [newVariantPrice, setNewVariantPrice] = useState("");
+  const [basePortionName, setBasePortionName] = useState("Regular");
+  const [tried, setTried] = useState(false);
+  const [busy, setBusy] = useState(false);
+  const hasVariants = item.variants.length > 0;
+  // PE-15: an item's first variant keeps its current price on sale as a named portion.
+  const keepsBase = !hasVariants && item.priceMinor !== null;
+  const newPriceError = priceInputError(newVariantPrice);
+  const note = unsellableNote(item);
+
+  async function add() {
+    setTried(true);
+    if (!newVariantName.trim() || newPriceError) return;
+    setBusy(true);
+    const saved = await onAddVariant({
+      name: newVariantName.trim(),
+      priceMinor: majorStringToPriceMinor(newVariantPrice) ?? 0,
+      ...(keepsBase ? { basePortionName: basePortionName.trim() || "Regular" } : {}),
+    });
+    setBusy(false);
+    if (saved) {
+      setNewVariantName("");
+      setNewVariantPrice("");
+      setTried(false);
+    }
+  }
 
   return (
     <div data-testid="item-variants-section">
-      <p className={LABEL_CLASS}>Variants &amp; Pricing</p>
+      <p className={LABEL_CLASS}>{hasVariants ? "Portions & prices" : "Price"}</p>
+      {note && (
+        <p data-testid="item-unsellable-note" role="status" className="mb-2 text-xs text-status-warning">
+          {note}
+        </p>
+      )}
 
-      <PriceRow
-        label={item.variants.length === 0 ? "Base price" : undefined}
-        testId="item-base-price"
-        currency={currency}
-        current={currentPrices.base ?? 0}
-        pending={pendingChangeFor(pending, null, "dine_in")}
-        onChange={() => onOpenPriceChange({ variantId: null, label: item.name })}
-      />
+      {/* CU-1: once an item has portions, only their prices are used - the old base price is not shown. */}
+      {!hasVariants && (
+        <PriceRow
+          testId="item-base-price"
+          currency={currency}
+          current={item.priceMinor}
+          pending={pendingChangeFor(pending, null, "dine_in")}
+          onChange={() => onOpenPriceChange({ variantId: null, label: item.name })}
+        />
+      )}
 
       <ul className="mt-3 space-y-3">
         {item.variants.map((variant) => (
@@ -611,7 +807,7 @@ function VariantsSection({
             <PriceRow
               testId={`item-variant-${variant.id}-price`}
               currency={currency}
-              current={currentPrices[variant.id] ?? 0}
+              current={variant.priceMinor}
               pending={pendingChangeFor(pending, variant.id, "dine_in")}
               onChange={() => onOpenPriceChange({ variantId: variant.id, label: variant.name })}
             />
@@ -619,27 +815,51 @@ function VariantsSection({
         ))}
       </ul>
 
-      <div className="mt-3 flex items-center gap-2">
-        <input
-          data-testid="item-new-variant-name"
-          value={newVariantName}
-          placeholder="e.g. Half, Full"
-          onChange={(event) => setNewVariantName(event.target.value)}
-          className={`${FIELD_CLASS} flex-1`}
-        />
-        <Button
-          type="button"
-          variant="secondary"
-          size="sm"
-          data-testid="item-add-variant"
-          disabled={!newVariantName.trim()}
-          onClick={() => {
-            onAddVariant(newVariantName);
-            setNewVariantName("");
-          }}
-        >
-          + Add Variant
-        </Button>
+      <div className="mt-3 rounded-lg border border-dashed border-border/60 p-3">
+        <p className="text-xs font-medium text-muted-foreground">Add a portion (e.g. Half, Full)</p>
+        {keepsBase && (
+          <div className="mt-2">
+            <label htmlFor="item-base-portion-name" className="text-xs text-muted-foreground">
+              Name for the current {formatPriceMinor(item.priceMinor ?? 0, currency)} portion
+            </label>
+            <input
+              id="item-base-portion-name"
+              data-testid="item-base-portion-name"
+              value={basePortionName}
+              onChange={(event) => setBasePortionName(event.target.value)}
+              className={FIELD_CLASS}
+            />
+          </div>
+        )}
+        <div className="mt-2 flex items-start gap-2">
+          <input
+            aria-label="New portion name"
+            data-testid="item-new-variant-name"
+            value={newVariantName}
+            placeholder="e.g. Half"
+            onChange={(event) => setNewVariantName(event.target.value)}
+            className={`${FIELD_CLASS} flex-1`}
+          />
+          <input
+            aria-label={`New portion price (${currency})`}
+            data-testid="item-new-variant-price"
+            type="number"
+            min="0"
+            step="0.01"
+            placeholder="Price"
+            value={newVariantPrice}
+            onChange={(event) => setNewVariantPrice(event.target.value)}
+            className={`${FIELD_CLASS} w-28`}
+          />
+          <Button type="button" variant="secondary" size="sm" data-testid="item-add-variant" disabled={!newVariantName.trim() || busy} onClick={() => void add()}>
+            + Add
+          </Button>
+        </div>
+        {tried && newPriceError && (
+          <p data-testid="item-new-variant-price-error" className="mt-1 text-xs text-status-error">
+            {newPriceError}
+          </p>
+        )}
       </div>
     </div>
   );
@@ -656,7 +876,7 @@ function PriceRow({
   label?: string;
   testId: string;
   currency: string;
-  current: number;
+  current: number | null;
   pending: PendingPriceInfo | null;
   onChange: () => void;
 }>) {
@@ -664,11 +884,11 @@ function PriceRow({
     <div className="mt-2">
       {label && <p className="text-xs text-muted-foreground">{label}</p>}
       <div className="flex items-center justify-between gap-2">
-        <p data-testid={`${testId}-current`} className="text-sm tabular-nums">
-          {formatPriceMinor(current, currency)}
+        <p data-testid={`${testId}-current`} className={`text-sm tabular-nums ${current === null ? "text-status-warning" : ""}`}>
+          {current === null ? "No price yet" : formatPriceMinor(current, currency)}
         </p>
         <button type="button" data-testid={`${testId}-change`} onClick={onChange} className="text-xs font-medium text-primary hover:underline">
-          Change price
+          {current === null ? "Set price" : "Change price"}
         </button>
       </div>
       {pending && (

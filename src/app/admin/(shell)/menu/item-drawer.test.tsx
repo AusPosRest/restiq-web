@@ -20,6 +20,8 @@ function item(overrides: Partial<ItemView> = {}): ItemView {
     shortName: "Paneer Tikka",
     categoryId: "tandoor",
     available: true,
+    priceMinor: 18000,
+    currency: "INR",
     variants: [],
     modifierGroups: [],
     allergens: [],
@@ -200,13 +202,29 @@ describe("ItemDrawer open/close and field editing", () => {
     expect((input as HTMLInputElement).value).toBe("Malai Tikka");
   });
 
-  it("disables Save Changes until the item has a name", async () => {
+  it("says the item needs a name instead of saving it without one", async () => {
     stubFetch();
-    renderDrawer();
+    const { onSaved } = renderDrawer();
     const input = screen.getByTestId("item-name-input");
     await userEvent.clear(input);
-    expect(screen.getByTestId("item-save")).toHaveProperty("disabled", true);
+    await userEvent.click(screen.getByTestId("item-save"));
     expect(screen.getByTestId("item-name-error").textContent).toBe("Name the item.");
+    expect(onSaved).not.toHaveBeenCalled();
+  });
+
+  it("shows no errors on a fresh Add Item form until a field is left or Add is tried (PE-13)", async () => {
+    stubFetch();
+    renderDrawer({ item: null });
+    expect(screen.queryByTestId("item-name-error")).toBeNull();
+    expect(screen.queryByTestId("item-short-name-error")).toBeNull();
+    expect(screen.getByTestId("item-save").textContent).toBe("Add item");
+  });
+
+  it("fills the kitchen ticket name from the item name until it is edited (CU-1)", async () => {
+    stubFetch();
+    renderDrawer({ item: null });
+    await userEvent.type(screen.getByTestId("item-name-input"), "Garden Salad");
+    expect((screen.getByTestId("item-short-name-input") as HTMLInputElement).value).toBe("Garden Salad");
   });
 
   it("saves routine field edits through the update endpoint (name/shortName/categoryId only)", async () => {
@@ -230,18 +248,46 @@ describe("ItemDrawer open/close and field editing", () => {
     expect(onClose).toHaveBeenCalled();
     const patchCall = fetchMock.mock.calls.find(([, init]) => (init as RequestInit | undefined)?.method === "PATCH");
     expect(patchCall?.[0]).toBe("/admin/api/menu/items/item-1");
-    expect(JSON.parse((patchCall?.[1] as RequestInit).body as string)).toEqual({ name: "Malai Tikka", shortName: "Paneer Tikka", categoryId: "tandoor" });
+    expect(JSON.parse((patchCall?.[1] as RequestInit).body as string)).toEqual({ name: "Malai Tikka", shortName: "Paneer Tikka", categoryId: "tandoor", vegMarker: null });
   });
 
-  it("disables Save Changes until a new item has a price", async () => {
-    stubFetch();
+  it("says a new item needs a price, and that a negative one is not allowed (PE-13)", async () => {
+    const fetchMock = stubFetch();
     renderDrawer({ item: null });
     await userEvent.type(screen.getByTestId("item-name-input"), "Malai Tikka");
-    await userEvent.type(screen.getByTestId("item-short-name-input"), "Malai Tikka");
-    expect(screen.getByTestId("item-save")).toHaveProperty("disabled", true);
+    await userEvent.click(screen.getByTestId("item-save"));
+    expect(screen.getByTestId("item-create-price-error").textContent).toBe("Enter a price.");
 
-    await userEvent.type(screen.getByTestId("item-create-price"), "250");
-    expect(screen.getByTestId("item-save")).toHaveProperty("disabled", false);
+    await userEvent.type(screen.getByTestId("item-create-price"), "-5");
+    expect(screen.getByTestId("item-create-price-error").textContent).toBe("Price can't be negative.");
+    expect(fetchMock.mock.calls.some(([, init]) => init?.method === "POST")).toBe(false);
+  });
+
+  it("creates an item with Half/Full portions and their prices in one go (CU-1)", async () => {
+    const created = item({ id: "item-3", name: "Biryani", priceMinor: null, variants: [{ id: "v1", name: "Half", sortOrder: 0, priceMinor: 16900 }] });
+    const fetchMock = vi.fn((input: RequestInfo | URL, init?: RequestInit) => {
+      if ((init?.method ?? "GET") === "POST" && String(input) === "/admin/api/menu/items") return Promise.resolve(jsonResponse(created, 201));
+      return Promise.resolve(jsonResponse({ error: { code: "not_found", message: "unhandled" } }, 404));
+    });
+    vi.stubGlobal("fetch", fetchMock);
+    const { onSaved } = renderDrawer({ item: null });
+
+    await userEvent.type(screen.getByTestId("item-name-input"), "Biryani");
+    await userEvent.click(screen.getByTestId("item-create-add-variant"));
+    await userEvent.click(screen.getByTestId("item-create-add-variant"));
+    await userEvent.type(screen.getByTestId("item-create-variant-0-name"), "Half");
+    await userEvent.type(screen.getByTestId("item-create-variant-0-price"), "169");
+    await userEvent.type(screen.getByTestId("item-create-variant-1-name"), "Full");
+    await userEvent.type(screen.getByTestId("item-create-variant-1-price"), "289.50");
+    await userEvent.click(screen.getByTestId("item-save"));
+
+    await waitFor(() => expect(onSaved).toHaveBeenCalledWith(created));
+    const posts = fetchMock.mock.calls.filter(([, init]) => init?.method === "POST");
+    expect(posts).toHaveLength(1); // no separate base price for an item sold by portion
+    expect(JSON.parse(posts[0]?.[1]?.body as string).variants).toEqual([
+      { name: "Half", priceMinor: 16900, currency: "INR" },
+      { name: "Full", priceMinor: 28950, currency: "INR" },
+    ]);
   });
 
   it("creates a new item through the create endpoint, then posts its price with the price-change dialog's client (issue #330)", async () => {
@@ -262,11 +308,10 @@ describe("ItemDrawer open/close and field editing", () => {
     const { onSaved } = renderDrawer({ item: null });
 
     await userEvent.type(screen.getByTestId("item-name-input"), "Malai Tikka");
-    await userEvent.type(screen.getByTestId("item-short-name-input"), "Malai Tikka");
     await userEvent.type(screen.getByTestId("item-create-price"), "250");
     await userEvent.click(screen.getByTestId("item-save"));
 
-    await waitFor(() => expect(onSaved).toHaveBeenCalledWith(created));
+    await waitFor(() => expect(onSaved).toHaveBeenCalledWith({ ...created, priceMinor: 25000, currency: "INR" }));
     const [itemCall, priceCall] = fetchMock.mock.calls as [string, RequestInit][];
     expect(itemCall[0]).toBe("/admin/api/menu/items");
     expect(itemCall[1].method).toBe("POST");
@@ -351,11 +396,12 @@ describe("ItemDrawer price - current vs pending distinction", () => {
   beforeEach(() => vi.unstubAllGlobals());
   afterEach(cleanup);
 
-  it("fetches and shows one current price - no delivery price (#272)", async () => {
-    stubFetch();
-    renderDrawer();
-    await waitFor(() => expect(screen.getByTestId("item-base-price-current").textContent).toBe("₹180"));
+  it("shows the item's one current price from the item itself, with no price request (#272, SE-20)", async () => {
+    const fetchMock = stubFetch();
+    renderDrawer({ item: item({ priceMinor: 28950 }) });
+    expect(screen.getByTestId("item-base-price-current").textContent).toBe("₹289.50");
     expect(screen.queryByTestId("item-base-price-pending")).toBeNull();
+    expect(fetchMock.mock.calls.some(([url]) => String(url).includes("/price?"))).toBe(false);
   });
 
   it("opens the price-change dialog from 'Change price', schedules a future change with a reason, and shows it as pending (distinct from current)", async () => {
@@ -400,12 +446,14 @@ describe("ItemDrawer price - current vs pending distinction", () => {
     expect(sentBody).not.toHaveProperty("channel"); // no channel = every channel, so QR and takeaway are priced too
   });
 
-  it("requires a reason before the price-change submit is enabled", async () => {
-    stubFetch();
+  it("says a reason is needed instead of greying out the save button (CU-2)", async () => {
+    const fetchMock = stubFetch();
     renderDrawer();
-    await waitFor(() => screen.getByTestId("item-base-price-current"));
     await userEvent.click(screen.getByTestId("item-base-price-change"));
-    expect(screen.getByTestId("price-change-submit")).toHaveProperty("disabled", true);
+    expect(screen.getByTestId("price-change-submit")).toHaveProperty("disabled", false);
+    await userEvent.click(screen.getByTestId("price-change-submit"));
+    expect(screen.getByTestId("price-change-reason-error").textContent).toBe("Add a reason for this price change.");
+    expect(fetchMock.mock.calls.some(([, init]) => init?.method === "POST")).toBe(false);
   });
 });
 
@@ -413,20 +461,81 @@ describe("ItemDrawer variants", () => {
   beforeEach(() => vi.unstubAllGlobals());
   afterEach(cleanup);
 
-  it("adds a variant through the dedicated variant endpoint, keeping the drawer open (issue #333)", async () => {
-    const updated = item({ variants: [{ id: "v1", name: "Half", sortOrder: 0 }] });
+  it("adds a priced variant and keeps the current price on sale as a named portion (issue #333, PE-15)", async () => {
+    const updated = item({
+      variants: [
+        { id: "v0", name: "Full", sortOrder: 0, priceMinor: 18000 },
+        { id: "v1", name: "Half", sortOrder: 1, priceMinor: 11000 },
+      ],
+    });
     const fetchMock = stubFetch({
       onPost: (url, body) => (url === "/admin/api/menu/items/item-1/variants" && (body as { name: string }).name === "Half" ? jsonResponse(updated, 201) : undefined),
     });
     const { onSaved, onClose } = renderDrawer();
-    await waitFor(() => screen.getByTestId("item-base-price-current"));
 
+    await userEvent.clear(screen.getByTestId("item-base-portion-name"));
+    await userEvent.type(screen.getByTestId("item-base-portion-name"), "Full");
     await userEvent.type(screen.getByTestId("item-new-variant-name"), "Half");
+    await userEvent.type(screen.getByTestId("item-new-variant-price"), "110");
     await userEvent.click(screen.getByTestId("item-add-variant"));
 
     await waitFor(() => expect(onSaved).toHaveBeenCalledWith(updated));
     const postCall = fetchMock.mock.calls.find(([url]) => url === "/admin/api/menu/items/item-1/variants");
-    expect(postCall).toBeTruthy();
+    expect(JSON.parse(postCall?.[1]?.body as string)).toEqual({ name: "Half", priceMinor: 11000, basePortionName: "Full", currency: "INR" });
     expect(onClose).not.toHaveBeenCalled();
+    // CU-1: once portions exist, the base price is no longer shown.
+    expect(screen.queryByTestId("item-base-price-current")).toBeNull();
+    expect(screen.getByTestId("item-variant-v0-price-current").textContent).toBe("₹180");
+  });
+
+  it("asks for the new variant's price instead of creating it at nothing (PE-13)", async () => {
+    const fetchMock = stubFetch();
+    renderDrawer();
+    await userEvent.type(screen.getByTestId("item-new-variant-name"), "Half");
+    await userEvent.click(screen.getByTestId("item-add-variant"));
+    expect(screen.getByTestId("item-new-variant-price-error").textContent).toBe("Enter a price.");
+    expect(fetchMock.mock.calls.some(([, init]) => init?.method === "POST")).toBe(false);
+  });
+
+  it("flags a portion with no price, which the till and QR menu can't sell (CU-23)", () => {
+    stubFetch();
+    renderDrawer({ item: item({ priceMinor: null, variants: [{ id: "v1", name: "Half", sortOrder: 0, priceMinor: null }] }) });
+    expect(screen.getByTestId("item-unsellable-note").textContent).toContain("isn't on the till or QR menu");
+    expect(screen.getByTestId("item-variant-v1-price-current").textContent).toBe("No price yet");
+  });
+});
+
+describe("ItemDrawer kitchen station (PE-21)", () => {
+  beforeEach(() => vi.unstubAllGlobals());
+  afterEach(cleanup);
+
+  it("lists the outlet's stations and routes the item to the chosen one", async () => {
+    const routed = item({ stationId: "st-bar" });
+    const fetchMock = vi.fn((input: RequestInfo | URL, init?: RequestInit) => {
+      const url = String(input);
+      if (url === "/admin/api/outlets/o1/floor-plan") {
+        return Promise.resolve(
+          jsonResponse({
+            floors: [],
+            printers: [],
+            stations: [
+              { id: "st-hot", name: "Hot Kitchen" },
+              { id: "st-bar", name: "Bar" },
+            ],
+          }),
+        );
+      }
+      if (init?.method === "PATCH" && url === "/admin/api/menu/items/item-1/station") return Promise.resolve(jsonResponse(routed));
+      return Promise.resolve(jsonResponse({ error: { code: "not_found", message: "unhandled" } }, 404));
+    });
+    vi.stubGlobal("fetch", fetchMock);
+    const { onSaved } = renderDrawer({ outlets: [{ id: "o1", name: "Main", address: "", type: "dine_in", timezone: "Asia/Kolkata" }], selectedOutletId: "o1" });
+
+    const select = await screen.findByTestId("item-station-select");
+    await userEvent.selectOptions(select, "st-bar");
+
+    await waitFor(() => expect(onSaved).toHaveBeenCalledWith(routed));
+    const patch = fetchMock.mock.calls.find(([url]) => String(url).endsWith("/station"));
+    expect(JSON.parse(patch?.[1]?.body as string)).toEqual({ stationId: "st-bar" });
   });
 });

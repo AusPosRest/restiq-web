@@ -21,6 +21,8 @@ export interface VariantView {
   id: string;
   name: string;
   sortOrder: number;
+  /** restiq-backend#211: current dine-in price, null = unpriced (not on sale). */
+  priceMinor: number | null;
 }
 
 export interface ModifierView {
@@ -50,9 +52,29 @@ export interface ItemView {
   available: boolean;
   // https or an uploaded data:image URL (issue #218); optional for older backends.
   photoUrl?: string | null;
+  vegMarker?: VegMarker | null;
+  /** Kitchen station this item's tickets go to; null = the outlet's first station. */
+  stationId?: string | null;
+  /** restiq-backend#211: current dine-in base price, inline (no per-row price request). */
+  priceMinor: number | null;
+  currency: string | null;
   variants: VariantView[];
   modifierGroups: ModifierGroupView[];
   allergens: AllergenView[];
+}
+
+export type VegMarker = "veg" | "non_veg";
+
+/**
+ * CU-23: why the till and QR menu can't sell an item as the owner sees it, or
+ * null when they can. An item with variants sells only its priced variants.
+ */
+export function unsellableNote(item: Pick<ItemView, "priceMinor" | "variants">): string | null {
+  if (item.variants.length === 0) return item.priceMinor === null ? "No price set, so it isn't on the till or QR menu." : null;
+  const unpriced = item.variants.filter((v) => v.priceMinor === null).map((v) => v.name);
+  if (unpriced.length === 0) return null;
+  if (unpriced.length === item.variants.length) return "No portion has a price, so it isn't on the till or QR menu.";
+  return `${unpriced.join(", ")} ${unpriced.length === 1 ? "has" : "have"} no price, so ${unpriced.length === 1 ? "it isn't" : "they aren't"} offered.`;
 }
 
 export interface CategoryView {
@@ -131,7 +153,8 @@ const CURRENCY_SYMBOLS: Record<string, string> = { INR: "₹", USD: "$", AUD: "$
 
 export function formatPriceMinor(priceMinor: number, currency: string): string {
   const symbol = CURRENCY_SYMBOLS[currency] ?? `${currency} `;
-  return `${symbol}${(priceMinor / 100).toFixed(0)}`;
+  // PE-12: paise are shown when there are any (₹289.50), so the menu never disagrees with the bill.
+  return `${symbol}${(priceMinor / 100).toFixed(priceMinor % 100 === 0 ? 0 : 2)}`;
 }
 
 export function majorStringToPriceMinor(value: string): number | null {

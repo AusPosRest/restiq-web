@@ -330,10 +330,11 @@ export interface AddOrderLineInput {
 
 const CURRENCY_SYMBOLS: Record<string, string> = { INR: "₹" };
 
-/** Menu/order prices render whole-currency-unit, no decimals - matches the P3/P4 mocks (₹340, not ₹340.00). */
+/** Menu/order prices render whole units when even (₹340, the P3/P4 mocks), with paise otherwise (₹289.50). */
 export function formatPriceMinor(priceMinor: number, currency = "INR"): string {
   const symbol = CURRENCY_SYMBOLS[currency] ?? `${currency} `;
-  return `${symbol}${(priceMinor / 100).toFixed(0)}`;
+  // PE-12: paise are shown when there are any (₹289.50), so the menu never disagrees with the bill.
+  return `${symbol}${(priceMinor / 100).toFixed(priceMinor % 100 === 0 ? 0 : 2)}`;
 }
 
 // --- Grid filtering (category tabs + search). A non-empty search query
