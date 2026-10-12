@@ -41,7 +41,7 @@ function paymentRow(overrides: Partial<PaymentRow> = {}): PaymentRow {
       { method: "cash", amountMinor: 60000, createdAt: "2026-09-03T08:05:00.000Z" },
       { method: "card", amountMinor: 40000, createdAt: "2026-09-03T08:05:00.000Z" },
     ],
-    creditNotes: [{ id: "cn-1", amountMinor: 1000, reason: "Wrong item", createdAt: "2026-09-03T08:10:00.000Z" }],
+    creditNotes: [{ id: "cn-1", amountMinor: 1000, method: "upi_manual", reason: "Wrong item", createdAt: "2026-09-03T08:10:00.000Z" }],
     ...overrides,
   };
 }
@@ -162,6 +162,7 @@ describe("Payments", () => {
     // PE-23: plain tender names, never raw keys.
     expect(row.textContent).toContain("Cash ₹");
     expect(row.textContent).not.toContain("cash=");
+    expect(within(row).getByTestId("payments-row-bill-1-refund-methods").textContent).toBe("UPI");
 
     const tokenRow = screen.getByTestId("payments-row-bill-2");
     expect(tokenRow.textContent).toContain("Token #7");

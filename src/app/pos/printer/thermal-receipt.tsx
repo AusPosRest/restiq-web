@@ -94,7 +94,7 @@ export function ThermalReceipt({ invoice, printedAt }: Readonly<{ invoice: Invoi
         <>
           <Rule />
           {invoice.creditNotes.map((note) => (
-            <Row key={note.id} label={`Credit: ${note.reason}`} value={`-${formatMinor(note.amountMinor, currency)}`} />
+            <Row key={note.id} label={note.method ? `Credit (${TENDER_METHOD_LABEL[note.method]}): ${note.reason}` : `Credit: ${note.reason}`} value={`-${formatMinor(note.amountMinor, currency)}`} />
           ))}
         </>
       )}

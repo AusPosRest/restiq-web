@@ -52,7 +52,7 @@ function inInvoice(overrides: Partial<InvoiceView> = {}): InvoiceView {
     totalMinor: 11550,
     pricesIncludeTax: false,
     tenders: [{ method: "cash", amountMinor: 11550, createdAt: "2026-09-02T10:31:00.000Z" }],
-    creditNotes: [{ id: "cn-1", amountMinor: 500, reason: "Item returned", createdAt: "2026-09-02T10:45:00.000Z" }],
+    creditNotes: [{ id: "cn-1", amountMinor: 500, method: "cash", reason: "Item returned", createdAt: "2026-09-02T10:45:00.000Z" }],
     notes: ["Thank you for dining with us.", "This is a computer-generated invoice."],
     footerMessage: null,
     ...overrides,
@@ -124,6 +124,7 @@ describe("BillInvoiceView - IN invoice (GSTIN, CGST+SGST)", () => {
 
     expect(screen.getByTestId("invoice-tender-0").textContent).toContain("Cash");
     expect(screen.getByTestId("invoice-credit-note-cn-1").textContent).toContain("Item returned");
+    expect(screen.getByTestId("invoice-credit-note-cn-1").textContent).toContain("refunded by Cash");
     expect(screen.getByTestId("invoice-notes").textContent).toContain("Thank you for dining with us.");
     expect(screen.getByTestId("invoice-notes").textContent).toContain("This is a computer-generated invoice.");
   });

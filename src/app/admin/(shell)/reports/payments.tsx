@@ -349,7 +349,14 @@ function PaymentRowLine({ row, timeZone, currency }: Readonly<{ row: PaymentRow;
           ))}
         </div>
       </td>
-      <td className="px-4 text-right tabular-nums">{refunded ? formatMoney(refunded, currency) : "—"}</td>
+      <td className="px-4 text-right tabular-nums">
+        {refunded ? formatMoney(refunded, currency) : "—"}
+        {row.creditNotes.some((note) => note.method) && (
+          <div data-testid={`payments-row-${row.billId}-refund-methods`} className="text-xs text-muted-foreground">
+            {[...new Set(row.creditNotes.flatMap((note) => (note.method ? [tenderMethodLabel(note.method)] : [])))].join(", ")}
+          </div>
+        )}
+      </td>
     </tr>
   );
 }
