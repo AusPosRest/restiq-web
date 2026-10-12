@@ -346,6 +346,18 @@ export function setOutletCapability(outletId: string, key: string, enabled: bool
   });
 }
 
+// Issue #329: owner-editable outlet name/address/timezone. Outlet type is
+// set at provisioning and never sent here.
+export interface UpdateOutletInput {
+  name?: string;
+  address?: string;
+  timezone?: string;
+}
+
+export function updateOutlet(outletId: string, input: UpdateOutletInput): Promise<OutletView> {
+  return adminApi<OutletView>(`outlets/${outletId}`, { method: "PATCH", body: JSON.stringify(input) });
+}
+
 // --- CAP-5 Floor plan & stations. Verified against restiq-backend's actual
 // admin/v1/floor-plan working tree (feature/34-floor-plan,
 // src/admin/floor-plan/floor-plan.controller.ts / .dtos.ts, read directly -
