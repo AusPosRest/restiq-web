@@ -87,6 +87,32 @@ describe("ItemDetailView", () => {
     await waitFor(() => expect(push).toHaveBeenCalledWith("/qr/menu"));
   });
 
+  it.each([
+    ["  No onions please  ", "No onions please"],
+    ["   ", undefined],
+    ["", undefined],
+  ])("sends only a nonblank trimmed note: %j", async (note, expectedNote) => {
+    const cartPost = vi.fn().mockResolvedValue(jsonResponse(200, CART_RESPONSE));
+    vi.stubGlobal("fetch", async (input: RequestInfo | URL, init?: RequestInit) => {
+      const url = input.toString();
+      if (url.includes("/menu/items/i1")) return jsonResponse(200, SIMPLE_ITEM);
+      if (url.includes("/api/cart/lines")) return cartPost(init);
+      return jsonResponse(200, CART_RESPONSE);
+    });
+
+    render(<ItemDetailView itemId="i1" />);
+    const textarea = await screen.findByLabelText("Special instructions (optional)");
+    expect(textarea.getAttribute("maxlength")).toBe("200");
+    expect(textarea.getAttribute("data-testid")).toBe("qr-item-note");
+    fireEvent.change(textarea, { target: { value: note } });
+    expect(screen.getByText(`${note.length}/200`)).toBeTruthy();
+    fireEvent.click(screen.getByTestId("qr-add-to-cart"));
+    await waitFor(() => expect(cartPost).toHaveBeenCalled());
+    const body = JSON.parse((cartPost.mock.calls[0][0] as RequestInit).body as string);
+    expect(body).toEqual({ itemId: "i1", quantity: 1, modifierIds: [], ...(expectedNote ? { note: expectedNote } : {}) });
+    await waitFor(() => expect(push).toHaveBeenCalledWith("/qr/menu"));
+  });
+
   it("gates add-to-cart on a required variant and modifier group being satisfied", async () => {
     vi.stubGlobal(
       "fetch",
