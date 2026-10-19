@@ -116,6 +116,17 @@ describe("CartScreen", () => {
   });
   afterEach(cleanup);
 
+  it("renders special instructions beneath their cart line", async () => {
+    const cart = structuredClone(TWO_GUEST_CART);
+    Object.assign(cart.guests[0].lines[0], { note: "No onions please" });
+    vi.stubGlobal("fetch", routedFetch({ "GET /qr/api/cart": () => jsonResponse(200, cart) }));
+    render(<CartScreen myGuestId="g1" />);
+    const note = await screen.findByTestId("qr-cart-line-note");
+    expect(note.textContent).toBe("No onions please");
+    expect(screen.getByTestId("cart-line-l1").contains(note)).toBe(true);
+    expect(screen.getByTestId("cart-line-l2").querySelector('[data-testid="qr-cart-line-note"]')).toBeNull();
+  });
+
   it("groups by guest with per-guest subtotals and the combined total, rendered from the real shape", async () => {
     vi.stubGlobal("fetch", vi.fn().mockResolvedValue(jsonResponse(200, TWO_GUEST_CART)));
     render(<CartScreen myGuestId="g1" />);

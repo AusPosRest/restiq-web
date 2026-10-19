@@ -8,6 +8,7 @@
 // every required group is satisfied and, when the item has variants, one is
 // picked - see menu-state.ts's canAddToCart for the exact gate.
 import { useEffect, useState } from "react";
+import { Textarea } from "@/components/ui/textarea";
 import { useRouter } from "next/navigation";
 import { CartPill } from "../../cart-pill";
 import { SessionEndedView } from "../../session-ended-view";
@@ -39,6 +40,7 @@ export function ItemDetailView({ itemId }: Readonly<{ itemId: string }>) {
   const [variantId, setVariantId] = useState<string | null>(null);
   const [selection, setSelection] = useState<ModifierSelection>({});
   const [quantity, setQuantity] = useState(1);
+  const [note, setNote] = useState("");
   const [adding, setAdding] = useState(false);
   const [addError, setAddError] = useState<string | null>(null);
 
@@ -88,7 +90,7 @@ export function ItemDetailView({ itemId }: Readonly<{ itemId: string }>) {
       response = await fetch("/qr/api/cart/lines", {
         method: "POST",
         headers: { "content-type": "application/json" },
-        body: JSON.stringify({ itemId: state.item.id, variantId: variantId ?? undefined, quantity, modifierIds: modifiers.map((modifier) => modifier.id) }),
+        body: JSON.stringify({ itemId: state.item.id, variantId: variantId ?? undefined, quantity, modifierIds: modifiers.map((modifier) => modifier.id), note: note.trim() || undefined }),
       });
     } catch {
       setAdding(false);
@@ -252,6 +254,23 @@ export function ItemDetailView({ itemId }: Readonly<{ itemId: string }>) {
             </fieldset>
           );
         })}
+        <div className="space-y-2">
+          <label htmlFor="qr-item-note" className="text-sm font-medium text-foreground">
+            Special instructions (optional)
+          </label>
+          <Textarea
+            id="qr-item-note"
+            data-testid="qr-item-note"
+            maxLength={200}
+            value={note}
+            onChange={(event) => setNote(event.target.value)}
+            disabled={adding}
+            aria-describedby="qr-item-note-counter"
+          />
+          <p id="qr-item-note-counter" className="text-right text-xs tabular-nums text-muted-foreground">
+            {note.length}/200
+          </p>
+        </div>
       </div>
 
       <CartPill stackAboveActionBar />
