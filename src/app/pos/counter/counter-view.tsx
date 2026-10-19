@@ -52,7 +52,6 @@ import {
   getBill,
   PosApiError,
   removeOrderLine,
-  sendOrderToKitchen,
   startCounterOrder,
   updateOrderLineQuantity,
   type PostableTenderMethod,
@@ -65,7 +64,6 @@ import { ModifierSheet, type ModifierSheetConfirmValue } from "../orders/[orderI
 import { PosComboTile } from "../orders/[orderId]/pos-combo-tile";
 import { PosItemTile } from "../orders/[orderId]/pos-item-tile";
 import {
-  canSendToKitchen,
   filterMenuItems,
   formatPriceMinor,
   itemNeedsModifierSheet,
@@ -361,11 +359,11 @@ function CounterLoaded({
     const change = cashChangeMinor(billTotalMinor(bill), bill, pendingTenders, menu.currency);
     setFinalizeBusy(true);
     setFinalizeError(null);
-    // issue #306: a counter sale has no separate Send step, so Charge fires the
-    // unsent lines to the kitchen first - otherwise no ticket is ever made.
-    const fired = canSendToKitchen(order) ? sendOrderToKitchen(order.id, menu).then(setOrder) : Promise.resolve();
-    fired
-      .then(() => finalizeBill(bill.id, { tenders: tendersForFinalize(billTotalMinor(bill), bill, pendingTenders) }))
+    // restiq-web#361: no web pre-send. A successful finalize fires the unsent
+    // lines to the kitchen in the same transaction (restiq-backend#210), so a
+    // failed payment (e.g. shift_not_open) never leaves a ticket for an
+    // unpaid order on the KDS.
+    finalizeBill(bill.id, { tenders: tendersForFinalize(billTotalMinor(bill), bill, pendingTenders) })
       .then((finalised) => {
         setBill(finalised);
         // Paid: a reload now starts a fresh order rather than resuming this one.
