@@ -1,5 +1,6 @@
 # Completed
 
+- **2026-10-19** - Counter doesn't pre-send to the kitchen (issue #361, audit gap G3 web part): `pos/counter/counter-view.tsx` `handleFinalize` calls `finalizeBill` directly; the #306 `sendOrderToKitchen` pre-send is gone because the backend's finalize fires unsent lines in the same transaction (restiq-backend#210). A failed finalize shows `finalize-error` and keeps the cart. Tests: `counter-view.test.tsx` (no `PATCH .../status` on Charge; finalize `shift_not_open` sends nothing and keeps the order).
 - **2026-10-12** - QR special instructions (issue #363, G10; backend restiq-backend#231): labeled shadcn Textarea with a 200-character limit and counter; add-to-cart sends trimmed nonblank notes; cart lines display optional notes. Unit coverage checks note submission, blank omission and cart rendering.
 
 - **2026-10-09** - Outlet tab (issue #329): `(shell)/settings/outlet-details-editor.tsx` + `settings/outlet/page.tsx`, now the default settings tab (`settings-tabs.tsx`, `settings/page.tsx`). `updateOutlet` in `api.ts` PATCHes only the changed fields; `OutletContext` gained a small `updateOutlet` to apply the save locally. The checklist's `outlet_details` step is now a link step pointing here.

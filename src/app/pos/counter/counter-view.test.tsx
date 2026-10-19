@@ -87,6 +87,11 @@ function stubFetch(handlers: Partial<Record<string, (init?: RequestInit) => Resp
   return fetchMock;
 }
 
+/** restiq-web#361: did the screen itself send the order to the kitchen? */
+function sentToKitchen(fetchMock: ReturnType<typeof stubFetch>): boolean {
+  return fetchMock.mock.calls.some(([input, init]) => init?.method === "PATCH" && String(input).endsWith("/status"));
+}
+
 afterEach(() => {
   cleanup();
   vi.unstubAllGlobals();
@@ -224,9 +229,8 @@ describe("CounterView - ring up and settle in one continuous flow", () => {
   it("rings up an item and settles the bill without navigating away from /pos/counter", async () => {
     const user = userEvent.setup();
     let currentBill = bill("order-47");
-    let fired = false;
 
-    stubFetch({
+    const fetchMock = stubFetch({
       "GET menu": () => jsonResponse(MENU),
       [`POST outlets/${OUTLET_ID}/counter-orders`]: () => jsonResponse(counterOrder(), 201),
       "POST orders/order-47/bill": () => jsonResponse(currentBill, 201),
@@ -251,14 +255,7 @@ describe("CounterView - ring up and settle in one continuous flow", () => {
           }),
         );
       },
-      // issue #306: Charge fires the unsent lines to the kitchen before finalising.
-      "PATCH orders/order-47/status": (init) => {
-        expect(JSON.parse(String(init?.body))).toEqual({ status: "sent" });
-        fired = true;
-        return jsonResponse(counterOrder({ status: "sent" }));
-      },
       "POST bills/bill-order-47/finalize": (init) => {
-        expect(fired).toBe(true);
         const body = JSON.parse(String(init?.body)) as { tenders: { method: string; amountMinor: number }[] };
         currentBill = {
           ...currentBill,
@@ -296,11 +293,40 @@ describe("CounterView - ring up and settle in one continuous flow", () => {
     await user.click(screen.getByTestId("finalize-bill"));
 
     await screen.findByTestId("counter-settled-panel");
+    // restiq-web#361: the web never sends to the kitchen itself on Charge - a
+    // successful finalize fires the ticket server-side.
+    expect(sentToKitchen(fetchMock)).toBe(false);
     expect(screen.getByTestId("token-badge-number").textContent).toBe("#47");
     // No mutation UI survives finalization, same AD-14 discipline as bill-settle-view.
     expect(screen.queryByTestId("tender-keypad")).toBeNull();
     expect(screen.queryByTestId("item-grid")).toBeNull();
     expect(screen.getByTestId("print-invoice-link").getAttribute("href")).toBe("/pos/bills/bill-order-47/invoice");
+  });
+
+  it("does not send to the kitchen when finalize fails; shows the error and keeps the cart (restiq-web#361)", async () => {
+    const user = userEvent.setup();
+    resumeOrder47();
+    const fetchMock = stubFetch({
+      "GET menu": () => jsonResponse(MENU),
+      "GET orders/order-47": () => jsonResponse(counterOrder({ lines: [NAAN_LINE] })),
+      "POST orders/order-47/bill": () => jsonResponse(bill("order-47", { subtotalMinor: 6000, taxMinor: 300, totalMinor: 6300 }), 201),
+      "POST bills/bill-order-47/finalize": () =>
+        jsonResponse({ error: { code: "shift_not_open", message: "Open a shift with your starting cash float before taking cash" } }, 409),
+    });
+    render(<CounterView outletId={OUTLET_ID} currentStaffId={CURRENT_STAFF_ID} currentStaffName="Priya" />);
+
+    await user.click(await screen.findByTestId("tender-fill-remaining"));
+    await waitFor(() => expect(screen.getByTestId("finalize-bill")).toHaveProperty("disabled", false));
+    await user.click(screen.getByTestId("finalize-bill"));
+
+    const error = await screen.findByTestId("finalize-error");
+    expect(error.textContent).toContain("Open a shift");
+    expect(fetchMock.mock.calls.some(([input]) => String(input).endsWith("/finalize"))).toBe(true);
+    expect(sentToKitchen(fetchMock)).toBe(false);
+    // The cart survives so the cashier can fix the problem and charge again.
+    expect(screen.queryByTestId("counter-settled-panel")).toBeNull();
+    expect(screen.getByTestId("bill-line-line-1").textContent).toContain("Butter Naan");
+    expect(sessionStorage.getItem(`pos:counter-order:${CURRENT_STAFF_ID}`)).toBe("order-47");
   });
 
   it("keeps the counter on screen while the bill refreshes after a tap, no loading flash (#269)", async () => {
@@ -471,7 +497,6 @@ describe("CounterView - card terminal (issue #188)", () => {
       },
       "GET payment-intents/pi-7": () => jsonResponse({ ...pending, status: "succeeded", succeededAt: "2026-08-25T09:02:30.000Z", tenderId: "tender-c1" }),
       [`GET bills/${openBill.id}`]: () => jsonResponse({ ...openBill, tenders: [captured] }),
-      "PATCH orders/order-47/status": () => jsonResponse({ ...rungUp, status: "sent" }),
       [`POST bills/${openBill.id}/finalize`]: (init) => {
         expect(JSON.parse(String(init?.body)).tenders).toEqual([]);
         return jsonResponse({ ...openBill, status: "finalized", billNumber: 12, finalizedAt: "2026-08-25T09:03:00.000Z", tenders: [captured] });
