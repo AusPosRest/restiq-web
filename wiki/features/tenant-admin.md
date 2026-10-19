@@ -330,6 +330,14 @@ device" stays in the header for both. Default tab: Devices. Test:
   input; `buildTaxRegistrationPatch` sends back `Number(draft.gstRatePercent)`
   or `null` when the field is blank, same merge-PUT discipline as every other
   patchable field here.
+- **GST split rounding (issue #369, restiq-backend#244).** `gstSplitRounding`
+  (`"exact_total" | "equal_half_up" | "equal_half_even" | null`) joined the
+  GET/PUT record. India tenants not on the composition scheme see a "GST split
+  rounding (CGST/SGST)" radio group (`tax-gst-split-rounding`, options
+  `tax-gst-split-rounding-<value>`, labels and ₹289 @5% examples in
+  `GST_SPLIT_ROUNDING_OPTIONS`). A null from the backend reads as
+  `exact_total`; `buildTaxRegistrationPatch` sends it only for IN tenants.
+  It applies to new bills only; finalized bills keep their stored tax lines.
 
 ## CAP-5 - Floor plan & stations
 

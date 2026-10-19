@@ -29,6 +29,9 @@ import type { TaxBreakdownEntry } from "@/lib/tax-lines";
 
 export type BillStatus = "open" | "finalized";
 
+/** The tenant's CGST/SGST odd-paisa rule (restiq-backend#244, restiq-web#369). Null where it doesn't apply (non-IN, IGST, composition) - read as `exact_total`. */
+export type GstSplitRounding = "exact_total" | "equal_half_up" | "equal_half_even";
+
 /** The methods a cashier can post in the finalize call (bills.dtos.ts's `TENDER_METHODS`). `external` (issue #224) is money taken outside RESTIQ, with its reference. */
 export type PostableTenderMethod = "cash" | "upi_manual" | "external";
 /** Every method a bill's tenders can carry (prisma's `TenderMethod`, widened by restiq-backend#130): the four electronic ones are only ever written by the server when a payment intent confirms (ADR-001). */
@@ -70,6 +73,8 @@ export interface BillView {
   discountReason: string | null;
   /** True for tax-inclusive pricing (AU): subtotalMinor already contains taxMinor, so the payable total is subtotal - discount. Optional only for older fixtures; the backend always sends it. */
   pricesIncludeTax?: boolean;
+  /** How finalize splits CGST/SGST; null where it doesn't apply. Optional only for older fixtures; the backend always sends it. */
+  gstSplitRounding?: GstSplitRounding | null;
   /** subtotal (+ tax when not inclusive) - discount, never persisted as its own column - always derived server-side (bill-core.ts's `toBillView`). */
   totalMinor: number;
   status: BillStatus;
@@ -129,16 +134,26 @@ function roundHalfUp(numerator: bigint, denominator: bigint): bigint {
   return (numerator * TWO + denominator) / (denominator * TWO);
 }
 
-type BillFigures = Pick<BillView, "subtotalMinor" | "taxMinor" | "taxBreakdown" | "discountMinor" | "pricesIncludeTax" | "totalMinor">;
+/** round(numerator / denominator), half to even - the `equal_half_even` split rule. */
+function roundHalfEven(numerator: bigint, denominator: bigint): bigint {
+  if (numerator < ZERO) return -roundHalfEven(-numerator, denominator);
+  const quotient = numerator / denominator;
+  const twiceRemainder = (numerator % denominator) * TWO;
+  if (twiceRemainder > denominator || (twiceRemainder === denominator && quotient % TWO !== ZERO)) return quotient + BigInt(1);
+  return quotient;
+}
+
+type BillFigures = Pick<BillView, "subtotalMinor" | "taxMinor" | "taxBreakdown" | "discountMinor" | "pricesIncludeTax" | "gstSplitRounding" | "totalMinor">;
 
 /**
  * The bill's tax and total as finalize will compute them (restiq-web#369,
  * AP-pe-6 / AP-se-20). The backend only recomputes tax on the discounted value
  * inside the finalize call (bill-core.ts commitFinalize, SE-2), so while a
  * discount is pending the settle screen does the same maths: GST on
- * net = subtotal - discount, the total GST rounded once and split CGST =
- * floor(half), SGST = the remainder (restiq-backend#244), so the lines always
- * add up; inclusive pricing (AU) backs the GST out of the discounted price and
+ * net = subtotal - discount, split by the tenant's `gstSplitRounding`
+ * (restiq-backend#244): `exact_total` (also null/missing) rounds the total GST
+ * once and gives CGST = floor(half), SGST = the remainder; `equal_half_up` /
+ * `equal_half_even` round each line on its own, and the tax is their sum. Inclusive pricing (AU) backs the GST out of the discounted price and
  * never adds it on top. A bill with no rated breakdown (composition scheme,
  * older bills) keeps its own taxMinor. With no pending discount - or once the
  * bill carries its own `discountMinor` - the server's figures stand as sent.
@@ -155,6 +170,14 @@ export function billFigures(bill: BillFigures, pendingDiscountMinor = 0): Pick<B
   }
   const basisPoints = rated.map((line) => BigInt(Math.round(line.ratePercent * 100)));
   const rateBasis = basisPoints.reduce((sum, bp) => sum + bp, ZERO);
+  const split = bill.gstSplitRounding;
+  if (!bill.pricesIncludeTax && (split === "equal_half_up" || split === "equal_half_even")) {
+    const round = split === "equal_half_up" ? roundHalfUp : roundHalfEven;
+    const amounts = basisPoints.map((bp) => round(net * bp, BASIS_POINTS));
+    const taxMinor = amounts.reduce((sum, amount) => sum + amount, ZERO);
+    const taxBreakdown = rated.map((line, i) => ({ ...line, amountMinor: Number(amounts[i]) }));
+    return { taxMinor: Number(taxMinor), taxBreakdown, totalMinor: Number(net + taxMinor) };
+  }
   const taxMinor = bill.pricesIncludeTax
     ? net - roundHalfUp(net * BASIS_POINTS, BASIS_POINTS + rateBasis)
     : roundHalfUp(net * rateBasis, BASIS_POINTS);

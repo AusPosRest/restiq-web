@@ -19,6 +19,7 @@ const TAX_REGISTRATION = {
   compositionScheme: false,
   gstRegistered: true,
   gstRatePercent: 5,
+  gstSplitRounding: null,
 };
 
 function stubFetch({ get = TAX_REGISTRATION, putStatus = 200 }: { get?: unknown; putStatus?: number } = {}) {
@@ -149,6 +150,42 @@ describe("TaxRegistrationEditor", () => {
     const putCall = fetchMock.mock.calls.find(([, init]) => (init as RequestInit | undefined)?.method === "PUT");
     const sentBody = JSON.parse((putCall?.[1] as RequestInit).body as string) as Record<string, unknown>;
     expect(sentBody).toMatchObject({ gstRegistered: false });
+  });
+
+  it("#369: an India CGST/SGST tenant picks the GST split rounding and saves it as gstSplitRounding", async () => {
+    const fetchMock = stubFetch();
+    renderEditor();
+    await screen.findByTestId("tax-registration-form");
+
+    expect(screen.getByTestId("tax-gst-split-rounding").textContent).toContain("CGST ₹7.22 + SGST ₹7.23 = ₹14.45");
+    // null from the backend reads as the default, exact_total.
+    expect((screen.getByTestId("tax-gst-split-rounding-exact_total") as HTMLInputElement).checked).toBe(true);
+    await userEvent.click(screen.getByTestId("tax-gst-split-rounding-equal_half_even"));
+    expect((screen.getByTestId("tax-gst-split-rounding-equal_half_even") as HTMLInputElement).checked).toBe(true);
+    await userEvent.click(screen.getByTestId("tax-registration-save"));
+    await waitFor(() => expect(screen.getByTestId("tax-registration-save")).toHaveProperty("disabled", true));
+
+    const putCall = fetchMock.mock.calls.find(([, init]) => (init as RequestInit | undefined)?.method === "PUT");
+    const sentBody = JSON.parse((putCall?.[1] as RequestInit).body as string) as Record<string, unknown>;
+    expect(sentBody).toMatchObject({ gstSplitRounding: "equal_half_even" });
+  });
+
+  it("#369: hides GST split rounding for composition-scheme and Australian tenants", async () => {
+    stubFetch({ get: { ...TAX_REGISTRATION, compositionScheme: true } });
+    renderEditor();
+    await screen.findByTestId("tax-registration-form");
+    expect(screen.queryByTestId("tax-gst-split-rounding")).toBeNull();
+    cleanup();
+
+    const fetchMock = stubFetch({ get: { ...TAX_REGISTRATION, country: "AU", registrationType: "abn", registrationNumber: "51824753556" } });
+    renderEditor();
+    await screen.findByTestId("tax-registration-form");
+    expect(screen.queryByTestId("tax-gst-split-rounding")).toBeNull();
+    await userEvent.click(screen.getByTestId("tax-registration-gst-registered"));
+    await userEvent.click(screen.getByTestId("tax-registration-save"));
+    await waitFor(() => expect(screen.getByTestId("tax-registration-save")).toHaveProperty("disabled", true));
+    const putCall = fetchMock.mock.calls.find(([, init]) => (init as RequestInit | undefined)?.method === "PUT");
+    expect(JSON.parse((putCall?.[1] as RequestInit).body as string)).not.toHaveProperty("gstSplitRounding");
   });
 
   it("shows a retryable error panel when the load fails", async () => {

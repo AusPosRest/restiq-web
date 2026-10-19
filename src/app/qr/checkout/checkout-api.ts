@@ -37,6 +37,8 @@ export interface GuestBillView {
   /** BillView's own breakdown (CGST/SGST, IGST or GST) - CU-24: shown split, never one lump. */
   taxBreakdown?: Array<{ label: string; ratePercent: number; amountMinor: number }>;
   pricesIncludeTax?: boolean;
+  /** The tenant's CGST/SGST split rule (restiq-backend#244); null where it doesn't apply. */
+  gstSplitRounding?: "exact_total" | "equal_half_up" | "equal_half_even" | null;
   discountMinor: number | null;
   discountReason: string | null;
   totalMinor: number;
