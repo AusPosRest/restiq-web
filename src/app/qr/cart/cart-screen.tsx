@@ -342,6 +342,11 @@ function CartLineRow({
           {line.itemName}
           {line.variantName ? <span className="text-muted-foreground"> · {line.variantName}</span> : null}
         </p>
+        {line.note ? (
+          <p data-testid="qr-cart-line-note" className="whitespace-pre-wrap break-words text-xs text-muted-foreground">
+            {line.note}
+          </p>
+        ) : null}
         {line.modifiers.length > 0 ? (
           <p className="text-xs text-muted-foreground">{line.modifiers.map((m) => m.name).join(", ")}</p>
         ) : null}

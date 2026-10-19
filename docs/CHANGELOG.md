@@ -7,6 +7,7 @@ with the payments epic.
 ## [Unreleased]
 
 ### Added
+- **QR special instructions** (#363, needs restiq-backend#231): guests can add an optional note of up to 200 characters on item detail and review it beneath the cart line. Blank notes are omitted.
 - **Outlet tab** (#329, needs restiq-backend outlets PATCH): Settings > Outlet (now the default settings tab) lets the owner edit the selected outlet's name, address and timezone; outlet type stays read-only. The go-live checklist's "Outlet details" step links here instead of just "Mark as done".
 - **Test / Live mode** (#346, needs restiq-backend#213): operators switch a tenant between Test and Live from its page (confirmed and audited); new tenants can start in Test from the wizard. Test tenants are badged TEST in the Platform Console, the owner console, the POS and the KDS, and their invoices and receipts say "Test mode - not a valid tax invoice".
 - **Plans by country** (#337): the Plans page shows India and Australia in separate sections, each with its currency, instead of one mixed table.
