@@ -30,7 +30,7 @@ import { Minus, Plus, Trash2 } from "lucide-react";
 import { taxLines } from "@/lib/tax-lines";
 import { formatMinor } from "../../../(shell)/shift/shift-state";
 import type { OrderLineView } from "../order-taking-state";
-import { billTotalMinor, type BillView, type PendingDiscount } from "./bill-state";
+import { billFigures, type BillView, type PendingDiscount } from "./bill-state";
 
 export interface BillSummaryProps {
   bill: BillView;
@@ -63,7 +63,9 @@ export function BillSummary({
   const editable = Boolean(onIncrement && onDecrement && onRemove);
   const discountMinor = bill.discountMinor ?? pendingDiscount?.amountMinor ?? 0;
   const discountReason = bill.discountReason ?? pendingDiscount?.reason ?? null;
-  const totalMinor = billTotalMinor(bill, pendingDiscount?.amountMinor ?? 0);
+  // restiq-web#369: tax lines and total both on the discounted value, so they add up.
+  const figures = billFigures(bill, pendingDiscount?.amountMinor ?? 0);
+  const totalMinor = figures.totalMinor;
 
   return (
     <section data-testid="bill-summary" className={`flex shrink-0 flex-col border-border/60 bg-card ${layoutClassName}`}>
@@ -180,7 +182,7 @@ export function BillSummary({
             />
           )}
           {/* issue #306: the per-rate lines (CGST + SGST) the backend already snapshots, else one Tax line. */}
-          {taxLines(bill).map((line) => (
+          {taxLines(figures).map((line) => (
             <Row key={line.label || "tax"} label={line.label || "Tax"} value={formatMinor(line.amountMinor, currency)} />
           ))}
           <div className="mt-1 flex items-center justify-between border-t border-border/60 pt-2">

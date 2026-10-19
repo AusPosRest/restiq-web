@@ -129,27 +129,49 @@ function roundHalfUp(numerator: bigint, denominator: bigint): bigint {
   return (numerator * TWO + denominator) / (denominator * TWO);
 }
 
+type BillFigures = Pick<BillView, "subtotalMinor" | "taxMinor" | "taxBreakdown" | "discountMinor" | "pricesIncludeTax" | "totalMinor">;
+
 /**
- * The payable total, mirroring the backend's finalize maths (restiq-backend#207):
- * GST is charged on the discounted value - net = subtotal - discount, and each
- * breakdown component (CGST, SGST, IGST) is round(net x rate) on its own, so
- * CGST always equals SGST. Inclusive pricing (AU) never adds tax on top, and a
- * bill with no rated breakdown (composition scheme, older bills) keeps its own
- * taxMinor. `pendingDiscountMinor` previews a discount not yet submitted (a
- * finalized bill's own `discountMinor` wins once it's non-null).
+ * The bill's tax and total as finalize will compute them (restiq-web#369,
+ * AP-pe-6 / AP-se-20). The backend only recomputes tax on the discounted value
+ * inside the finalize call (bill-core.ts commitFinalize, SE-2), so while a
+ * discount is pending the settle screen does the same maths: GST on
+ * net = subtotal - discount, the total GST rounded once and split CGST =
+ * floor(half), SGST = the remainder (restiq-backend#244), so the lines always
+ * add up; inclusive pricing (AU) backs the GST out of the discounted price and
+ * never adds it on top. A bill with no rated breakdown (composition scheme,
+ * older bills) keeps its own taxMinor. With no pending discount - or once the
+ * bill carries its own `discountMinor` - the server's figures stand as sent.
  */
-export function billTotalMinor(
-  bill: Pick<BillView, "subtotalMinor" | "taxMinor" | "discountMinor" | "pricesIncludeTax" | "taxBreakdown">,
-  pendingDiscountMinor = 0,
-): number {
-  const discountMinor = bill.discountMinor ?? pendingDiscountMinor;
-  const netMinor = bill.subtotalMinor - discountMinor;
-  if (bill.pricesIncludeTax) return netMinor;
+export function billFigures(bill: BillFigures, pendingDiscountMinor = 0): Pick<BillView, "taxMinor" | "taxBreakdown" | "totalMinor"> {
+  if (bill.discountMinor !== null || pendingDiscountMinor <= 0) {
+    return { taxMinor: bill.taxMinor, taxBreakdown: bill.taxBreakdown, totalMinor: bill.totalMinor };
+  }
+  const net = BigInt(bill.subtotalMinor - pendingDiscountMinor);
   const rated = (bill.taxBreakdown ?? []).filter((line) => line.ratePercent > 0);
-  if (rated.length === 0) return netMinor + bill.taxMinor;
-  const net = BigInt(netMinor);
-  const taxMinor = rated.reduce((sum, line) => sum + roundHalfUp(net * BigInt(Math.round(line.ratePercent * 100)), BASIS_POINTS), ZERO);
-  return Number(net + taxMinor);
+  if (rated.length === 0) {
+    const totalMinor = bill.pricesIncludeTax ? net : net + BigInt(bill.taxMinor);
+    return { taxMinor: bill.taxMinor, taxBreakdown: bill.taxBreakdown, totalMinor: Number(totalMinor) };
+  }
+  const basisPoints = rated.map((line) => BigInt(Math.round(line.ratePercent * 100)));
+  const rateBasis = basisPoints.reduce((sum, bp) => sum + bp, ZERO);
+  const taxMinor = bill.pricesIncludeTax
+    ? net - roundHalfUp(net * BASIS_POINTS, BASIS_POINTS + rateBasis)
+    : roundHalfUp(net * rateBasis, BASIS_POINTS);
+  // Every line but the last gets floor(its share); the last takes the remainder.
+  let allocated = ZERO;
+  const taxBreakdown = rated.map((line, i) => {
+    const amount = i === rated.length - 1 ? taxMinor - allocated : (taxMinor * basisPoints[i]) / rateBasis;
+    allocated += amount;
+    return { ...line, amountMinor: Number(amount) };
+  });
+  const totalMinor = bill.pricesIncludeTax ? net : net + taxMinor;
+  return { taxMinor: Number(taxMinor), taxBreakdown, totalMinor: Number(totalMinor) };
+}
+
+/** The payable total - `billFigures`' total; `pendingDiscountMinor` previews a discount not yet submitted. */
+export function billTotalMinor(bill: BillFigures, pendingDiscountMinor = 0): number {
+  return billFigures(bill, pendingDiscountMinor).totalMinor;
 }
 
 /** Finalize is disabled until the pending tenders exactly cover the total - `bill-core.ts`'s `commitFinalize` rejects any other sum with a 400 `tender_mismatch`, this mirrors that gate client-side, same posture as `order-taking-state.ts`'s `canSendToKitchen`. */

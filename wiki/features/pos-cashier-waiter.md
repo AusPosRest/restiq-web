@@ -961,6 +961,7 @@ done now, this is what actually happened:
 > - Cash can go over the total. The screen shows "Change due" and posts the cash net of change, because the backend still needs the tenders to equal the total.
 > - The payment keypad takes whole currency units.
 > - The bill lists `taxBreakdown` lines (CGST/SGST, GST).
+> - #369 (2026-10-19): with a discount pending, those lines are recomputed on the discounted value (`billFigures` in `bill-state.ts`: GST rounded once, CGST = floor(half), SGST = remainder), so Discount + tax lines add up to TOTAL before finalize.
 > - Counter Charge fires the order to the kitchen first.
 > - Closed orders are read-only.
 
