@@ -961,7 +961,7 @@ done now, this is what actually happened:
 > - Cash can go over the total. The screen shows "Change due" and posts the cash net of change, because the backend still needs the tenders to equal the total.
 > - The payment keypad takes whole currency units.
 > - The bill lists `taxBreakdown` lines (CGST/SGST, GST).
-> - Counter Charge fires the order to the kitchen first.
+> - ~~Counter Charge fires the order to the kitchen first.~~ Superseded by #361 (2026-10-19): Charge only calls finalize, and the backend fires the unsent lines to the kitchen inside a successful finalize. A failed payment (e.g. no open shift) sends nothing to the KDS; the error shows and the cart stays.
 > - Closed orders are read-only.
 
 - **Intent:** cashier reviews a tax breakdown of the order, optionally applies a discount
