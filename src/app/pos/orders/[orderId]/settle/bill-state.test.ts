@@ -1,5 +1,6 @@
 import { describe, expect, it } from "vitest";
 import {
+  billFigures,
   billTotalMinor,
   canFinalizeBill,
   discountRequiresManagerApproval,
@@ -54,19 +55,20 @@ describe("billTotalMinor", () => {
   });
 
   it("prefers the bill's own discountMinor once it's real, over any pending preview", () => {
-    expect(billTotalMinor(bill({ discountMinor: 5000 }), 10000)).toBe(100000);
+    expect(billTotalMinor(bill({ discountMinor: 5000, totalMinor: 100000 }), 10000)).toBe(100000);
   });
 
-  it("charges GST on the discounted value for an India bill, CGST and SGST each rounded on their own (restiq-backend#207)", () => {
+  it("charges GST on the discounted value for an India bill (restiq-backend#207)", () => {
     const india = bill({
       subtotalMinor: 24045,
       taxMinor: 1202,
+      totalMinor: 24045 + 1202,
       taxBreakdown: [
         { label: "CGST", ratePercent: 2.5, amountMinor: 601 },
         { label: "SGST", ratePercent: 2.5, amountMinor: 601 },
       ],
     });
-    // 10% discount: net 21641; each half = round(21641 x 2.5%) = round(541.025) = 541.
+    // 10% discount: net 21641; GST = round(21641 x 5%) = round(1082.05) = 1082, split 541 + 541.
     expect(billTotalMinor(india, 2404)).toBe(21641 + 541 + 541);
     // No discount: unchanged from the snapshotted tax.
     expect(billTotalMinor(india)).toBe(24045 + 601 + 601);
@@ -77,7 +79,7 @@ describe("billTotalMinor", () => {
   });
 
   it("never adds tax on top of a tax-inclusive (AU) subtotal (issue #156)", () => {
-    expect(billTotalMinor(bill({ pricesIncludeTax: true }))).toBe(100000);
+    expect(billTotalMinor(bill({ pricesIncludeTax: true, totalMinor: 100000 }))).toBe(100000);
     expect(billTotalMinor(bill({ pricesIncludeTax: true }), 10000)).toBe(90000);
   });
 });
@@ -121,5 +123,77 @@ describe("isBillReadOnly", () => {
 
   it("is true for a finalized bill", () => {
     expect(isBillReadOnly(bill({ status: "finalized" }))).toBe(true);
+  });
+});
+
+describe("billFigures (restiq-web#369)", () => {
+  const CGST_SGST = [
+    { label: "CGST", ratePercent: 2.5, amountMinor: 1844 },
+    { label: "SGST", ratePercent: 2.5, amountMinor: 1844 },
+  ];
+
+  it("puts CGST/SGST on the discounted value so discount and tax lines add up to TOTAL (AP-pe-6 repro)", () => {
+    // ₹737.50 with 25% off: discount ₹184.38, GST round(55312 x 5%) = 2766 -> CGST ₹13.83 + SGST ₹13.83, TOTAL ₹580.78.
+    const b = bill({ subtotalMinor: 73750, taxMinor: 3688, taxBreakdown: CGST_SGST, totalMinor: 77438 });
+    const figures = billFigures(b, 18438);
+    expect(figures.taxBreakdown).toEqual([
+      { label: "CGST", ratePercent: 2.5, amountMinor: 1383 },
+      { label: "SGST", ratePercent: 2.5, amountMinor: 1383 },
+    ]);
+    expect(figures.taxMinor).toBe(2766);
+    expect(figures.totalMinor).toBe(58078);
+    expect(73750 - 18438 + 1383 + 1383).toBe(figures.totalMinor);
+  });
+
+  it("rounds the total GST once and splits CGST = floor(half), SGST = remainder on odd paisa (restiq-backend#244)", () => {
+    // ₹778 with 10% off: net 70020, GST round(3501) = 3501 -> 1750 + 1751, TOTAL ₹735.21.
+    const b = bill({ subtotalMinor: 77800, taxMinor: 3890, taxBreakdown: CGST_SGST, totalMinor: 81690 });
+    const figures = billFigures(b, 7780);
+    expect(figures.taxBreakdown?.map((line) => line.amountMinor)).toEqual([1750, 1751]);
+    expect(figures.totalMinor).toBe(70020 + 3501);
+  });
+
+  describe("honours the tenant's gstSplitRounding (₹300 - ₹11 = ₹289 @5%: 722.5 per half)", () => {
+    const split = (gstSplitRounding: BillView["gstSplitRounding"]) =>
+      billFigures(bill({ subtotalMinor: 30000, taxMinor: 1500, taxBreakdown: CGST_SGST, totalMinor: 31500, gstSplitRounding }), 1100);
+
+    it("exact_total: one rounding, CGST 722 + SGST 723", () => {
+      const figures = split("exact_total");
+      expect(figures.taxBreakdown?.map((line) => line.amountMinor)).toEqual([722, 723]);
+      expect(figures.taxMinor).toBe(1445);
+      expect(figures.totalMinor).toBe(28900 + 1445);
+    });
+
+    it("equal_half_up: each half rounded half-up, 723 + 723", () => {
+      const figures = split("equal_half_up");
+      expect(figures.taxBreakdown?.map((line) => line.amountMinor)).toEqual([723, 723]);
+      expect(figures.taxMinor).toBe(1446);
+      expect(figures.totalMinor).toBe(28900 + 1446);
+    });
+
+    it("equal_half_even: each half rounded half-even, 722 + 722", () => {
+      const figures = split("equal_half_even");
+      expect(figures.taxBreakdown?.map((line) => line.amountMinor)).toEqual([722, 722]);
+      expect(figures.taxMinor).toBe(1444);
+      expect(figures.totalMinor).toBe(28900 + 1444);
+    });
+
+    it("null or missing is read as exact_total", () => {
+      expect(split(null)).toEqual(split("exact_total"));
+      expect(split(undefined)).toEqual(split("exact_total"));
+    });
+  });
+
+  it("backs GST out of the discounted price for a tax-inclusive (AU) bill", () => {
+    // A$110 incl. 10% GST, A$11 off: net 9900, GST = 9900 - round(9900 / 1.1) = 900; total stays the net.
+    const b = bill({ subtotalMinor: 11000, taxMinor: 1000, pricesIncludeTax: true, taxBreakdown: [{ label: "GST", ratePercent: 10, amountMinor: 1000 }], totalMinor: 11000 });
+    expect(billFigures(b, 1100)).toEqual({ taxMinor: 900, taxBreakdown: [{ label: "GST", ratePercent: 10, amountMinor: 900 }], totalMinor: 9900 });
+  });
+
+  it("keeps the server's own figures with no pending discount, or once the bill has its discount", () => {
+    const b = bill({ subtotalMinor: 73750, taxMinor: 3688, taxBreakdown: CGST_SGST, totalMinor: 77438 });
+    expect(billFigures(b)).toEqual({ taxMinor: 3688, taxBreakdown: CGST_SGST, totalMinor: 77438 });
+    const finalized = bill({ status: "finalized", discountMinor: 18438, taxMinor: 2766, totalMinor: 58078 });
+    expect(billFigures(finalized, 18438).totalMinor).toBe(58078);
   });
 });

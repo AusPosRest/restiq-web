@@ -13,10 +13,21 @@
 // the full record back. `gstRegistered` is only editable for AU tenants - the
 // backend 400s a PUT with `gstRegistered: false` for an IN tenant, so the
 // editor never renders the toggle (or sends a changed value) for
-// country === "IN". `gstRatePercent` is shown whenever `gstRegistered` is
+// country === "IN". `gstSplitRounding` (restiq-web#369, restiq-backend#244)
+// is the CGST/SGST odd-paisa rule - null from the backend reads as
+// "exact_total" and it is only shown for IN tenants not on the composition
+// scheme. `gstRatePercent` is shown whenever `gstRegistered` is
 // true (always for IN, opt-in for AU); a blank input sends `null`.
 
 export type TaxRegistrationType = "gstin" | "abn";
+
+export type GstSplitRounding = "exact_total" | "equal_half_up" | "equal_half_even";
+
+export const GST_SPLIT_ROUNDING_OPTIONS: ReadonlyArray<{ value: GstSplitRounding; label: string; help: string }> = [
+  { value: "exact_total", label: "Exact total", help: "GST is rounded once, then split. ₹289 at 5%: CGST ₹7.22 + SGST ₹7.23 = ₹14.45." },
+  { value: "equal_half_up", label: "Equal halves, round half up", help: "Each half is rounded up on half a paisa. ₹289 at 5%: CGST ₹7.23 + SGST ₹7.23 = ₹14.46." },
+  { value: "equal_half_even", label: "Equal halves, round half to even", help: "Each half is rounded to the even paisa. ₹289 at 5%: CGST ₹7.22 + SGST ₹7.22 = ₹14.44." },
+];
 
 export interface TaxRegistrationView {
   country: string;
@@ -28,6 +39,7 @@ export interface TaxRegistrationView {
   compositionScheme: boolean;
   gstRegistered: boolean;
   gstRatePercent: number | null;
+  gstSplitRounding: GstSplitRounding | null;
 }
 
 /** The editable draft shape this form works with - nullable text fields
@@ -42,6 +54,7 @@ export interface TaxRegistrationDraft {
   compositionScheme: boolean;
   gstRegistered: boolean;
   gstRatePercent: string;
+  gstSplitRounding: GstSplitRounding;
 }
 
 /** Only the fields PUT accepts - country/registrationType are read-only and
@@ -54,6 +67,7 @@ export interface TaxRegistrationPatch {
   compositionScheme?: boolean;
   gstRegistered?: boolean;
   gstRatePercent?: number | null;
+  gstSplitRounding?: GstSplitRounding;
 }
 
 export function normalizeTaxRegistration(raw: Partial<TaxRegistrationView> | null | undefined): TaxRegistrationDraft {
@@ -67,6 +81,7 @@ export function normalizeTaxRegistration(raw: Partial<TaxRegistrationView> | nul
     compositionScheme: raw?.compositionScheme ?? false,
     gstRegistered: raw?.gstRegistered ?? true,
     gstRatePercent: raw?.gstRatePercent != null ? String(raw.gstRatePercent) : "",
+    gstSplitRounding: raw?.gstSplitRounding ?? "exact_total",
   };
 }
 
@@ -78,7 +93,8 @@ export function taxRegistrationEqual(a: TaxRegistrationDraft, b: TaxRegistration
     a.fssaiLicense === b.fssaiLicense &&
     a.compositionScheme === b.compositionScheme &&
     a.gstRegistered === b.gstRegistered &&
-    a.gstRatePercent === b.gstRatePercent
+    a.gstRatePercent === b.gstRatePercent &&
+    a.gstSplitRounding === b.gstSplitRounding
   );
 }
 
@@ -102,5 +118,7 @@ export function buildTaxRegistrationPatch(draft: TaxRegistrationDraft): TaxRegis
     compositionScheme: draft.compositionScheme,
     gstRegistered: draft.gstRegistered,
     gstRatePercent: draft.gstRatePercent.trim() ? Number(draft.gstRatePercent) : null,
+    // CGST/SGST only - never sent for an AU tenant.
+    ...(draft.country === "IN" ? { gstSplitRounding: draft.gstSplitRounding } : {}),
   };
 }

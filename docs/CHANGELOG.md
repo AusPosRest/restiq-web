@@ -7,6 +7,7 @@ with the payments epic.
 ## [Unreleased]
 
 ### Added
+- **GST split rounding setting** (#369, needs restiq-backend#244): Settings > Tax Registration lets an India owner choose how CGST/SGST are rounded on odd paisa: Exact total (default, ₹289 @5%: ₹7.22 + ₹7.23 = ₹14.45), Equal halves rounded half up (₹7.23 + ₹7.23) or Equal halves rounded half to even (₹7.22 + ₹7.22). The settle screen's discount preview follows the bill's `gstSplitRounding`.
 - **QR special instructions** (#363, needs restiq-backend#231): guests can add an optional note of up to 200 characters on item detail and review it beneath the cart line. Blank notes are omitted.
 - **Outlet tab** (#329, needs restiq-backend outlets PATCH): Settings > Outlet (now the default settings tab) lets the owner edit the selected outlet's name, address and timezone; outlet type stays read-only. The go-live checklist's "Outlet details" step links here instead of just "Mark as done".
 - **Test / Live mode** (#346, needs restiq-backend#213): operators switch a tenant between Test and Live from its page (confirmed and audited); new tenants can start in Test from the wizard. Test tenants are badged TEST in the Platform Console, the owner console, the POS and the KDS, and their invoices and receipts say "Test mode - not a valid tax invoice".
@@ -20,6 +21,7 @@ with the payments epic.
 
 ### Fixed
 - **Counter doesn't send to the kitchen before payment** (#361): Charge on the QSR counter no longer sends the order to the kitchen before finalising. The backend fires the kitchen inside a successful finalize, so a failed payment (for example no open shift) leaves no ticket for an unpaid order on the KDS; the error is shown and the cart is kept.
+- **Settle screen tax lines add up after a discount** (#369, AP-pe-6 / AP-se-20): with a discount entered, CGST/SGST (or GST) are shown on the discounted value, as finalize charges them, so Discount + tax lines add up to TOTAL (₹737.50 with 25% off: CGST ₹13.83 + SGST ₹13.83, TOTAL ₹580.78). GST is rounded once and split CGST = floor(half), SGST = remainder (restiq-backend#244). Without a pending discount the bill's own figures are shown as the server sent them.
 - **Menu variants, kitchen and QR tables** (#344, needs restiq-backend#211): adding Half to a dish keeps the full portion on sale; portions are priced when added (also on Add Item); dishes the till or QR can't sell are flagged; prices show paise; items can be sent to a kitchen station and marked veg/non-veg; the kitchen display reports in to Devices, wraps its tickets and drops day-old leftovers; expo keeps paid orders until cooked; diners learn a table is taken before building a cart, and an abandoned table frees up after 30 minutes.
 - **Simulator devices sign in** (#346, PE-26 / CU-25): each simulated device opens in its own window on its own `sim-<id>.localhost` address, so its login cookie is kept; the simulator page lists the devices with Focus, Close and Re-open.
 - **/demo publishes no operator login** (#346, PE-30): `/demo` and `/simulator` answer 404 in production unless `DEMO_PAGES=on`; `/demo` lists only Test-mode tenants' logins.

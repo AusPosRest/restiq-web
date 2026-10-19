@@ -15,6 +15,7 @@ import { useToast } from "../toast";
 import { useAdminLoad } from "../use-admin-load";
 import {
   buildTaxRegistrationPatch,
+  GST_SPLIT_ROUNDING_OPTIONS,
   isRegistrationNumberValid,
   normalizeTaxRegistration,
   registrationTypeLabel,
@@ -184,6 +185,31 @@ function TaxRegistrationForm({ initial }: Readonly<{ initial: TaxRegistrationDra
             />
             Composition scheme
           </label>
+
+          {/* CGST/SGST odd-paisa rule (restiq-web#369) - a composition-scheme business charges no GST, so nothing to split. */}
+          {!draft.compositionScheme && (
+            <fieldset data-testid="tax-gst-split-rounding" className="space-y-2">
+              <legend className="font-label mb-1 block text-xs font-semibold uppercase tracking-wider text-muted-foreground">GST split rounding (CGST/SGST)</legend>
+              <p className="text-xs text-muted-foreground">How CGST and SGST are rounded when half the GST ends in half a paisa. Applies to new bills only.</p>
+              {GST_SPLIT_ROUNDING_OPTIONS.map((option) => (
+                <label key={option.value} className="flex items-start gap-2 text-sm">
+                  <input
+                    type="radio"
+                    name="gst-split-rounding"
+                    value={option.value}
+                    data-testid={`tax-gst-split-rounding-${option.value}`}
+                    checked={draft.gstSplitRounding === option.value}
+                    onChange={() => updateField({ gstSplitRounding: option.value })}
+                    className="mt-0.5 size-4 accent-primary focus-visible:ring-2 focus-visible:ring-ring"
+                  />
+                  <span>
+                    {option.label}
+                    <span className="block text-xs text-muted-foreground">{option.help}</span>
+                  </span>
+                </label>
+              ))}
+            </fieldset>
+          )}
         </>
       )}
 
