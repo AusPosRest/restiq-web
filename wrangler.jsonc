@@ -1,0 +1,30 @@
+{
+  "$schema": "node_modules/wrangler/config-schema.json",
+  "name": "restiq-web",
+  "account_id": "2e01974f8599d877f0015ce024bfc7a5",
+  "main": ".open-next/worker.js",
+  "compatibility_date": "2026-10-19",
+  "compatibility_flags": ["nodejs_compat", "global_fetch_strictly_public"],
+  "assets": {
+    "directory": ".open-next/assets",
+    "binding": "ASSETS"
+  },
+  "observability": {
+    "enabled": true
+  },
+  // The apex plus every tenant subdomain. api.dailypos.shop is the backend, not this app:
+  // a script-less route for api.dailypos.shop/* on the dailypos.shop zone is more
+  // specific than *.dailypos.shop/*, so its requests skip the Worker and go to the origin.
+  "routes": [
+    { "pattern": "dailypos.shop/*", "zone_name": "dailypos.shop" },
+    { "pattern": "*.dailypos.shop/*", "zone_name": "dailypos.shop" }
+  ],
+  // NEXT_PUBLIC_* are inlined at build time from .env.production; these keep the
+  // server-side reads in step at runtime. PROXY_SHARED_SECRET is a secret:
+  // `wrangler secret put PROXY_SHARED_SECRET` (locally: .dev.vars).
+  "vars": {
+    "NEXT_PUBLIC_API_URL": "https://api.dailypos.shop",
+    "NEXT_PUBLIC_BASE_DOMAIN": "dailypos.shop",
+    "NEXT_PUBLIC_ENV_LABEL": "Production"
+  }
+}

@@ -199,3 +199,10 @@ the record even if a provider refund fails (exception filed).
 **Decision:** the web never decides Test mode itself; it reads `testMode` from `GET /admin/v1/tenant`, `GET /pos/v1/tenant`, the ops tenant views and each invoice. A failed lookup shows no badge.
 **Consequences:** one extra small request per console header mount. The invoice's own `testMode` keeps an old test invoice marked after the tenant goes Live.
 
+
+## ADR-015 - 2026-10-22 - Host the web app on Cloudflare Workers (#397)
+
+**Context:** every tenant gets its own subdomain of `dailypos.shop`, so production needs a wildcard certificate. The zone's DNS is on Cloudflare with SSL mode Full (strict). Vercel only issues a wildcard certificate when the domain uses Vercel's nameservers, which would mean moving DNS off Cloudflare.
+**Decision:** deploy the Next app as a Cloudflare Worker with `@opennextjs/cloudflare`, routed on `dailypos.shop/*` and `*.dailypos.shop/*`. Cloudflare's edge certificate covers the wildcard and DNS stays where it is. `api.dailypos.shop` is excluded with a script-less route. No incremental cache (R2/KV): every page reads live data.
+**Alternatives considered:** Vercel with Vercel nameservers (moves DNS); Vercel behind the Cloudflare proxy (Vercel can't issue the wildcard origin certificate that Full (strict) needs).
+**Consequences:** `src/proxy.ts` runs as OpenNext's Node.js middleware, which OpenNext flags as experimental. `NEXT_PUBLIC_*` values come from the committed `.env.production`; `PROXY_SHARED_SECRET` is a Wrangler secret. `vercel.json` stays for now.

@@ -12,6 +12,9 @@ const eslintConfig = defineConfig([
     "out/**",
     "build/**",
     "next-env.d.ts",
+    // OpenNext / Wrangler build output (issue #397).
+    ".open-next/**",
+    ".wrangler/**",
   ]),
   // AD-4 import boundary: the ops console and tenant route trees never import
   // each other; shared primitives live in src/components/ui and src/lib.
