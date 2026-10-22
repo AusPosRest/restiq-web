@@ -53,18 +53,18 @@ function gstStat(detail: TenantDetail): string {
   return gst.gstRatePercent != null ? `Applicable · ${gst.gstRatePercent}%` : "Applicable";
 }
 
-const REGION_LABELS: Record<string, string> = { "in-mumbai": "India (Mumbai)" };
-const REGION_COUNTRY: Record<string, string> = { "in-mumbai": "IN" };
+const REGION_LABELS: Record<string, string> = { "in-mumbai": "India (Mumbai)", "au-sydney": "Australia (Sydney)" };
+const REGION_COUNTRY: Record<string, string> = { "in-mumbai": "IN", "au-sydney": "AU" };
 
 /**
- * PE-28: where this tenant's data is hosted. v1 runs one data plane (Mumbai),
- * so an Australian tenant really is hosted in India - say so plainly rather
- * than leave "India (Mumbai)" looking like a mistake.
+ * PE-28: where this tenant's data is hosted. v1 runs one data plane (Sydney in
+ * production, #399), so a tenant from another country really is hosted there -
+ * say so plainly rather than leave the label looking like a mistake.
  */
 export function regionLabel(region: string, country: string): string {
   const label = REGION_LABELS[region] ?? region;
   const regionCountry = REGION_COUNTRY[region];
-  return regionCountry && regionCountry !== country ? `${label} - no ${country === "AU" ? "Australian" : "local"} region yet` : label;
+  return regionCountry && regionCountry !== country ? `${label} - no ${country === "AU" ? "Australian" : country === "IN" ? "Indian" : "local"} region yet` : label;
 }
 
 /** "standard" -> "Standard" (PE-28). */
