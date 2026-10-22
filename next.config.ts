@@ -1,4 +1,5 @@
 import type { NextConfig } from "next";
+import { initOpenNextCloudflareForDev } from "@opennextjs/cloudflare";
 
 // Next evaluates this file before it loads .env, so load it here. Built into Node.
 try {
@@ -21,3 +22,6 @@ const nextConfig: NextConfig = {
 };
 
 export default nextConfig;
+
+// Gives `next dev` the Cloudflare bindings (getCloudflareContext) - OpenNext setup.
+initOpenNextCloudflareForDev();

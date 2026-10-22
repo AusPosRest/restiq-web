@@ -1,5 +1,9 @@
 # In progress
 
+## 2026-10-22 - Cloudflare Workers deploy (#397)
+
+Branch `feature/397-cloudflare-workers`: OpenNext + Wrangler config, `pnpm preview` / `pnpm run deploy`, ADR-015, README deploy section. Left: set `PROXY_SHARED_SECRET`, the script-less `api.dailypos.shop/*` route, first deploy.
+
 ## 2026-09-09 - Payments day 1 (IST)
 
 Goal for the day: the payments foundation merged in both repos - the

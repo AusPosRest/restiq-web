@@ -1,0 +1,2 @@
+# Copy to .dev.vars for `pnpm preview`. Production sets it with `wrangler secret put PROXY_SHARED_SECRET`.
+PROXY_SHARED_SECRET=
