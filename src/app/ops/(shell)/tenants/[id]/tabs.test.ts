@@ -8,6 +8,11 @@ describe("tenant overview wording (PE-28)", () => {
     expect(regionLabel("ap-south-1", "IN")).toBe("ap-south-1");
   });
 
+  it("labels the Sydney region and flags Indian tenants hosted there (#399)", () => {
+    expect(regionLabel("au-sydney", "AU")).toBe("Australia (Sydney)");
+    expect(regionLabel("au-sydney", "IN")).toBe("Australia (Sydney) - no Indian region yet");
+  });
+
   it("capitalises plan and billing period", () => {
     expect(`${titleCase("standard")} · ${titleCase("monthly")}`).toBe("Standard · Monthly");
   });

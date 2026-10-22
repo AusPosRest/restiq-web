@@ -8,6 +8,7 @@ with the payments epic.
 
 ### Added
 - **Cloudflare Workers deploy** (#397): `pnpm preview` / `pnpm run deploy` build the app with OpenNext and publish it as the `restiq-web` Worker on `dailypos.shop` and `*.dailypos.shop` (ADR-015).
+- **Sydney region label** (#399): the ops console's tenant overview shows `au-sydney` as "Australia (Sydney)" and flags Indian tenants hosted there ("no Indian region yet").
 - **GST split rounding setting** (#369, needs restiq-backend#244): Settings > Tax Registration lets an India owner choose how CGST/SGST are rounded on odd paisa: Exact total (default, ₹289 @5%: ₹7.22 + ₹7.23 = ₹14.45), Equal halves rounded half up (₹7.23 + ₹7.23) or Equal halves rounded half to even (₹7.22 + ₹7.22). The settle screen's discount preview follows the bill's `gstSplitRounding`.
 - **QR special instructions** (#363, needs restiq-backend#231): guests can add an optional note of up to 200 characters on item detail and review it beneath the cart line. Blank notes are omitted.
 - **Outlet tab** (#329, needs restiq-backend outlets PATCH): Settings > Outlet (now the default settings tab) lets the owner edit the selected outlet's name, address and timezone; outlet type stays read-only. The go-live checklist's "Outlet details" step links here instead of just "Mark as done".
