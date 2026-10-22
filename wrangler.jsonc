@@ -30,6 +30,8 @@
   "vars": {
     "NEXT_PUBLIC_API_URL": "https://api.dailypos.shop",
     "NEXT_PUBLIC_BASE_DOMAIN": "dailypos.shop",
-    "NEXT_PUBLIC_ENV_LABEL": "Production"
+    "NEXT_PUBLIC_ENV_LABEL": "Production",
+    // Public demo (/demo, /simulator) is on for dailypos.shop - read per request (PE-30).
+    "DEMO_PAGES": "on"
   }
 }
