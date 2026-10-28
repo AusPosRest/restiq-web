@@ -20,8 +20,9 @@
 import { Minus, Plus, Trash2 } from "lucide-react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { GuestApiError } from "../api-client";
+import { fetchMenuCurrency } from "../guest-currency";
 import { KioskPay } from "../kiosk/kiosk-pay";
 import { endKioskSession, isKioskTab } from "../kiosk-session";
 import {
@@ -96,6 +97,22 @@ export function CartScreen({ myGuestId }: Readonly<{ myGuestId: string }>) {
       onSessionEnded={() => setSessionEndedByPlacement(true)}
     />
   );
+}
+
+/** Fetched once, and only while the cart is empty - a cart with lines carries the right currency itself. */
+function useMenuCurrency(enabled: boolean): string | null {
+  const [currency, setCurrency] = useState<string | null>(null);
+  useEffect(() => {
+    if (!enabled || currency) return;
+    let cancelled = false;
+    void fetchMenuCurrency().then((value) => {
+      if (!cancelled) setCurrency(value);
+    });
+    return () => {
+      cancelled = true;
+    };
+  }, [enabled, currency]);
+  return currency;
 }
 
 function CartLoaded({
@@ -186,6 +203,9 @@ function CartLoaded({
   }
 
   const empty = isCartEmpty(cart);
+  // Issue #403: an empty cart's currency is the backend's INR fallback - the menu knows the tenant's.
+  const menuCurrency = useMenuCurrency(empty);
+  const currency = empty ? (menuCurrency ?? cart.currency) : cart.currency;
 
   return (
     <main data-testid="cart-screen" className="flex min-h-screen flex-1 flex-col px-6 pb-40 pt-8">
@@ -217,7 +237,7 @@ function CartLoaded({
               <GuestGroup
                 key={guest.guestId}
                 guest={guest}
-                currency={cart.currency}
+                currency={currency}
                 own={guest.guestId === myGuestId}
                 kiosk={isKioskTab()}
                 busyLineId={busyLineId}
@@ -238,12 +258,12 @@ function CartLoaded({
         <div className="flex items-baseline justify-between">
           <span className="text-sm font-medium text-muted-foreground">{isKioskTab() ? "Total" : "Table total"}</span>
           <span data-testid="cart-total" className="font-headline text-2xl font-bold tabular-nums text-foreground">
-            {formatMinor(cart.totalMinor, cart.currency)}
+            {formatMinor(cart.totalMinor, currency)}
           </span>
         </div>
         {/* PE-24: no surprise on the bill - Indian GST is added on top, Australian GST is already in the price. */}
         <p data-testid="cart-tax-note" className="text-right text-xs text-muted-foreground">
-          {cart.currency === "AUD" ? "Prices include GST" : "Plus applicable taxes, shown on your bill"}
+          {currency === "AUD" ? "Prices include GST" : "Plus applicable taxes, shown on your bill"}
         </p>
         <button
           type="button"

@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
 import type { BillShareView, GuestBillView } from "./checkout-api";
-import { canPayAll, findShare, formatRupees, isSettled, sortSharesOwnFirst } from "./checkout-state";
+import { formatMoney } from "@/lib/money";
+import { canPayAll, findShare, isSettled, sortSharesOwnFirst } from "./checkout-state";
 
 function share(overrides: Partial<BillShareView> = {}): BillShareView {
   return {
@@ -33,13 +34,17 @@ function bill(overrides: Partial<GuestBillView> = {}): GuestBillView {
   };
 }
 
-describe("formatRupees", () => {
+describe("bill money (formatMoney)", () => {
   it("formats minor units with the rupee symbol and two decimals", () => {
-    expect(formatRupees(52500)).toBe("₹525.00");
+    expect(formatMoney(52500, "INR")).toBe("₹525.00");
   });
 
   it("formats zero cleanly", () => {
-    expect(formatRupees(0)).toBe("₹0.00");
+    expect(formatMoney(0, "INR")).toBe("₹0.00");
+  });
+
+  it("issue #403: formats an AUD bill in A$, never ₹", () => {
+    expect(formatMoney(3100, "AUD")).toBe("A$31.00");
   });
 });
 

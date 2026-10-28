@@ -23,21 +23,22 @@
 // param (any guest may technically pay any share, or pay-all) - this UI
 // simply never exposes that button for someone else's row.
 import { createContext, useContext, useEffect, useState } from "react";
-import { fetchCart } from "../cart/cart-api";
+import { fetchMenuCurrency } from "../guest-currency";
 import { KioskReceipt } from "../kiosk/kiosk-pay";
 import { GuestApiError } from "../api-client";
 import { SessionEndedView } from "../session-ended-view";
 import { createOrFetchBill, fetchInvoice, payAll, payShare, type BillShareView, type GuestBillView, type GuestInvoiceView, type SimulatedOutcome } from "./checkout-api";
-import { canPayAll, findShare, formatRupees, isSettled, sortSharesOwnFirst } from "./checkout-state";
+import { formatMoney } from "@/lib/money";
+import { canPayAll, findShare, isSettled, sortSharesOwnFirst } from "./checkout-state";
 
 type Phase = "loading" | "ready" | "error" | "settled" | "no-order";
 
-// PE-10: the bill carries no currency; the table cart does. Rupees until it loads.
+// PE-10: the bill carries no currency; the menu does (issue #403 - the emptied cart says INR).
 const CurrencyContext = createContext("INR");
 
 function useMoney(): (amountMinor: number) => string {
   const currency = useContext(CurrencyContext);
-  return (amountMinor) => formatRupees(amountMinor, currency);
+  return (amountMinor) => formatMoney(amountMinor, currency);
 }
 type PayMode = "split" | "all";
 type SheetKind = "own" | "all";
@@ -52,16 +53,14 @@ export function CheckoutScreen({ orderId, myGuestId }: Readonly<{ orderId: strin
     if (!orderId) return;
     let cancelled = false;
     createOrFetchBill(orderId)
-      .then((value) => {
+      .then(async (value) => {
+        // Once the bill is in hand: its currency, from the menu (best effort - rupees otherwise),
+        // before the bill shows so an A$ bill never flashes ₹.
+        const menuCurrency = await fetchMenuCurrency();
         if (cancelled) return;
+        if (menuCurrency) setCurrency(menuCurrency);
         setBill(value);
         setPhase("ready");
-        // Once the bill is in hand: its currency, from the table cart (best effort - rupees otherwise).
-        fetchCart()
-          .then((cart) => {
-            if (!cancelled && cart.currency) setCurrency(cart.currency);
-          })
-          .catch(() => {});
       })
       .catch((error: unknown) => {
         if (cancelled) return;
@@ -121,6 +120,9 @@ function BillLoaded({
   // outcome (UJ-5), so this is plain local UI state, never surfaced as an
   // alert. "all" covers a failed pay-all attempt. Cleared on any new attempt.
   const [failedFor, setFailedFor] = useState<string | null>(null);
+  // Issue #404: no payment provider here - the bill says so up front, or a pay attempt 409s `provider_unavailable`.
+  const [providerUnavailable, setProviderUnavailable] = useState(false);
+  const payHere = bill.paymentsAvailable !== false && !providerUnavailable;
 
   const myShare = findShare(bill.shares, myGuestId);
   const payAllEligible = canPayAll(bill.shares);
@@ -154,6 +156,12 @@ function BillLoaded({
           onSessionEnded();
           return;
         }
+        if (error.code === "provider_unavailable") {
+          closeSheet();
+          setProviderUnavailable(true);
+          setSubmitting(false);
+          return;
+        }
         setSheetError(error.message);
         setSubmitting(false);
         return;
@@ -174,43 +182,51 @@ function BillLoaded({
 
       <BillSummary bill={bill} />
 
-      <div role="tablist" aria-label="How do you want to pay?" className="mt-6 flex gap-2 rounded-xl bg-accent p-1">
-        <ModeTab data-testid="checkout-mode-split" selected={mode === "split"} onClick={() => setMode("split")}>
-          Split by guest
-        </ModeTab>
-        <ModeTab data-testid="checkout-mode-all" selected={mode === "all"} onClick={() => setMode("all")}>
-          Pay for the table
-        </ModeTab>
-      </div>
+      {payHere ? (
+        <>
+          <div role="tablist" aria-label="How do you want to pay?" className="mt-6 flex gap-2 rounded-xl bg-accent p-1">
+            <ModeTab data-testid="checkout-mode-split" selected={mode === "split"} onClick={() => setMode("split")}>
+              Split by guest
+            </ModeTab>
+            <ModeTab data-testid="checkout-mode-all" selected={mode === "all"} onClick={() => setMode("all")}>
+              Pay for the table
+            </ModeTab>
+          </div>
 
-      {mode === "split" ? (
-        <ul className="mt-4 flex flex-col gap-3" aria-label="Split by guest">
-          {orderedShares.map((share) => (
-            <SplitShareRow
-              key={share.guestId}
-              share={share}
-              own={share.guestId === myGuestId}
-              failed={failedFor === share.guestId}
-              onPay={() => openSheet("own")}
+          {mode === "split" ? (
+            <ul className="mt-4 flex flex-col gap-3" aria-label="Split by guest">
+              {orderedShares.map((share) => (
+                <SplitShareRow
+                  key={share.guestId}
+                  share={share}
+                  own={share.guestId === myGuestId}
+                  failed={failedFor === share.guestId}
+                  onPay={() => openSheet("own")}
+                />
+              ))}
+            </ul>
+          ) : (
+            <PayAllPanel bill={bill} eligible={payAllEligible} failed={failedFor === "all"} onPay={() => openSheet("all")} />
+          )}
+
+          {sheet ? (
+            <PaymentSheet
+              kind={sheet}
+              amountMinor={sheetAmount}
+              phone={phone}
+              onPhoneChange={setPhone}
+              submitting={submitting}
+              error={sheetError}
+              onSimulate={handleSimulate}
+              onCancel={closeSheet}
             />
-          ))}
-        </ul>
+          ) : null}
+        </>
       ) : (
-        <PayAllPanel bill={bill} eligible={payAllEligible} failed={failedFor === "all"} onPay={() => openSheet("all")} />
+        <p data-testid="checkout-pay-at-counter" role="status" className="mt-6 rounded-xl border border-border bg-card p-4 text-center text-sm font-medium text-foreground">
+          Please pay at the counter
+        </p>
       )}
-
-      {sheet ? (
-        <PaymentSheet
-          kind={sheet}
-          amountMinor={sheetAmount}
-          phone={phone}
-          onPhoneChange={setPhone}
-          submitting={submitting}
-          error={sheetError}
-          onSimulate={handleSimulate}
-          onCancel={closeSheet}
-        />
-      ) : null}
     </main>
   );
 }

@@ -227,6 +227,21 @@ describe("CartScreen", () => {
     expect(link.getAttribute("href")).toBe("/qr/menu");
   });
 
+  it("issue #403: an AUD tenant's empty cart totals in A$, even though the empty cart says INR", async () => {
+    vi.stubGlobal(
+      "fetch",
+      routedFetch({
+        "GET /qr/api/cart": () => jsonResponse(200, EMPTY_CART),
+        "GET /qr/api/menu": () => jsonResponse(200, { outletId: "o1", categories: [{ id: "c1", name: "Mains", sortOrder: 0, items: [{ id: "i1", priceMinor: 500, currency: "AUD", variants: [] }] }] }),
+      }),
+    );
+    render(<CartScreen myGuestId="g1" />);
+    await screen.findByTestId("cart-empty");
+
+    await waitFor(() => expect(screen.getByTestId("cart-total").textContent).toBe("A$0.00"));
+    expect(screen.getByTestId("cart-tax-note").textContent).toBe("Prices include GST");
+  });
+
   it("shows a session-ended state on a 410, never a dead screen or auth error", async () => {
     vi.stubGlobal("fetch", vi.fn().mockResolvedValue(jsonResponse(410, { error: { code: "session_closed", message: "closed" } })));
     render(<CartScreen myGuestId="g1" />);
