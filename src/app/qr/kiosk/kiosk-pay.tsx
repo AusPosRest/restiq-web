@@ -25,7 +25,13 @@ type PayState =
   | { kind: "busy"; label: string }
   | { kind: "tap"; bill: GuestBillView; declined: boolean }
   | { kind: "paid"; invoice: GuestInvoiceView }
+  | { kind: "counter" }
   | { kind: "error"; message: string };
+
+// Issue #404: no payment provider here (restiq-backend#278) - the bill says so, or pay-all 409s.
+function isProviderUnavailable(error: unknown): boolean {
+  return error instanceof GuestApiError && error.code === "provider_unavailable";
+}
 
 function errorMessage(error: unknown): string {
   return error instanceof GuestApiError && error.status !== 0 ? error.message : "Couldn't reach the restaurant - please try again or pay at the counter.";
@@ -45,9 +51,10 @@ export function KioskPay({ orderId, tokenNumber, currency }: Readonly<{ orderId:
     try {
       const bill = await createOrFetchBill(orderId);
       if (bill.status === "finalized") await finish(bill);
+      else if (bill.paymentsAvailable === false) setState({ kind: "counter" });
       else setState({ kind: "tap", bill, declined: false });
     } catch (error) {
-      setState({ kind: "error", message: errorMessage(error) });
+      setState(isProviderUnavailable(error) ? { kind: "counter" } : { kind: "error", message: errorMessage(error) });
     }
   }
 
@@ -56,7 +63,7 @@ export function KioskPay({ orderId, tokenNumber, currency }: Readonly<{ orderId:
     try {
       await finish(await payAll(bill.id, { simulatedOutcome: "success" }));
     } catch (error) {
-      setState({ kind: "error", message: errorMessage(error) });
+      setState(isProviderUnavailable(error) ? { kind: "counter" } : { kind: "error", message: errorMessage(error) });
     }
   }
 
@@ -110,6 +117,12 @@ export function KioskPay({ orderId, tokenNumber, currency }: Readonly<{ orderId:
             Pay at the counter instead
           </button>
         </>
+      )}
+
+      {state.kind === "counter" && (
+        <p role="status" data-testid="kiosk-pay-at-counter" className="py-4 text-sm font-medium text-foreground">
+          Card payment isn&apos;t available here yet - please pay at the counter.
+        </p>
       )}
 
       {state.kind === "paid" && (

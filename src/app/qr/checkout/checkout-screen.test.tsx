@@ -18,6 +18,11 @@ function routedFetch(handlers: Record<string, () => Response>): ReturnType<typeo
   });
 }
 
+// Issue #403: the bill's currency comes from the menu - the cart the order emptied falls back to INR.
+function menuIn(currency: string) {
+  return { outletId: "out1", categories: [{ id: "c1", name: "Mains", sortOrder: 0, items: [{ id: "i1", priceMinor: 500, currency, variants: [] }] }] };
+}
+
 const TWO_GUEST_BILL: GuestBillView = {
   id: "b1",
   orderId: "o1",
@@ -64,7 +69,7 @@ describe("CheckoutScreen", () => {
     };
     const fetchMock = routedFetch({
       "POST /qr/api/orders/o1/bill": () => jsonResponse(200, split),
-      "GET /qr/api/cart": () => jsonResponse(200, { currency: "INR", guests: [], totalMinor: 0 }),
+      "GET /qr/api/menu": () => jsonResponse(200, menuIn("INR")),
     });
     vi.stubGlobal("fetch", fetchMock);
     render(<CheckoutScreen orderId="o1" myGuestId="g1" />);
@@ -94,7 +99,7 @@ describe("CheckoutScreen", () => {
       "fetch",
       routedFetch({
         "POST /qr/api/orders/o1/bill": () => jsonResponse(200, paid),
-        "GET /qr/api/cart": () => jsonResponse(200, { currency: "AUD", guests: [], totalMinor: 0 }),
+        "GET /qr/api/menu": () => jsonResponse(200, menuIn("AUD")),
         "GET /qr/api/bills/b1/invoice": () => jsonResponse(200, invoice),
       }),
     );
@@ -244,5 +249,48 @@ describe("CheckoutScreen", () => {
     await userEvent.click(retry);
 
     await waitFor(() => expect(screen.getByTestId("checkout-bill-summary")).toBeTruthy());
+  });
+
+  it("issue #403: an AUD tenant's bill is in A$, even though the emptied cart says INR", async () => {
+    vi.stubGlobal(
+      "fetch",
+      routedFetch({
+        "POST /qr/api/orders/o1/bill": () => jsonResponse(201, { ...TWO_GUEST_BILL, totalMinor: 3100 }),
+        "GET /qr/api/cart": () => jsonResponse(200, { currency: "INR", guests: [], totalMinor: 0 }),
+        "GET /qr/api/menu": () => jsonResponse(200, menuIn("AUD")),
+      }),
+    );
+    render(<CheckoutScreen orderId="o1" myGuestId="g1" />);
+
+    expect((await screen.findByTestId("checkout-total")).textContent).toBe("A$31.00");
+    expect(screen.getByTestId("checkout-bill-summary").textContent).not.toContain("₹");
+  });
+
+  it("issue #404: no pay sheet when the bill says payments aren't available - pay at the counter instead", async () => {
+    vi.stubGlobal("fetch", routedFetch({ "POST /qr/api/orders/o1/bill": () => jsonResponse(201, { ...TWO_GUEST_BILL, paymentsAvailable: false }) }));
+    render(<CheckoutScreen orderId="o1" myGuestId="g1" />);
+
+    expect((await screen.findByTestId("checkout-pay-at-counter")).textContent).toContain("Please pay at the counter");
+    expect(screen.queryByTestId("checkout-pay-own")).toBeNull();
+    expect(screen.queryByTestId("checkout-mode-all")).toBeNull();
+    expect(screen.queryByTestId("checkout-payment-sheet")).toBeNull();
+  });
+
+  it("issue #404: a provider_unavailable 409 closes the sheet and shows pay at the counter", async () => {
+    vi.stubGlobal(
+      "fetch",
+      routedFetch({
+        "POST /qr/api/orders/o1/bill": () => jsonResponse(201, TWO_GUEST_BILL),
+        "POST /qr/api/bills/b1/shares/g1/pay": () =>
+          jsonResponse(409, { error: { code: "provider_unavailable", message: "Paying from your phone is not available here yet - please pay at the counter" } }),
+      }),
+    );
+    render(<CheckoutScreen orderId="o1" myGuestId="g1" />);
+    await userEvent.click(await screen.findByTestId("checkout-pay-own"));
+    await userEvent.click(screen.getByTestId("checkout-simulate-success"));
+
+    expect((await screen.findByTestId("checkout-pay-at-counter")).textContent).toContain("Please pay at the counter");
+    expect(screen.queryByTestId("checkout-payment-sheet")).toBeNull();
+    expect(screen.queryByTestId("checkout-pay-own")).toBeNull();
   });
 });

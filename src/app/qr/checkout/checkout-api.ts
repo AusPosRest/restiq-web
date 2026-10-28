@@ -3,9 +3,8 @@
 // controller,service}.ts, read directly - not a guess). Shape copied
 // field-for-field from GuestBillView/BillShareView there. `BillView` (the
 // shape GuestBillView extends, src/pos/bills/bills.dtos.ts) carries no
-// `currency` field at all - checkout-state.ts's formatRupees is INR-only for
-// that reason, same India-first posture cart-state.ts's formatMinor default
-// already established.
+// `currency` field at all - checkout-screen.tsx reads it off the menu
+// (../guest-currency.ts, issue #403).
 import { guestApi } from "../api-client";
 
 export type BillStatus = "open" | "finalized";
@@ -47,6 +46,8 @@ export interface GuestBillView {
   finalizedAt: string | null;
   tenders: TenderView[];
   shares: BillShareView[];
+  /** restiq-backend#278: false when guests can't pay here (no payment provider) - missing on an older backend, which means true. */
+  paymentsAvailable?: boolean;
 }
 
 export interface SimulatedPaymentInput {
@@ -71,7 +72,7 @@ export function createOrFetchBill(orderId: string): Promise<GuestBillView> {
  * POST /guest/v1/bills/:id/shares/:guestId/pay - 200 GuestBillView for BOTH
  * simulated outcomes (a 'failure' is a valid demo result, not an HTTP error -
  * the returned share simply stays 'outstanding'); 409 `share_already_paid`;
- * 409 `already_finalized`; 410 `session_closed`; 404 `not_found`.
+ * 409 `already_finalized`; 409 `provider_unavailable` (restiq-backend#278); 410 `session_closed`; 404 `not_found`.
  */
 export function payShare(billId: string, guestId: string, input: SimulatedPaymentInput): Promise<GuestBillView> {
   return guestApi<GuestBillView>(`bills/${billId}/shares/${guestId}/pay`, { method: "POST", body: JSON.stringify(input) });
@@ -81,7 +82,8 @@ export function payShare(billId: string, guestId: string, input: SimulatedPaymen
  * POST /guest/v1/bills/:id/pay-all - 200 GuestBillView; 409
  * `partial_payment_exists` if any share was already paid individually
  * (checkout-state.ts's canPayAll mirrors this so the UI never offers a
- * control the API would reject); 409 `already_finalized`; 410 `session_closed`.
+ * control the API would reject); 409 `already_finalized`; 409
+ * `provider_unavailable` (restiq-backend#278); 410 `session_closed`.
  */
 export function payAll(billId: string, input: SimulatedPaymentInput): Promise<GuestBillView> {
   return guestApi<GuestBillView>(`bills/${billId}/pay-all`, { method: "POST", body: JSON.stringify(input) });
