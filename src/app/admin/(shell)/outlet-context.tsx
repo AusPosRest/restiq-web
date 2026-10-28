@@ -13,6 +13,9 @@ const STORAGE_KEY = "admin.selectedOutletId";
 interface OutletContextValue {
   outlets: OutletView[];
   loading: boolean;
+  /** The outlet list failed to load - screens show an error with retry, not the "No outlets yet" empty state. */
+  failed: boolean;
+  reload: () => void;
   selectedOutletId: string | null;
   selectOutlet: (id: string) => void;
   /** Applies a just-saved patch locally so e.g. the outlet switcher reflects a renamed outlet without a refetch. */
@@ -24,6 +27,8 @@ const OutletContext = createContext<OutletContextValue | null>(null);
 export function OutletProvider({ children }: Readonly<{ children: React.ReactNode }>) {
   const [outlets, setOutlets] = useState<OutletView[]>([]);
   const [loading, setLoading] = useState(true);
+  const [failed, setFailed] = useState(false);
+  const [attempt, setAttempt] = useState(0);
   const [selectedOutletId, setSelectedOutletId] = useState<string | null>(null);
 
   useEffect(() => {
@@ -31,18 +36,26 @@ export function OutletProvider({ children }: Readonly<{ children: React.ReactNod
     fetchOutlets()
       .then((result) => {
         if (cancelled) return;
+        setFailed(false);
         setOutlets(result);
         const stored = sessionStorage.getItem(STORAGE_KEY);
         const initial = result.find((outlet) => outlet.id === stored)?.id ?? result[0]?.id ?? null;
         setSelectedOutletId(initial);
       })
-      .catch(() => undefined)
+      .catch(() => {
+        if (!cancelled) setFailed(true);
+      })
       .finally(() => {
         if (!cancelled) setLoading(false);
       });
     return () => {
       cancelled = true;
     };
+  }, [attempt]);
+
+  const reload = useCallback(() => {
+    setLoading(true);
+    setAttempt((n) => n + 1);
   }, []);
 
   const selectOutlet = useCallback((id: string) => {
@@ -54,7 +67,7 @@ export function OutletProvider({ children }: Readonly<{ children: React.ReactNod
     setOutlets((current) => current.map((outlet) => (outlet.id === id ? { ...outlet, ...patch } : outlet)));
   }, []);
 
-  return <OutletContext.Provider value={{ outlets, loading, selectedOutletId, selectOutlet, updateOutlet }}>{children}</OutletContext.Provider>;
+  return <OutletContext.Provider value={{ outlets, loading, failed, reload, selectedOutletId, selectOutlet, updateOutlet }}>{children}</OutletContext.Provider>;
 }
 
 export function useOutlets(): OutletContextValue {
@@ -66,4 +79,10 @@ export function useOutlets(): OutletContextValue {
 /** The tenant's currency (INR/AUD, PE-10), read off the outlet list; INR until it loads or outside the provider. */
 export function useTenantCurrency(): string {
   return useContext(OutletContext)?.outlets[0]?.currency ?? "INR";
+}
+
+/** The selected outlet's IANA timezone, or undefined (viewer's zone) outside the provider or before outlets load. */
+export function useSelectedTimezone(): string | undefined {
+  const ctx = useContext(OutletContext);
+  return ctx?.outlets.find((outlet) => outlet.id === ctx.selectedOutletId)?.timezone;
 }

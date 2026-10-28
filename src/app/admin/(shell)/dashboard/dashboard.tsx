@@ -7,6 +7,7 @@
 // this GET-and-render pattern).
 import { LayoutDashboard, MonitorSmartphone, Soup, Store, Users } from "lucide-react";
 import { LoadErrorPanel, Skeleton } from "../data-states";
+import { useSelectedTimezone } from "../outlet-context";
 import { useAdminLoad } from "../use-admin-load";
 import type { DashboardView } from "./dashboard-state";
 import { FreshnessBadge } from "./freshness-badge";
@@ -40,6 +41,7 @@ export function Dashboard() {
 
 function DashboardContent({ view }: Readonly<{ view: DashboardView }>) {
   const { tenant, outlets, asOf } = view;
+  const timeZone = useSelectedTimezone();
 
   return (
     <div className="flex flex-1 flex-col gap-8">
@@ -47,7 +49,7 @@ function DashboardContent({ view }: Readonly<{ view: DashboardView }>) {
         <h1 className="font-headline text-2xl font-semibold">Dashboard</h1>
         {/* Backend computes asOf fresh on every request (no caching layer
             exists yet), so there is no wire "stale" signal - always false. */}
-        <FreshnessBadge asOf={asOf} stale={false} />
+        <FreshnessBadge asOf={asOf} stale={false} timeZone={timeZone} />
       </div>
 
       <div className="grid grid-cols-2 gap-4 xl:grid-cols-4">

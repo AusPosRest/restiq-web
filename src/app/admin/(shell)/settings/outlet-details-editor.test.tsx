@@ -49,6 +49,21 @@ afterEach(() => {
 });
 
 describe("OutletDetailsEditor", () => {
+  it("shows an error with Retry, not the empty state, when the outlets fail to load (#408)", async () => {
+    let fail = true;
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(() => Promise.resolve(fail ? jsonResponse({ error: { code: "bad_gateway", message: "down" } }, 502) : jsonResponse(OUTLETS))),
+    );
+    renderEditor();
+    expect(await screen.findByTestId("outlet-details-load-error")).toBeTruthy();
+    expect(screen.queryByTestId("outlet-details-no-outlets")).toBeNull();
+
+    fail = false;
+    await userEvent.click(screen.getByTestId("outlet-details-load-error-retry"));
+    expect(await screen.findByTestId("outlet-details-form")).toBeTruthy();
+  });
+
   it("shows an informational empty state when the tenant has no outlets", async () => {
     stubFetch({ outlets: [] });
     renderEditor();
