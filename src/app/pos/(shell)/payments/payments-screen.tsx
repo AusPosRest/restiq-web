@@ -4,6 +4,11 @@
 // newest first, with per-method totals on top. Read-only; five-state
 // pattern like status/device-status-screen.tsx. "Today" is decided by the
 // backend in the outlet's own timezone, so the screen never computes dates.
+//
+// Refund entry point (issue #405): the backend only lists tenders on
+// finalised bills, so every bill here is refundable. Its newest row carries
+// one Refund link; the refund screen does the rest, manager PIN included.
+import Link from "next/link";
 import { RotateCcw } from "lucide-react";
 import type { PaymentHistoryEntry, PaymentHistoryView } from "../../api";
 import { usePosLoad } from "../../use-pos-load";
@@ -99,10 +104,13 @@ export function PaymentsScreen({ outletId }: Readonly<{ outletId: string }>) {
                     <th className={`${TH} text-right`}>Amount</th>
                     <th className={TH}>Reference</th>
                     <th className={TH}>Taken by</th>
+                    <th className={TH}>
+                      <span className="sr-only">Actions</span>
+                    </th>
                   </tr>
                 </thead>
                 <tbody>
-                  {data.payments.map((payment) => (
+                  {data.payments.map((payment, index) => (
                     <tr key={payment.id} className="h-11 border-b border-border/20" data-testid={`pos-payment-row-${payment.id}`}>
                       <td className="px-3 tabular-nums text-muted-foreground">{formatTime(payment.createdAt)}</td>
                       <td className="px-3">{billLabel(payment)}</td>
@@ -110,6 +118,17 @@ export function PaymentsScreen({ outletId }: Readonly<{ outletId: string }>) {
                       <td className="px-3 text-right font-medium tabular-nums">{formatMinor(payment.amountMinor, data.currency)}</td>
                       <td className="px-3 text-muted-foreground">{payment.reference ?? "—"}</td>
                       <td className="px-3">{payment.takenBy?.name ?? "—"}</td>
+                      <td className="px-3 text-right">
+                        {data.payments.findIndex((other) => other.billId === payment.billId) === index && (
+                          <Link
+                            href={`/pos/orders/${encodeURIComponent(payment.orderId)}/refund?billId=${encodeURIComponent(payment.billId)}`}
+                            data-testid={`pos-payment-refund-${payment.billId}`}
+                            className="rounded-md px-2 py-1 text-xs font-semibold text-primary underline-offset-4 hover:underline focus:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+                          >
+                            Refund
+                          </Link>
+                        )}
+                      </td>
                     </tr>
                   ))}
                 </tbody>

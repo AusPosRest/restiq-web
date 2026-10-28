@@ -197,7 +197,8 @@ function BillSettleLoaded({
             )}
             {/* issue #226: no actions here - Back to table map, Refund… and
                 Print invoice were removed at the owner's request. Refund
-                (/pos/orders/:id/refund?billId=) has no other entry point now. */}
+                (/pos/orders/:id/refund?billId=) is reached from the POS
+                Payments list instead (issue #405). */}
           </section>
         ) : (
           <div className="flex flex-1 flex-col">
@@ -211,7 +212,7 @@ function BillSettleLoaded({
                 capturedTenders={bill.tenders.filter((tender) => isElectronicMethod(tender.method))}
                 onAddTender={handleAddTender}
                 onRemoveTender={handleRemoveTender}
-                onSendToTerminal={terminal.send}
+                onSendToTerminal={terminal.available ? terminal.send : undefined}
                 terminalBusy={terminal.busy}
                 changeMinor={cashChangeMinor(totalMinor, bill, pendingTenders, menu.currency)}
                 cashLocked={shiftOpen === false}

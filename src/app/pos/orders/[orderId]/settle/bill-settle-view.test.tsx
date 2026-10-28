@@ -101,6 +101,7 @@ function stubFetch(handlers: Partial<Record<string, (init?: RequestInit) => Resp
 afterEach(() => {
   cleanup();
   vi.unstubAllGlobals();
+  window.sessionStorage.clear();
 });
 
 describe("BillSettleView - loading", () => {
@@ -191,6 +192,45 @@ describe("BillSettleView - tenders", () => {
 
     await userEvent.click(screen.getByTestId("tender-fill-remaining"));
     expect(screen.getByTestId("tender-remaining").textContent).toBe("₹0.00");
+  });
+
+  it("keys whole rupees and shows the amount live while typing (issues #306, #406)", async () => {
+    stubFetch();
+    render(<BillSettleView orderId={ORDER_ID} />);
+    await screen.findByTestId("bill-summary");
+
+    for (const digit of ["6", "0"]) {
+      await userEvent.click(screen.getByTestId(`tender-keypad-amount-digit-${digit}`));
+    }
+    expect(screen.getByTestId("tender-keypad-amount-display").textContent).toBe("₹60.00");
+    await userEvent.click(screen.getByTestId("tender-add"));
+    expect(screen.getByTestId("tender-captured-0").textContent).toContain("₹60.00");
+    expect(screen.getByTestId("tender-remaining").textContent).toBe("₹759.00");
+  });
+
+  it("asks before adding cash over 10x what is still due, and Cancel keeps the keyed amount out (issue #406)", async () => {
+    stubFetch();
+    render(<BillSettleView orderId={ORDER_ID} />);
+    await screen.findByTestId("bill-summary");
+
+    // ₹10,000.00 on an ₹819.00 bill - the classic "keyed cents as rupees" slip.
+    for (const digit of ["1", "0", "0", "0", "0"]) {
+      await userEvent.click(screen.getByTestId(`tender-keypad-amount-digit-${digit}`));
+    }
+    await userEvent.click(screen.getByTestId("tender-add"));
+    expect(screen.getByTestId("tender-large-cash-confirm").textContent).toContain("₹10,000.00");
+    expect(screen.queryByTestId("tender-captured-list")).toBeNull();
+
+    await userEvent.click(screen.getByTestId("tender-large-cash-cancel"));
+    expect(screen.queryByTestId("tender-large-cash-confirm")).toBeNull();
+    expect(screen.queryByTestId("tender-captured-list")).toBeNull();
+
+    for (const digit of ["1", "0", "0", "0", "0"]) {
+      await userEvent.click(screen.getByTestId(`tender-keypad-amount-digit-${digit}`));
+    }
+    await userEvent.click(screen.getByTestId("tender-add"));
+    await userEvent.click(screen.getByTestId("tender-large-cash-accept"));
+    expect(screen.getByTestId("tender-captured-0").textContent).toContain("₹10,000.00");
   });
 
   it("removes a pending tender before finalizing", async () => {
@@ -507,6 +547,24 @@ describe("BillSettleView - card terminal (issue #188)", () => {
     await waitFor(() => expect(screen.getByTestId("intent-error").textContent).toBe(message));
     expect(screen.queryByTestId("intent-panel")).toBeNull();
     expect(screen.getByTestId("tender-method-cash")).toBeTruthy();
+    // Issue #407: no terminal for this till - stop offering it, fall back to cash.
+    expect(screen.queryByTestId("tender-method-card_terminal")).toBeNull();
+    expect(screen.getByTestId("tender-method-cash").getAttribute("aria-pressed")).toBe("true");
+  });
+
+  it("keeps Card terminal hidden for the rest of the session once the till is known to have none (issue #407)", async () => {
+    stubFetch({ "POST bills/bill-1/intents": () => jsonResponse({ error: { code: "no_terminal", message: "No card terminal is set up for this till." } }, 409) });
+    const first = render(<BillSettleView orderId={ORDER_ID} />);
+    await screen.findByTestId("bill-summary");
+    await userEvent.click(screen.getByTestId("tender-method-card_terminal"));
+    await userEvent.click(screen.getByTestId("tender-fill-remaining"));
+    await waitFor(() => expect(screen.queryByTestId("tender-method-card_terminal")).toBeNull());
+    first.unmount();
+
+    render(<BillSettleView orderId={ORDER_ID} />);
+    await screen.findByTestId("bill-summary");
+    expect(screen.queryByTestId("tender-method-card_terminal")).toBeNull();
+    expect(screen.getByTestId("tender-method-external")).toBeTruthy();
   });
 
   it("keeps Finalise disabled while the terminal is still waiting, and a declined card offers a retry with the bill untouched", async () => {

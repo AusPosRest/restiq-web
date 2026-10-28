@@ -1,8 +1,8 @@
 "use client";
 
-// P10 Refund & Adjustments (CAP-9, story 10). Reached from the finalised
-// bill-settle-view.tsx's "Bill finalised" panel (story 8) via its "Refund…"
-// entry point.
+// P10 Refund & Adjustments (CAP-9, story 10). Reached from the POS
+// Payments list's "Refund" link on each finalised bill (issue #405; the
+// settle screen's own link was removed in #226).
 //
 // RECONCILED (2026-09-02, restiq-web#98) against the real, merged
 // restiq-backend `src/pos/bills/*` (see refund-state.ts's file header for
@@ -76,9 +76,9 @@ export function RefundView({ orderId, billId }: Readonly<{ orderId: string; bill
   if (!billId) {
     return (
       <section data-testid="refund-no-bill" className="flex flex-1 flex-col items-center justify-center gap-2 p-6 text-center text-sm text-muted-foreground">
-        <p>Open this order&apos;s Settle screen first, then use its Refund… link.</p>
-        <Link href={`/pos/orders/${orderId}/settle`} data-testid="refund-back-to-settle" className="text-primary underline-offset-4 hover:underline">
-          Go to Settle
+        <p>Find the bill in today&apos;s Payments, then use its Refund link.</p>
+        <Link href="/pos/payments" data-testid="refund-go-to-payments" className="text-primary underline-offset-4 hover:underline">
+          Go to Payments
         </Link>
       </section>
     );

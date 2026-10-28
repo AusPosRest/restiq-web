@@ -60,6 +60,17 @@ describe("PaymentsScreen", () => {
     expect(screen.getByTestId("pos-payment-row-t3").textContent).toContain("EFT-1");
   });
 
+  it("offers Refund once per finalised bill, linking to that bill's refund screen (issue #405)", async () => {
+    vi.stubGlobal("fetch", vi.fn().mockResolvedValue(jsonResponse(VIEW)));
+    render(<PaymentsScreen outletId={OUTLET_ID} />);
+    await screen.findByTestId("pos-payments-content");
+
+    const links = screen.getAllByTestId(/^pos-payment-refund-/);
+    expect(links.map((link) => link.getAttribute("data-testid"))).toEqual(["pos-payment-refund-b2", "pos-payment-refund-b1"]);
+    expect(screen.getByTestId("pos-payment-refund-b2").getAttribute("href")).toBe("/pos/orders/o2/refund?billId=b2");
+    expect(screen.getByTestId("pos-payment-row-t3").contains(screen.getByTestId("pos-payment-refund-b2"))).toBe(true);
+  });
+
   it("shows the empty state when nothing has been taken today", async () => {
     vi.stubGlobal("fetch", vi.fn().mockResolvedValue(jsonResponse({ ...VIEW, totalMinor: 0, count: 0, byMethod: [], payments: [] })));
     render(<PaymentsScreen outletId={OUTLET_ID} />);
