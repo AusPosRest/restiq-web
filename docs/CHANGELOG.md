@@ -7,6 +7,7 @@ with the payments epic.
 ## [Unreleased]
 
 ### Fixed
+- **Android release key in asset links** (#413): `/.well-known/assetlinks.json` also lists the restiq-android release-key fingerprint, so the signed app (1.0.1) runs full-screen without Chrome's URL bar.
 - **Outlet load failure** (#408): when the outlet list fails to load, Settings > Outlet/Capabilities, Devices, Floor plan and Reports > Payments show an error with Retry instead of "No outlets yet" (`OutletContext` now exposes `failed` and `reload`).
 - **Dashboard "As of" timezone** (#409): the freshness badge uses the selected outlet's timezone, like the reports, not the browser's.
 
