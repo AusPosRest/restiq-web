@@ -8,6 +8,10 @@
 // a poll lands `succeeded` the caller is told once (`onSettled`) so it can
 // re-read the bill - the tender the terminal wrote is on the server, never
 // invented here.
+//
+// No terminal (issue #407): the POS has no device list of its own, so the
+// first `no_terminal` refusal is the signal - `available` turns false and
+// stays false for this tab's session, and callers stop offering the option.
 import { useEffect, useRef, useState } from "react";
 import {
   isActiveIntent,
@@ -17,8 +21,29 @@ import {
 } from "@/lib/payment-intent";
 import { cancelPaymentIntent, createPaymentIntent, getPaymentIntent, listPendingPaymentIntents, PosApiError } from "../../../api";
 
+// Same per-tab, best-effort storage posture as terminal-binding.ts.
+const NO_TERMINAL_KEY = "pos:no-terminal";
+
+function readNoTerminal(): boolean {
+  try {
+    return window.sessionStorage.getItem(NO_TERMINAL_KEY) === "1";
+  } catch {
+    return false;
+  }
+}
+
+function saveNoTerminal(): void {
+  try {
+    window.sessionStorage.setItem(NO_TERMINAL_KEY, "1");
+  } catch {
+    // Best-effort - this screen still hides the option until it unmounts.
+  }
+}
+
 export interface TerminalIntent {
   intent: PaymentIntentView | null;
+  /** False once the server said this till has no card terminal (issue #407). */
+  available: boolean;
   busy: boolean;
   error: string | null;
   send: (amountMinor: number) => void;
@@ -36,6 +61,7 @@ export function useTerminalIntent(billId: string | null, onSettled: () => void, 
   const [intent, setIntent] = useState<PaymentIntentView | null>(null);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [available, setAvailable] = useState(() => !readNoTerminal());
   const settledFor = useRef<string | null>(null);
   // Latest callback without re-arming the effects below on every render.
   const onSettledRef = useRef(onSettled);
@@ -107,6 +133,10 @@ export function useTerminalIntent(billId: string | null, onSettled: () => void, 
       .then(setIntent)
       .catch(async (cause: unknown) => {
         if (cause instanceof PosApiError && cause.code === "intent_active" && (await adoptWaitingIntent())) return;
+        if (cause instanceof PosApiError && cause.code === "no_terminal") {
+          saveNoTerminal();
+          setAvailable(false);
+        }
         setError(cause instanceof PosApiError ? cause.message : "Couldn't reach the card terminal. Choose another way to pay, or try again.");
       })
       .finally(() => setBusy(false));
@@ -126,5 +156,5 @@ export function useTerminalIntent(billId: string | null, onSettled: () => void, 
     setError(null);
   }
 
-  return { intent, busy, error, send, cancel, dismiss };
+  return { intent, available, busy, error, send, cancel, dismiss };
 }

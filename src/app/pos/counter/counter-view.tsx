@@ -527,7 +527,7 @@ function CounterLoaded({
                   capturedTenders={bill.tenders.filter((tender) => isElectronicMethod(tender.method))}
                   onAddTender={handleAddTender}
                   onRemoveTender={handleRemoveTender}
-                  onSendToTerminal={terminal.send}
+                  onSendToTerminal={terminal.available ? terminal.send : undefined}
                   terminalBusy={terminal.busy}
                   changeMinor={cashChangeMinor(totalMinor, bill, pendingTenders, menu.currency)}
                   cashLocked={shiftOpen === false}
