@@ -26,9 +26,10 @@ function LoadingRows() {
 }
 
 export function CapabilitiesEditor() {
-  const { outlets, loading: outletsLoading, selectedOutletId } = useOutlets();
+  const { outlets, loading: outletsLoading, failed: outletsFailed, reload: reloadOutlets, selectedOutletId } = useOutlets();
 
   if (outletsLoading) return <LoadingRows />;
+  if (outletsFailed) return <LoadErrorPanel testId="capabilities-outlets-load-error" message="Your outlets couldn't be loaded." onRetry={reloadOutlets} />;
 
   if (outlets.length === 0) {
     return (

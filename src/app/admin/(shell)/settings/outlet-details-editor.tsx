@@ -11,7 +11,7 @@ import { Store } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { AdminApiError, updateOutlet, type UpdateOutletInput } from "../../api";
 import type { OutletType, OutletView } from "../menu/menu-state";
-import { Skeleton } from "../data-states";
+import { LoadErrorPanel, Skeleton } from "../data-states";
 import { useOutlets } from "../outlet-context";
 import { useToast } from "../toast";
 
@@ -39,9 +39,10 @@ function LoadingRows() {
 }
 
 export function OutletDetailsEditor() {
-  const { outlets, loading, selectedOutletId, updateOutlet: applyLocalUpdate } = useOutlets();
+  const { outlets, loading, failed, reload, selectedOutletId, updateOutlet: applyLocalUpdate } = useOutlets();
 
   if (loading) return <LoadingRows />;
+  if (failed) return <LoadErrorPanel testId="outlet-details-load-error" message="Your outlets couldn't be loaded." onRetry={reload} />;
 
   if (outlets.length === 0) {
     return (

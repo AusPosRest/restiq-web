@@ -6,6 +6,10 @@ with the payments epic.
 
 ## [Unreleased]
 
+### Fixed
+- **Outlet load failure** (#408): when the outlet list fails to load, Settings > Outlet/Capabilities, Devices, Floor plan and Reports > Payments show an error with Retry instead of "No outlets yet" (`OutletContext` now exposes `failed` and `reload`).
+- **Dashboard "As of" timezone** (#409): the freshness badge uses the selected outlet's timezone, like the reports, not the browser's.
+
 ### Added
 - **Cloudflare Workers deploy** (#397): `pnpm preview` / `pnpm run deploy` build the app with OpenNext and publish it as the `restiq-web` Worker on `dailypos.shop` and `*.dailypos.shop` (ADR-015).
 - **Sydney region label** (#399): the ops console's tenant overview shows `au-sydney` as "Australia (Sydney)" and flags Indian tenants hosted there ("no Indian region yet").

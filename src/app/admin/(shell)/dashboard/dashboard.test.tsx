@@ -1,6 +1,7 @@
-import { cleanup, render, screen, within } from "@testing-library/react";
+import { cleanup, render, screen, waitFor, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
+import { OutletProvider } from "../outlet-context";
 import { Dashboard } from "./dashboard";
 import { formatAsOf, type DashboardView } from "./dashboard-state";
 
@@ -173,6 +174,34 @@ describe("Dashboard", () => {
       // The viewer's own clock, so the expected text follows the runner's zone.
       expect(badge.textContent).toContain(`As of ${formatAsOf("2026-08-24T09:05:00.000Z")}`);
       expect(badge.getAttribute("data-stale")).toBe("false");
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
+  it("formats the as-of time in the selected outlet's timezone, not the browser's (#409)", async () => {
+    sessionStorage.clear();
+    vi.useFakeTimers({ toFake: ["Date"] });
+    vi.setSystemTime(new Date("2026-08-24T12:00:00.000Z"));
+    try {
+      vi.stubGlobal(
+        "fetch",
+        vi.fn((input: RequestInfo | URL) =>
+          Promise.resolve(
+            String(input).includes("/outlets")
+              ? jsonResponse([{ id: "o1", name: "Sydney", address: "1 George St", type: "dine_in", timezone: "Australia/Sydney" }])
+              : jsonResponse(MULTI_OUTLET),
+          ),
+        ),
+      );
+      render(
+        <OutletProvider>
+          <Dashboard />
+        </OutletProvider>,
+      );
+      await screen.findByTestId("dashboard-freshness-badge");
+      // 09:05 UTC is 7:05pm in Sydney (AEST, UTC+10)
+      await waitFor(() => expect(screen.getByTestId("dashboard-freshness-badge").textContent).toContain("As of 7:05pm"));
     } finally {
       vi.useRealTimers();
     }

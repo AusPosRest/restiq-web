@@ -54,9 +54,10 @@ function LoadingShell() {
 }
 
 export function Payments() {
-  const { outlets, loading: outletsLoading, selectedOutletId } = useOutlets();
+  const { outlets, loading: outletsLoading, failed: outletsFailed, reload: reloadOutlets, selectedOutletId } = useOutlets();
 
   if (outletsLoading) return <LoadingShell />;
+  if (outletsFailed) return <LoadErrorPanel testId="payments-outlets-load-error" message="Your outlets couldn't be loaded." onRetry={reloadOutlets} />;
 
   if (outlets.length === 0) {
     return (
