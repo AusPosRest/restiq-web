@@ -432,6 +432,8 @@ const FOOTER_LINKS = [
   { href: "/kds", label: "Kitchen display (staff PIN)", testId: "landing-footer-kds" },
   { href: "/admin/login", label: "Owner console", testId: "landing-footer-admin" },
   { href: "/ops/login", label: "Platform operators", testId: "landing-footer-ops" },
+  // Stable name: a new release overwrites this object in the R2 bucket (restiq-desktop README).
+  { href: "https://downloads.dailypos.shop/windows/RESTIQ-POS-Setup.exe", label: "Windows app (download)", testId: "landing-footer-windows" },
 ];
 
 function SiteFooter() {

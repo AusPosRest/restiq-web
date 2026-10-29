@@ -23,6 +23,7 @@ describe("Marketing landing page (issue #262)", () => {
     expect(screen.getByTestId("landing-footer-kds").getAttribute("href")).toBe("/kds");
     expect(screen.getByTestId("landing-footer-admin").getAttribute("href")).toBe("/admin/login");
     expect(screen.getByTestId("landing-footer-ops").getAttribute("href")).toBe("/ops/login");
+    expect(screen.getByTestId("landing-footer-windows").getAttribute("href")).toBe("https://downloads.dailypos.shop/windows/RESTIQ-POS-Setup.exe");
   });
 
   it("anchors the nav to real sections", () => {
