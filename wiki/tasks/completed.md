@@ -1,5 +1,6 @@
 # Completed
 
+- **2026-10-29** - Guide video byte ranges (issue #419): `src/app/guides/making-demo-videos/video/route.ts` (`parseRange`, 206/416/502). Test: `route.test.ts`.
 - **2026-10-29** - Public guide on making the demo videos (issue #417): `public/guides/making-demo-videos/index.html` (+ `restiq-demo.mp4`, `poster.jpg`), served as a static asset; no internal accounts, ids or local paths.
 - **2026-10-29** - Android release key in asset links (issue #413): added the restiq-android release-key SHA-256 to `public/.well-known/assetlinks.json` next to the debug key.
 - **2026-10-28** - Guest QR/kiosk currency (issue #403): new `qr/guest-currency.ts` (`menuCurrency`, `fetchMenuCurrency`) reads the tenant's currency off `GET /guest/v1/menu`; `checkout-screen.tsx` uses it instead of the (emptied, INR-fallback) cart before showing the bill, and `cart-screen.tsx` uses it while the cart is empty. `formatRupees` removed for `formatMoney`. Tests: `guest-currency.test.ts`, AUD cases in `checkout-screen.test.tsx`, `cart-screen.test.tsx`, `checkout-state.test.ts`.
