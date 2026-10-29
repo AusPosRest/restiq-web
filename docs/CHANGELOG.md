@@ -6,6 +6,9 @@ with the payments epic.
 
 ## [Unreleased]
 
+### Added
+- **Guide page: how we make the demo videos** (#417): static page at `/guides/making-demo-videos/` (`public/guides/making-demo-videos/`) with the 2-minute demo video embedded; explains the scripted recording, JSON plan, ElevenLabs voice and ffmpeg build, and how to make a custom video.
+
 ### Fixed
 - **Android release key in asset links** (#413): `/.well-known/assetlinks.json` also lists the restiq-android release-key fingerprint, so the signed app (1.0.1) runs full-screen without Chrome's URL bar.
 - **Outlet load failure** (#408): when the outlet list fails to load, Settings > Outlet/Capabilities, Devices, Floor plan and Reports > Payments show an error with Retry instead of "No outlets yet" (`OutletContext` now exposes `failed` and `reload`).

@@ -1,0 +1,255 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>How we make RESTIQ's demo videos</title>
+<meta name="description" content="How RESTIQ's demo videos are made: scripted browser recordings with on-screen captions, a JSON script, an ElevenLabs voice and ffmpeg. And how to make your own.">
+<meta property="og:title" content="How we make RESTIQ's demo videos">
+<meta property="og:description" content="Scripted recordings, a JSON script, an AI voice and ffmpeg: every video rebuilt with one command.">
+<meta property="og:image" content="https://app.dailypos.shop/guides/making-demo-videos/poster.jpg">
+<link rel="icon" href="/icon">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Archivo:wdth,wght@75..125,600..900&family=Hanken+Grotesk:wght@400;500;600;700&family=IBM+Plex+Mono:wght@400;500&display=swap" rel="stylesheet">
+<style>
+  :root { --ink:#17140f; --ink-soft:#5b5650; --paper:#fafaf9; --amber:#f59e0b; --amber-ink:#8a4b06; --night:#131315; --line:#e7e5e4; }
+  * { box-sizing:border-box }
+  html { scroll-behavior:smooth }
+  body { margin:0; background:var(--paper); color:var(--ink); font:400 17px/1.65 "Hanken Grotesk",system-ui,-apple-system,sans-serif; -webkit-font-smoothing:antialiased }
+  a { color:var(--amber-ink); text-underline-offset:3px }
+  a:focus-visible, video:focus-visible { outline:3px solid var(--amber); outline-offset:3px; border-radius:6px }
+  .d { font-family:Archivo,system-ui,sans-serif; font-stretch:112%; letter-spacing:-.02em }
+  .m, code, pre { font-family:"IBM Plex Mono",ui-monospace,Menlo,monospace }
+  header.top { background:var(--night); color:#fff }
+  .bar { max-width:1080px; margin:0 auto; padding:18px 20px; display:flex; align-items:center; justify-content:space-between; gap:12px }
+  .logo { display:flex; align-items:center; gap:10px; color:#fff; text-decoration:none; font-weight:800 }
+  .logo span:first-child { display:grid; place-items:center; width:30px; height:30px; border-radius:8px; background:var(--amber); color:var(--ink); font-size:15px }
+  .bar .cta { color:var(--ink); background:var(--amber); padding:9px 18px; border-radius:999px; font-weight:600; text-decoration:none; font-size:15px }
+  .hero { background:var(--night); color:#fff; padding:56px 20px 72px; text-align:center }
+  .kick { display:inline-block; font-size:12px; letter-spacing:.16em; text-transform:uppercase; color:#d6d3d1; border:1px solid rgba(255,255,255,.15); border-radius:999px; padding:5px 14px }
+  .hero h1 { font-size:clamp(36px,6vw,68px); line-height:1.02; font-weight:800; margin:22px auto 16px; max-width:900px }
+  .hero h1 em { font-style:normal; color:var(--amber) }
+  .hero p { color:#a8a29e; max-width:680px; margin:0 auto; font-size:19px }
+  .player { max-width:960px; margin:40px auto 0; border-radius:20px; overflow:hidden; box-shadow:0 30px 80px -20px rgba(245,158,11,.35); border:1px solid rgba(255,255,255,.08) }
+  .player video { display:block; width:100%; height:auto; background:#000 }
+  .cap { color:#78716c; font-size:14px; margin-top:14px }
+  main { max-width:820px; margin:0 auto; padding:56px 20px 40px }
+  nav.toc { border:1px solid var(--line); border-radius:16px; padding:18px 22px; background:#fff; margin-bottom:48px }
+  nav.toc p { margin:0 0 8px; font-size:12px; letter-spacing:.14em; text-transform:uppercase; color:var(--ink-soft) }
+  nav.toc ol { margin:0; padding-left:20px; columns:2; column-gap:32px }
+  nav.toc li { break-inside:avoid; margin:2px 0 }
+  h2 { font-size:clamp(26px,3.4vw,34px); line-height:1.1; font-weight:800; margin:64px 0 14px; scroll-margin-top:20px }
+  h2 .n { color:var(--amber); margin-right:10px }
+  h3 { font-size:20px; margin:32px 0 8px }
+  p, li { color:#292524 }
+  code { background:#f1efed; border-radius:5px; padding:1px 6px; font-size:.88em }
+  pre { background:var(--night); color:#e7e5e4; border-radius:14px; padding:18px 20px; overflow-x:auto; font-size:14px; line-height:1.55 }
+  pre code { background:none; padding:0; font-size:inherit; color:inherit }
+  pre .c { color:#a8a29e }
+  table { width:100%; border-collapse:collapse; margin:16px 0; font-size:15.5px }
+  th, td { text-align:left; vertical-align:top; padding:10px 12px; border-bottom:1px solid var(--line) }
+  th { font-size:12px; letter-spacing:.1em; text-transform:uppercase; color:var(--ink-soft); font-weight:600 }
+  .scroll { overflow-x:auto }
+  .flow { display:grid; grid-template-columns:repeat(5,1fr); gap:10px; margin:24px 0 8px }
+  .flow div { background:#fff; border:1px solid var(--line); border-radius:14px; padding:14px; position:relative }
+  .flow b { display:block; font-family:Archivo,sans-serif; font-size:13px; color:var(--amber-ink); letter-spacing:.06em }
+  .flow span { font-size:14px; color:var(--ink-soft); line-height:1.4; display:block; margin-top:4px }
+  .note { border-left:4px solid var(--amber); background:#fffbeb; padding:14px 18px; border-radius:0 12px 12px 0; margin:20px 0 }
+  .two { display:grid; grid-template-columns:1fr 1fr; gap:16px; margin:20px 0 }
+  .two div { background:#fff; border:1px solid var(--line); border-radius:16px; padding:18px 20px }
+  .two h4 { margin:0 0 6px; font-family:Archivo,sans-serif; font-size:18px }
+  .two p { margin:0; font-size:15.5px; color:var(--ink-soft) }
+  footer { background:var(--night); color:#a8a29e; text-align:center; padding:40px 20px; margin-top:56px; font-size:14px }
+  footer a { color:#fff }
+  @media (max-width:720px) { .flow { grid-template-columns:1fr 1fr } nav.toc ol { columns:1 } .two { grid-template-columns:1fr } }
+</style>
+</head>
+<body>
+<header class="top">
+  <div class="bar">
+    <a class="logo d" href="/" data-testid="guide-logo"><span aria-hidden="true">R</span><span>RESTIQ</span></a>
+    <a class="cta" href="/demo" data-testid="guide-nav-demo">Try the live demo</a>
+  </div>
+</header>
+
+<section class="hero">
+  <span class="kick m">Behind the scenes</span>
+  <h1 class="d">How we make RESTIQ's <em>demo videos</em></h1>
+  <p>No screen recorder and no video editor: every click is a script, every cut is a command, and the voice is generated. Change a sentence, run one command, and you get a new video.</p>
+  <div class="player">
+    <video controls preload="metadata" playsinline poster="poster.jpg" data-testid="guide-demo-video" aria-label="RESTIQ demo video, 2 minutes 13 seconds, with voice-over">
+      <source src="restiq-demo.mp4" type="video/mp4">
+      Your browser can't play this video. <a href="restiq-demo.mp4" data-testid="guide-demo-download">Download it</a> instead.
+    </video>
+  </div>
+  <p class="cap">The result: RESTIQ's 2-minute demo, built entirely by the steps on this page.</p>
+</section>
+
+<main>
+  <nav class="toc" aria-label="On this page">
+    <p>On this page</p>
+    <ol>
+      <li><a href="#overview" data-testid="guide-toc-overview">The pipeline</a></li>
+      <li><a href="#tools" data-testid="guide-toc-tools">Tools</a></li>
+      <li><a href="#safe" data-testid="guide-toc-safe">A safe place to record</a></li>
+      <li><a href="#record" data-testid="guide-toc-record">Recording with Playwright</a></li>
+      <li><a href="#script" data-testid="guide-toc-script">The script is data</a></li>
+      <li><a href="#cards" data-testid="guide-toc-cards">Title cards</a></li>
+      <li><a href="#voice" data-testid="guide-toc-voice">The voice</a></li>
+      <li><a href="#assemble" data-testid="guide-toc-assemble">Putting it together</a></li>
+      <li><a href="#custom" data-testid="guide-toc-custom">Make your own video</a></li>
+      <li><a href="#lessons" data-testid="guide-toc-lessons">Lessons learned</a></li>
+    </ol>
+  </nav>
+
+  <h2 id="overview" class="d"><span class="n">01</span>The pipeline</h2>
+  <p>We made two videos this way: a <strong>2-minute demo</strong> for restaurant owners (above), and a <strong>16-minute end-to-end test</strong> for our team that walks through 11 scenarios, from onboarding a restaurant to the owner's reports, with a pass or fail verdict for each step.</p>
+  <div class="flow" role="list">
+    <div role="listitem"><b>1 · PREPARE</b><span>A test restaurant and private logins</span></div>
+    <div role="listitem"><b>2 · RECORD</b><span>A script drives the live app, with captions on screen</span></div>
+    <div role="listitem"><b>3 · SCRIPT</b><span>JSON: which clips, card text and voice lines</span></div>
+    <div role="listitem"><b>4 · VOICE</b><span>ElevenLabs reads each line, saved for reuse</span></div>
+    <div role="listitem"><b>5 · ASSEMBLE</b><span>ffmpeg joins cards, clips and voice</span></div>
+  </div>
+  <p>Because each stage is a file and a command, anything can be redone on its own. A wording change only re-voices one line, and a screen change only re-records one scene.</p>
+
+  <h2 id="tools" class="d"><span class="n">02</span>Tools</h2>
+  <div class="scroll"><table>
+    <tr><th>Tool</th><th>What it does here</th></tr>
+    <tr><td><strong>Playwright</strong> (Node)</td><td>Drives a real Chromium browser through each scenario and records it. Also turns the HTML title cards into images.</td></tr>
+    <tr><td><strong>ffmpeg</strong></td><td>Converts, cuts, freezes frames, crossfades, mixes the voice and evens out the volume.</td></tr>
+    <tr><td><strong>Python 3</strong></td><td>One build script turns the JSON plan into ffmpeg commands. Standard library only.</td></tr>
+    <tr><td><strong>ElevenLabs</strong></td><td>Text to speech. Voice "George", a warm British narrator, with the <code>eleven_multilingual_v2</code> model.</td></tr>
+  </table></div>
+
+  <h2 id="safe" class="d"><span class="n">03</span>A safe place to record</h2>
+  <p>We record on the <strong>live</strong> RESTIQ site so the videos show the real product, but always inside a restaurant account in <strong>Test mode</strong>. In Test mode, payments are simulated, emails stay inside the platform, and the restaurant isn't counted in platform figures. No real restaurant's data ever appears on screen.</p>
+  <p>Logins are kept in a private file that only the owner of the computer can read. The scripts read it at run time, so passwords never appear in a script, a video or this page. Each script also saves what the next one needs (a signed-in session, a device code, an order number), so the scenes follow on from each other like one real day of service.</p>
+
+  <h2 id="record" class="d"><span class="n">04</span>Recording with Playwright</h2>
+  <p>There is one short script per scene: onboarding, the menu, taking an order on the till, the kitchen screen, paying, QR ordering on a phone, the self-order kiosk and reports. Running one produces one MP4:</p>
+  <pre><code>node 06-pos-order.mjs     <span class="c"># → 06-pos-signin-table-order.mp4</span></code></pre>
+  <p>A few small helpers make the recordings look like a careful person is using the app:</p>
+  <div class="scroll"><table>
+    <tr><th>Helper</th><th>Why</th></tr>
+    <tr><td><code>session()</code></td><td>Opens Chromium at 1280×800 (or a phone-sized touch screen for the QR guest), turns on video recording and slows every action a little so viewers can follow it.</td></tr>
+    <tr><td><code>caption(page, text)</code></td><td>Shows a dark caption bar at the bottom of the page. The captions are part of the page while it records, not added afterwards, so they always match what's on screen.</td></tr>
+    <tr><td><code>typeIn()</code></td><td>Types one key at a time, so viewers see the typing.</td></tr>
+    <tr><td><code>ensure()</code></td><td>Waits until the screen has actually appeared, and reloads if it didn't, the way a person would.</td></tr>
+    <tr><td><code>finish()</code></td><td>Closes the browser and converts Playwright's WebM into an H.264 MP4.</td></tr>
+  </table></div>
+  <p>The caption helper is just a few lines of DOM code:</p>
+<pre><code>export async function caption(page, text, hold = 1800) {
+  await page.evaluate((t) =&gt; {
+    let el = document.getElementById('__demo_caption')
+    if (!el) {
+      el = document.createElement('div')
+      el.id = '__demo_caption'
+      el.style.cssText = 'position:fixed;left:50%;bottom:18px;transform:translateX(-50%);' +
+        'z-index:2147483647;padding:10px 18px;border-radius:10px;background:rgba(17,24,39,.88);' +
+        'color:#fff;font:600 16px/1.35 system-ui;pointer-events:none'
+      document.body.appendChild(el)
+    }
+    el.textContent = t
+  }, text)
+  await new Promise((r) =&gt; setTimeout(r, hold))   <span class="c">// time to read it</span>
+}</code></pre>
+  <div class="note"><strong>Bonus:</strong> a recording run doubles as an end-to-end test. Each script logs every failed request and page error, and saves a screenshot if a step fails. Our first full run found eight bugs, all of them now fixed.</div>
+
+  <h2 id="script" class="d"><span class="n">05</span>The script is data</h2>
+  <p>All the words live in a JSON file, separate from the code. The demo video is a list of <strong>sections</strong>. Each one has an optional card, the clips to use (recording number, start second, end second) and one voice-over line:</p>
+<pre><code>{ "card": { "kind": "section", "kicker": "03", "title": "Take orders fast",
+            "sub": "PIN sign-in, table map, one tap to the kitchen" },
+  "card_secs": 2.5,
+  "clips": [["06", 46.0, 61.5]],
+  "vo": "On the till, staff sign in with their own PIN and tap a table to start an order." }</code></pre>
+  <p>For the end-to-end test video, each voice line is pinned to the second its caption appears in the recording (<code>[5.0, "Staff sign in…"]</code>), so the voice explains exactly what's on screen.</p>
+  <p>One small trick: the voice lines spell RESTIQ as <strong>"Resteek"</strong> so it's pronounced right, while the cards and captions still read RESTIQ.</p>
+
+  <h2 id="cards" class="d"><span class="n">06</span>Title cards</h2>
+  <p>Cards are a single HTML page with a few layouts: title, statement, numbered section, closing call to action, and for the test video the step, the pass/fail result and the summary. A small Playwright script loads the page once per card at 1920×1080, takes a PNG, and warns <code>CLIPPED</code> if any text runs off the edge. Changing the design means editing CSS, not using a design tool.</p>
+
+  <h2 id="voice" class="d"><span class="n">07</span>The voice</h2>
+  <p>A small Python client sends each line to the ElevenLabs text-to-speech API (voice George, stability 0.5, similarity 0.75, style 0.2). Every result is <strong>saved under a hash of the voice, settings and text</strong>, so rebuilding only pays for lines that changed. Fixing one sentence costs one sentence. The API key is read from a private file at run time and never printed or saved anywhere else.</p>
+
+  <h2 id="assemble" class="d"><span class="n">08</span>Putting it together</h2>
+  <p>The build script turns everything into <strong>1920×1080, 25 fps</strong> H.264 and joins it with ffmpeg. A few details make it look edited by hand:</p>
+  <ul>
+    <li><strong>The voice never gets cut off.</strong> If a line runs longer than its pictures, the last frame is held (<code>tpad=stop_mode=clone</code>) until the line finishes.</li>
+    <li><strong>No white flashes.</strong> Page loads flash white for a moment. Inverting the picture turns those flashes black, ffmpeg's <code>blackdetect</code> finds them, and they are cut out:
+      <pre><code>ffmpeg -i in.mp4 -vf "negate,blackdetect=d=0.08:pix_th=0.15:pic_th=0.9" -f null -</code></pre></li>
+    <li><strong>Voice in step with the captions.</strong> In the test video the recording is cut at each caption, so every line starts with its caption and they never drift apart.</li>
+    <li><strong>Smooth and even.</strong> Short crossfades between sections, a fade in and out, and the voice loudness-normalised to <strong>−16 LUFS</strong> (<code>loudnorm=I=-16:TP=-1.5:LRA=11</code>), the usual level for online video.</li>
+  </ul>
+<pre><code>python3 build.py demo      <span class="c"># the 2-minute demo</span>
+python3 build.py e2e       <span class="c"># the end-to-end test video</span></code></pre>
+
+  <h2 id="custom" class="d"><span class="n">09</span>Make your own video</h2>
+  <div class="two">
+    <div><h4>A · Re-cut existing footage</h4><p>About 10 minutes, no recording. Good for a 30-second social clip, a video about one feature, or a different message for one customer.</p></div>
+    <div><h4>B · Record something new</h4><p>For screens that aren't in the existing recordings, or after the app's design changes. Then build as in A.</p></div>
+  </div>
+
+  <h3>A. Re-cut existing footage</h3>
+  <ol>
+    <li>Copy an existing plan, for example <code>cp example-pos-video.json kitchen-for-cafes.json</code>.</li>
+    <li>Watch the recordings and note the start and end seconds of the moments you want. The on-screen captions tell you what's happening.</li>
+    <li>Write the sections:
+<pre><code>{ "sections": [
+  { "card": { "kind": "title", "title": "RESTIQ", "sub": "A kitchen screen that keeps up" },
+    "card_secs": 4.0, "clips": [],
+    "vo": "Meet Resteek, the kitchen screen built for busy cafés." },
+  { "card": { "kind": "section", "kicker": "01", "title": "Every order, instantly",
+              "sub": "Tickets arrive the moment the till sends them" },
+    "card_secs": 2.5, "clips": [["07", 5.0, 18.0], ["07", 24.0, 30.0]],
+    "vo": "Orders land on the kitchen screen the second they're sent, with a timer on every ticket." },
+  { "card": { "kind": "closing", "title": "RESTIQ", "sub": "Book a demo", "url": "dailypos.shop" },
+    "card_secs": 6.0, "clips": [],
+    "vo": "Resteek. Book a demo at daily pos dot shop." }
+] }</code></pre></li>
+    <li>Build it: <code>python3 build.py demo kitchen-for-cafes.json</code> → <code>kitchen-for-cafes.mp4</code>. For each section the build prints how long the pictures and the voice are. If it says <code>held 4.0s</code>, the voice ran 4 seconds past the pictures, so add footage or shorten the line.</li>
+  </ol>
+  <div class="scroll"><table>
+    <tr><th>Field</th><th>Meaning</th></tr>
+    <tr><td><code>card.kind</code></td><td><code>title</code>, <code>statement</code>, <code>section</code> or <code>closing</code>. Leave out <code>card</code> to show clips only.</td></tr>
+    <tr><td><code>card_secs</code></td><td>How long the card shows: about 2.5 for a section, 4 to 6 for the title and closing.</td></tr>
+    <tr><td><code>clips</code></td><td><code>["NN", start, end]</code>, where NN is the recording number. Several clips are joined with a crossfade.</td></tr>
+    <tr><td><code>vo</code></td><td>One voice line per section. It starts 0.6 s in.</td></tr>
+  </table></div>
+  <div class="note"><strong>Writing voice lines:</strong> allow about <strong>2.5 words per second</strong> (a 15-second clip fits about 35 words). Keep to one idea per section, use short sentences, and spell out anything the voice could misread ("daily pos dot shop"). A 2-minute video uses about 2,000 ElevenLabs characters, and unchanged lines are free.</div>
+
+  <h3>B. Record something new</h3>
+  <ol>
+    <li>Copy the recording template: <code>cp _template.mjs 12-new-feature.mjs</code>. It's a working script that signs in and records the owner's dashboard.</li>
+    <li>Write the steps with the helpers above. Every button and field in RESTIQ has a <code>data-testid</code>, so a step is just:
+<pre><code>await caption(page, 'Add a new dish to the menu')
+await page.locator('[data-testid="menu-add-item"]').click()
+await typeIn(page, '[data-testid="item-name-input"]', 'Masala Chai')</code></pre></li>
+    <li>Run <code>node 12-new-feature.mjs</code>. If a step fails, the script saves a screenshot and prints the errors.</li>
+    <li>Use the new recording in your plan like any other: <code>"clips": [["12", 3.0, 14.0]]</code>.</li>
+  </ol>
+
+  <h3>Variations</h3>
+  <ul>
+    <li><strong>Different voice:</strong> pick one in the ElevenLabs Voice Library and set <code>RESTIQ_VOICE_ID</code> before building.</li>
+    <li><strong>Another language:</strong> the multilingual model speaks Hindi, Tamil and many more. Write the voice lines in that language. For translated captions, record the scenes again.</li>
+    <li><strong>Your own look:</strong> the cards are plain HTML and CSS.</li>
+    <li><strong>Vertical video (Reels/Shorts):</strong> record at phone size, switch the build to 1080×1920 and add a vertical card layout.</li>
+  </ul>
+
+  <h2 id="lessons" class="d"><span class="n">10</span>Lessons learned</h2>
+  <ul>
+    <li><strong>Script it, don't screen-record it.</strong> A re-take is one command, and captions, timing and typing speed come out the same every time.</li>
+    <li><strong>Keep the words in data and the voice in a cache.</strong> Changing a word takes seconds, not a re-record.</li>
+    <li><strong>Pin each voice line to its caption, and hold frames rather than rushing.</strong> This is what keeps the narration in sync.</li>
+    <li><strong>Plan for hiccups.</strong> Automatic reloads let recordings finish even when a page is slow, and the error log turns those hiccups into a bug list.</li>
+    <li><strong>Record in a test account, and keep secrets in private files.</strong> They never go into scripts, videos or pages like this one.</li>
+  </ul>
+</main>
+
+<footer>
+  <p><a href="/" data-testid="guide-footer-home">RESTIQ</a> · Restaurant POS for India and Australia · <a href="/demo" data-testid="guide-footer-demo">Live demo</a></p>
+</footer>
+</body>
+</html>
