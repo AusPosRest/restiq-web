@@ -37,6 +37,7 @@ with the payments epic.
 
 ### Added
 - **Guide page: how we make the demo videos** (#417): static page at `/guides/making-demo-videos/` (`public/guides/making-demo-videos/`) with the 2-minute demo video embedded; explains the scripted recording, JSON plan, ElevenLabs voice and ffmpeg build, and how to make a custom video.
+- **Windows app download** (#415): landing footer links to https://github.com/AusPosRest/restiq-downloads/releases/latest/download/RESTIQ-POS-Setup.exe (latest GitHub release of the public `AusPosRest/restiq-downloads` repo, which holds installers only).
 
 ### Fixed
 - **Android release key in asset links** (#413): `/.well-known/assetlinks.json` also lists the restiq-android release-key fingerprint, so the signed app (1.0.1) runs full-screen without Chrome's URL bar.
