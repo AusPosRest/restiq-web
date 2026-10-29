@@ -6,6 +6,9 @@ with the payments epic.
 
 ## [Unreleased]
 
+### Fixed
+- **Guide video on iPhone** (#419): `/guides/making-demo-videos/video` (route handler) serves the demo video with byte ranges (206/416), because Cloudflare static assets ignore Range and iOS Safari won't play without it; the guide's `<video>` uses it.
+
 ### Added
 - **Guide page: how we make the demo videos** (#417): static page at `/guides/making-demo-videos/` (`public/guides/making-demo-videos/`) with the 2-minute demo video embedded; explains the scripted recording, JSON plan, ElevenLabs voice and ffmpeg build, and how to make a custom video.
 
