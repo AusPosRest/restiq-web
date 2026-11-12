@@ -4,7 +4,7 @@ import { GET, parseRange } from "./route";
 const BYTES = new Uint8Array(Array.from({ length: 100 }, (_, i) => i));
 
 function get(range?: string) {
-  return GET(new Request("https://app.dailypos.shop/guides/making-demo-videos/video", range ? { headers: { range } } : {}));
+  return GET(new Request("https://app.niftypos.com.au/guides/making-demo-videos/video", range ? { headers: { range } } : {}));
 }
 
 describe("parseRange", () => {

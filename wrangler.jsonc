@@ -17,21 +17,21 @@
   "observability": {
     "enabled": true
   },
-  // The apex plus every tenant subdomain. api.dailypos.shop is the backend, not this app:
-  // a script-less route for api.dailypos.shop/* on the dailypos.shop zone is more
-  // specific than *.dailypos.shop/*, so its requests skip the Worker and go to the origin.
+  // The apex plus every tenant subdomain. api.niftypos.com.au is the backend, not this app:
+  // a script-less route for api.niftypos.com.au/* on the niftypos.com.au zone is more
+  // specific than *.niftypos.com.au/*, so its requests skip the Worker and go to the origin.
   "routes": [
-    { "pattern": "dailypos.shop/*", "zone_name": "dailypos.shop" },
-    { "pattern": "*.dailypos.shop/*", "zone_name": "dailypos.shop" }
+    { "pattern": "niftypos.com.au/*", "zone_name": "niftypos.com.au" },
+    { "pattern": "*.niftypos.com.au/*", "zone_name": "niftypos.com.au" }
   ],
   // NEXT_PUBLIC_* are inlined at build time from .env.production; these keep the
   // server-side reads in step at runtime. PROXY_SHARED_SECRET is a secret:
   // `wrangler secret put PROXY_SHARED_SECRET` (locally: .dev.vars).
   "vars": {
-    "NEXT_PUBLIC_API_URL": "https://api.dailypos.shop",
-    "NEXT_PUBLIC_BASE_DOMAIN": "dailypos.shop",
+    "NEXT_PUBLIC_API_URL": "https://api.niftypos.com.au",
+    "NEXT_PUBLIC_BASE_DOMAIN": "niftypos.com.au",
     "NEXT_PUBLIC_ENV_LABEL": "Production",
-    // Public demo (/demo, /simulator) is on for dailypos.shop - read per request (PE-30).
+    // Public demo (/demo, /simulator) is on for niftypos.com.au - read per request (PE-30).
     "DEMO_PAGES": "on"
   }
 }
