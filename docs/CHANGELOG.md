@@ -6,6 +6,9 @@ with the payments epic.
 
 ## [Unreleased]
 
+### Changed
+- **Production domain is niftypos.com.au** (#421): Worker routes, `NEXT_PUBLIC_API_URL` (`https://api.niftypos.com.au`) and `NEXT_PUBLIC_BASE_DOMAIN` move off dailypos.shop; tenant subdomains are now `<slug>.niftypos.com.au`.
+
 ### Fixed
 - **Guide video on iPhone** (#419): `/guides/making-demo-videos/video` (route handler) serves the demo video with byte ranges (206/416), because Cloudflare static assets ignore Range and iOS Safari won't play without it; the guide's `<video>` uses it.
 
