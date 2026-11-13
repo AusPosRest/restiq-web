@@ -434,6 +434,7 @@ const FOOTER_LINKS = [
   { href: "/ops/login", label: "Platform operators", testId: "landing-footer-ops" },
   // Stable link: always the latest release in AusPosRest/restiq-downloads.
   { href: "https://github.com/AusPosRest/restiq-downloads/releases/latest/download/RESTIQ-POS-Setup.exe", label: "Windows app (download)", testId: "landing-footer-windows" },
+  { href: "/privacy", label: "Privacy", testId: "landing-footer-privacy" },
 ];
 
 function SiteFooter() {

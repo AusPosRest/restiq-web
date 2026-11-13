@@ -1,5 +1,6 @@
 # Completed
 
+- **2026-11-13** - Public privacy policy (issue #435): new `src/app/privacy/page.tsx` (static server component, `ENTITY` placeholders for name, ABN, email, address) and `landing-footer-privacy` in `page.tsx` FOOTER_LINKS. Tests: `privacy/page.test.tsx`, `page.test.tsx`.
 - **2026-11-13** - Per-restaurant billing contracts, ops web (issue #433, restiq-backend#290): new `tenants/[id]/contract-card.tsx` (Billing contract card above Card billing in `subscription-tab.tsx`, `contract-*` test ids) and `contract-state.ts` (`rowsFromView`, `validateRows`, `totals`, `isChanged`, `planRow`); `api.ts` `ContractView` types + `saveContract` (PUT `subscription/contract`). Tests: `contract-state.test.ts`, `contract-card.test.tsx`, `subscription-tab.test.tsx`.
 - **2026-11-13** - Owner console demo gaps (issue #431): `menu/item-drawer.tsx` new add-on group option price (`new-modifier-group-option-price`, `priceError` validation); `devices/devices.tsx` keeps a list of issued codes (`devices-code-list`, `CodeChip` `title`); `reports/payments-state.ts` `sourceLabel` handles `kiosk`. Tests: `item-drawer.test.tsx`, `devices.test.tsx`, `payments-state.test.ts`.
 - **2026-10-29** - Guide video byte ranges (issue #419): `src/app/guides/making-demo-videos/video/route.ts` (`parseRange`, 206/416/502). Test: `route.test.ts`.
