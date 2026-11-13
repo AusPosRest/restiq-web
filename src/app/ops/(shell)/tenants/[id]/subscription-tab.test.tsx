@@ -4,11 +4,21 @@
 import { cleanup, render, screen, waitFor } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
-import type { SubscriptionView } from "../../api";
+import type { ContractView, SubscriptionView } from "../../api";
 import { ToastProvider } from "../../toast";
 import { SubscriptionTab } from "./subscription-tab";
 
 const TENANT_ID = "0192cccc-0000-7000-8000-000000000003";
+const contract: ContractView = {
+  currency: "AUD",
+  billingPeriod: "monthly",
+  items: [],
+  source: "plan",
+  recurringTotalMinor: "4900",
+  nextInvoiceOneTimeMinor: "0",
+  planAmountMinor: "4900",
+  appliesFromNextInvoice: false,
+};
 
 function subscription(overrides: Partial<SubscriptionView> = {}): SubscriptionView {
   return {
@@ -35,6 +45,7 @@ function renderTab(sub: SubscriptionView, extraRoutes?: (url: string, init?: Req
     if (extra) return Promise.resolve(extra);
     if (url.endsWith(`/ops/api/tenants/${TENANT_ID}/subscription`)) return Promise.resolve(jsonResponse(sub));
     if (url.endsWith(`/ops/api/tenants/${TENANT_ID}/subscription/invoices`)) return Promise.resolve(jsonResponse({ invoices: [] }));
+    if (url.endsWith(`/ops/api/tenants/${TENANT_ID}/subscription/contract`)) return Promise.resolve(jsonResponse(contract));
     return Promise.resolve(jsonResponse({}));
   });
   vi.stubGlobal("fetch", fetchMock);
@@ -68,6 +79,7 @@ describe("SubscriptionTab", () => {
     expect(screen.getByTestId("subscription-grace-window").textContent).toBe("72h");
     expect(screen.getByTestId("subscription-suspend")).toBeTruthy();
     expect(screen.queryByTestId("subscription-reactivate")).toBeNull();
+    expect((await screen.findByTestId("contract-plan-source")).textContent).toContain("A$49.00 per month");
   });
 
   it("maps suspended to the critical badge and shows the read-only banner", async () => {
@@ -154,6 +166,7 @@ describe("SubscriptionTab", () => {
         return Promise.resolve(jsonResponse(subscription({ status: "suspended", suspendedAt: "2026-08-24T00:00:00.000Z" })));
       }
       if (url.endsWith(`/ops/api/tenants/${TENANT_ID}/subscription/invoices`)) return Promise.resolve(jsonResponse({ invoices: [] }));
+      if (url.endsWith(`/ops/api/tenants/${TENANT_ID}/subscription/contract`)) return Promise.resolve(jsonResponse(contract));
       return Promise.resolve(jsonResponse({}));
     });
 

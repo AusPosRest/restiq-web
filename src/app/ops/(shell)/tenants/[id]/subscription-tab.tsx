@@ -17,6 +17,7 @@ import { StatusBadge } from "../../status-badge";
 import { useToast } from "../../toast";
 import { useOpsLoad } from "../../use-ops-load";
 import { DATE_LOCALE } from "@/lib/datetime";
+import { ContractCard } from "./contract-card";
 import { copyToClipboard, openBlankTab, StripeLinkResult } from "./stripe-link";
 
 function formatDate(iso: string): string {
@@ -188,6 +189,8 @@ export function SubscriptionTab({ tenantId, tenantStatus }: Readonly<{ tenantId:
           </div>
         )}
       </div>
+
+      <ContractCard tenantId={tenantId} plan={sub.plan} onSaved={retry} />
 
       <div className="rounded-lg border border-border/40 bg-card p-5" data-testid="card-billing">
         <h3 className="font-headline text-base font-semibold">Card billing</h3>

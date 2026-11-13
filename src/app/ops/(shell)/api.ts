@@ -153,6 +153,37 @@ export interface SubscriptionView {
   };
 }
 
+/** restiq-web#433: per-restaurant billing contract; amounts per billing period, minor units. */
+export interface ContractItemInput {
+  description: string;
+  quantity: number;
+  unitAmountMinor: number;
+  kind: "recurring" | "one_time";
+}
+
+export interface ContractItemView extends ContractItemInput {
+  id: string;
+  billedAt: string | null;
+}
+
+export interface ContractView {
+  currency: "AUD" | "INR";
+  billingPeriod: "monthly" | "annual";
+  /** sortOrder, billed one-time items last. */
+  items: ContractItemView[];
+  source: "contract" | "plan";
+  recurringTotalMinor: string | null;
+  nextInvoiceOneTimeMinor: string;
+  /** The plan's period amount, for "Start from plan price"; null when no plan price is set. */
+  planAmountMinor: string | null;
+  /** Card billing is active: changes apply from the next invoice. */
+  appliesFromNextInvoice: boolean;
+}
+
+export function saveContract(tenantId: string, body: { items: ContractItemInput[]; reason: string }): Promise<ContractView> {
+  return opsApi<ContractView>(`tenants/${tenantId}/subscription/contract`, { method: "PUT", body: JSON.stringify(body) });
+}
+
 export interface InvoiceView {
   id: string;
   period: string;
