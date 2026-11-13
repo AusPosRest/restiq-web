@@ -3,15 +3,17 @@
 // Polls the shop hub's status every 10 s (HUB-BUILD-PLAN W2). null means "not
 // on a hub": the cloud answers 404, polling stops, and the till keeps its
 // browser-only connectivity pill. Any other failure keeps the last answer.
+// `enabled` is false on the PIN pad (no session yet): no polling, null.
 import { useEffect, useState } from "react";
 import { getHubStatus, PosApiError, type HubStatus } from "../../api";
 
 export const HUB_POLL_MS = 10_000;
 
-export function useHubStatus(): HubStatus | null {
+export function useHubStatus(enabled = true): HubStatus | null {
   const [status, setStatus] = useState<HubStatus | null>(null);
 
   useEffect(() => {
+    if (!enabled) return;
     let stopped = false;
     let timer: ReturnType<typeof setTimeout> | undefined;
     async function poll(): Promise<void> {
@@ -28,7 +30,7 @@ export function useHubStatus(): HubStatus | null {
       stopped = true;
       clearTimeout(timer);
     };
-  }, []);
+  }, [enabled]);
 
-  return status;
+  return enabled ? status : null;
 }

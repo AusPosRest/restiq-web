@@ -25,6 +25,15 @@ describe("useHubStatus (W2)", () => {
     expect(fetchMock.mock.calls[0]).toEqual(["/pos/api/hub/status", expect.anything()]);
   });
 
+  it("does not poll while disabled (the PIN pad)", async () => {
+    const fetchMock = vi.fn();
+    vi.stubGlobal("fetch", fetchMock);
+    const { result } = renderHook(() => useHubStatus(false));
+    await act(() => vi.advanceTimersByTimeAsync(HUB_POLL_MS * 2));
+    expect(result.current).toBeNull();
+    expect(fetchMock).not.toHaveBeenCalled();
+  });
+
   it("polls the hub every 10 s and keeps the last answer through a failed poll", async () => {
     const fetchMock = vi
       .fn()

@@ -8,7 +8,7 @@ with the payments epic.
 ## Unreleased - offline hub status and sync issues (#437)
 
 - POS/KDS and QR/kiosk sign-in work over plain http on the shop LAN: session cookies are `secure` only on https requests.
-- POS on a shop hub: the status pill shows "Online" or "Offline · N sales waiting to sync", a red banner explains when new sales are locked (offline too long, or till removed), and managers (`settle_bills`) get a Sync issues screen to review and acknowledge rejected or never-synced sales. Off a hub nothing changes.
+- POS on a shop hub (shift bar, table map and counter; the lock banner on every screen): the status pill shows "Online" or "Offline · N sales waiting to sync", a red banner explains when new sales are locked (offline too long, or till removed), and managers (`settle_bills`) get a Sync issues screen to review and acknowledge rejected or never-synced sales. Off a hub nothing changes.
 
 ## Unreleased - per-restaurant billing contracts (#433)
 

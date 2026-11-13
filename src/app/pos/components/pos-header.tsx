@@ -3,6 +3,7 @@
 // the right - so nothing jumps when switching modes.
 import Link from "next/link";
 import { LockTillButton } from "./lock-till-button";
+import { HubStatusStrip } from "../hub-status";
 import { TenantTestBadge } from "@/components/tenant-test-badge";
 
 const HREF = { counter: "/pos/counter", tables: "/pos/table-map" } as const;
@@ -53,6 +54,7 @@ export function PosHeader({
       </div>
       <ModeToggle current={mode} />
       <div className="ml-auto flex flex-wrap items-center gap-3">
+        <HubStatusStrip pillTestId="pos-header-status" />
         {children}
         {/* PE-19: shift, payments, status and clock-out live in the /pos shell; Lock signs out to the PIN pad. */}
         <Link

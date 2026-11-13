@@ -1,6 +1,7 @@
 import { cleanup, render, screen, waitFor, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { afterEach, describe, expect, it, vi } from "vitest";
+import { HubStatusProvider } from "../hub-status";
 import { TableMap } from "./table-map";
 import type { RawTableMapEntry } from "./table-map-state";
 
@@ -8,6 +9,7 @@ const push = vi.fn();
 
 vi.mock("next/navigation", () => ({
   useRouter: () => ({ push }),
+  usePathname: () => "/pos/table-map",
 }));
 
 const OUTLET_ID = "outlet-1";
@@ -139,6 +141,37 @@ describe("TableMap", () => {
     await user.click(await screen.findByTestId("table-tile-t1"));
     expect((await screen.findByTestId("table-map-action-error")).textContent).toContain(message);
     expect(push).not.toHaveBeenCalled();
+  });
+
+  it("on a shop hub, the table map header shows the offline pill and the /pos layout shows the lock banner (restiq-web#437)", async () => {
+    const hub = { online: false, lastSyncAt: "2026-11-13T10:00:00.000Z", outboxDepth: 7, mustSyncBefore: "2026-11-14T10:00:00.000Z", locked: true, lockReason: "offline_limit", rejections: 0, orphans: 0 };
+    stubFetch((url) => {
+      if (url.endsWith(`/pos/api/outlets/${OUTLET_ID}/table-map`)) return jsonResponse(tables());
+      if (url === "/pos/api/hub/status") return jsonResponse(hub);
+      return jsonResponse({ error: { code: "forbidden", message: "no" } }, 403);
+    });
+    render(
+      <HubStatusProvider>
+        <TableMap outletId={OUTLET_ID} currentStaffId={CURRENT_STAFF_ID} currentStaffName={CURRENT_STAFF_NAME} />
+      </HubStatusProvider>,
+    );
+    await waitFor(() => expect(screen.getByTestId("pos-header-status").textContent).toBe("Offline · 7 sales waiting to sync"));
+    expect(screen.getByTestId("pos-hub-lock-banner").getAttribute("data-reason")).toBe("offline_limit");
+  });
+
+  it("off a hub (404), the table map header keeps the browser connectivity pill and no banner", async () => {
+    stubFetch((url) => {
+      if (url.endsWith(`/pos/api/outlets/${OUTLET_ID}/table-map`)) return jsonResponse(tables());
+      return jsonResponse({ error: { code: "not_found", message: "Cannot GET" } }, 404);
+    });
+    render(
+      <HubStatusProvider>
+        <TableMap outletId={OUTLET_ID} currentStaffId={CURRENT_STAFF_ID} currentStaffName={CURRENT_STAFF_NAME} />
+      </HubStatusProvider>,
+    );
+    await waitFor(() => expect(screen.getByTestId("table-map")).toBeTruthy());
+    expect(screen.getByTestId("pos-header-status").getAttribute("data-hub")).toBeNull();
+    expect(screen.queryByTestId("pos-hub-lock-banner")).toBeNull();
   });
 
   it("reflects the server's real owner after a get-or-claim race (openOrClaimTable can return a pre-existing order owned by someone else), requiring transfer on a second tap instead of a silent open", async () => {

@@ -1,11 +1,13 @@
 import { cleanup, render, screen, waitFor } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
+import { HubStatusProvider } from "../hub-status";
 import { ShiftBar } from "./shift-bar";
 
 const replace = vi.fn();
 vi.mock("next/navigation", () => ({
   useRouter: () => ({ replace }),
+  usePathname: () => "/pos",
 }));
 
 const DISPLAY = { staff: { id: "s1", name: "Priya Nair" }, outlet: { id: "o1", name: "Spice Route - Indiranagar" } };
@@ -32,7 +34,7 @@ describe("ShiftBar", () => {
   });
   afterEach(cleanup);
 
-  it("shows the staff name and outlet from the server-provided display, with no client fetch on mount but the hub status poll", async () => {
+  it("shows the staff name and outlet from the server-provided display, with no client fetch on mount", () => {
     const fetchMock = routeFetch({});
     render(<ShiftBar initial={DISPLAY} />);
 
@@ -46,9 +48,19 @@ describe("ShiftBar", () => {
     );
     expect(screen.getByTestId("pos-shift-bar-status-link")).toHaveProperty("href", expect.stringContaining("/pos/status"));
     expect(screen.getByTestId("pos-shift-bar-payments-link")).toHaveProperty("href", expect.stringContaining("/pos/payments"));
+    expect(fetchMock).not.toHaveBeenCalled();
+  });
+
+  it("off a hub (404), the /pos layout's poller changes nothing in the bar", async () => {
+    const fetchMock = routeFetch({});
+    render(
+      <HubStatusProvider>
+        <ShiftBar initial={DISPLAY} />
+      </HubStatusProvider>,
+    );
     await waitFor(() => expect(fetchMock).toHaveBeenCalledTimes(1));
     expect(fetchMock.mock.calls[0]?.[0]).toBe("/pos/api/hub/status");
-    // Off a hub (404): today's chrome exactly - no sync issues link, no lock banner.
+    expect(screen.getByTestId("pos-status-online").getAttribute("data-hub")).toBeNull();
     expect(screen.queryByTestId("pos-shift-bar-sync-issues-link")).toBeNull();
     expect(screen.queryByTestId("pos-hub-lock-banner")).toBeNull();
   });
@@ -58,7 +70,11 @@ describe("ShiftBar", () => {
       "/pos/api/hub/status": () => jsonResponse(200, HUB),
       "/pos/api/hub/rejections": () => jsonResponse(200, { items: [] }),
     });
-    render(<ShiftBar initial={DISPLAY} />);
+    render(
+      <HubStatusProvider>
+        <ShiftBar initial={DISPLAY} />
+      </HubStatusProvider>,
+    );
 
     const link = await screen.findByTestId("pos-shift-bar-sync-issues-link");
     expect(link).toHaveProperty("href", expect.stringContaining("/pos/sync-issues"));
@@ -72,16 +88,24 @@ describe("ShiftBar", () => {
       "/pos/api/hub/status": () => jsonResponse(200, HUB),
       "/pos/api/hub/rejections": () => jsonResponse(403, { error: { code: "forbidden", message: "Missing permission settle_bills" } }),
     });
-    render(<ShiftBar initial={DISPLAY} />);
+    render(
+      <HubStatusProvider>
+        <ShiftBar initial={DISPLAY} />
+      </HubStatusProvider>,
+    );
 
     await waitFor(() => expect(fetchMock.mock.calls.some(([url]) => url === "/pos/api/hub/rejections")).toBe(true));
     expect(screen.getByTestId("pos-status-online").getAttribute("data-hub")).toBe("true");
     expect(screen.queryByTestId("pos-shift-bar-sync-issues-link")).toBeNull();
   });
 
-  it("on a locked hub, shows the red lock banner under the bar", async () => {
+  it("on a locked hub, the /pos layout shows the red lock banner", async () => {
     routeFetch({ "/pos/api/hub/status": () => jsonResponse(200, { ...HUB, locked: true, lockReason: "offline_limit" }) });
-    render(<ShiftBar initial={DISPLAY} />);
+    render(
+      <HubStatusProvider>
+        <ShiftBar initial={DISPLAY} />
+      </HubStatusProvider>,
+    );
     expect((await screen.findByTestId("pos-hub-lock-banner")).getAttribute("data-reason")).toBe("offline_limit");
   });
 

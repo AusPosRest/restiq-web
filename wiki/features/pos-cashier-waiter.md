@@ -1637,9 +1637,14 @@ HUB-BUILD-PLAN W1-W3, built against the H6 contract (backend not built yet).
   (`src/lib/secure-cookie.ts#isHttpsRequest`: URL protocol or
   `x-forwarded-proto: https`), not by `NODE_ENV`. A till on the shop hub over
   plain `http://192.168.x.x` can sign in. Admin/ops cookies are unchanged.
-- **Hub status (W2):** `ShiftBar` calls `useHubStatus()`
+- **Hub status (W2):** one poller for every signed-in /pos page:
+  `HubStatusProvider` (`src/app/pos/hub-status.tsx`, mounted in
+  `src/app/pos/layout.tsx`, off on `/pos/login`) runs `useHubStatus()`
   (`(shell)/status/use-hub-status.ts`), polling `GET pos/v1/hub/status` every
-  10 s. A 404 means "not on a hub": it stops polling and the pill keeps the
+  10 s. `HubStatusStrip` (pill + Sync issues link) sits in the shift bar
+  (`pos-status-online`) and the table-map/counter `PosHeader`
+  (`pos-header-status`); the lock banner renders at the top of every page,
+  order taking, settle and bills included. A 404 means "not on a hub": it stops polling and the pill keeps the
   browser online/offline signal. On a hub the pill (`pos-status-online`,
   `data-hub="true"`) reads "Online" or "Offline · N sales waiting to sync"
   (`outboxDepth`), and `HubLockBanner` (`pos-hub-lock-banner`,
@@ -1658,6 +1663,6 @@ HUB-BUILD-PLAN W1-W3, built against the H6 contract (backend not built yet).
 - **Tests:** `pos/auth/session-cookies.test.ts`, `qr/auth/session-cookies.test.ts`,
   `status/offline-indicator-pill.test.tsx`, `status/use-hub-status.test.tsx`,
   `sync-issues/sync-issues-screen.test.tsx`, hub cases in `shift-bar.test.tsx`,
-  423 case in `table-map.test.tsx`.
+  423, hub pill + lock banner and 404 cases in `table-map.test.tsx`.
 - **Backend dependency:** H6 must put `settle_bills` on `hub/rejections` (and
   acknowledge), or every staff member will see the link.
