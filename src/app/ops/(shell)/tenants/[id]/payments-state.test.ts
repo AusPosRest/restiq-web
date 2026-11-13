@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import type { PaymentsView } from "../../api";
-import { formFromPayments, isDirty, majorToMinor, minorToMajor, percentToBps, validatePaymentsForm } from "./payments-state";
+import { CARD_REQUIRED, formFromPayments, isDirty, majorToMinor, minorToMajor, percentToBps, validatePaymentsForm } from "./payments-state";
 
 const VIEW: PaymentsView = {
   tenantId: "t1",
@@ -41,8 +41,9 @@ describe("payments-state", () => {
     expect(validatePaymentsForm(form)).toEqual({ allowedMethods: ["card", "apple_pay", "google_pay"], feePercentBps: 250, feeFixedMinor: "30" });
   });
 
-  it("refuses no methods and bad fees", () => {
+  it("refuses no methods, no card and bad fees", () => {
     expect(validatePaymentsForm({ methods: [], percent: "0", fixed: "0" })).toHaveProperty("error");
+    expect(validatePaymentsForm({ methods: ["apple_pay", "google_pay"], percent: "0", fixed: "0" })).toEqual({ error: CARD_REQUIRED });
     expect(validatePaymentsForm({ methods: ["card"], percent: "101", fixed: "0" })).toHaveProperty("error");
     expect(validatePaymentsForm({ methods: ["card"], percent: "0", fixed: "abc" })).toHaveProperty("error");
   });

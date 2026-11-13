@@ -14,6 +14,9 @@ export interface PaymentsForm {
 export const METHOD_LABELS: Record<PaymentMethod, string> = { card: "Card", apple_pay: "Apple Pay", google_pay: "Google Pay" };
 export const ALL_METHODS: PaymentMethod[] = ["card", "apple_pay", "google_pay"];
 
+/** restiq-backend#284: the wallets are card payments underneath. */
+export const CARD_REQUIRED = "Apple Pay and Google Pay run on card payments, so Card must stay on";
+
 const DECIMAL = /^(\d+)(?:\.(\d{1,2}))?$/;
 
 /** "2.5" -> 250; null when not a number from 0 to 100 with at most 2 decimals. */
@@ -53,7 +56,7 @@ export interface PaymentsPatch {
 }
 
 export function validatePaymentsForm(form: PaymentsForm): PaymentsPatch | { error: string } {
-  if (form.methods.length === 0) return { error: "Keep at least one payment method on." };
+  if (!form.methods.includes("card")) return { error: CARD_REQUIRED };
   const feePercentBps = percentToBps(form.percent);
   if (feePercentBps === null) return { error: "The percentage fee is a number from 0 to 100 with up to 2 decimals." };
   const feeFixedMinor = majorToMinor(form.fixed);

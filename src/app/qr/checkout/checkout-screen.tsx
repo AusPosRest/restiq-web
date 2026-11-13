@@ -27,7 +27,9 @@ import { fetchMenuCurrency } from "../guest-currency";
 import { KioskReceipt } from "../kiosk/kiosk-pay";
 import { GuestApiError } from "../api-client";
 import { SessionEndedView } from "../session-ended-view";
-import { createOrFetchBill, fetchInvoice, payAll, payShare, type BillShareView, type GuestBillView, type GuestInvoiceView, type SimulatedOutcome } from "./checkout-api";
+import { createOrFetchBill, fetchInvoice, payAll, payShare, syncCardPayment, type BillShareView, type GuestBillView, type GuestInvoiceView, type SimulatedOutcome } from "./checkout-api";
+import { CardPaymentSheet, CardPendingNotice } from "./card-payment-sheet";
+import { isPaidFor, parseCardReturn, stripCardReturn, syncUntilPaid } from "./card-payment-state";
 import { formatMoney } from "@/lib/money";
 import { canPayAll, findShare, isSettled, sortSharesOwnFirst } from "./checkout-state";
 
@@ -42,12 +44,17 @@ function useMoney(): (amountMinor: number) => string {
 }
 type PayMode = "split" | "all";
 type SheetKind = "own" | "all";
+/** After a card payment (#427): Stripe took it but the bill hasn't caught up, or a redirect came back failed. */
+type CardNotice = { kind: "pending"; intentId: string } | { kind: "failed" } | null;
 
 export function CheckoutScreen({ orderId, myGuestId }: Readonly<{ orderId: string | null; myGuestId: string }>) {
   const [phase, setPhase] = useState<Phase>(orderId ? "loading" : "no-order");
   const [bill, setBill] = useState<GuestBillView | null>(null);
   const [attempt, setAttempt] = useState(0);
   const [currency, setCurrency] = useState("INR");
+  const [cardNotice, setCardNotice] = useState<CardNotice>(null);
+  // Back from a Stripe redirect (3-D Secure, some wallets): ?card_intent=… plus Stripe's own params.
+  const [cardReturn] = useState(() => (typeof window === "undefined" ? null : parseCardReturn(window.location.search)));
 
   useEffect(() => {
     if (!orderId) return;
@@ -57,9 +64,28 @@ export function CheckoutScreen({ orderId, myGuestId }: Readonly<{ orderId: strin
         // Once the bill is in hand: its currency, from the menu (best effort - rupees otherwise),
         // before the bill shows so an A$ bill never flashes ₹.
         const menuCurrency = await fetchMenuCurrency();
+        let loaded = value;
+        let notice: CardNotice = null;
+        if (cardReturn) {
+          window.history.replaceState(null, "", stripCardReturn(window.location.href));
+          const sync = () => syncCardPayment(cardReturn.intentId);
+          try {
+            if (cardReturn.reportedSuccess) {
+              const synced = await syncUntilPaid(sync, myGuestId);
+              loaded = synced.bill;
+              if (!synced.paid) notice = { kind: "pending", intentId: cardReturn.intentId };
+            } else {
+              loaded = await sync();
+              if (cardReturn.reportedFailure) notice = { kind: "failed" };
+            }
+          } catch {
+            if (cardReturn.reportedSuccess) notice = { kind: "pending", intentId: cardReturn.intentId };
+          }
+        }
         if (cancelled) return;
         if (menuCurrency) setCurrency(menuCurrency);
-        setBill(value);
+        setCardNotice(notice);
+        setBill(loaded);
         setPhase("ready");
       })
       .catch((error: unknown) => {
@@ -73,7 +99,17 @@ export function CheckoutScreen({ orderId, myGuestId }: Readonly<{ orderId: strin
     return () => {
       cancelled = true;
     };
-  }, [orderId, attempt]);
+  }, [orderId, attempt, cardReturn, myGuestId]);
+
+  async function refreshCardPayment(intentId: string) {
+    try {
+      const value = await syncCardPayment(intentId);
+      setBill(value);
+      if (isPaidFor(value, myGuestId)) setCardNotice(null);
+    } catch (error) {
+      if (error instanceof GuestApiError && error.status === 410) setPhase("settled");
+    }
+  }
 
   if (phase === "no-order") return <NoOrderPanel />;
   if (phase === "settled") return <SessionEndedView variant="settled" />;
@@ -94,7 +130,15 @@ export function CheckoutScreen({ orderId, myGuestId }: Readonly<{ orderId: strin
       {isSettled(bill) ? (
         <SettledPanel bill={bill} />
       ) : (
-        <BillLoaded bill={bill} myGuestId={myGuestId} onUpdate={setBill} onSessionEnded={() => setPhase("settled")} />
+        <BillLoaded
+          bill={bill}
+          myGuestId={myGuestId}
+          onUpdate={setBill}
+          onSessionEnded={() => setPhase("settled")}
+          cardNotice={cardNotice}
+          onCardNotice={setCardNotice}
+          onCardRefresh={refreshCardPayment}
+        />
       )}
     </CurrencyContext.Provider>
   );
@@ -105,12 +149,19 @@ function BillLoaded({
   myGuestId,
   onUpdate,
   onSessionEnded,
+  cardNotice,
+  onCardNotice,
+  onCardRefresh,
 }: Readonly<{
   bill: GuestBillView;
   myGuestId: string;
   onUpdate: (bill: GuestBillView) => void;
   onSessionEnded: () => void;
+  cardNotice: CardNotice;
+  onCardNotice: (notice: CardNotice) => void;
+  onCardRefresh: (intentId: string) => Promise<void>;
 }>) {
+  const money = useMoney();
   const [mode, setMode] = useState<PayMode>("split");
   const [sheet, setSheet] = useState<SheetKind | null>(null);
   const [phone, setPhone] = useState("");
@@ -130,6 +181,7 @@ function BillLoaded({
 
   function openSheet(kind: SheetKind) {
     setSheetError(null);
+    if (cardNotice?.kind === "failed") onCardNotice(null);
     setSheet(kind);
   }
 
@@ -209,7 +261,34 @@ function BillLoaded({
             <PayAllPanel bill={bill} eligible={payAllEligible} failed={failedFor === "all"} onPay={() => openSheet("all")} />
           )}
 
-          {sheet ? (
+          {cardNotice?.kind === "pending" ? <CardPendingNotice onRefresh={() => onCardRefresh(cardNotice.intentId)} /> : null}
+          {cardNotice?.kind === "failed" ? (
+            <p data-testid="checkout-card-failed" className="mt-4 text-sm text-muted-foreground">
+              Your card payment didn&apos;t go through - try again.
+            </p>
+          ) : null}
+
+          {sheet && bill.cardPayments ? (
+            // #427: a Live tenant with Stripe - the guest pays by card here, no simulation.
+            <CardPaymentSheet
+              billId={bill.id}
+              guestId={sheet === "own" && myShare ? myShare.guestId : null}
+              myGuestId={myGuestId}
+              amountLabel={money(sheetAmount)}
+              config={bill.cardPayments}
+              onPaid={(paid) => {
+                onUpdate(paid);
+                closeSheet();
+              }}
+              onPending={(intentId, latest) => {
+                if (latest) onUpdate(latest);
+                closeSheet();
+                onCardNotice({ kind: "pending", intentId });
+              }}
+              onSessionEnded={onSessionEnded}
+              onCancel={closeSheet}
+            />
+          ) : sheet ? (
             <PaymentSheet
               kind={sheet}
               amountMinor={sheetAmount}

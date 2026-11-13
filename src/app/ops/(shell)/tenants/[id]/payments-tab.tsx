@@ -11,7 +11,7 @@ import { LoadErrorPanel, Skeleton } from "../../data-states";
 import { StatusBadge } from "../../status-badge";
 import { useToast } from "../../toast";
 import { useOpsLoad } from "../../use-ops-load";
-import { ALL_METHODS, formFromPayments, isDirty, METHOD_LABELS, PaymentsForm, validatePaymentsForm } from "./payments-state";
+import { ALL_METHODS, CARD_REQUIRED, formFromPayments, isDirty, METHOD_LABELS, PaymentsForm, validatePaymentsForm } from "./payments-state";
 import { StripeLinkResult } from "./stripe-link";
 
 const INPUT_CLASSES =
@@ -139,6 +139,9 @@ function PaymentsBody({ tenantId, view, reload, link, setLink }: Readonly<{ tena
                   type="checkbox"
                   data-testid={`payments-method-${method}`}
                   checked={form.methods.includes(method)}
+                  // Card can be ticked back on (an old setting) but never off.
+                  disabled={method === "card" && form.methods.includes("card")}
+                  aria-describedby={method === "card" ? "payments-card-hint" : undefined}
                   onChange={(event) => toggle(method, event.target.checked)}
                   className="size-4 rounded border-border focus-visible:ring-2 focus-visible:ring-ring"
                 />
@@ -146,6 +149,9 @@ function PaymentsBody({ tenantId, view, reload, link, setLink }: Readonly<{ tena
               </label>
             ))}
           </div>
+          <p id="payments-card-hint" className="mt-2 text-xs text-muted-foreground" data-testid="payments-card-hint">
+            {CARD_REQUIRED}
+          </p>
         </fieldset>
 
         <h3 className="font-headline mt-6 text-base font-semibold">Platform fee</h3>

@@ -48,6 +48,26 @@ export interface GuestBillView {
   shares: BillShareView[];
   /** restiq-backend#278: false when guests can't pay here (no payment provider) - missing on an older backend, which means true. */
   paymentsAvailable?: boolean;
+  /** restiq-backend#284: set when the guest pays by card on their phone (Stripe, Live tenant); null or missing = the simulated flow. */
+  cardPayments?: CardPaymentsConfig | null;
+}
+
+export type CardPaymentMethod = "card" | "apple_pay" | "google_pay";
+
+export interface CardPaymentsConfig {
+  provider: "stripe";
+  publishableKey: string;
+  /** The restaurant's connected account - loadStripe(publishableKey, { stripeAccount }). */
+  stripeAccountId: string;
+  /** Always includes "card". */
+  allowedMethods: CardPaymentMethod[];
+}
+
+export interface CardPaymentStart {
+  intentId: string;
+  clientSecret: string;
+  amountMinor: number;
+  currency: "AUD" | "INR";
 }
 
 export interface SimulatedPaymentInput {
@@ -87,6 +107,20 @@ export function payShare(billId: string, guestId: string, input: SimulatedPaymen
  */
 export function payAll(billId: string, input: SimulatedPaymentInput): Promise<GuestBillView> {
   return guestApi<GuestBillView>(`bills/${billId}/pay-all`, { method: "POST", body: JSON.stringify(input) });
+}
+
+/**
+ * POST /guest/v1/bills/:id/card-payment (restiq-backend#284) - `guestId` pays that guest's
+ * share, omitted pays the whole bill. 409 `provider_unavailable` / `share_already_paid` /
+ * `already_finalized` / `partial_payment_exists`; 410 `session_closed`; 404 `not_found`.
+ */
+export function startCardPayment(billId: string, input: { guestId?: string; payerPhone?: string }): Promise<CardPaymentStart> {
+  return guestApi<CardPaymentStart>(`bills/${billId}/card-payment`, { method: "POST", body: JSON.stringify(input) });
+}
+
+/** POST /guest/v1/card-payments/:intentId/sync - the server reads Stripe and settles; idempotent. */
+export function syncCardPayment(intentId: string): Promise<GuestBillView> {
+  return guestApi<GuestBillView>(`card-payments/${intentId}/sync`, { method: "POST", body: "{}" });
 }
 
 // Issue #220: GET /guest/v1/bills/:id/invoice - finalised bills only (409

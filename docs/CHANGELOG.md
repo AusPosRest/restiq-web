@@ -7,6 +7,7 @@ with the payments epic.
 ## [Unreleased]
 
 ### Added
+- **Guests pay by card on their phone** (#427, needs restiq-backend#284): when the bill carries `cardPayments` (a Live tenant with an active Stripe account), "Pay your share" and "Pay full bill" open Stripe's Payment Element on the restaurant's connected account (Apple Pay / Google Pay only where ops allowed them) instead of the simulated outcome picker. After paying, the screen syncs the payment with the server; a 3-D Secure redirect comes back to checkout and syncs once. If the bill lags behind, it shows "Payment received — updating your bill" with a Refresh. Test-mode tenants keep the simulated flow. Ops Payments tab: Card can't be turned off (Apple Pay and Google Pay run on card payments). New deps `@stripe/stripe-js` 10.3.0, `@stripe/react-stripe-js` 7.0.1.
 - **Stripe payments in the ops console** (#425, needs restiq-backend#282): tenant detail has a Payments tab (Stripe connect status, onboarding link to copy or open, accepted methods Card / Apple Pay / Google Pay, platform fee percent + fixed; saves are audited). The Subscription tab gains Card billing with a billing link. New public `/stripe/done` page is where Stripe sends owners afterwards.
 
 ### Changed
