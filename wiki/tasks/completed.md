@@ -1,5 +1,6 @@
 # Completed
 
+- **2026-11-13** - Owner console demo gaps (issue #431): `menu/item-drawer.tsx` new add-on group option price (`new-modifier-group-option-price`, `priceError` validation); `devices/devices.tsx` keeps a list of issued codes (`devices-code-list`, `CodeChip` `title`); `reports/payments-state.ts` `sourceLabel` handles `kiosk`. Tests: `item-drawer.test.tsx`, `devices.test.tsx`, `payments-state.test.ts`.
 - **2026-10-29** - Guide video byte ranges (issue #419): `src/app/guides/making-demo-videos/video/route.ts` (`parseRange`, 206/416/502). Test: `route.test.ts`.
 - **2026-10-29** - Public guide on making the demo videos (issue #417): `public/guides/making-demo-videos/index.html` (+ `restiq-demo.mp4`, `poster.jpg`), served as a static asset; no internal accounts, ids or local paths.
 - **2026-10-29** - Android release key in asset links (issue #413): added the restiq-android release-key SHA-256 to `public/.well-known/assetlinks.json` next to the debug key.

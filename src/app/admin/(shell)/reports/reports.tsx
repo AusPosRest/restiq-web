@@ -5,7 +5,7 @@
 // report data - issue #42's acceptance bar). Single GET, same
 // load/error/retry shape as dashboard.tsx/staff.tsx (useAdminLoad exists
 // precisely for this GET-and-render pattern).
-import { ArrowRight, Landmark, Receipt } from "lucide-react";
+import { ArrowRight, Landmark, Receipt, TrendingUp } from "lucide-react";
 import Link from "next/link";
 import { useState } from "react";
 import { Button } from "@/components/ui/button";
@@ -82,6 +82,21 @@ function ReportsCatalogue({ reports }: Readonly<{ reports: ReportDefinition[] }>
           <div>
             <p className="font-headline font-semibold">Payments</p>
             <p className="mt-1 text-sm text-muted-foreground">Browse every finalized bill with filters, totals, and a CSV export.</p>
+          </div>
+        </div>
+        <ArrowRight className="size-4 shrink-0 text-muted-foreground" aria-hidden="true" />
+      </Link>
+
+      <Link
+        href="/admin/reports/top-items"
+        data-testid="reports-top-items-link"
+        className="flex items-center justify-between gap-4 rounded-lg border border-border/40 bg-card p-5 transition-colors hover:bg-accent/40 focus:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+      >
+        <div className="flex items-center gap-3">
+          <TrendingUp className="size-5 shrink-0 text-primary" aria-hidden="true" />
+          <div>
+            <p className="font-headline font-semibold">Top-selling items</p>
+            <p className="mt-1 text-sm text-muted-foreground">See which items and portions sell most, with quantity, sales, and a CSV export.</p>
           </div>
         </div>
         <ArrowRight className="size-4 shrink-0 text-muted-foreground" aria-hidden="true" />

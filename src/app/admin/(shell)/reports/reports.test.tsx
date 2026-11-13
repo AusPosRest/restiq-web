@@ -92,6 +92,7 @@ describe("Reports", () => {
     await screen.findByTestId("reports-category-menu");
     expect(screen.queryByTestId("reports-category-sales")).toBeNull();
     expect(screen.queryByTestId("report-card-sales-summary-pending")).toBeNull();
+    expect(screen.getByTestId("reports-top-items-link").getAttribute("href")).toBe("/admin/reports/top-items");
   });
 
   it("shows a working Export CSV action for a real report", async () => {

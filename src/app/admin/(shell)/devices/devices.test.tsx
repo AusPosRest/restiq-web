@@ -30,6 +30,7 @@ function jsonResponse(body: unknown, status = 200): Response {
 const revokeCalls: { reason: string }[] = [];
 
 function stubFetch() {
+  let codeCalls = 0;
   revokeCalls.length = 0;
   const fetchMock = vi.fn((input: RequestInfo | URL, init?: RequestInit) => {
     const url = String(input);
@@ -39,7 +40,14 @@ function stubFetch() {
       return Promise.resolve(jsonResponse({ id: "d1", status: "revoked", revokedAt: "2026-08-24T12:01:00.000Z" }));
     }
     if (url.includes("/devices/enrolment-codes") && method === "POST") {
-      return Promise.resolve(jsonResponse({ code: "R7K-4PD", deviceType: "pos", expiresAt: "2026-08-24T12:15:00.000Z" }));
+      codeCalls += 1;
+      return Promise.resolve(
+        jsonResponse(
+          codeCalls === 1
+            ? { code: "R7K-4PD", deviceType: "pos", expiresAt: "2026-08-24T12:15:00.000Z" }
+            : { code: "K2M-9QX", deviceType: "kds", expiresAt: "2026-08-24T12:15:00.000Z" },
+        ),
+      );
     }
     if (url.includes("/outlets/outlet-1/devices")) return Promise.resolve(jsonResponse(devicesResponse()));
     if (url.includes("/floor-plan")) return Promise.resolve(jsonResponse(floorPlanResponse()));
@@ -120,6 +128,23 @@ describe("Devices", () => {
     await userEvent.click(screen.getByTestId("generate-code-done"));
     expect(screen.queryByTestId("devices-no-active-code")).toBeNull();
     expect(screen.getByTestId("device-code-chip-countdown").textContent).toContain("15:00");
+  });
+
+  it("keeps every code issued this visit listed, newest first (#431)", async () => {
+    stubFetch();
+    renderDevices();
+    await screen.findByTestId("devices-row-d1");
+
+    for (let i = 0; i < 2; i++) {
+      await userEvent.click(screen.getByTestId("devices-generate-code"));
+      await userEvent.click(screen.getByTestId("generate-code-submit"));
+      await within(screen.getByTestId("generate-code-dialog")).findByTestId("device-code-chip-value");
+      await userEvent.click(screen.getByTestId("generate-code-done"));
+    }
+
+    const list = screen.getByTestId("devices-code-list");
+    expect(within(list).getAllByTestId("device-code-chip-value").map((el) => el.textContent)).toEqual(["K2M-9QX", "R7K-4PD"]);
+    expect(list.textContent).toContain("KDS (Kitchen Display) code");
   });
 });
 
