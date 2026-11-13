@@ -536,6 +536,19 @@ describe("BillSettleView - card terminal (issue #188)", () => {
     expect(screen.getByTestId("intent-cancel")).toBeTruthy();
   });
 
+  it("#286: brings back a Stripe reader payment still waiting after a reload (it is never in the terminal queue)", async () => {
+    const onReader = { ...pending, provider: "stripe", readerId: "rdr-1", readerLabel: "Counter 1" };
+    stubFetch({
+      "GET bills/bill-1/intents/active": () => jsonResponse({ intent: onReader }),
+      "GET outlets/outlet-1/payment-intents": () => jsonResponse([]),
+      "GET payment-intents/pi-1": () => jsonResponse(onReader),
+    });
+    render(<BillSettleView orderId={ORDER_ID} />);
+    const panel = await screen.findByTestId("intent-panel");
+    expect(panel.getAttribute("data-phase")).toBe("showing");
+    expect(screen.getByTestId("intent-cancel")).toBeTruthy();
+  });
+
   it("shows the server's plain reason when there is no card terminal, and keeps the other ways to pay (PE-22)", async () => {
     const message = "No card terminal is set up for this till. Take the card on your own machine and record it as External, or choose Cash or UPI.";
     stubFetch({ "POST bills/bill-1/intents": () => jsonResponse({ error: { code: "no_terminal", message } }, 409) });

@@ -29,6 +29,7 @@ import {
   createPaymentIntent,
   getPaymentIntent,
   listCardReaders,
+  getActiveBillIntent,
   listPendingPaymentIntents,
   PosApiError,
   simulatePaymentIntent,
@@ -125,15 +126,23 @@ export function useTerminalIntent(billId: string | null, onSettled: () => void, 
     };
   }, [intentId, active]);
 
+  // A payment already waiting for this bill: the per-bill read (#286) also finds Stripe reader
+  // payments, which never sit in the terminal queue; an older API without it falls back to the queue.
   function adoptWaitingIntent(): Promise<boolean> {
-    if (!billId || !outletId) return Promise.resolve(false);
-    return listPendingPaymentIntents(outletId).then(
-      (pending) => {
-        const waiting = pending.find((candidate) => candidate.billId === billId && isActiveIntent(candidate));
-        if (waiting) setIntent(waiting);
-        return Boolean(waiting);
-      },
-      () => false,
+    if (!billId) return Promise.resolve(false);
+    const adopt = (waiting: PaymentIntentView | null | undefined): boolean => {
+      if (waiting && isActiveIntent(waiting)) setIntent(waiting);
+      return Boolean(waiting && isActiveIntent(waiting));
+    };
+    return getActiveBillIntent(billId).then(
+      ({ intent: waiting }) => adopt(waiting),
+      () =>
+        outletId
+          ? listPendingPaymentIntents(outletId).then(
+              (pending) => adopt(pending.find((candidate) => candidate.billId === billId && isActiveIntent(candidate))),
+              () => false,
+            )
+          : false,
     );
   }
 

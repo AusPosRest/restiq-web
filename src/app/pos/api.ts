@@ -595,6 +595,11 @@ export function cancelPaymentIntent(intentId: string): Promise<PaymentIntentView
   return posApi<PaymentIntentView>(`payment-intents/${encodeURIComponent(intentId)}/cancel`, { method: "POST" });
 }
 
+/** GET bills/:id/intents/active (#286) - the bill's still-waiting card terminal payment, Stripe reader or simulated, or null. */
+export function getActiveBillIntent(billId: string): Promise<{ intent: PaymentIntentView | null }> {
+  return posApi<{ intent: PaymentIntentView | null }>(`bills/${encodeURIComponent(billId)}/intents/active`);
+}
+
 export function listPendingPaymentIntents(outletId: string): Promise<PaymentIntentView[]> {
   return posApi<PaymentIntentView[]>(`outlets/${encodeURIComponent(outletId)}/payment-intents${deviceQuery()}`);
 }
