@@ -6,6 +6,9 @@ with the payments epic.
 
 ## [Unreleased]
 
+### Added
+- **Dev environment** (#423): `pnpm run deploy:dev` builds with the dev API (`restiq-backend-dev.fly.dev`) and base domain and deploys the `restiq-web-dev` Worker on `dev.niftypos.com.au/*`.
+
 ### Changed
 - **Production domain is niftypos.com.au** (#421): Worker routes, `NEXT_PUBLIC_API_URL` (`https://api.niftypos.com.au`) and `NEXT_PUBLIC_BASE_DOMAIN` move off dailypos.shop; tenant subdomains are now `<slug>.niftypos.com.au`.
 

@@ -33,5 +33,25 @@
     "NEXT_PUBLIC_ENV_LABEL": "Production",
     // Public demo (/demo, /simulator) is on for niftypos.com.au - read per request (PE-30).
     "DEMO_PAGES": "on"
+  },
+  // restiq-web#423: the dev environment - `pnpm run deploy:dev`. Separate Worker, same code.
+  // dev.niftypos.com.au/* is more specific than production's *.niftypos.com.au/*, so it wins (a
+  // Custom Domain does not - production's wildcard route still caught it). The zone's free
+  // certificate covers dev.niftypos.com.au; dev test restaurants (<slug>.dev.niftypos.com.au) are
+  // one level deeper and need their own certificate - added with the first dev tenant.
+  "env": {
+    "dev": {
+      "name": "restiq-web-dev",
+      "routes": [
+        { "pattern": "dev.niftypos.com.au/*", "zone_name": "niftypos.com.au" }
+      ],
+      // Not inherited from the top level - restated. The dev API has no custom domain: its Fly address.
+      "vars": {
+        "NEXT_PUBLIC_API_URL": "https://restiq-backend-dev.fly.dev",
+        "NEXT_PUBLIC_BASE_DOMAIN": "dev.niftypos.com.au",
+        "NEXT_PUBLIC_ENV_LABEL": "Development",
+        "DEMO_PAGES": "on"
+      }
+    }
   }
 }

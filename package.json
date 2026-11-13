@@ -11,7 +11,8 @@
     "test": "vitest run",
     "preview": "opennextjs-cloudflare build && opennextjs-cloudflare preview",
     "deploy": "[ ! -e .env.local ] || { echo 'Refusing to deploy: .env.local would override .env.production and be bundled into the Worker.'; exit 1; }; opennextjs-cloudflare build && opennextjs-cloudflare deploy",
-    "cf-typegen": "wrangler types --env-interface CloudflareEnv cloudflare-env.d.ts"
+    "cf-typegen": "wrangler types --env-interface CloudflareEnv cloudflare-env.d.ts",
+    "deploy:dev": "[ ! -e .env.local ] || { echo 'Refusing to deploy: .env.local would override .env.production and be bundled into the Worker.'; exit 1; }; NEXT_PUBLIC_API_URL=https://restiq-backend-dev.fly.dev NEXT_PUBLIC_BASE_DOMAIN=dev.niftypos.com.au NEXT_PUBLIC_ENV_LABEL=Development opennextjs-cloudflare build && opennextjs-cloudflare deploy --env dev"
   },
   "dependencies": {
     "@opennextjs/cloudflare": "^1.20.13",
