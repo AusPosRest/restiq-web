@@ -1,4 +1,5 @@
 import type { NextConfig } from "next";
+import { initOpenNextCloudflareForDev } from "@opennextjs/cloudflare";
 
 // Next evaluates this file before it loads .env, so load it here. Built into Node.
 try {
@@ -21,8 +22,11 @@ const nextConfig: NextConfig = {
 
   // restiq-web#304: the Windows hub till runs a standalone build pointed at
   // its own local POS service via RESTIQ_API_URL, set at start - not build.
-  // Opt-in, so the Vercel build is exactly as before.
+  // Opt-in so plain `next build` is unchanged; OpenNext forces standalone on its own.
   ...(process.env.RESTIQ_STANDALONE === "1" && { output: "standalone" as const }),
 };
 
 export default nextConfig;
+
+// Gives `next dev` the Cloudflare bindings (getCloudflareContext) - OpenNext setup.
+initOpenNextCloudflareForDev();

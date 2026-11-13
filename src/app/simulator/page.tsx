@@ -1,7 +1,7 @@
-import { SimulatorCanvas } from "./simulator-canvas";
+import { SimulatorDevices } from "./simulator-devices";
 
-export const metadata = { title: "Simulator · Restiq" };
+export const metadata = { title: "Simulator · RESTIQ" };
 
 export default function SimulatorPage() {
-  return <SimulatorCanvas />;
+  return <SimulatorDevices />;
 }

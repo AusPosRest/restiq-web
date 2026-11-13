@@ -27,8 +27,9 @@ export interface StepMeta {
 export const STEP_META: Record<ChecklistStepKey, StepMeta> = {
   outlet_details: {
     label: "Outlet details",
-    description: "Confirm your outlet's address, hours and contact info.",
-    action: "complete",
+    description: "Check your outlet's name, address and timezone.",
+    action: "link",
+    href: "/admin/settings/outlet?from=setup",
   },
   menu_import: {
     label: "Import your menu",

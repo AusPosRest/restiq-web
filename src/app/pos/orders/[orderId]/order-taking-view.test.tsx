@@ -7,6 +7,9 @@ import { cleanup, render, screen, waitFor, within } from "@testing-library/react
 import userEvent from "@testing-library/user-event";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { OrderTakingView } from "./order-taking-view";
+
+const routerPush = vi.fn();
+vi.mock("next/navigation", () => ({ useRouter: () => ({ push: routerPush, replace: vi.fn() }) }));
 import type { PosMenuView, RawOrder } from "./order-taking-state";
 
 function jsonResponse(body: unknown, status = 200): Response {
@@ -133,11 +136,24 @@ describe("OrderTakingView", () => {
     expect(screen.getByTestId("order-owner").textContent).toContain("You");
   });
 
-  it("shows the raw owner id for someone else's order", async () => {
-    stubFetch((url) => (url.includes("/menu") ? jsonResponse(MENU) : jsonResponse(order({ ownerId: "staff-priya" }))));
+  it("shows the owner's name, never their id, on someone else's order - read-only with a Take over action (SE-22)", async () => {
+    const user = userEvent.setup();
+    const fetchMock = stubFetch((url, init) => {
+      if (url.includes("/menu")) return jsonResponse(MENU);
+      if (url.endsWith("/transfer") && init?.method === "POST") return jsonResponse(order({ ownerId: CURRENT_STAFF_ID, ownerName: "Me" }));
+      return jsonResponse(order({ ownerId: "staff-priya", ownerName: "Priya" }));
+    });
     renderView();
     await waitFor(() => expect(screen.getByTestId("order-taking-view")).toBeTruthy());
-    expect(screen.getByTestId("order-owner").textContent).toContain("staff-priya");
+    expect(screen.getByTestId("order-owner").textContent).toContain("Priya");
+    expect(screen.getByTestId("order-owner").textContent).not.toContain("staff-priya");
+    expect(screen.getByTestId("order-not-yours").textContent).toContain("belongs to Priya");
+    expect(screen.queryByTestId("discard-order")).toBeNull();
+
+    await user.click(screen.getByTestId("order-take-over"));
+    await waitFor(() => expect(screen.queryByTestId("order-not-yours")).toBeNull());
+    expect(JSON.parse(String(fetchMock.mock.calls.at(-1)?.[1]?.body))).toEqual({ newOwnerStaffId: CURRENT_STAFF_ID });
+    expect(screen.getByTestId("order-owner").textContent).toContain("You");
   });
 
   it("adding an item with no required modifiers works directly - no sheet needed, item name resolved from the menu", async () => {
@@ -459,4 +475,83 @@ describe("OrderTakingView", () => {
     expect(screen.getByTestId("item-tile-item-naan")).toBeTruthy();
     expect(screen.queryByTestId("item-tile-item-paneer")).toBeNull();
   });
+
+describe("OrderTakingView - long category names (CU-16)", () => {
+  it("clamps a very long category name instead of stretching the till, with the full name on hover", async () => {
+    const longName = "SE Ω🍛".repeat(400);
+    stubFetch((url) => (url.includes("/menu") ? jsonResponse({ ...MENU, categories: [{ id: "cat-long", name: longName, sortOrder: 0 }] }) : jsonResponse(order())));
+    renderView();
+    const tab = await screen.findByTestId("category-tab-cat-long");
+    expect(tab.getAttribute("title")).toBe(longName);
+    expect(tab.className).toContain("line-clamp-2");
+    expect(tab.className).toContain("truncate");
+  });
+});
+
+describe("OrderTakingView - mistakes on a sent order (CU-15, CU-27)", () => {
+  const sentLine = {
+    id: "line-sent",
+    orderId: ORDER_ID,
+    itemId: "item-paneer",
+    variantId: "v-half",
+    quantity: 1,
+    unitPriceMinor: 34000,
+    seatNumber: null,
+    addedByStaffId: CURRENT_STAFF_ID,
+    addedByStaffName: "Me",
+    note: "less spicy",
+    sentToKitchen: true,
+    createdAt: new Date().toISOString(),
+    modifiers: [],
+  };
+  const newLine = { ...sentLine, id: "line-new", note: null, sentToKitchen: false };
+
+  it("marks what the kitchen has, shows notes, lets an unsent line go and voids a sent one only with a manager PIN", async () => {
+    const user = userEvent.setup();
+    let voidBody: unknown = null;
+    stubFetch((url, init) => {
+      if (url.includes("/menu")) return jsonResponse(MENU);
+      if (url.endsWith("/void")) {
+        voidBody = JSON.parse(String(init?.body));
+        return jsonResponse(order({ status: "sent", lines: [newLine] }));
+      }
+      return jsonResponse(order({ status: "sent", lines: [sentLine, newLine] }));
+    });
+    renderView();
+    await waitFor(() => expect(screen.getByTestId("order-taking-view")).toBeTruthy());
+
+    expect(screen.getByTestId("order-line-note-line-sent").textContent).toBe("Note: less spicy");
+    expect(screen.getByTestId("order-line-kitchen-state-line-sent").textContent).toBe("In kitchen");
+    expect(screen.getByTestId("order-line-kitchen-state-line-new").textContent).toContain("not sent yet");
+    // A bin only where it works: the unsent line has one, the sent line has Void instead.
+    expect(screen.queryByTestId("order-line-remove-line-sent")).toBeNull();
+    expect(screen.getByTestId("order-line-remove-line-new")).toBeTruthy();
+    expect(screen.getByTestId("send-to-kitchen").textContent).toBe("Send 1 new item to kitchen");
+
+    await user.click(screen.getByTestId("order-line-void-line-sent"));
+    for (const digit of ["1", "2", "3", "4"]) await user.click(screen.getByTestId(`manager-pin-dialog-digit-${digit}`));
+    await user.selectOptions(screen.getByTestId("manager-pin-dialog-reason-select"), "order-error");
+    await user.click(screen.getByTestId("manager-pin-dialog-confirm"));
+
+    await waitFor(() => expect(screen.queryByTestId("order-line-line-sent")).toBeNull());
+    expect(voidBody).toEqual({ managerPin: "1234", reason: "Order entry error" });
+  });
+
+  it("discards an empty order and goes back to the table map (CU-27)", async () => {
+    const user = userEvent.setup();
+    let deleted = false;
+    stubFetch((url, init) => {
+      if (url.includes("/menu")) return jsonResponse(MENU);
+      if (init?.method === "DELETE") {
+        deleted = true;
+        return new Response(null, { status: 204 });
+      }
+      return jsonResponse(order());
+    });
+    renderView();
+    await user.click(await screen.findByTestId("discard-order"));
+    await waitFor(() => expect(routerPush).toHaveBeenCalledWith("/pos/table-map"));
+    expect(deleted).toBe(true);
+  });
+});
 });

@@ -36,6 +36,21 @@ describe("device API pass-through", () => {
     expect(upstreamInit.body).toBe(JSON.stringify({ code: "ABC-123", hardwareKeyFingerprint: "web-1" }));
   });
 
+  it("passes the browser's address to the API so enrolment attempts are limited per browser (restiq-backend#209, SE-32)", async () => {
+    vi.stubEnv("PROXY_SHARED_SECRET", "proxy-secret");
+    const fetchMock = vi.fn().mockResolvedValue(new Response(JSON.stringify({ device: { id: "d1" } }), { status: 201 }));
+    vi.stubGlobal("fetch", fetchMock);
+    const request = new NextRequest("https://web.example.test/device/api/enroll", {
+      method: "POST",
+      headers: { "content-type": "application/json", "x-forwarded-for": "198.51.100.4, 10.0.0.1" },
+      body: JSON.stringify({ code: "ABC-123", hardwareKeyFingerprint: "web-1" }),
+    });
+    await POST(request, { params: Promise.resolve({ path: ["enroll"] }) });
+    const [, init] = fetchMock.mock.calls[0] as [string, RequestInit];
+    expect(init.headers).toMatchObject({ "x-restiq-client-ip": "198.51.100.4", "x-restiq-proxy-secret": "proxy-secret" });
+    vi.unstubAllEnvs();
+  });
+
   it("passes the backend's error body and status straight through", async () => {
     vi.stubGlobal(
       "fetch",

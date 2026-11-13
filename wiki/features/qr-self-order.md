@@ -534,7 +534,7 @@ This pass reconciled the guess against it:
     every item/variant carries its own nullable `priceMinor`/`currency`, so this client
     never assumes one global currency.
   - **Add to cart:** Q4's sticky bar posts the real `POST /guest/v1/cart/lines`
-    (`{ itemId, variantId?, quantity, modifierIds? }`) through the existing `/qr/api`
+    (`{ itemId, variantId?, quantity, modifierIds?, note? }`) through the existing `/qr/api`
     pass-through. `item_unavailable` and `modifier_selection_invalid` (the exact codes
     the real `cart.service.ts` throws) render as an inline error at the action, per
     EXPERIENCE.md's error state pattern - never a raw crash. A successful add refreshes
@@ -657,3 +657,15 @@ This pass reconciled the guess against it:
   bare-/qr bounce), updated device/landing/cart/status tests.
 - **Not built:** card payment at the kiosk (the order is settled at the POS
   counter by token), customer display, per-outlet idle timeout.
+
+## QR special instructions (issue #363, G10)
+
+Item detail offers a labeled "Special instructions (optional)" shadcn Textarea
+(`qr-item-note`), capped at 200 characters with a character counter. Add to cart
+trims the note and omits it when blank. The shared cart shows returned notes below
+their item (`qr-cart-line-note`). `CartLineView.note` is optional and nullable, so
+responses from backends without this field continue to work. Persistence and
+copying the note to the kitchen order require restiq-backend#231.
+
+Unit tests cover trimmed notes, empty and whitespace-only omission, the textarea
+limit/counter, and cart notes alongside lines without notes.

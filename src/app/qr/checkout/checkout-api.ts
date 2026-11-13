@@ -3,9 +3,8 @@
 // controller,service}.ts, read directly - not a guess). Shape copied
 // field-for-field from GuestBillView/BillShareView there. `BillView` (the
 // shape GuestBillView extends, src/pos/bills/bills.dtos.ts) carries no
-// `currency` field at all - checkout-state.ts's formatRupees is INR-only for
-// that reason, same India-first posture cart-state.ts's formatMinor default
-// already established.
+// `currency` field at all - checkout-screen.tsx reads it off the menu
+// (../guest-currency.ts, issue #403).
 import { guestApi } from "../api-client";
 
 export type BillStatus = "open" | "finalized";
@@ -34,6 +33,11 @@ export interface GuestBillView {
   billNumber: number | null;
   subtotalMinor: number;
   taxMinor: number;
+  /** BillView's own breakdown (CGST/SGST, IGST or GST) - CU-24: shown split, never one lump. */
+  taxBreakdown?: Array<{ label: string; ratePercent: number; amountMinor: number }>;
+  pricesIncludeTax?: boolean;
+  /** The tenant's CGST/SGST split rule (restiq-backend#244); null where it doesn't apply. */
+  gstSplitRounding?: "exact_total" | "equal_half_up" | "equal_half_even" | null;
   discountMinor: number | null;
   discountReason: string | null;
   totalMinor: number;
@@ -42,6 +46,28 @@ export interface GuestBillView {
   finalizedAt: string | null;
   tenders: TenderView[];
   shares: BillShareView[];
+  /** restiq-backend#278: false when guests can't pay here (no payment provider) - missing on an older backend, which means true. */
+  paymentsAvailable?: boolean;
+  /** restiq-backend#284: set when the guest pays by card on their phone (Stripe, Live tenant); null or missing = the simulated flow. */
+  cardPayments?: CardPaymentsConfig | null;
+}
+
+export type CardPaymentMethod = "card" | "apple_pay" | "google_pay";
+
+export interface CardPaymentsConfig {
+  provider: "stripe";
+  publishableKey: string;
+  /** The restaurant's connected account - loadStripe(publishableKey, { stripeAccount }). */
+  stripeAccountId: string;
+  /** Always includes "card". */
+  allowedMethods: CardPaymentMethod[];
+}
+
+export interface CardPaymentStart {
+  intentId: string;
+  clientSecret: string;
+  amountMinor: number;
+  currency: "AUD" | "INR";
 }
 
 export interface SimulatedPaymentInput {
@@ -66,7 +92,7 @@ export function createOrFetchBill(orderId: string): Promise<GuestBillView> {
  * POST /guest/v1/bills/:id/shares/:guestId/pay - 200 GuestBillView for BOTH
  * simulated outcomes (a 'failure' is a valid demo result, not an HTTP error -
  * the returned share simply stays 'outstanding'); 409 `share_already_paid`;
- * 409 `already_finalized`; 410 `session_closed`; 404 `not_found`.
+ * 409 `already_finalized`; 409 `provider_unavailable` (restiq-backend#278); 410 `session_closed`; 404 `not_found`.
  */
 export function payShare(billId: string, guestId: string, input: SimulatedPaymentInput): Promise<GuestBillView> {
   return guestApi<GuestBillView>(`bills/${billId}/shares/${guestId}/pay`, { method: "POST", body: JSON.stringify(input) });
@@ -76,10 +102,25 @@ export function payShare(billId: string, guestId: string, input: SimulatedPaymen
  * POST /guest/v1/bills/:id/pay-all - 200 GuestBillView; 409
  * `partial_payment_exists` if any share was already paid individually
  * (checkout-state.ts's canPayAll mirrors this so the UI never offers a
- * control the API would reject); 409 `already_finalized`; 410 `session_closed`.
+ * control the API would reject); 409 `already_finalized`; 409
+ * `provider_unavailable` (restiq-backend#278); 410 `session_closed`.
  */
 export function payAll(billId: string, input: SimulatedPaymentInput): Promise<GuestBillView> {
   return guestApi<GuestBillView>(`bills/${billId}/pay-all`, { method: "POST", body: JSON.stringify(input) });
+}
+
+/**
+ * POST /guest/v1/bills/:id/card-payment (restiq-backend#284) - `guestId` pays that guest's
+ * share, omitted pays the whole bill. 409 `provider_unavailable` / `share_already_paid` /
+ * `already_finalized` / `partial_payment_exists`; 410 `session_closed`; 404 `not_found`.
+ */
+export function startCardPayment(billId: string, input: { guestId?: string; payerPhone?: string }): Promise<CardPaymentStart> {
+  return guestApi<CardPaymentStart>(`bills/${billId}/card-payment`, { method: "POST", body: JSON.stringify(input) });
+}
+
+/** POST /guest/v1/card-payments/:intentId/sync - the server reads Stripe and settles; idempotent. */
+export function syncCardPayment(intentId: string): Promise<GuestBillView> {
+  return guestApi<GuestBillView>(`card-payments/${intentId}/sync`, { method: "POST", body: "{}" });
 }
 
 // Issue #220: GET /guest/v1/bills/:id/invoice - finalised bills only (409
@@ -87,6 +128,8 @@ export function payAll(billId: string, input: SimulatedPaymentInput): Promise<Gu
 // trimmed to what the kiosk receipt prints (AD-4: no import from app/pos).
 export interface GuestInvoiceView {
   invoiceNumber: string | null;
+  /** restiq-backend#213: rung up while the tenant was in Test mode. */
+  testMode?: boolean;
   title: string;
   issuedAt: string | null;
   currency: string;

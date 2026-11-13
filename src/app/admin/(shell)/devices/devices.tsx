@@ -17,13 +17,14 @@ import { DevicesTable } from "./devices-table";
 import { GenerateCodeDialog } from "./generate-code-dialog";
 import { PrinterConfigPanel } from "./printer-config-panel";
 import { Topology } from "./topology";
-import type { AdminDeviceView, EnrolmentCodeResult } from "./devices-state";
+import { DEVICE_TYPE_LABELS, type AdminDeviceView, type EnrolmentCodeResult } from "./devices-state";
 import type { PrinterView, StationView } from "../floor-plan/floor-plan-state";
 
 export function Devices() {
-  const { outlets, loading: outletsLoading, selectedOutletId } = useOutlets();
+  const { outlets, loading: outletsLoading, failed: outletsFailed, reload: reloadOutlets, selectedOutletId } = useOutlets();
 
   if (outletsLoading) return <LoadingShell />;
+  if (outletsFailed) return <LoadErrorPanel testId="devices-outlets-load-error" message="Your outlets couldn't be loaded." onRetry={reloadOutlets} />;
 
   if (outlets.length === 0) {
     return (
@@ -37,7 +38,8 @@ export function Devices() {
 
   if (!selectedOutletId) return <LoadingShell />;
 
-  return <OutletDevices key={selectedOutletId} outletId={selectedOutletId} />;
+  const outletName = outlets.find((outlet) => outlet.id === selectedOutletId)?.name;
+  return <OutletDevices key={selectedOutletId} outletId={selectedOutletId} outletName={outletName} />;
 }
 
 function LoadingShell() {
@@ -82,14 +84,14 @@ function useDevicesData(outletId: string) {
   };
 }
 
-function OutletDevices({ outletId }: Readonly<{ outletId: string }>) {
+function OutletDevices({ outletId, outletName }: Readonly<{ outletId: string; outletName?: string }>) {
   const { loading, failed, data, retry } = useDevicesData(outletId);
 
   if (loading) return <LoadingShell />;
   if (failed) return <LoadErrorPanel testId="devices-load-error" message="Devices and printers couldn't be loaded." onRetry={retry} />;
   if (!data) return null;
 
-  return <DevicesEditor outletId={outletId} initial={data} />;
+  return <DevicesEditor outletId={outletId} outletName={outletName} initial={data} />;
 }
 
 // The topology's online dots follow the devices' 30 s heartbeat (issue #210).
@@ -105,12 +107,14 @@ const VIEWS = [
 ] as const;
 type ViewKey = (typeof VIEWS)[number]["key"];
 
-function DevicesEditor({ outletId, initial }: Readonly<{ outletId: string; initial: DevicesData }>) {
+function DevicesEditor({ outletId, outletName, initial }: Readonly<{ outletId: string; outletName?: string; initial: DevicesData }>) {
   const [devices, setDevices] = useState<AdminDeviceView[]>(initial.devices);
   const [now, setNow] = useState(() => Date.now());
   const [printers, setPrinters] = useState<PrinterView[]>(initial.printers);
   const [stations, setStations] = useState<StationView[]>(initial.stations);
-  const [activeCode, setActiveCode] = useState<EnrolmentCodeResult | null>(null);
+  // #431: every code issued this visit stays listed (newest first) - an older
+  // code keeps working until it is used or expires, so hiding it was misleading.
+  const [codes, setCodes] = useState<EnrolmentCodeResult[]>([]);
   const [generateOpen, setGenerateOpen] = useState(false);
   const [view, setView] = useState<ViewKey>("devices");
   // Remove device (issue #215): confirm with a reason, then revoke - the row
@@ -195,8 +199,18 @@ function DevicesEditor({ outletId, initial }: Readonly<{ outletId: string; initi
       {view === "devices" && (
         <div className="grid grid-cols-1 gap-6 2xl:grid-cols-[minmax(0,1fr)_320px]">
           <DevicesTable devices={devices} onRemove={setRemoveTarget} />
-          {activeCode ? (
-            <CodeChip key={activeCode.code} code={activeCode.code} expiresAt={activeCode.expiresAt} onRegenerate={() => setGenerateOpen(true)} />
+          {codes.length > 0 ? (
+            <div data-testid="devices-code-list" className="space-y-3">
+              {codes.map((c) => (
+                <CodeChip
+                  key={c.code}
+                  code={c.code}
+                  expiresAt={c.expiresAt}
+                  title={`${DEVICE_TYPE_LABELS[c.deviceType]} code`}
+                  onRegenerate={() => setGenerateOpen(true)}
+                />
+              ))}
+            </div>
           ) : (
             <div data-testid="devices-no-active-code" className="flex flex-col items-center justify-center gap-2 rounded-lg border border-dashed border-border/60 bg-card/50 p-5 text-center text-sm text-muted-foreground">
               No active enrolment code. Enrol a device to generate one.
@@ -225,7 +239,7 @@ function DevicesEditor({ outletId, initial }: Readonly<{ outletId: string; initi
         onConfirm={(reason) => void handleConfirmRemove(reason)}
       />
 
-      <GenerateCodeDialog open={generateOpen} onClose={() => setGenerateOpen(false)} outletId={outletId} onGenerated={setActiveCode} />
+      <GenerateCodeDialog open={generateOpen} onClose={() => setGenerateOpen(false)} outletId={outletId} outletName={outletName} onGenerated={(code) => setCodes((current) => [code, ...current.filter((c) => c.code !== code.code)])} />
     </div>
   );
 }

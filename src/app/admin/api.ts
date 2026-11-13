@@ -19,6 +19,7 @@ import type { AdminDeviceView, DeviceType, EnrolmentCodeResult } from "./(shell)
 import type { RoleView, StaffView } from "./(shell)/staff/staff-state";
 import { filenameFromContentDisposition, type ReportExport } from "./(shell)/reports/reports-state";
 import type { PaymentsResponse } from "./(shell)/reports/payments-state";
+import type { TopItemsResponse } from "./(shell)/reports/top-items-state";
 
 export class AdminApiError extends Error {
   constructor(
@@ -102,6 +103,11 @@ export async function uploadMenuImport(file: File): Promise<MenuImportDraft> {
   return payload as MenuImportDraft;
 }
 
+// PE-11: the open (uncommitted) draft the owner left, so the import page can resume it.
+export function fetchLatestMenuImport(): Promise<{ draft: MenuImportDraft | null }> {
+  return adminApi<{ draft: MenuImportDraft | null }>("menu-import/latest");
+}
+
 // The backend's PATCH takes a batch of per-item edits and returns the full,
 // re-authoritative draft (same "no extra fetch needed" shape as the
 // checklist's completeStep) - one field on one item is just a batch of one.
@@ -168,11 +174,22 @@ export function fetchItems(categoryId?: string): Promise<ItemView[]> {
   return adminApi<ItemView[]>(categoryId ? `menu/items?categoryId=${encodeURIComponent(categoryId)}` : "menu/items");
 }
 
+export interface NewVariantInput {
+  name: string;
+  /** restiq-backend#211: the variant is created with its price (every channel). */
+  priceMinor?: number;
+  currency?: string;
+  /** On an item's first variant: the name its existing price is kept under (default "Regular"). */
+  basePortionName?: string;
+}
+
 export interface CreateItemInput {
   categoryId: string;
   name: string;
   shortName: string;
-  variants?: Array<{ name: string; sortOrder?: number }>;
+  vegMarker?: "veg" | "non_veg";
+  stationId?: string;
+  variants?: NewVariantInput[];
   modifierGroupIds?: string[];
   allergenIds?: string[];
 }
@@ -187,6 +204,7 @@ export interface UpdateItemInput {
   categoryId?: string;
   /** null removes the photo (restiq-backend#142). */
   photoUrl?: string | null;
+  vegMarker?: "veg" | "non_veg" | null;
 }
 
 export function updateMenuItem(itemId: string, input: UpdateItemInput): Promise<ItemView> {
@@ -202,8 +220,13 @@ export function deleteMenuItem(itemId: string): Promise<null> {
   return adminApi<null>(`menu/items/${itemId}`, { method: "DELETE" });
 }
 
-export function addVariant(itemId: string, name: string): Promise<ItemView> {
-  return adminApi<ItemView>(`menu/items/${itemId}/variants`, { method: "POST", body: JSON.stringify({ name }) });
+export function addVariant(itemId: string, input: NewVariantInput): Promise<ItemView> {
+  return adminApi<ItemView>(`menu/items/${itemId}/variants`, { method: "POST", body: JSON.stringify(input) });
+}
+
+/** PE-21: which kitchen station gets this item's tickets; null = the outlet's first station. */
+export function setItemStation(itemId: string, stationId: string | null): Promise<ItemView> {
+  return adminApi<ItemView>(`menu/items/${itemId}/station`, { method: "PATCH", body: JSON.stringify(stationId ? { stationId } : {}) });
 }
 
 export function removeVariant(itemId: string, variantId: string): Promise<ItemView> {
@@ -244,21 +267,6 @@ export interface ItemPriceView extends CurrentPriceView {
 
 export function createItemPrice(itemId: string, input: CreatePriceInput): Promise<ItemPriceView> {
   return adminApi<ItemPriceView>(`menu/items/${itemId}/prices`, { method: "POST", body: JSON.stringify(input) });
-}
-
-export function fetchCurrentPrice(
-  itemId: string,
-  params: { channel: PriceChannel; variantId?: string; outletId?: string },
-): Promise<CurrentPriceView> {
-  const search = new URLSearchParams({ channel: params.channel });
-  if (params.variantId) search.set("variantId", params.variantId);
-  if (params.outletId) search.set("outletId", params.outletId);
-  return adminApi<CurrentPriceView>(`menu/items/${itemId}/price?${search.toString()}`).catch((error: unknown) => {
-    // 404 (no_current_price) means this line has never been priced yet -
-    // that's a normal state for a freshly added variant, not a load failure.
-    if (error instanceof AdminApiError && error.status === 404) return null as unknown as CurrentPriceView;
-    throw error;
-  });
 }
 
 export function fetchModifierGroups(): Promise<ModifierGroupView[]> {
@@ -344,6 +352,18 @@ export function setOutletCapability(outletId: string, key: string, enabled: bool
     method: "PATCH",
     body: JSON.stringify({ enabled }),
   });
+}
+
+// Issue #329: owner-editable outlet name/address/timezone. Outlet type is
+// set at provisioning and never sent here.
+export interface UpdateOutletInput {
+  name?: string;
+  address?: string;
+  timezone?: string;
+}
+
+export function updateOutlet(outletId: string, input: UpdateOutletInput): Promise<OutletView> {
+  return adminApi<OutletView>(`outlets/${outletId}`, { method: "PATCH", body: JSON.stringify(input) });
 }
 
 // --- CAP-5 Floor plan & stations. Verified against restiq-backend's actual
@@ -564,11 +584,19 @@ export interface CreateStaffInput {
   lastName: string;
   email: string;
   roleId: string;
+  outletIds?: string[];
 }
 
 export function createStaff(input: CreateStaffInput): Promise<StaffView> {
   const name = `${input.firstName} ${input.lastName}`.trim();
-  return adminApi<StaffView>("staff", { method: "POST", body: JSON.stringify({ name, email: input.email, roleId: input.roleId }) });
+  // CU-3: a blank email is left out (the API takes no email, but rejects an empty one).
+  const email = input.email.trim() || undefined;
+  return adminApi<StaffView>("staff", { method: "POST", body: JSON.stringify({ name, email, roleId: input.roleId, outletIds: input.outletIds ?? [] }) });
+}
+
+/** restiq-backend#197: where this person may sign in (empty = every outlet). Ends their open till sessions. */
+export function updateStaffOutlets(staffId: string, outletIds: string[]): Promise<StaffView> {
+  return adminApi<StaffView>(`staff/${staffId}`, { method: "PATCH", body: JSON.stringify({ outletIds }) });
 }
 
 // Role change is security-relevant (SPEC constraints: audited with actor +
@@ -611,10 +639,12 @@ export function revokeStaffPin(staffId: string, reason: string): Promise<StaffVi
 // adminApi always parses the response as JSON, which a CSV export body is
 // not - this fetches and reads the blob directly instead, same reasoning as
 // uploadMenuImport's FormData special-case.
-export async function exportReport(reportKey: string, format: string): Promise<ReportExport> {
+// Shared by every CSV export below: fetch, surface the backend's error
+// envelope on failure, and name the download from Content-Disposition.
+async function fetchExport(path: string, fallbackFilename: string): Promise<ReportExport> {
   let res: Response;
   try {
-    res = await fetch(`/admin/api/reports/${reportKey}/export?format=${encodeURIComponent(format)}`);
+    res = await fetch(`/admin/api/${path}`);
   } catch {
     throw new AdminApiError("The API could not be reached", 0);
   }
@@ -624,8 +654,12 @@ export async function exportReport(reportKey: string, format: string): Promise<R
     throw new AdminApiError(error?.message ?? "The export failed", res.status, error?.code);
   }
   const blob = await res.blob();
-  const filename = filenameFromContentDisposition(res.headers.get("content-disposition")) ?? `${reportKey}.${format}`;
+  const filename = filenameFromContentDisposition(res.headers.get("content-disposition")) ?? fallbackFilename;
   return { filename, blob };
+}
+
+export function exportReport(reportKey: string, format: string): Promise<ReportExport> {
+  return fetchExport(`reports/${reportKey}/export?format=${encodeURIComponent(format)}`, `${reportKey}.${format}`);
 }
 
 // --- Payments history (issue #137, web half; restiq-backend#104, landing in
@@ -656,21 +690,19 @@ export function fetchPayments(params: FetchPaymentsParams): Promise<PaymentsResp
   return adminApi<PaymentsResponse>(`reports/payments?${paymentsSearchParams(params).toString()}`);
 }
 
-export async function exportPayments(params: Omit<FetchPaymentsParams, "cursor" | "limit">): Promise<ReportExport> {
-  let res: Response;
-  try {
-    res = await fetch(`/admin/api/reports/payments/export?${paymentsSearchParams(params).toString()}`);
-  } catch {
-    throw new AdminApiError("The API could not be reached", 0);
-  }
-  if (!res.ok) {
-    const body: unknown = await res.json().catch(() => null);
-    const error = (body as { error?: { code?: string; message?: string } } | null)?.error;
-    throw new AdminApiError(error?.message ?? "The export failed", res.status, error?.code);
-  }
-  const blob = await res.blob();
-  const filename = filenameFromContentDisposition(res.headers.get("content-disposition")) ?? "payments.csv";
-  return { filename, blob };
+export function exportPayments(params: Omit<FetchPaymentsParams, "cursor" | "limit">): Promise<ReportExport> {
+  return fetchExport(`reports/payments/export?${paymentsSearchParams(params).toString()}`, "payments.csv");
+}
+
+// --- Top-selling items (restiq-web#431 item 4, restiq-backend#288). Same
+// outletId/from/to filter as payments, no pagination: { currency, items }.
+
+export function fetchTopItems(params: Omit<FetchPaymentsParams, "cursor" | "limit">): Promise<TopItemsResponse> {
+  return adminApi<TopItemsResponse>(`reports/top-items?${paymentsSearchParams(params).toString()}`);
+}
+
+export function exportTopItems(params: Omit<FetchPaymentsParams, "cursor" | "limit">): Promise<ReportExport> {
+  return fetchExport(`reports/top-items/export?${paymentsSearchParams(params).toString()}`, "top-items.csv");
 }
 
 // --- Tax registration (issue #140, web half; restiq-backend#108, landing in
@@ -702,14 +734,18 @@ export interface AgreementSignatureView {
 }
 
 export interface OwnerAgreementView {
-  current: { id: string; version: number; title: string; body: string; publishedAt: string } | null;
+  /** The agreement is a PDF: read it at /admin/api/agreement/{id}/file. hasFile is false for a version published as text. */
+  current: { id: string; version: number; title: string; hasFile: boolean; fileName: string | null; sizeBytes: number | null; fileSha256: string; publishedAt: string } | null;
   signature: AgreementSignatureView | null;
   history: AgreementSignatureView[];
 }
 
-export function signAgreement(versionId: string, signerName: string): Promise<{ signature: AgreementSignatureView }> {
-  return adminApi(`agreement/${versionId}/sign`, { method: "POST", body: JSON.stringify({ signerName, accepted: true }) });
+/** fileSha256 is the hash of the file the owner was shown; the server refuses if the current file has changed. */
+export function signAgreement(versionId: string, signerName: string, fileSha256: string): Promise<{ signature: AgreementSignatureView }> {
+  return adminApi(`agreement/${versionId}/sign`, { method: "POST", body: JSON.stringify({ signerName, accepted: true, fileSha256 }) });
 }
+
+export const agreementFileUrl = (versionId: string): string => `/admin/api/agreement/${versionId}/file`;
 
 // --- Product directory (issue #245): the platform catalog, scoped by the
 // backend to this tenant's currency. Import copies the chosen products into

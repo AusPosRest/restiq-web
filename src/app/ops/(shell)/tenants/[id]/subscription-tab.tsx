@@ -6,29 +6,79 @@
 // pessimistic (spinner-in-button via ConfirmReasonDialog's busy state, then a
 // result toast) - never optimistic, per EXPERIENCE.md's money/fleet-affecting
 // rule.
-import { PauseCircle, PlayCircle, ShieldAlert } from "lucide-react";
+import { Copy, ExternalLink, PauseCircle, PlayCircle, ShieldAlert } from "lucide-react";
+import Link from "next/link";
 import { useState } from "react";
-import { InvoiceView, opsApi, OpsApiError, SubscriptionView } from "../../api";
+import { Button } from "@/components/ui/button";
+import { InvoiceView, opsApi, OpsApiError, StripeLink, SubscriptionView } from "../../api";
 import { ConfirmReasonDialog } from "../../confirm-reason-dialog";
 import { LoadErrorPanel, Skeleton } from "../../data-states";
 import { StatusBadge } from "../../status-badge";
 import { useToast } from "../../toast";
 import { useOpsLoad } from "../../use-ops-load";
+import { DATE_LOCALE } from "@/lib/datetime";
+import { ContractCard } from "./contract-card";
+import { copyToClipboard, openBlankTab, StripeLinkResult } from "./stripe-link";
 
 function formatDate(iso: string): string {
-  return new Date(iso).toLocaleDateString(undefined, { day: "2-digit", month: "short", year: "numeric" });
+  return new Date(iso).toLocaleDateString(DATE_LOCALE, { day: "2-digit", month: "short", year: "numeric" });
 }
 
 function formatAmount(amountMinor: string): string {
   return (Number(amountMinor) / 100).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 });
 }
 
-export function SubscriptionTab({ tenantId }: Readonly<{ tenantId: string }>) {
+export function SubscriptionTab({ tenantId, tenantStatus }: Readonly<{ tenantId: string; tenantStatus?: string }>) {
   const toast = useToast();
   const { loading, failed, data, retry } = useOpsLoad<SubscriptionView>(`tenants/${tenantId}/subscription`);
   const invoices = useOpsLoad<{ invoices: InvoiceView[] }>(`tenants/${tenantId}/subscription/invoices`);
   const [confirmKind, setConfirmKind] = useState<"suspend" | "reactivate" | null>(null);
   const [busy, setBusy] = useState(false);
+  const [billingLink, setBillingLink] = useState<StripeLink | null>(null);
+  const [billingBusy, setBillingBusy] = useState<"open" | "copy" | null>(null);
+  const [billingError, setBillingError] = useState<{ priceNotSet: boolean; message: string } | null>(null);
+
+  async function requestBillingLink(): Promise<StripeLink | null> {
+    setBillingError(null);
+    try {
+      return await opsApi<StripeLink>(`tenants/${tenantId}/subscription/billing-link`, { method: "POST", body: "{}" });
+    } catch (error) {
+      setBillingError({
+        priceNotSet: error instanceof OpsApiError && error.code === "price_not_set",
+        message: error instanceof OpsApiError ? error.message : "Could not create the billing link.",
+      });
+      return null;
+    }
+  }
+
+  async function openCheckout() {
+    const tab = openBlankTab();
+    setBillingBusy("open");
+    const link = await requestBillingLink();
+    setBillingBusy(null);
+    if (!link) {
+      tab?.close();
+      return;
+    }
+    if (tab) {
+      tab.location.href = link.url;
+    } else {
+      setBillingLink(link);
+      toast({ kind: "error", message: "The browser blocked the new tab. Use Open below." });
+    }
+    retry();
+  }
+
+  async function copyBillingLink() {
+    setBillingBusy("copy");
+    const link = await requestBillingLink();
+    setBillingBusy(null);
+    if (!link) return;
+    setBillingLink(link);
+    if (await copyToClipboard(link.url)) toast({ kind: "success", message: "Link copied — send it to the owner" });
+    else toast({ kind: "error", message: "Could not copy. Copy the link from the box below." });
+    retry();
+  }
 
   async function confirm(reason: string) {
     if (!confirmKind) return;
@@ -76,6 +126,11 @@ export function SubscriptionTab({ tenantId }: Readonly<{ tenantId: string }>) {
                 {sub.plan} · {sub.billingPeriod}
               </span>
             </div>
+            {tenantStatus === "provisioning" && (
+              <p className="mt-2 text-xs text-muted-foreground" data-testid="subscription-not-live">
+                The restaurant isn&apos;t live yet. It goes live on its first sale or when the owner presses Go live.
+              </p>
+            )}
           </div>
           {sub.status === "suspended" ? (
             <button
@@ -132,6 +187,48 @@ export function SubscriptionTab({ tenantId }: Readonly<{ tenantId: string }>) {
               -hour grace window.
             </span>
           </div>
+        )}
+      </div>
+
+      <ContractCard tenantId={tenantId} plan={sub.plan} onSaved={retry} />
+
+      <div className="rounded-lg border border-border/40 bg-card p-5" data-testid="card-billing">
+        <h3 className="font-headline text-base font-semibold">Card billing</h3>
+        <div className="mt-2 flex flex-wrap items-center gap-3 text-sm">
+          <StatusBadge status={sub.cardBilling.status} testId="card-billing-status" />
+          <span className="text-muted-foreground" data-testid="card-billing-amount">
+            {sub.cardBilling.amountMinor === null
+              ? "No price set"
+              : `${sub.cardBilling.currency} ${formatAmount(sub.cardBilling.amountMinor)} per ${sub.billingPeriod === "annual" ? "year" : "month"}`}
+          </span>
+        </div>
+        {(sub.cardBilling.status === "not_set_up" || sub.cardBilling.status === "canceled" || sub.cardBilling.status === "pending") && (
+          <div className="mt-4 flex flex-wrap gap-2">
+            <Button size="sm" data-testid="card-billing-open" disabled={billingBusy !== null} onClick={() => void openCheckout()}>
+              <ExternalLink aria-hidden="true" />
+              {billingBusy === "open" ? "Opening..." : "Open checkout"}
+            </Button>
+            <Button size="sm" variant="secondary" data-testid="card-billing-copy" disabled={billingBusy !== null} onClick={() => void copyBillingLink()}>
+              <Copy aria-hidden="true" />
+              {billingBusy === "copy" ? "Working..." : "Copy link for owner"}
+            </Button>
+          </div>
+        )}
+        {billingError && (
+          <p role="alert" className="mt-3 text-sm text-status-critical" data-testid="card-billing-error">
+            {billingError.message}
+            {billingError.priceNotSet && (
+              <>
+                {" "}
+                <Link href="/ops/plans" className="underline">
+                  Set the price on the Plans page.
+                </Link>
+              </>
+            )}
+          </p>
+        )}
+        {billingLink && (
+          <StripeLinkResult link={billingLink} testId="card-billing-link-result" note="Send this link to the restaurant owner. They enter a card once and it is charged automatically each period." />
         )}
       </div>
 

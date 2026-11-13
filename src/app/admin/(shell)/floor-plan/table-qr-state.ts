@@ -1,16 +1,14 @@
 // Helpers for the per-table self-order QR (issue #131) and its downloadable
-// forms (issue #161's HTML sheet, issue #175's ZIP-of-PNGs and customisable
-// template). The URL/filename helpers stay free of React/qrcode so they're
+// PNG (issue #175's customisable template; the whole sheet is printed or saved
+// as a PDF from the browser instead, PE-20). The URL/filename helpers stay free of React/qrcode so they're
 // unit-testable without mocking the qrcode package - mirrors
 // floor-plan-state.ts's split between logic and UI. renderTableQrPng is the
-// one exception: it *is* the shared PNG-generation helper (issue #175), used
-// by both the per-table "Download PNG" button (table-qr-dialog.tsx) and the
-// ZIP sheet (floor-plan.tsx), so it has to own the qrcode + canvas work.
+// one exception: it is the PNG-generation helper behind the per-table
+// "Download PNG" button (table-qr-dialog.tsx), so it owns the qrcode + canvas work.
 // Must match the guest entry route exactly:
 // src/app/qr/t/[outletId]/[tableId]/page.tsx.
 import QRCode from "qrcode";
-import type { PrintQrCard } from "./qr-print-sheet";
-import { QR_CARD_SIZE_MM, type QrSheetTemplate } from "./qr-sheet-template";
+import type { QrSheetTemplate } from "./qr-sheet-template";
 
 /** Matches TableQrDialog's QR_DOWNLOAD_PX (~87mm at 300dpi) - sticker-sized when handed to a print shop or used standalone (issues #161, #175). */
 export const QR_DOWNLOAD_PX = 1024;
@@ -25,73 +23,12 @@ export function qrPngFilename(label: string): string {
   return `${label.replace(/[^\w-]+/g, "_")}-qr.png`;
 }
 
-/** Lowercase, dash-separated, filesystem/URL-safe; empty input falls back to "item" rather than producing a blank path segment. */
-export function slug(text: string): string {
-  const cleaned = text
-    .toLowerCase()
-    .trim()
-    .replace(/[^a-z0-9]+/g, "-")
-    .replace(/^-+|-+$/g, "");
-  return cleaned || "item";
-}
-
-/** `("Ground Floor", "T-1")` → `ground-floor-t-1-qr.png`, one ZIP entry name per table (issue #175). */
-export function qrZipPngFilename(floorName: string, tableLabel: string): string {
-  return `${slug(floorName)}-${slug(tableLabel)}-qr.png`;
-}
-
 /** Saves `href` (a data: or blob: URL) as `filename` via a synthetic anchor click - the same shape as reports-state.ts's downloadReportExport. */
 export function downloadUrl(filename: string, href: string): void {
   const anchor = document.createElement("a");
   anchor.href = href;
   anchor.download = filename;
   anchor.click();
-}
-
-const escapeHtml = (text: string) => text.replace(/[&<>"']/g, (char) => `&#${char.charCodeAt(0)};`);
-
-/**
- * "Download QR sheet" (issue #161, templated per #175): one self-contained
- * HTML file with a cut-out card per table, so the sheet can go to a print
- * shop or a designer without the app. Inline styles only - the file has to
- * render on its own. Table/floor labels and the template's owner-entered
- * heading/instruction are escaped; qrDataUrl is our own base64 PNG and needs
- * no escaping.
- */
-export function qrSheetHtml(cards: readonly PrintQrCard[], template: QrSheetTemplate): string {
-  const qrMm = QR_CARD_SIZE_MM[template.cardSize];
-  const items = cards
-    .map(
-      (card) => `<figure>
-  ${template.showFloorName ? `<p class="floor">${escapeHtml(card.floorName)}</p>` : ""}
-  ${template.showTableLabel ? `<h2>${escapeHtml(card.table.label)}</h2>` : ""}
-  <img src="${card.qrDataUrl}" alt="Self-order QR code for ${escapeHtml(card.table.label)}" style="width:${qrMm}mm;height:${qrMm}mm">
-  ${template.showUrl ? `<small>${escapeHtml(card.url)}</small>` : ""}
-</figure>`,
-    )
-    .join("\n");
-  const header =
-    template.heading || template.instruction
-      ? `<header>${template.heading ? `<h1>${escapeHtml(template.heading)}</h1>` : ""}${template.instruction ? `<p>${escapeHtml(template.instruction)}</p>` : ""}</header>`
-      : "";
-  return `<!doctype html>
-<html lang="en"><head><meta charset="utf-8"><title>Table QR codes</title>
-<style>
-  @page{margin:10mm}
-  html{color-scheme:light}
-  body{font-family:system-ui,sans-serif;margin:0;padding:12mm;background:#fff;color:#111}
-  header{text-align:center;margin-bottom:8mm}
-  header h1{margin:0;font-size:22px}
-  header p{margin:2mm 0 0;color:#666;font-size:13px}
-  main{display:grid;grid-template-columns:repeat(auto-fill,minmax(64mm,1fr));gap:8mm}
-  figure{margin:0;padding:6mm;border:1px dashed #999;border-radius:4mm;text-align:center;break-inside:avoid}
-  .floor{margin:0;font-size:10px;letter-spacing:.1em;text-transform:uppercase;color:#666}
-  h2{margin:2mm 0 4mm;font-size:20px}
-  small{display:block;margin-top:3mm;font-weight:400;font-size:9px;color:#666;word-break:break-all}
-</style></head><body>${header}<main>
-${items}
-</main></body></html>
-`;
 }
 
 function loadImage(src: string): Promise<HTMLImageElement> {
@@ -107,8 +44,7 @@ function loadImage(src: string): Promise<HTMLImageElement> {
  * Renders one table's self-order QR as a standalone PNG, with the template's
  * heading/instruction and this table's floor/label/url baked in underneath
  * so the image still makes sense once it's off the sheet (issue #175). Used
- * by both the per-table "Download PNG" button (table-qr-dialog.tsx) and the
- * ZIP sheet (floor-plan.tsx) - the one PNG-generation code path for both.
+ * by the per-table "Download PNG" button (table-qr-dialog.tsx).
  * When every per-card toggle is off there's nothing to caption, so this
  * skips the canvas step entirely and returns the plain QR.
  */
@@ -128,7 +64,6 @@ export async function renderTableQrPng(table: { label: string }, floorName: stri
   const padding = 40;
   const canvas = document.createElement("canvas");
   canvas.width = QR_DOWNLOAD_PX;
-  canvas.height = headerRows.length * rowHeight + padding + QR_DOWNLOAD_PX + padding + footerRows.length * rowHeight;
 
   // Checked (and the plain QR returned) before touching Image at all - an
   // environment where 2d canvas contexts aren't available (jsdom without the
@@ -136,6 +71,18 @@ export async function renderTableQrPng(table: { label: string }, floorName: stri
   // there's no point starting a load that would never resolve.
   const ctx = canvas.getContext("2d");
   if (!ctx) return qrDataUrl;
+
+  // PE-20 / CU-8: a long table link ran off both edges - every row now wraps to the image width.
+  const maxWidth = QR_DOWNLOAD_PX - padding * 2;
+  const lines = (rows: Array<{ text: string; font: string }>) =>
+    rows.flatMap((row) => {
+      ctx.font = row.font;
+      return wrapText(row.text, maxWidth, (text) => ctx.measureText(text).width).map((text) => ({ text, font: row.font }));
+    });
+  const headerLines = lines(headerRows);
+  const footerLines = lines(footerRows);
+  // Setting the height resets the context, so it comes after measuring and before drawing.
+  canvas.height = headerLines.length * rowHeight + padding + QR_DOWNLOAD_PX + padding + footerLines.length * rowHeight;
 
   const qrImage = await loadImage(qrDataUrl);
   ctx.fillStyle = "#ffffff";
@@ -145,21 +92,44 @@ export async function renderTableQrPng(table: { label: string }, floorName: stri
   ctx.textBaseline = "middle";
 
   let y = rowHeight / 2;
-  for (const row of headerRows) {
+  for (const row of headerLines) {
     ctx.font = row.font;
     ctx.fillText(row.text, canvas.width / 2, y);
     y += rowHeight;
   }
 
-  const qrY = headerRows.length * rowHeight + padding;
+  const qrY = headerLines.length * rowHeight + padding;
   ctx.drawImage(qrImage, 0, qrY, QR_DOWNLOAD_PX, QR_DOWNLOAD_PX);
 
   y = qrY + QR_DOWNLOAD_PX + padding + rowHeight / 2;
-  for (const row of footerRows) {
+  for (const row of footerLines) {
     ctx.font = row.font;
     ctx.fillText(row.text, canvas.width / 2, y);
     y += rowHeight;
   }
 
   return canvas.toDataURL("image/png");
+}
+
+/** Splits `text` into lines no wider than `maxWidth` - at spaces where it can, mid-word (a URL) where it must. */
+export function wrapText(text: string, maxWidth: number, measure: (text: string) => number): string[] {
+  const out: string[] = [];
+  let line = "";
+  for (const char of text) {
+    const next = line + char;
+    if (line && measure(next) > maxWidth) {
+      const space = line.lastIndexOf(" ");
+      if (space > 0 && char !== " ") {
+        out.push(line.slice(0, space));
+        line = line.slice(space + 1) + char;
+      } else {
+        out.push(line.trimEnd());
+        line = char === " " ? "" : char;
+      }
+    } else {
+      line = next;
+    }
+  }
+  if (line) out.push(line);
+  return out;
 }

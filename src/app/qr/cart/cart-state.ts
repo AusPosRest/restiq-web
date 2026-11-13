@@ -3,16 +3,14 @@
 // hinges on. Kept framework-free, same split as pos/(shell)/shift/
 // shift-state.ts, so it's unit-testable without a DOM.
 import type { CartLineView, PlacedOrderLineView, PlacedOrderView, TableCartView } from "./cart-api";
+import { formatMoney } from "@/lib/money";
 
 // AD-4's realm-isolation rule (app/qr may not import from app/pos) means
 // this can't reuse pos/(shell)/shift/shift-state.ts#formatMinor even though
 // the shape is identical - the guest realm's own small copy, not a stray
 // duplicate.
-const CURRENCY_SYMBOLS: Record<string, string> = { INR: "₹" };
-
 export function formatMinor(amountMinor: number, currency: string): string {
-  const symbol = CURRENCY_SYMBOLS[currency] ?? `${currency} `;
-  return `${symbol}${(amountMinor / 100).toFixed(2)}`;
+  return formatMoney(amountMinor, currency);
 }
 
 /** Whether this line was added by the signed-in guest - the only lines this UI ever renders edit controls for. */

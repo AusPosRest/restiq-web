@@ -19,9 +19,6 @@ export const DEFAULT_QR_INSTRUCTION = "Scan to view the menu and order";
 
 export const QR_SHEET_CARD_SIZES: readonly QrSheetCardSize[] = ["small", "medium", "large"];
 
-/** Printed/HTML card QR size in mm, keyed by cardSize - "medium" matches the fixed 48mm the sheet used before templates existed. */
-export const QR_CARD_SIZE_MM: Record<QrSheetCardSize, number> = { small: 36, medium: 48, large: 64 };
-
 /** On-screen (print-preview) card QR size in px, keyed by cardSize - "medium" matches QR_SIZE_PX, the fixed size the sheet used before templates existed. */
 export const QR_CARD_SIZE_PX: Record<QrSheetCardSize, number> = { small: 140, medium: 200, large: 260 };
 

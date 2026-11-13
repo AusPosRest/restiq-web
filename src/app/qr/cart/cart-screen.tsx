@@ -20,8 +20,9 @@
 import { Minus, Plus, Trash2 } from "lucide-react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { GuestApiError } from "../api-client";
+import { fetchMenuCurrency } from "../guest-currency";
 import { KioskPay } from "../kiosk/kiosk-pay";
 import { endKioskSession, isKioskTab } from "../kiosk-session";
 import {
@@ -96,6 +97,22 @@ export function CartScreen({ myGuestId }: Readonly<{ myGuestId: string }>) {
       onSessionEnded={() => setSessionEndedByPlacement(true)}
     />
   );
+}
+
+/** Fetched once, and only while the cart is empty - a cart with lines carries the right currency itself. */
+function useMenuCurrency(enabled: boolean): string | null {
+  const [currency, setCurrency] = useState<string | null>(null);
+  useEffect(() => {
+    if (!enabled || currency) return;
+    let cancelled = false;
+    void fetchMenuCurrency().then((value) => {
+      if (!cancelled) setCurrency(value);
+    });
+    return () => {
+      cancelled = true;
+    };
+  }, [enabled, currency]);
+  return currency;
 }
 
 function CartLoaded({
@@ -186,9 +203,16 @@ function CartLoaded({
   }
 
   const empty = isCartEmpty(cart);
+  // Issue #403: an empty cart's currency is the backend's INR fallback - the menu knows the tenant's.
+  const menuCurrency = useMenuCurrency(empty);
+  const currency = empty ? (menuCurrency ?? cart.currency) : cart.currency;
 
   return (
     <main data-testid="cart-screen" className="flex min-h-screen flex-1 flex-col px-6 pb-40 pt-8">
+      {/* CU-22: a way back to the menu without the phone's back button. */}
+      <Link href={MENU_ROUTE} data-testid="cart-add-more" className="mb-3 self-start text-sm font-medium text-primary underline-offset-2 hover:underline">
+        ← Add more items
+      </Link>
       <h1 className="font-headline text-2xl font-semibold text-foreground">{isKioskTab() ? "Your order" : "Your table's order"}</h1>
 
       {stale ? (
@@ -213,8 +237,9 @@ function CartLoaded({
               <GuestGroup
                 key={guest.guestId}
                 guest={guest}
-                currency={cart.currency}
+                currency={currency}
                 own={guest.guestId === myGuestId}
+                kiosk={isKioskTab()}
                 busyLineId={busyLineId}
                 onIncrement={increment}
                 onDecrement={decrement}
@@ -233,9 +258,13 @@ function CartLoaded({
         <div className="flex items-baseline justify-between">
           <span className="text-sm font-medium text-muted-foreground">{isKioskTab() ? "Total" : "Table total"}</span>
           <span data-testid="cart-total" className="font-headline text-2xl font-bold tabular-nums text-foreground">
-            {formatMinor(cart.totalMinor, cart.currency)}
+            {formatMinor(cart.totalMinor, currency)}
           </span>
         </div>
+        {/* PE-24: no surprise on the bill - Indian GST is added on top, Australian GST is already in the price. */}
+        <p data-testid="cart-tax-note" className="text-right text-xs text-muted-foreground">
+          {currency === "AUD" ? "Prices include GST" : "Plus applicable taxes, shown on your bill"}
+        </p>
         <button
           type="button"
           data-testid="cart-place-order"
@@ -255,6 +284,7 @@ function GuestGroup({
   guest,
   currency,
   own,
+  kiosk = false,
   busyLineId,
   onIncrement,
   onDecrement,
@@ -263,6 +293,8 @@ function GuestGroup({
   guest: TableCartView["guests"][number];
   currency: string;
   own: boolean;
+  /** PE-29: a kiosk has one customer and no table - no "who added this" chip. */
+  kiosk?: boolean;
   busyLineId: string | null;
   onIncrement: (line: CartLineView) => void;
   onDecrement: (line: CartLineView) => void;
@@ -271,7 +303,7 @@ function GuestGroup({
   return (
     <section data-testid={`cart-guest-${guest.guestId}`} className="rounded-xl border border-border bg-card p-4">
       <div className="flex items-center justify-between">
-        <GuestChip name={guest.guestName} mine={own} />
+        {kiosk ? <span /> : <GuestChip name={guest.guestName} mine={own} />}
         <span data-testid={`cart-guest-subtotal-${guest.guestId}`} className="text-sm font-semibold tabular-nums text-foreground">
           {formatMinor(guest.subtotalMinor, currency)}
         </span>
@@ -330,6 +362,11 @@ function CartLineRow({
           {line.itemName}
           {line.variantName ? <span className="text-muted-foreground"> · {line.variantName}</span> : null}
         </p>
+        {line.note ? (
+          <p data-testid="qr-cart-line-note" className="whitespace-pre-wrap break-words text-xs text-muted-foreground">
+            {line.note}
+          </p>
+        ) : null}
         {line.modifiers.length > 0 ? (
           <p className="text-xs text-muted-foreground">{line.modifiers.map((m) => m.name).join(", ")}</p>
         ) : null}

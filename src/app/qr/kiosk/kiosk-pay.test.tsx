@@ -82,4 +82,35 @@ describe("KioskPay", () => {
     await userEvent.click(screen.getByTestId("kiosk-pay-retry"));
     expect(screen.getByTestId("kiosk-pay-start")).toBeTruthy();
   });
+
+  it("issue #404: says card payment isn't available here when the bill has no payments - never 'from your phone'", async () => {
+    vi.stubGlobal("fetch", vi.fn(() => Promise.resolve(json({ ...BILL, paymentsAvailable: false }, 201))));
+    render(<KioskPay orderId="o1" tokenNumber={24} currency="AUD" />);
+
+    await userEvent.click(screen.getByTestId("kiosk-pay-start"));
+    const note = await screen.findByTestId("kiosk-pay-at-counter");
+    expect(note.textContent).toContain("Card payment isn't available here yet - please pay at the counter");
+    expect(screen.queryByTestId("kiosk-pay-approve")).toBeNull();
+  });
+
+  it("issue #404: a provider_unavailable 409 on pay-all shows the kiosk wording, not the phone one", async () => {
+    vi.stubGlobal(
+      "fetch",
+      vi.fn((input: RequestInfo | URL, init?: RequestInit) =>
+        Promise.resolve(
+          init?.method === "POST" && String(input).endsWith("/pay-all")
+            ? json({ error: { code: "provider_unavailable", message: "Paying from your phone is not available here yet - please pay at the counter" } }, 409)
+            : json(BILL, 201),
+        ),
+      ),
+    );
+    render(<KioskPay orderId="o1" tokenNumber={24} currency="AUD" />);
+
+    await userEvent.click(screen.getByTestId("kiosk-pay-start"));
+    await userEvent.click(await screen.findByTestId("kiosk-pay-approve"));
+    const note = await screen.findByTestId("kiosk-pay-at-counter");
+    expect(note.textContent).toContain("Card payment isn't available here yet - please pay at the counter");
+    expect(note.textContent).not.toContain("phone");
+  });
 });
+

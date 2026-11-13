@@ -12,11 +12,9 @@
 //    Order - `../../../api.ts`'s `createRefund` now takes a `billId`), and
 //    its body is `RefundBillDto`: `managerPin`, a single free-text `reason`
 //    string, and an optional `lines: {orderLineId, quantity}[]` - omitted
-//    entirely to mean "refund everything not already refunded". There is no
-//    `refundMethod` anywhere in that DTO - a refund only ever produces a
-//    credit note, it doesn't choose how the money physically moves, so the
-//    old "Issue refund to Cash/UPI" picker has no backing field at all and
-//    is dropped.
+//    entirely to mean "refund everything not already refunded", plus an
+//    optional `method` (restiq-backend#221) - how the money went back, see
+//    `RefundChoice` below.
 //  - tax reversal is bill-core.ts's own flat `TAX_RATE_PLACEHOLDER_PERCENT`
 //    (5%) applied to the refunded subtotal (`bills.service.ts`'s `refund()`,
 //    read directly) - not a "combined CGST+SGST" figure read off two tax
@@ -42,6 +40,46 @@
 // "mirrors, never replaces, the server gate" posture as
 // `order-taking-state.ts`'s `canSendToKitchen`.
 import { computeUnitTotalMinor, type OrderLineView } from "../order-taking-state";
+import { TENDER_METHOD_LABEL, type BillTenderMethod, type BillTenderView, type BillView } from "../settle/bill-state";
+
+/** How the money goes back to the guest - the four choices the refund screen offers (restiq-web#353). */
+export type RefundChoice = "cash" | "card" | "upi" | "external";
+
+export const REFUND_CHOICES: { value: RefundChoice; label: string }[] = [
+  { value: "cash", label: "Cash" },
+  { value: "card", label: "Card" },
+  { value: "upi", label: "UPI" },
+  { value: "external", label: "External" },
+];
+
+function choiceFor(method: BillTenderMethod): RefundChoice {
+  if (method.startsWith("card_")) return "card";
+  if (method.startsWith("upi_")) return "upi";
+  return method === "cash" ? "cash" : "external";
+}
+
+/** The bill's main tender - its largest, earliest on a tie (the same default the server uses). */
+function mainTender(tenders: readonly BillTenderView[]): BillTenderView | null {
+  return tenders.reduce<BillTenderView | null>((best, t) => (!best || t.amountMinor > best.amountMinor ? t : best), null);
+}
+
+/** Defaults the refund to how the bill was paid. */
+export function defaultRefundChoice(tenders: readonly BillTenderView[]): RefundChoice {
+  const main = mainTender(tenders);
+  return main ? choiceFor(main.method) : "cash";
+}
+
+/** The tender method sent to the server: the bill's own card/UPI method when it matches the choice (a refund to the same card), else the manual one. */
+export function refundMethodFor(choice: RefundChoice, tenders: readonly BillTenderView[]): BillTenderMethod {
+  const main = mainTender(tenders);
+  if (main && choiceFor(main.method) === choice) return main.method;
+  return ({ cash: "cash", card: "card_terminal", upi: "upi_manual", external: "external" } as const)[choice];
+}
+
+/** "Cash", "Card terminal", ... - or "Not recorded" for a credit note issued before the method was kept. */
+export function refundMethodLabel(method: BillTenderMethod | null): string {
+  return method ? TENDER_METHOD_LABEL[method] : "Not recorded";
+}
 
 /** Selected refund quantity per original order line id; a line absent (or 0) isn't part of the refund. */
 export type RefundSelection = Record<string, number>;
@@ -75,7 +113,16 @@ export interface RefundTotals {
 /** `bill-core.ts`'s `TAX_RATE_PLACEHOLDER_PERCENT` - the same flat rate `bills.service.ts`'s `refund()` reverses at. */
 export const REFUND_TAX_RATE_PERCENT = 5;
 
-export function computeRefundTotals(lines: readonly OrderLineView[], selection: RefundSelection): RefundTotals {
+/** What the preview needs from the original bill to pro-rate a refund the way the server does (restiq-backend#207/#221). */
+export type RefundBillTotals = Pick<BillView, "subtotalMinor" | "discountMinor" | "taxMinor" | "pricesIncludeTax">;
+
+/**
+ * Without `bill`: gross lines plus the flat placeholder tax. With it: the
+ * server's own pro-rating - the selection's share of the bill's discounted
+ * subtotal and of its stored tax, each rounded down (exact for a first
+ * refund; the server's figure on the credit note is the source of truth).
+ */
+export function computeRefundTotals(lines: readonly OrderLineView[], selection: RefundSelection, bill?: RefundBillTotals): RefundTotals {
   const linesById = new Map(lines.map((line) => [line.id, line]));
   const selected: RefundLineTotal[] = Object.entries(selection)
     .filter(([, quantity]) => quantity > 0)
@@ -87,9 +134,14 @@ export function computeRefundTotals(lines: readonly OrderLineView[], selection: 
     })
     .filter((entry): entry is RefundLineTotal => entry !== null);
 
-  const subtotalMinor = selected.reduce((sum, entry) => sum + entry.amountMinor, 0);
-  const taxReversalMinor = Math.round((subtotalMinor * REFUND_TAX_RATE_PERCENT) / 100);
-  return { lines: selected, subtotalMinor, taxReversalMinor, totalMinor: subtotalMinor + taxReversalMinor };
+  const grossMinor = selected.reduce((sum, entry) => sum + entry.amountMinor, 0);
+  if (bill && bill.subtotalMinor > 0) {
+    const subtotalMinor = Math.floor((grossMinor * (bill.subtotalMinor - (bill.discountMinor ?? 0))) / bill.subtotalMinor);
+    const taxReversalMinor = Math.floor((grossMinor * bill.taxMinor) / bill.subtotalMinor);
+    return { lines: selected, subtotalMinor, taxReversalMinor, totalMinor: bill.pricesIncludeTax ? subtotalMinor : subtotalMinor + taxReversalMinor };
+  }
+  const taxReversalMinor = Math.round((grossMinor * REFUND_TAX_RATE_PERCENT) / 100);
+  return { lines: selected, subtotalMinor: grossMinor, taxReversalMinor, totalMinor: grossMinor + taxReversalMinor };
 }
 
 export function hasRefundSelection(selection: RefundSelection): boolean {
@@ -114,6 +166,8 @@ export interface CreateRefundInput {
   reason: string;
   /** Omitted entirely to mean "refund every line's full remaining quantity" - a whole-bill refund, not a separate code path (matches `RefundBillDto.lines`'s own optionality). */
   lines?: RefundLineInput[];
+  /** How the money went back; the server defaults it to the bill's main tender when omitted. */
+  method?: BillTenderMethod;
 }
 
 export interface CreditNoteLineView {
@@ -134,7 +188,10 @@ export interface CreditNoteView {
   subtotalMinor: number;
   taxMinor: number;
   totalMinor: number;
+  /** How the money went back; null on a note issued before this was recorded (restiq-backend#221). */
+  method: BillTenderMethod | null;
   createdAt: string;
+  /** Each line's amount is net of its share of the bill discount, so they add up to subtotalMinor. */
   lines: CreditNoteLineView[];
 }
 

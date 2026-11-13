@@ -31,6 +31,15 @@ export interface StaffView {
   roleId: string;
   roleName: string;
   pinStatus: PinStatus;
+  /** restiq-backend#197: outlets this person may sign in at; empty (or absent from an older API) = every outlet. */
+  outletIds?: string[];
+}
+
+/** "Every outlet", or the assigned outlets' names (closed outlets drop out of the list). */
+export function outletsLabel(outletIds: readonly string[] | undefined, outlets: readonly { id: string; name: string }[]): string {
+  if (!outletIds || outletIds.length === 0) return "Every outlet";
+  const names = outlets.filter((outlet) => outletIds.includes(outlet.id)).map((outlet) => outlet.name);
+  return names.length > 0 ? names.join(", ") : "No open outlets";
 }
 
 export function staffFullName(staff: Pick<StaffView, "name">): string {
@@ -44,9 +53,11 @@ export interface AddStaffForm {
   lastName: string;
   email: string;
   roleId: string;
+  /** Empty = every outlet. */
+  outletIds: string[];
 }
 
-export const EMPTY_ADD_STAFF_FORM: AddStaffForm = { firstName: "", lastName: "", email: "", roleId: "" };
+export const EMPTY_ADD_STAFF_FORM: AddStaffForm = { firstName: "", lastName: "", email: "", roleId: "", outletIds: [] };
 
 const EMAIL_PATTERN = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 
@@ -68,8 +79,8 @@ export function validateAddStaffForm(form: AddStaffForm, roles: readonly RoleVie
   const errors: AddStaffErrors = {};
   if (!form.firstName.trim()) errors.firstName = "First name is required.";
   if (!form.lastName.trim()) errors.lastName = "Last name is required.";
-  if (!form.email.trim()) errors.email = "Email is required.";
-  else if (!EMAIL_PATTERN.test(form.email.trim())) errors.email = "Enter a valid email address.";
+  // CU-3: most floor staff have no email - it is optional; only a typed one must be valid.
+  if (form.email.trim() && !EMAIL_PATTERN.test(form.email.trim())) errors.email = "Enter a valid email address.";
   if (!form.roleId || !roles.some((role) => role.id === form.roleId)) errors.roleId = "Choose one of the six system roles.";
   return errors;
 }

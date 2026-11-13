@@ -957,6 +957,14 @@ done now, this is what actually happened:
 
 ## CAP-7 - Bill & Settle (story 8)
 
+> **Update 2026-10-08 (#306).**
+> - Cash can go over the total. The screen shows "Change due" and posts the cash net of change, because the backend still needs the tenders to equal the total.
+> - The payment keypad takes whole currency units.
+> - The bill lists `taxBreakdown` lines (CGST/SGST, GST).
+> - #369 (2026-10-19): with a discount pending, those lines are recomputed on the discounted value (`billFigures` in `bill-state.ts`: GST rounded once, CGST = floor(half), SGST = remainder), so Discount + tax lines add up to TOTAL before finalize. The split follows the bill's `gstSplitRounding` (restiq-backend#244): `exact_total` or null rounds once (CGST = floor(half), SGST = remainder); `equal_half_up` / `equal_half_even` round each half on its own.
+> - ~~Counter Charge fires the order to the kitchen first.~~ Superseded by #361 (2026-10-19): Charge only calls finalize, and the backend fires the unsent lines to the kitchen inside a successful finalize. A failed payment (e.g. no open shift) sends nothing to the KDS; the error shows and the cart stays.
+> - Closed orders are read-only.
+
 - **Intent:** cashier reviews a tax breakdown of the order, optionally applies a discount
   (gated by manager PIN once above a threshold), tenders payment across one or more
   methods until the remaining-to-settle figure hits zero, then finalises - after which the

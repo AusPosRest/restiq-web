@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
 import {
   EMPTY_ADD_STAFF_FORM,
+  outletsLabel,
   ROLE_PERMISSION_CATALOG,
   roleHasPermission,
   staffFullName,
@@ -24,26 +25,31 @@ describe("staffFullName", () => {
 });
 
 describe("validateAddStaffForm", () => {
-  it("requires first name, last name, email and a role", () => {
+  it("requires first name, last name and a role", () => {
     const errors = validateAddStaffForm(EMPTY_ADD_STAFF_FORM, ROLES);
     expect(errors.firstName).toBeTruthy();
     expect(errors.lastName).toBeTruthy();
-    expect(errors.email).toBeTruthy();
     expect(errors.roleId).toBeTruthy();
   });
 
+  // CU-3: a waiter without an email can be added.
+  it("does not require an email", () => {
+    const errors = validateAddStaffForm({ firstName: "Raju", lastName: "K", email: "", roleId: "r-cashier", outletIds: [] }, ROLES);
+    expect(errors).toEqual({});
+  });
+
   it("rejects a malformed email", () => {
-    const errors = validateAddStaffForm({ firstName: "Priya", lastName: "Nair", email: "not-an-email", roleId: "r-cashier" }, ROLES);
+    const errors = validateAddStaffForm({ firstName: "Priya", lastName: "Nair", email: "not-an-email", roleId: "r-cashier", outletIds: [] }, ROLES);
     expect(errors.email).toBeTruthy();
   });
 
   it("rejects a roleId that isn't one of the tenant's seeded roles - no free-text roles", () => {
-    const errors = validateAddStaffForm({ firstName: "Priya", lastName: "Nair", email: "priya@example.com", roleId: "made-up-role" }, ROLES);
+    const errors = validateAddStaffForm({ firstName: "Priya", lastName: "Nair", email: "priya@example.com", roleId: "made-up-role", outletIds: [] }, ROLES);
     expect(errors.roleId).toBeTruthy();
   });
 
   it("passes for a complete form with a real role id", () => {
-    const errors = validateAddStaffForm({ firstName: "Priya", lastName: "Nair", email: "priya@example.com", roleId: "r-cashier" }, ROLES);
+    const errors = validateAddStaffForm({ firstName: "Priya", lastName: "Nair", email: "priya@example.com", roleId: "r-cashier", outletIds: [] }, ROLES);
     expect(errors).toEqual({});
   });
 });
@@ -62,5 +68,20 @@ describe("roleHasPermission", () => {
 
   it("denies everything for an unknown role name", () => {
     expect(roleHasPermission("Made Up Role", "take_orders")).toBe(false);
+  });
+});
+
+describe("outletsLabel", () => {
+  const outlets = [
+    { id: "o1", name: "Indiranagar" },
+    { id: "o2", name: "Koramangala" },
+  ];
+  it("reads Every outlet for none or an older API, and says when every assigned outlet has closed", () => {
+    expect(outletsLabel([], outlets)).toBe("Every outlet");
+    expect(outletsLabel(undefined, outlets)).toBe("Every outlet");
+    expect(outletsLabel(["gone"], outlets)).toBe("No open outlets");
+  });
+  it("names the assigned outlets", () => {
+    expect(outletsLabel(["o2", "o1"], outlets)).toBe("Indiranagar, Koramangala");
   });
 });

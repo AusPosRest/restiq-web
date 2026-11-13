@@ -1,0 +1,57 @@
+{
+  "$schema": "node_modules/wrangler/config-schema.json",
+  "name": "restiq-web",
+  "account_id": "2e01974f8599d877f0015ce024bfc7a5",
+  "main": ".open-next/worker.js",
+  "compatibility_date": "2026-10-19",
+  "compatibility_flags": ["nodejs_compat", "global_fetch_strictly_public"],
+  "assets": {
+    "directory": ".open-next/assets",
+    "binding": "ASSETS"
+  },
+  // Run the server code next to the backend (Fly syd, Neon ap-southeast-2): every
+  // signed-in page makes API calls to Sydney. Static assets still serve near the visitor.
+  "placement": {
+    "region": "aws:ap-southeast-2"
+  },
+  "observability": {
+    "enabled": true
+  },
+  // The apex plus every tenant subdomain. api.niftypos.com.au is the backend, not this app:
+  // a script-less route for api.niftypos.com.au/* on the niftypos.com.au zone is more
+  // specific than *.niftypos.com.au/*, so its requests skip the Worker and go to the origin.
+  "routes": [
+    { "pattern": "niftypos.com.au/*", "zone_name": "niftypos.com.au" },
+    { "pattern": "*.niftypos.com.au/*", "zone_name": "niftypos.com.au" }
+  ],
+  // NEXT_PUBLIC_* are inlined at build time from .env.production; these keep the
+  // server-side reads in step at runtime. PROXY_SHARED_SECRET is a secret:
+  // `wrangler secret put PROXY_SHARED_SECRET` (locally: .dev.vars).
+  "vars": {
+    "NEXT_PUBLIC_API_URL": "https://api.niftypos.com.au",
+    "NEXT_PUBLIC_BASE_DOMAIN": "niftypos.com.au",
+    "NEXT_PUBLIC_ENV_LABEL": "Production",
+    // Public demo (/demo, /simulator) is on for niftypos.com.au - read per request (PE-30).
+    "DEMO_PAGES": "on"
+  },
+  // restiq-web#423: the dev environment - `pnpm run deploy:dev`. Separate Worker, same code.
+  // dev.niftypos.com.au/* is more specific than production's *.niftypos.com.au/*, so it wins (a
+  // Custom Domain does not - production's wildcard route still caught it). The zone's free
+  // certificate covers dev.niftypos.com.au; dev test restaurants (<slug>.dev.niftypos.com.au) are
+  // one level deeper and need their own certificate - added with the first dev tenant.
+  "env": {
+    "dev": {
+      "name": "restiq-web-dev",
+      "routes": [
+        { "pattern": "dev.niftypos.com.au/*", "zone_name": "niftypos.com.au" }
+      ],
+      // Not inherited from the top level - restated. The dev API has no custom domain: its Fly address.
+      "vars": {
+        "NEXT_PUBLIC_API_URL": "https://restiq-backend-dev.fly.dev",
+        "NEXT_PUBLIC_BASE_DOMAIN": "dev.niftypos.com.au",
+        "NEXT_PUBLIC_ENV_LABEL": "Development",
+        "DEMO_PAGES": "on"
+      }
+    }
+  }
+}

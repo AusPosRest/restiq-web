@@ -5,7 +5,7 @@
 import { Clock } from "lucide-react";
 import { formatAsOf } from "./dashboard-state";
 
-export function FreshnessBadge({ asOf, stale }: Readonly<{ asOf: string; stale: boolean }>) {
+export function FreshnessBadge({ asOf, stale, timeZone }: Readonly<{ asOf: string; stale: boolean; timeZone?: string }>) {
   return (
     <span
       data-testid="dashboard-freshness-badge"
@@ -15,7 +15,7 @@ export function FreshnessBadge({ asOf, stale }: Readonly<{ asOf: string; stale: 
       }`}
     >
       <Clock className="size-3.5" aria-hidden="true" />
-      {stale ? `Sync is behind - as of ${formatAsOf(asOf)}` : `As of ${formatAsOf(asOf)}`}
+      {stale ? `Sync is behind - as of ${formatAsOf(asOf, new Date(), timeZone)}` : `As of ${formatAsOf(asOf, new Date(), timeZone)}`}
     </span>
   );
 }

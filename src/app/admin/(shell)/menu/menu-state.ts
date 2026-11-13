@@ -15,12 +15,17 @@
 //    file's PendingPriceInfo is therefore populated only from what the UI
 //    itself just wrote in this session (see item-drawer.tsx), not fetched.
 
+import { formatPrice } from "@/lib/money";
+import { DATE_LOCALE } from "@/lib/datetime";
+
 export type PriceChannel = "dine_in" | "takeaway" | "delivery" | "qr" | "aggregator";
 
 export interface VariantView {
   id: string;
   name: string;
   sortOrder: number;
+  /** restiq-backend#211: current dine-in price, null = unpriced (not on sale). */
+  priceMinor: number | null;
 }
 
 export interface ModifierView {
@@ -50,9 +55,29 @@ export interface ItemView {
   available: boolean;
   // https or an uploaded data:image URL (issue #218); optional for older backends.
   photoUrl?: string | null;
+  vegMarker?: VegMarker | null;
+  /** Kitchen station this item's tickets go to; null = the outlet's first station. */
+  stationId?: string | null;
+  /** restiq-backend#211: current dine-in base price, inline (no per-row price request). */
+  priceMinor: number | null;
+  currency: string | null;
   variants: VariantView[];
   modifierGroups: ModifierGroupView[];
   allergens: AllergenView[];
+}
+
+export type VegMarker = "veg" | "non_veg";
+
+/**
+ * CU-23: why the till and QR menu can't sell an item as the owner sees it, or
+ * null when they can. An item with variants sells only its priced variants.
+ */
+export function unsellableNote(item: Pick<ItemView, "priceMinor" | "variants">): string | null {
+  if (item.variants.length === 0) return item.priceMinor === null ? "No price set, so it isn't on the till or QR menu." : null;
+  const unpriced = item.variants.filter((v) => v.priceMinor === null).map((v) => v.name);
+  if (unpriced.length === 0) return null;
+  if (unpriced.length === item.variants.length) return "No portion has a price, so it isn't on the till or QR menu.";
+  return `${unpriced.join(", ")} ${unpriced.length === 1 ? "has" : "have"} no price, so ${unpriced.length === 1 ? "it isn't" : "they aren't"} offered.`;
 }
 
 export interface CategoryView {
@@ -115,6 +140,8 @@ export interface OutletView {
   address: string;
   type: OutletType;
   timezone: string;
+  /** The tenant's currency (INR/AUD) - restiq-backend#212. */
+  currency: string;
 }
 
 /** Client-tracked only (see file header) - the price just scheduled/saved in
@@ -127,11 +154,8 @@ export interface PendingPriceInfo {
   effectiveAt: string;
 }
 
-const CURRENCY_SYMBOLS: Record<string, string> = { INR: "₹", USD: "$", AUD: "$", GBP: "£" };
-
 export function formatPriceMinor(priceMinor: number, currency: string): string {
-  const symbol = CURRENCY_SYMBOLS[currency] ?? `${currency} `;
-  return `${symbol}${(priceMinor / 100).toFixed(0)}`;
+  return formatPrice(priceMinor, currency);
 }
 
 export function majorStringToPriceMinor(value: string): number | null {
@@ -141,7 +165,7 @@ export function majorStringToPriceMinor(value: string): number | null {
 }
 
 export function formatEffectiveDate(iso: string): string {
-  return new Date(iso).toLocaleDateString(undefined, { day: "numeric", month: "short" });
+  return new Date(iso).toLocaleDateString(DATE_LOCALE, { day: "numeric", month: "short" });
 }
 
 export function pendingChangeFor(

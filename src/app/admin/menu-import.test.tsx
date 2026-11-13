@@ -287,6 +287,32 @@ describe("MenuImport review", () => {
     expect(screen.getByTestId("menu-import-table")).toBeTruthy();
   });
 
+  it("flags rows already on the menu as soon as the draft arrives, and leaves them out in one click (PE-11)", async () => {
+    const draft = { ...DRAFT, items: [draftItem({ id: "1", duplicate: "on_menu" }), draftItem({ id: "2", name: "Kebab", duplicate: null })] };
+    const fetchMock = vi
+      .fn()
+      .mockResolvedValueOnce(jsonResponse(draft, 201))
+      .mockResolvedValueOnce(jsonResponse({ ...draft, items: [draft.items[1]] }));
+    vi.stubGlobal("fetch", fetchMock);
+    await uploadAndReachReview();
+
+    expect(screen.getByTestId("menu-import-row-1-duplicate").textContent).toBe("Already on your menu");
+    expect(screen.getByTestId("menu-import-duplicates-banner").textContent).toContain("1 item is already on your menu");
+    await userEvent.click(screen.getByTestId("menu-import-remove-duplicates"));
+    await waitFor(() => expect(screen.queryByTestId("menu-import-row-1")).toBeNull());
+    expect(screen.queryByTestId("menu-import-duplicates-banner")).toBeNull();
+  });
+
+  it("marks every row reviewed in one click, and hides the confidence column for a plain spreadsheet (PE-11)", async () => {
+    vi.stubGlobal("fetch", vi.fn().mockResolvedValue(jsonResponse({ ...DRAFT, items: [draftItem({ id: "1" }), draftItem({ id: "2", name: "Kebab" })] }, 201)));
+    await uploadAndReachReview();
+
+    expect(screen.queryByTestId("menu-import-row-1-confidence")).toBeNull();
+    await userEvent.click(screen.getByTestId("menu-import-mark-all"));
+    expect(screen.getByTestId("menu-import-reviewed-count").textContent).toBe("2/2 reviewed");
+    expect((screen.getByTestId("menu-import-commit") as HTMLButtonElement).disabled).toBe(false);
+  });
+
   it("flags rows already on the menu and lets the owner remove them from the import (issue #247)", async () => {
     const fetchMock = vi
       .fn()
@@ -320,5 +346,52 @@ describe("MenuImport review", () => {
     expect(patchUrl).toBe("/admin/api/menu-import/imp-1");
     expect(JSON.parse(patchInit.body as string)).toEqual({ items: [], removeIds: ["2"] });
     expect((screen.getByTestId("menu-import-commit") as HTMLButtonElement).disabled).toBe(false);
+  });
+});
+
+// PE-11: an upload left mid-review is still on the server; the page offers it back.
+describe("MenuImport resume", () => {
+  beforeEach(() => vi.unstubAllGlobals());
+  afterEach(cleanup);
+
+  function stubLatest(draft: unknown) {
+    const fetchMock = vi.fn((input: RequestInfo | URL) =>
+      Promise.resolve(String(input).includes("/admin/api/menu-import/latest") ? jsonResponse({ draft }) : jsonResponse({ error: { code: "not_found", message: "x" } }, 404)),
+    );
+    vi.stubGlobal("fetch", fetchMock);
+    return fetchMock;
+  }
+
+  it("offers to continue the open draft and opens it for review", async () => {
+    stubLatest({ ...DRAFT, items: [draftItem({ id: "1" }), draftItem({ id: "2", name: "Kebab", duplicate: "on_menu" })] });
+    render(<MenuImport resume />);
+
+    const card = await screen.findByTestId("menu-import-resume");
+    expect(card.textContent).toContain("Continue your import");
+    expect(card.textContent).toContain("menu.csv");
+    expect(card.textContent).toContain("2 items");
+
+    await userEvent.click(screen.getByTestId("menu-import-resume-continue"));
+    expect(await screen.findByTestId("menu-import-table")).toBeTruthy();
+    expect(screen.getByTestId("menu-import-row-2-duplicate")).toBeTruthy();
+  });
+
+  it("shows only the dropzone when there is no open draft, or the lookup fails", async () => {
+    const fetchMock = stubLatest(null);
+    render(<MenuImport resume />);
+    await waitFor(() => expect(fetchMock).toHaveBeenCalled());
+    expect(screen.queryByTestId("menu-import-resume")).toBeNull();
+    cleanup();
+
+    vi.stubGlobal("fetch", vi.fn().mockResolvedValue(jsonResponse({ error: { code: "error", message: "nope" } }, 500)));
+    render(<MenuImport resume />);
+    expect(screen.getByTestId("menu-import-dropzone")).toBeTruthy();
+    expect(screen.queryByTestId("menu-import-resume")).toBeNull();
+  });
+
+  it("does not look for a draft unless asked to", () => {
+    const fetchMock = stubLatest(DRAFT);
+    render(<MenuImport />);
+    expect(fetchMock).not.toHaveBeenCalled();
   });
 });

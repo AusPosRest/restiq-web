@@ -73,8 +73,14 @@ describe("StaffTable", () => {
     const onIssuePin = vi.fn();
     render(<StaffTable staff={STAFF} roles={ROLES} busyStaffId={null} issuedPin={null} onRoleSelected={noop} onIssuePin={onIssuePin} onRevokeRequested={noop} onDismissIssuedPin={noop} />);
 
+    // PE-19: it asks first - cancelling leaves the PIN alone.
+    const confirm = vi.spyOn(window, "confirm").mockReturnValueOnce(false).mockReturnValueOnce(true);
+    await userEvent.click(screen.getByTestId("staff-reset-pin-s1"));
+    expect(onIssuePin).not.toHaveBeenCalled();
     await userEvent.click(screen.getByTestId("staff-reset-pin-s1"));
     expect(onIssuePin).toHaveBeenCalledWith("s1");
+    expect(confirm.mock.calls[0]?.[0]).toContain("stops working");
+    confirm.mockRestore();
   });
 
   it("disables the busy row's controls", () => {

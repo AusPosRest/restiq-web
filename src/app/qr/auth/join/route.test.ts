@@ -55,6 +55,21 @@ describe("POST /qr/auth/join", () => {
     expect(cookie?.httpOnly).toBe(true);
   });
 
+  it("passes the guest's address to the API so wrong PINs are counted per guest (restiq-backend#209, SE-24)", async () => {
+    vi.stubEnv("PROXY_SHARED_SECRET", "proxy-secret");
+    const fetchMock = vi.fn().mockResolvedValue(upstreamJson(200, { token: "guest-jwt", session: { outletId: "o1", tableId: "t1" } }));
+    vi.stubGlobal("fetch", fetchMock);
+    const request = new Request("https://web.example.test/qr/auth/join", {
+      method: "POST",
+      headers: { "content-type": "application/json", "x-real-ip": "203.0.113.7" },
+      body: JSON.stringify({ outletId: "o1", tableId: "t1", pin: "4729", name: "Priya" }),
+    });
+    await POST(request);
+    const [, init] = fetchMock.mock.calls[0] as [string, RequestInit];
+    expect(init.headers).toMatchObject({ "x-restiq-client-ip": "203.0.113.7", "x-restiq-proxy-secret": "proxy-secret" });
+    vi.unstubAllEnvs();
+  });
+
   it("passes through a wrong-pin error (403 invalid_pin) untouched, without setting a cookie", async () => {
     vi.stubGlobal(
       "fetch",

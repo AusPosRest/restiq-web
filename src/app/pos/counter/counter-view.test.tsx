@@ -9,6 +9,8 @@ import { cleanup, render, screen, waitFor } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { CounterView } from "./counter-view";
+
+vi.mock("next/navigation", () => ({ useRouter: () => ({ push: vi.fn(), replace: vi.fn() }) }));
 import type { BillView } from "../orders/[orderId]/settle/bill-state";
 import type { PaymentIntentView } from "@/lib/payment-intent";
 import type { PosMenuView, RawOrder } from "../orders/[orderId]/order-taking-state";
@@ -78,10 +80,16 @@ function stubFetch(handlers: Partial<Record<string, (init?: RequestInit) => Resp
     const method = init?.method ?? "GET";
     const key = `${method} ${url.replace(/^.*\/pos\/api\//, "")}`;
     if (handlers[key]) return Promise.resolve(handlers[key]!(init));
+    if (key.startsWith("GET shifts/current")) return Promise.resolve(jsonResponse({ id: "shift-1" }));
     return Promise.resolve(jsonResponse({ error: { code: "not_found", message: `unhandled ${key}` } }, 404));
   });
   vi.stubGlobal("fetch", fetchMock);
   return fetchMock;
+}
+
+/** restiq-web#361: did the screen itself send the order to the kitchen? */
+function sentToKitchen(fetchMock: ReturnType<typeof stubFetch>): boolean {
+  return fetchMock.mock.calls.some(([input, init]) => init?.method === "PATCH" && String(input).endsWith("/status"));
 }
 
 afterEach(() => {
@@ -90,40 +98,130 @@ afterEach(() => {
   sessionStorage.clear();
 });
 
-describe("CounterView - starting a counter order", () => {
-  it("starts an outlet-scoped counter order on mount and shows the assigned token number", async () => {
+const NAAN_LINE = {
+  id: "line-1",
+  orderId: "order-47",
+  itemId: "item-naan",
+  variantId: null,
+  quantity: 1,
+  unitPriceMinor: 6000,
+  seatNumber: null,
+  addedByStaffId: "staff-priya",
+  createdAt: "2026-08-25T09:01:00.000Z",
+  modifiers: [],
+};
+
+/** A reload of a tab that was ringing up order-47 (restiq-web#343). */
+function resumeOrder47() {
+  sessionStorage.setItem(`pos:counter-order:${CURRENT_STAFF_ID}`, "order-47");
+}
+
+describe("CounterView - no shift open (restiq-web#341)", () => {
+  it("asks the cashier to open a shift before taking cash", async () => {
+    resumeOrder47();
+    stubFetch({
+      "GET menu": () => jsonResponse(MENU),
+      "GET orders/order-47": () => jsonResponse(counterOrder({ lines: [NAAN_LINE] })),
+      "POST orders/order-47/bill": () => jsonResponse(bill("order-47", { subtotalMinor: 6000, totalMinor: 6300 }), 201),
+      [`GET shifts/current?outletId=${OUTLET_ID}`]: () => jsonResponse({ error: { code: "not_found", message: "No open shift for this outlet" } }, 404),
+    });
+    render(<CounterView outletId={OUTLET_ID} currentStaffId={CURRENT_STAFF_ID} currentStaffName="Priya" />);
+
+    await screen.findByTestId("tender-shift-required");
+    expect(screen.getByTestId("tender-open-shift").getAttribute("href")).toBe("/pos/shift");
+    expect(screen.getByTestId("tender-fill-remaining")).toHaveProperty("disabled", true);
+  });
+});
+
+describe("CounterView - starting a counter order (restiq-web#343)", () => {
+  it("creates nothing on open - no order, no token - and shows the cashier's name (PE-16, PE-19)", async () => {
+    const fetchMock = stubFetch({ "GET menu": () => jsonResponse(MENU) });
+    render(<CounterView outletId={OUTLET_ID} currentStaffId={CURRENT_STAFF_ID} currentStaffName="Priya" />);
+
+    await screen.findByTestId("counter-view");
+    expect(screen.getByTestId("counter-new-order").textContent).toBe("New order");
+    expect(screen.getByTestId("counter-cashier").textContent).toContain("Priya");
+    expect(screen.getByTestId("counter-empty-cart")).toBeTruthy();
+    expect(fetchMock.mock.calls.some(([url, init]) => String(url).includes("counter-orders") && init?.method === "POST")).toBe(false);
+  });
+
+  it("creates the order and its token on the first item, and remembers it for a reload", async () => {
+    const user = userEvent.setup();
     stubFetch({
       "GET menu": () => jsonResponse(MENU),
       [`POST outlets/${OUTLET_ID}/counter-orders`]: () => jsonResponse(counterOrder(), 201),
-      "POST orders/order-47/bill": () => jsonResponse(bill("order-47"), 201),
+      "POST orders/order-47/lines": (init) => {
+        expect(JSON.parse(String(init?.body))).toMatchObject({ itemId: "item-naan", quantity: 1 });
+        return jsonResponse(counterOrder({ lines: [NAAN_LINE] }), 201);
+      },
+      "POST orders/order-47/bill": () => jsonResponse(bill("order-47", { subtotalMinor: 6000, taxMinor: 300, totalMinor: 6300 }), 201),
     });
-    render(<CounterView outletId={OUTLET_ID} currentStaffId={CURRENT_STAFF_ID} />);
-
+    render(<CounterView outletId={OUTLET_ID} currentStaffId={CURRENT_STAFF_ID} currentStaffName="Priya" />);
     await screen.findByTestId("counter-view");
+
+    await user.click(screen.getByTestId("item-tile-item-naan"));
+    await waitFor(() => expect(screen.getByTestId("bill-line-line-1")).toBeTruthy());
     expect(screen.getByTestId("token-badge-number").textContent).toBe("#47");
-    expect(screen.getByTestId("counter-cashier").textContent).toContain("You");
+    expect(sessionStorage.getItem(`pos:counter-order:${CURRENT_STAFF_ID}`)).toBe("order-47");
   });
 
-  it("shows the raw owner id for a counter order started by someone else's terminal", async () => {
+  it("resumes the order in progress after a reload instead of starting a new one (CU-13)", async () => {
+    resumeOrder47();
     stubFetch({
       "GET menu": () => jsonResponse(MENU),
-      [`POST outlets/${OUTLET_ID}/counter-orders`]: () => jsonResponse(counterOrder({ ownerId: "staff-arjun" }), 201),
-      "POST orders/order-47/bill": () => jsonResponse(bill("order-47"), 201),
+      "GET orders/order-47": () => jsonResponse(counterOrder({ lines: [NAAN_LINE] })),
+      "POST orders/order-47/bill": () => jsonResponse(bill("order-47", { subtotalMinor: 6000, taxMinor: 300, totalMinor: 6300 })),
     });
-    render(<CounterView outletId={OUTLET_ID} currentStaffId={CURRENT_STAFF_ID} />);
+    render(<CounterView outletId={OUTLET_ID} currentStaffId={CURRENT_STAFF_ID} currentStaffName="Priya" />);
 
+    await waitFor(() => expect(screen.getByTestId("bill-line-line-1")).toBeTruthy());
+    expect(screen.getByTestId("token-badge-number").textContent).toBe("#47");
+  });
+
+  it("does not resume a paid order, or someone else's", async () => {
+    resumeOrder47();
+    stubFetch({
+      "GET menu": () => jsonResponse(MENU),
+      "GET orders/order-47": () => jsonResponse(counterOrder({ status: "closed", lines: [NAAN_LINE] })),
+    });
+    render(<CounterView outletId={OUTLET_ID} currentStaffId={CURRENT_STAFF_ID} currentStaffName="Priya" />);
+
+    await screen.findByTestId("counter-new-order");
+    expect(sessionStorage.getItem(`pos:counter-order:${CURRENT_STAFF_ID}`)).toBeNull();
+  });
+
+  it("discards an order that was emptied again, back to a fresh screen (PE-16)", async () => {
+    const user = userEvent.setup();
+    resumeOrder47();
+    let discarded = false;
+    stubFetch({
+      "GET menu": () => jsonResponse(MENU),
+      "GET orders/order-47": () => jsonResponse(counterOrder()),
+      "POST orders/order-47/bill": () => jsonResponse(bill("order-47")),
+      "DELETE orders/order-47": () => {
+        discarded = true;
+        return new Response(null, { status: 204 });
+      },
+    });
+    render(<CounterView outletId={OUTLET_ID} currentStaffId={CURRENT_STAFF_ID} currentStaffName="Priya" />);
+
+    await user.click(await screen.findByTestId("counter-discard-order"));
+    await screen.findByTestId("counter-new-order");
+    expect(discarded).toBe(true);
+    expect(sessionStorage.getItem(`pos:counter-order:${CURRENT_STAFF_ID}`)).toBeNull();
+  });
+
+  it("shows the error and keeps the screen if the order can't be started", async () => {
+    const user = userEvent.setup();
+    stubFetch({
+      "GET menu": () => jsonResponse(MENU),
+      [`POST outlets/${OUTLET_ID}/counter-orders`]: () => jsonResponse({ error: { message: "The till is offline" } }, 500),
+    });
+    render(<CounterView outletId={OUTLET_ID} currentStaffId={CURRENT_STAFF_ID} currentStaffName="Priya" />);
     await screen.findByTestId("counter-view");
-    expect(screen.getByTestId("counter-cashier").textContent).toContain("staff-arjun");
-    expect(screen.getByTestId("counter-cashier").textContent).not.toContain("You");
-  });
-
-  it("shows a retryable error panel if the counter order can't be started", async () => {
-    stubFetch({
-      "GET menu": () => jsonResponse(MENU),
-      [`POST outlets/${OUTLET_ID}/counter-orders`]: () => jsonResponse({ error: { message: "down" } }, 500),
-    });
-    render(<CounterView outletId={OUTLET_ID} currentStaffId={CURRENT_STAFF_ID} />);
-    await waitFor(() => expect(screen.getByTestId("counter-order-error")).toBeTruthy());
+    await user.click(screen.getByTestId("item-tile-item-naan"));
+    await waitFor(() => expect(screen.getByTestId("counter-action-error").textContent).toContain("The till is offline"));
+    expect(screen.getByTestId("item-grid")).toBeTruthy();
   });
 });
 
@@ -132,7 +230,7 @@ describe("CounterView - ring up and settle in one continuous flow", () => {
     const user = userEvent.setup();
     let currentBill = bill("order-47");
 
-    stubFetch({
+    const fetchMock = stubFetch({
       "GET menu": () => jsonResponse(MENU),
       [`POST outlets/${OUTLET_ID}/counter-orders`]: () => jsonResponse(counterOrder(), 201),
       "POST orders/order-47/bill": () => jsonResponse(currentBill, 201),
@@ -169,7 +267,7 @@ describe("CounterView - ring up and settle in one continuous flow", () => {
       },
     });
 
-    render(<CounterView outletId={OUTLET_ID} currentStaffId={CURRENT_STAFF_ID} />);
+    render(<CounterView outletId={OUTLET_ID} currentStaffId={CURRENT_STAFF_ID} currentStaffName="Priya" />);
     await screen.findByTestId("counter-view");
 
     // Ring up: no-modifier item adds straight to the order, same behavior as
@@ -195,6 +293,9 @@ describe("CounterView - ring up and settle in one continuous flow", () => {
     await user.click(screen.getByTestId("finalize-bill"));
 
     await screen.findByTestId("counter-settled-panel");
+    // restiq-web#361: the web never sends to the kitchen itself on Charge - a
+    // successful finalize fires the ticket server-side.
+    expect(sentToKitchen(fetchMock)).toBe(false);
     expect(screen.getByTestId("token-badge-number").textContent).toBe("#47");
     // No mutation UI survives finalization, same AD-14 discipline as bill-settle-view.
     expect(screen.queryByTestId("tender-keypad")).toBeNull();
@@ -202,14 +303,42 @@ describe("CounterView - ring up and settle in one continuous flow", () => {
     expect(screen.getByTestId("print-invoice-link").getAttribute("href")).toBe("/pos/bills/bill-order-47/invoice");
   });
 
+  it("does not send to the kitchen when finalize fails; shows the error and keeps the cart (restiq-web#361)", async () => {
+    const user = userEvent.setup();
+    resumeOrder47();
+    const fetchMock = stubFetch({
+      "GET menu": () => jsonResponse(MENU),
+      "GET orders/order-47": () => jsonResponse(counterOrder({ lines: [NAAN_LINE] })),
+      "POST orders/order-47/bill": () => jsonResponse(bill("order-47", { subtotalMinor: 6000, taxMinor: 300, totalMinor: 6300 }), 201),
+      "POST bills/bill-order-47/finalize": () =>
+        jsonResponse({ error: { code: "shift_not_open", message: "Open a shift with your starting cash float before taking cash" } }, 409),
+    });
+    render(<CounterView outletId={OUTLET_ID} currentStaffId={CURRENT_STAFF_ID} currentStaffName="Priya" />);
+
+    await user.click(await screen.findByTestId("tender-fill-remaining"));
+    await waitFor(() => expect(screen.getByTestId("finalize-bill")).toHaveProperty("disabled", false));
+    await user.click(screen.getByTestId("finalize-bill"));
+
+    const error = await screen.findByTestId("finalize-error");
+    expect(error.textContent).toContain("Open a shift");
+    expect(fetchMock.mock.calls.some(([input]) => String(input).endsWith("/finalize"))).toBe(true);
+    expect(sentToKitchen(fetchMock)).toBe(false);
+    // The cart survives so the cashier can fix the problem and charge again.
+    expect(screen.queryByTestId("counter-settled-panel")).toBeNull();
+    expect(screen.getByTestId("bill-line-line-1").textContent).toContain("Butter Naan");
+    expect(sessionStorage.getItem(`pos:counter-order:${CURRENT_STAFF_ID}`)).toBe("order-47");
+  });
+
   it("keeps the counter on screen while the bill refreshes after a tap, no loading flash (#269)", async () => {
     const user = userEvent.setup();
+    resumeOrder47();
     let billRequests = 0;
     stubFetch({
       "GET menu": () => jsonResponse(MENU),
       [`POST outlets/${OUTLET_ID}/counter-orders`]: () => jsonResponse(counterOrder(), 201),
-      // First read resolves; the refresh after the tap never does, so any
-      // loading shell it triggers would stay on screen.
+      "GET orders/order-47": () => jsonResponse(counterOrder()),
+      // First read (the resumed order) resolves; the refresh after the tap never
+      // does, so any loading shell it triggers would stay on screen.
       "POST orders/order-47/bill": () => (++billRequests === 1 ? jsonResponse(bill("order-47"), 201) : (new Promise(() => {}) as unknown as Response)),
       "POST orders/order-47/lines": () =>
         jsonResponse(
@@ -232,8 +361,8 @@ describe("CounterView - ring up and settle in one continuous flow", () => {
         ),
     });
 
-    render(<CounterView outletId={OUTLET_ID} currentStaffId={CURRENT_STAFF_ID} />);
-    await screen.findByTestId("counter-view");
+    render(<CounterView outletId={OUTLET_ID} currentStaffId={CURRENT_STAFF_ID} currentStaffName="Priya" />);
+    await screen.findByTestId("bill-summary");
     await user.click(screen.getByTestId("item-tile-item-naan"));
 
     await waitFor(() => expect(billRequests).toBe(2));
@@ -273,7 +402,7 @@ describe("CounterView - ring up and settle in one continuous flow", () => {
       },
     });
 
-    render(<CounterView outletId={OUTLET_ID} currentStaffId={CURRENT_STAFF_ID} />);
+    render(<CounterView outletId={OUTLET_ID} currentStaffId={CURRENT_STAFF_ID} currentStaffName="Priya" />);
     await screen.findByTestId("counter-view");
 
     await user.click(screen.getByTestId("item-tile-item-naan"));
@@ -287,29 +416,35 @@ describe("CounterView - ring up and settle in one continuous flow", () => {
     expect(screen.getByTestId("bill-line-line-1").textContent).toContain("2");
   });
 
-  it("starting the next order after settling issues a fresh token number", async () => {
+  it("Start next order after settling goes back to a fresh screen; the next token comes with its first item", async () => {
     const user = userEvent.setup();
+    resumeOrder47();
     let orderCount = 0;
 
     stubFetch({
       "GET menu": () => jsonResponse(MENU),
+      "GET orders/order-47": () => jsonResponse(counterOrder({ status: "sent", lines: [NAAN_LINE] })),
       [`POST outlets/${OUTLET_ID}/counter-orders`]: () => {
         orderCount += 1;
-        return jsonResponse(counterOrder({ id: `order-${46 + orderCount}`, tokenNumber: 46 + orderCount }), 201);
+        return jsonResponse(counterOrder({ id: "order-48", tokenNumber: 48 }), 201);
       },
       "POST orders/order-47/bill": () =>
         jsonResponse(bill("order-47", { status: "finalized", finalizedAt: "2026-08-25T09:05:00.000Z", tenders: [{ id: "t1", method: "cash", amountMinor: 0, createdAt: "2026-08-25T09:05:00.000Z" }] }), 201),
+      "POST orders/order-48/lines": () => jsonResponse(counterOrder({ id: "order-48", tokenNumber: 48, lines: [{ ...NAAN_LINE, orderId: "order-48" }] }), 201),
       "POST orders/order-48/bill": () => jsonResponse(bill("order-48"), 201),
     });
 
-    render(<CounterView outletId={OUTLET_ID} currentStaffId={CURRENT_STAFF_ID} />);
+    render(<CounterView outletId={OUTLET_ID} currentStaffId={CURRENT_STAFF_ID} currentStaffName="Priya" />);
     await screen.findByTestId("counter-settled-panel");
     expect(screen.getByTestId("token-badge-number").textContent).toBe("#47");
 
     await user.click(screen.getByTestId("counter-start-next-order"));
+    await screen.findByTestId("counter-new-order");
+    expect(orderCount).toBe(0);
 
+    await user.click(screen.getByTestId("item-tile-item-naan"));
     await waitFor(() => expect(screen.getByTestId("token-badge-number").textContent).toBe("#48"));
-    expect(screen.getByTestId("item-grid")).toBeTruthy();
+    expect(orderCount).toBe(1);
   });
 });
 
@@ -354,7 +489,7 @@ describe("CounterView - card terminal (issue #188)", () => {
 
     stubFetch({
       "GET menu": () => jsonResponse(MENU),
-      [`POST outlets/${OUTLET_ID}/counter-orders`]: () => jsonResponse(rungUp, 201),
+      "GET orders/order-47": () => jsonResponse(rungUp),
       "POST orders/order-47/bill": () => jsonResponse(openBill, 201),
       [`POST bills/${openBill.id}/intents`]: (init) => {
         expect(JSON.parse(String(init?.body))).toMatchObject({ rail: "card_terminal", amountMinor: 6300 });
@@ -367,9 +502,10 @@ describe("CounterView - card terminal (issue #188)", () => {
         return jsonResponse({ ...openBill, status: "finalized", billNumber: 12, finalizedAt: "2026-08-25T09:03:00.000Z", tenders: [captured] });
       },
     });
-    render(<CounterView outletId={OUTLET_ID} currentStaffId={CURRENT_STAFF_ID} />);
+    resumeOrder47();
+    render(<CounterView outletId={OUTLET_ID} currentStaffId={CURRENT_STAFF_ID} currentStaffName="Priya" />);
 
-    await screen.findByTestId("counter-view");
+    await screen.findByTestId("tender-remaining");
     expect(screen.getByTestId("tender-remaining").textContent).toBe("₹63.00");
     expect(screen.getByTestId("finalize-bill").hasAttribute("disabled")).toBe(true);
 

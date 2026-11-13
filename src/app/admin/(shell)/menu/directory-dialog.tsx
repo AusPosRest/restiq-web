@@ -33,6 +33,10 @@ function DialogBody({ onClose, onImported }: Readonly<DirectoryDialogProps>) {
   const [busy, setBusy] = useState(false);
   const deferredSearch = useDeferredValue(search);
   const products = useAdminLoad<{ products: DirectoryProduct[] }>(directoryPath(deferredSearch, tag));
+  // Issue #333: keep the last results on screen while the next search loads,
+  // so typing doesn't flash the skeleton on every keystroke.
+  const [shown, setShown] = useState<DirectoryProduct[] | null>(null);
+  if (products.data && products.data.products !== shown) setShown(products.data.products);
   const tags = useAdminLoad<{ tags: string[] }>("menu/directory/tags");
 
   function toggle(id: string) {
@@ -106,19 +110,19 @@ function DialogBody({ onClose, onImported }: Readonly<DirectoryDialogProps>) {
           <div className="flex-1 overflow-y-auto px-6 py-4">
             {products.failed ? (
               <LoadErrorPanel message="The directory couldn't be loaded." onRetry={products.retry} testId="directory-error" />
-            ) : products.loading ? (
+            ) : shown === null ? (
               <div className="space-y-3" data-testid="directory-loading">
                 <Skeleton className="h-12" />
                 <Skeleton className="h-12" />
                 <Skeleton className="h-12" />
               </div>
-            ) : products.data?.products.length === 0 ? (
+            ) : shown.length === 0 ? (
               <p className="py-10 text-center text-sm text-muted-foreground" data-testid="directory-empty">
                 {search || tag ? "No products match these filters." : "The directory is empty right now."}
               </p>
             ) : (
-              <ul className="divide-y divide-border/30" data-testid="directory-list">
-                {products.data?.products.map((product) => (
+              <ul className="divide-y divide-border/30" data-testid="directory-list" aria-busy={products.loading}>
+                {shown.map((product) => (
                   <li key={product.id}>
                     <label className="flex cursor-pointer items-center gap-3 py-3" data-testid={`directory-row-${product.id}`}>
                       <input

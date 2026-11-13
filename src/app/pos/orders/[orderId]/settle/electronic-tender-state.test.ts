@@ -4,10 +4,13 @@ import type { BillView, PendingTender } from "./bill-state";
 import {
   canFinalizeWithElectronic,
   capturedElectronicMinor,
+  cashChangeMinor,
   hasPendingIntent,
   intentPanelPhase,
   isElectronicMethod,
   remainingToTenderMinor,
+  tendersForFinalize,
+  tendersNetOfChange,
   validateIntentAmount,
   validateManualUpiTender,
 } from "./electronic-tender-state";
@@ -100,6 +103,70 @@ describe("canFinalizeWithElectronic", () => {
 
   it("finalises a bill fully covered by electronic tenders with no cash keyed", () => {
     expect(canFinalizeWithElectronic(bill([tender("upi_qr", 52500)]), 52500, [], [intent("succeeded")])).toBe(true);
+  });
+});
+
+describe("cash change (issue #306)", () => {
+  it("gives change when cash goes over the total and lets the bill finalise", () => {
+    const cash: PendingTender[] = [{ method: "cash", amountMinor: 110000 }];
+    expect(cashChangeMinor(105630, bill(), cash)).toBe(4370);
+    expect(canFinalizeWithElectronic(bill(), 105630, cash, [])).toBe(true);
+  });
+
+  it("gives no change for an over-keyed UPI amount or an exact tender", () => {
+    expect(cashChangeMinor(105630, bill(), [{ method: "upi_manual", amountMinor: 110000 }])).toBe(0);
+    expect(cashChangeMinor(105630, bill(), [{ method: "cash", amountMinor: 105630 }])).toBe(0);
+    expect(canFinalizeWithElectronic(bill(), 105630, [{ method: "upi_manual", amountMinor: 110000 }], [])).toBe(false);
+  });
+
+  it("posts the cash net of change so the tenders sum to the total", () => {
+    const pending: PendingTender[] = [
+      { method: "upi_manual", amountMinor: 50000 },
+      { method: "cash", amountMinor: 1100 },
+      { method: "cash", amountMinor: 60000 },
+    ];
+    const change = cashChangeMinor(105630, bill(), pending);
+    expect(change).toBe(5470);
+    const net = tendersNetOfChange(pending, change);
+    expect(net).toEqual([
+      { method: "upi_manual", amountMinor: 50000 },
+      { method: "cash", amountMinor: 1100 },
+      { method: "cash", amountMinor: 54530 },
+    ]);
+    expect(net.reduce((sum, t) => sum + t.amountMinor, 0)).toBe(105630);
+  });
+
+  it("drops a cash tender the change uses up entirely", () => {
+    expect(tendersNetOfChange([{ method: "upi_manual", amountMinor: 1000 }, { method: "cash", amountMinor: 500 }], 500)).toEqual([{ method: "upi_manual", amountMinor: 1000 }]);
+  });
+});
+
+describe("rupee cash round-off (CU-11)", () => {
+  it("gives change against the bill rounded to the nearest rupee: Rs 890.40, Rs 1000 given -> Rs 110 back", () => {
+    const cash: PendingTender[] = [{ method: "cash", amountMinor: 100000 }];
+    expect(cashChangeMinor(89040, bill(), cash, "INR")).toBe(11000);
+    expect(canFinalizeWithElectronic(bill(), 89040, cash, [], "INR")).toBe(true);
+  });
+
+  it("lets Rs 890 in cash settle a Rs 890.40 bill, and Rs 891 a Rs 890.60 one", () => {
+    expect(canFinalizeWithElectronic(bill(), 89040, [{ method: "cash", amountMinor: 89000 }], [], "INR")).toBe(true);
+    expect(cashChangeMinor(89040, bill(), [{ method: "cash", amountMinor: 89000 }], "INR")).toBe(0);
+    expect(canFinalizeWithElectronic(bill(), 89060, [{ method: "cash", amountMinor: 89000 }], [], "INR")).toBe(false);
+    expect(canFinalizeWithElectronic(bill(), 89060, [{ method: "cash", amountMinor: 89100 }], [], "INR")).toBe(true);
+  });
+
+  it("never rounds AUD or a non-cash tender", () => {
+    expect(canFinalizeWithElectronic(bill(), 1995, [{ method: "cash", amountMinor: 1900 }], [], "AUD")).toBe(false);
+    expect(canFinalizeWithElectronic(bill(), 89040, [{ method: "upi_manual", amountMinor: 89000 }], [], "INR")).toBe(false);
+  });
+
+  it("posts tenders that sum to the exact bill total - the server never sees the round-off", () => {
+    expect(tendersForFinalize(89040, bill(), [{ method: "cash", amountMinor: 100000 }])).toEqual([{ method: "cash", amountMinor: 89040 }]);
+    expect(tendersForFinalize(89040, bill(), [{ method: "cash", amountMinor: 89000 }])).toEqual([{ method: "cash", amountMinor: 89040 }]);
+    expect(tendersForFinalize(89060, bill(), [{ method: "upi_manual", amountMinor: 50000 }, { method: "cash", amountMinor: 39100 }])).toEqual([
+      { method: "upi_manual", amountMinor: 50000 },
+      { method: "cash", amountMinor: 39060 },
+    ]);
   });
 });
 

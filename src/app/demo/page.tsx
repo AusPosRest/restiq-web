@@ -1,5 +1,7 @@
 import Link from "next/link";
-import { DEMO_STAFF } from "../demo-logins";
+import { notFound } from "next/navigation";
+import { demoPagesEnabled } from "@/lib/demo-pages";
+import { DEMO_OWNER, DEMO_STAFF } from "../demo-logins";
 import { CredentialValue } from "../landing-credential";
 import { deviceOpenHref, fetchLandingDevices } from "../landing-devices";
 
@@ -9,6 +11,9 @@ import { deviceOpenHref, fetchLandingDevices } from "../landing-devices";
 // one and shows the demo credentials, since this is a prototype with no real
 // sign-up. Rendered in the charcoal+amber "ops-theme" (globals.css), the
 // closest thing RESTIQ has to a house identity.
+// restiq-web#346 (PE-30): never shows a platform operator login, lists only
+// logins of tenants in Test mode, and is a 404 in production unless
+// DEMO_PAGES=on.
 
 interface Surface {
   name: string;
@@ -16,7 +21,8 @@ interface Surface {
   blurb: string;
   href: string;
   cta: string;
-  creds: { label: string; value: string }[];
+  /** How to get in, in plain words (not copyable). */
+  access: string;
   external?: boolean;
 }
 
@@ -31,10 +37,7 @@ const SURFACES: Surface[] = [
     blurb: "Onboard tenants, manage plans, devices and fleet health across every restaurant.",
     href: "/ops/login",
     cta: "Operator sign in",
-    creds: [
-      { label: "Email", value: "admin@restiq.example" },
-      { label: "Password", value: "OpsDemo2026!" },
-    ],
+    access: "Operators sign in with their own account",
   },
   {
     name: "Tenant Admin",
@@ -42,10 +45,7 @@ const SURFACES: Surface[] = [
     blurb: "The owner console: go-live checklist, menu, floor plan, staff, devices and branding.",
     href: "/admin/login",
     cta: "Open owner console",
-    creds: [
-      { label: "Email", value: "anita@bayleaf.example" },
-      { label: "Password", value: "BayLeaf#2026Demo" },
-    ],
+    access: "Demo owner login below",
   },
   {
     name: "POS · Cashier & Waiter",
@@ -53,7 +53,7 @@ const SURFACES: Surface[] = [
     blurb: "Table map, order taking, fire-to-kitchen and bill settlement on a tablet till.",
     href: "/pos/login",
     cta: "PIN sign in",
-    creds: [{ label: "PINs", value: "See the staff logins table below" }],
+    access: "Staff PINs are in the table below",
   },
   {
     name: "Kitchen Display",
@@ -61,7 +61,7 @@ const SURFACES: Surface[] = [
     blurb: "Live station queues, ticket ageing, bump / recall / refire and the all-day summary.",
     href: "/kds",
     cta: "Open kitchen display",
-    creds: [{ label: "Access", value: "Signs in with the same POS PINs" }],
+    access: "Sign in with a staff PIN",
   },
   {
     name: "Guest QR Self-Order",
@@ -69,7 +69,7 @@ const SURFACES: Surface[] = [
     blurb: "Scan the table QR, browse the menu, build a shared cart and pay - no app, no staff.",
     href: GUEST_QR,
     cta: "Try the guest flow",
-    creds: [{ label: "Access", value: "No login - a table session PIN is shown on screen" }],
+    access: "No login needed",
   },
   {
     name: "Enrol a Device",
@@ -77,15 +77,15 @@ const SURFACES: Surface[] = [
     blurb: "Turn this browser tab into a POS or KDS terminal with a one-time code from the console.",
     href: "/device",
     cta: "Enrol this browser",
-    creds: [{ label: "Access", value: "Generate a code in the ops or admin console" }],
+    access: "Needs a code from the owner console",
   },
   {
     name: "Simulator",
     who: "Tester",
-    blurb: "An infinite canvas of real RESTIQ screens side by side, each its own device.",
+    blurb: "Open several RESTIQ screens, each in its own window as its own device, and run one order across them.",
     href: "/simulator",
     cta: "Open the simulator",
-    creds: [{ label: "Access", value: "No login" }],
+    access: "No login needed",
   },
 ];
 
@@ -100,7 +100,12 @@ export const metadata = {
 export const dynamic = "force-dynamic";
 
 export default async function Home() {
+  if (!demoPagesEnabled()) notFound();
   const devicesResult = await fetchLandingDevices();
+  // Logins are shown only for tenants the platform reports as in Test mode; unreachable = none shown.
+  const testTenants = new Set(devicesResult.kind === "available" ? devicesResult.testTenantNames : []);
+  const staffLogins = DEMO_STAFF.filter((staff) => testTenants.has(staff.tenant));
+  const ownerLogin = testTenants.has(DEMO_OWNER.tenant) ? DEMO_OWNER : null;
 
   return (
     <div className="ops-theme min-h-screen bg-background text-foreground">
@@ -119,8 +124,8 @@ export default async function Home() {
             Restaurant point of sale, from the back office to the table.
           </h1>
           <p className="max-w-2xl text-sm leading-relaxed text-muted-foreground sm:text-base">
-            Six surfaces, one platform. Pick the door for who you are - every demo login is listed on its
-            card.
+            Every surface of one platform. Pick the door for who you are - the demo logins are listed
+            below.
           </p>
         </header>
 
@@ -138,16 +143,7 @@ export default async function Home() {
                 <span className="text-lg font-semibold">{s.name}</span>
               </div>
               <p className="flex-1 text-sm leading-relaxed text-muted-foreground">{s.blurb}</p>
-              <dl className="relative z-10 flex flex-col gap-0.5 rounded-lg bg-muted/60 px-2 py-2 text-xs">
-                {s.creds.map((c) => (
-                  <div key={c.label} className="flex items-center justify-between gap-3">
-                    <dt className="shrink-0 pl-1 font-medium text-muted-foreground">{c.label}</dt>
-                    <dd className="min-w-0">
-                      <CredentialValue label={c.label} value={c.value} />
-                    </dd>
-                  </div>
-                ))}
-              </dl>
+              <p className="rounded-lg bg-muted/60 px-3 py-2 text-xs text-muted-foreground">{s.access}</p>
               {/* Stretched link: the whole card is clickable, but the copy
                   buttons above (z-10) intercept their own clicks. */}
               <Link
@@ -214,8 +210,41 @@ export default async function Home() {
           )}
         </section>
 
+        <section className="mt-12 flex flex-col gap-3" data-testid="landing-owner-login">
+          <h2 className="text-lg font-semibold">Owner login</h2>
+          {ownerLogin ? (
+            <dl className="flex flex-wrap gap-x-6 gap-y-1 rounded-xl border border-border px-3 py-3 text-sm">
+              <div className="flex items-center gap-2">
+                <dt className="text-muted-foreground">Restaurant</dt>
+                <dd>{ownerLogin.tenant}</dd>
+              </div>
+              <div className="flex items-center gap-2">
+                <dt className="text-muted-foreground">Email</dt>
+                <dd>
+                  <CredentialValue label="Email" value={ownerLogin.email} />
+                </dd>
+              </div>
+              <div className="flex items-center gap-2">
+                <dt className="text-muted-foreground">Password</dt>
+                <dd>
+                  <CredentialValue label="Password" value={ownerLogin.password} />
+                </dd>
+              </div>
+            </dl>
+          ) : (
+            <p className="text-sm text-muted-foreground" data-testid="landing-owner-login-none">
+              No demo owner login right now.
+            </p>
+          )}
+        </section>
+
         <section className="mt-12 flex flex-col gap-3" data-testid="landing-staff-logins">
           <h2 className="text-lg font-semibold">Staff logins</h2>
+          {staffLogins.length === 0 ? (
+            <p className="text-sm text-muted-foreground" data-testid="landing-staff-none">
+              No demo staff logins right now.
+            </p>
+          ) : (
           <div className="overflow-x-auto rounded-xl border border-border">
             <table className="w-full min-w-[560px] text-left text-sm" data-testid="landing-staff-table">
               <thead>
@@ -228,7 +257,7 @@ export default async function Home() {
                 </tr>
               </thead>
               <tbody>
-                {DEMO_STAFF.map((staff) => (
+                {staffLogins.map((staff) => (
                   <tr
                     key={`${staff.tenant}-${staff.name}`}
                     className="border-b border-border/60 last:border-0"
@@ -256,11 +285,12 @@ export default async function Home() {
               </tbody>
             </table>
           </div>
+          )}
         </section>
 
         <footer className="mt-12 border-t border-border pt-6 text-xs text-muted-foreground">
-          RESTIQ is a working prototype. All logins above are seeded demo accounts - see the full testing
-          guide in <span className="font-mono">wiki/testing-credentials.md</span>.
+          RESTIQ is a working prototype. Every login above belongs to a demo restaurant in Test mode, where
+          payments and emails are simulated.
         </footer>
       </div>
     </div>

@@ -41,6 +41,26 @@ describe("GenerateCodeDialog", () => {
     );
   });
 
+  it("PE-29: warns when a kiosk is enrolled while the outlet's kiosk switch is off, and not when it is on", async () => {
+    let kioskEnabled = false;
+    vi.stubGlobal(
+      "fetch",
+      vi.fn((input: RequestInfo | URL) =>
+        Promise.resolve(String(input).includes("/capabilities") ? jsonResponse([{ key: "kiosk", enabled: kioskEnabled }]) : jsonResponse({ error: { code: "x", message: "x" } }, 404)),
+      ),
+    );
+    renderDialog();
+    await userEvent.selectOptions(screen.getByTestId("generate-code-type"), "kiosk");
+    expect((await screen.findByTestId("generate-code-kiosk-off")).textContent).toContain("Kiosk ordering is turned off");
+    cleanup();
+
+    kioskEnabled = true;
+    renderDialog();
+    await userEvent.selectOptions(screen.getByTestId("generate-code-type"), "kiosk");
+    await new Promise((resolve) => setTimeout(resolve, 0));
+    expect(screen.queryByTestId("generate-code-kiosk-off")).toBeNull();
+  });
+
   it("toasts an error and stays open when generation fails", async () => {
     vi.stubGlobal(
       "fetch",

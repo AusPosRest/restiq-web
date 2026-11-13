@@ -330,6 +330,14 @@ device" stays in the header for both. Default tab: Devices. Test:
   input; `buildTaxRegistrationPatch` sends back `Number(draft.gstRatePercent)`
   or `null` when the field is blank, same merge-PUT discipline as every other
   patchable field here.
+- **GST split rounding (issue #369, restiq-backend#244).** `gstSplitRounding`
+  (`"exact_total" | "equal_half_up" | "equal_half_even" | null`) joined the
+  GET/PUT record. India tenants not on the composition scheme see a "GST split
+  rounding (CGST/SGST)" radio group (`tax-gst-split-rounding`, options
+  `tax-gst-split-rounding-<value>`, labels and ₹289 @5% examples in
+  `GST_SPLIT_ROUNDING_OPTIONS`). A null from the backend reads as
+  `exact_total`; `buildTaxRegistrationPatch` sends it only for IN tenants.
+  It applies to new bills only; finalized bills keep their stored tax lines.
 
 ## CAP-5 - Floor plan & stations
 
@@ -544,6 +552,14 @@ device" stays in the header for both. Default tab: Devices. Test:
     per outlet in localStorage (`qr-sheet-template.ts`,
     `qr-sheet-template:<outletId>`) and applied to the print sheet, the
     ZIP's HTML and the PNGs alike.
+  - **One PDF instead of the ZIP (issue #354, PE-20 / CU-8):** the ZIP was
+    replaced by a single "Print or save as PDF" button
+    (`floor-plan-print-qr-sheet-button`): the print sheet sets an A4 `@page`
+    with 10mm margins (several cards per page), and the page title becomes
+    "<outlet> - QR codes" while printing so the browser's Save as PDF names
+    the file after the outlet. `qrSheetHtml`, `qrZipPngFilename`, `slug` and
+    `QR_CARD_SIZE_MM` were removed; the per-table Download PNG stays.
+    `jszip` is no longer imported (still listed in package.json - remove it).
 
 ## CAP-6 - Devices & printers
 
@@ -1403,3 +1419,13 @@ mocked-fetch component tests (`reports.test.tsx`,
   on by default). Off = the backend returns `photoUrl: null` on POS and guest menus
   (restiq-backend#148), so staff and guests see names only. The owner Menu table
   keeps its thumbnails so photos can still be managed.
+
+## First-run fixes (issue #312, 2026-10-08)
+
+- **Go-live checklist.**
+  - Floor plan and menu have no automatic "done" signal (only devices and staff do), so each link step also has **Mark as done**.
+  - A tenant that is already live sees "You're live"; it goes live on its first sale (restiq-backend#189).
+  - The sidebar's **Setup** item returns to the checklist.
+- **Agreement banner.** It shows on every console page until the current agreement version is signed.
+- **Dashboard.** Only **Sales today** is shown, because margin, labour and waste have no data source. "As of" uses the viewer's clock.
+- **Branding.** The logo is saved as a URL; the backend stores no uploaded files.

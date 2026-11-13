@@ -19,13 +19,14 @@ export interface LogMovementDialogProps {
   error?: string | null;
   onCancel: () => void;
   onSubmit: (type: CashMovementType, amountMinor: number, reason: string) => void;
+  currency?: string;
 }
 
 export function LogMovementDialog(props: Readonly<LogMovementDialogProps>) {
   return props.open ? <DialogBody key="open" {...props} /> : null;
 }
 
-function DialogBody({ busy, error, onCancel, onSubmit }: Readonly<LogMovementDialogProps>) {
+function DialogBody({ busy, error, onCancel, onSubmit, currency }: Readonly<LogMovementDialogProps>) {
   const [type, setType] = useState<CashMovementType>("paid_out");
   const [digits, setDigits] = useState("");
   const [reason, setReason] = useState("");
@@ -72,6 +73,7 @@ function DialogBody({ busy, error, onCancel, onSubmit }: Readonly<LogMovementDia
               <AmountKeypad
                 testId="movement-amount-keypad"
                 digits={digits}
+                currency={currency}
                 disabled={busy}
                 onDigit={(digit) => setDigits((current) => appendDigit(current, digit))}
                 onBackspace={() => setDigits((current) => current.slice(0, -1))}

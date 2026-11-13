@@ -4,11 +4,21 @@
 import { cleanup, render, screen, waitFor } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
-import type { SubscriptionView } from "../../api";
+import type { ContractView, SubscriptionView } from "../../api";
 import { ToastProvider } from "../../toast";
 import { SubscriptionTab } from "./subscription-tab";
 
 const TENANT_ID = "0192cccc-0000-7000-8000-000000000003";
+const contract: ContractView = {
+  currency: "AUD",
+  billingPeriod: "monthly",
+  items: [],
+  source: "plan",
+  recurringTotalMinor: "4900",
+  nextInvoiceOneTimeMinor: "0",
+  planAmountMinor: "4900",
+  appliesFromNextInvoice: false,
+};
 
 function subscription(overrides: Partial<SubscriptionView> = {}): SubscriptionView {
   return {
@@ -20,6 +30,7 @@ function subscription(overrides: Partial<SubscriptionView> = {}): SubscriptionVi
     currentPeriodEnd: "2026-08-31T00:00:00.000Z",
     suspendedAt: null,
     graceWindowHours: 72,
+    cardBilling: { status: "not_set_up", amountMinor: "4900", currency: "AUD" },
     ...overrides,
   };
 }
@@ -34,6 +45,7 @@ function renderTab(sub: SubscriptionView, extraRoutes?: (url: string, init?: Req
     if (extra) return Promise.resolve(extra);
     if (url.endsWith(`/ops/api/tenants/${TENANT_ID}/subscription`)) return Promise.resolve(jsonResponse(sub));
     if (url.endsWith(`/ops/api/tenants/${TENANT_ID}/subscription/invoices`)) return Promise.resolve(jsonResponse({ invoices: [] }));
+    if (url.endsWith(`/ops/api/tenants/${TENANT_ID}/subscription/contract`)) return Promise.resolve(jsonResponse(contract));
     return Promise.resolve(jsonResponse({}));
   });
   vi.stubGlobal("fetch", fetchMock);
@@ -67,6 +79,7 @@ describe("SubscriptionTab", () => {
     expect(screen.getByTestId("subscription-grace-window").textContent).toBe("72h");
     expect(screen.getByTestId("subscription-suspend")).toBeTruthy();
     expect(screen.queryByTestId("subscription-reactivate")).toBeNull();
+    expect((await screen.findByTestId("contract-plan-source")).textContent).toContain("A$49.00 per month");
   });
 
   it("maps suspended to the critical badge and shows the read-only banner", async () => {
@@ -78,6 +91,61 @@ describe("SubscriptionTab", () => {
     expect(screen.getByTestId("subscription-suspended-banner")).toBeTruthy();
     expect(screen.getByTestId("subscription-reactivate")).toBeTruthy();
     expect(screen.queryByTestId("subscription-suspend")).toBeNull();
+  });
+
+  it("card billing: shows status and amount, creates a billing link", async () => {
+    renderTab(subscription(), (url, init) =>
+      url.endsWith("/subscription/billing-link") && init?.method === "POST"
+        ? jsonResponse({ url: "https://checkout.stripe.test/x", expiresAt: "2026-08-24T00:00:00.000Z" })
+        : undefined,
+    );
+    await screen.findByTestId("subscription-tab");
+    expect(screen.getByTestId("card-billing-status").textContent).toBe("not set up");
+    expect(screen.getByTestId("card-billing-amount").textContent).toContain("49.00");
+    await userEvent.click(screen.getByTestId("card-billing-copy"));
+    expect((await screen.findByTestId("card-billing-link-result-url") as HTMLInputElement).value).toBe("https://checkout.stripe.test/x");
+  });
+
+  it("card billing: Open checkout opens the tab inside the click, then points it at Checkout", async () => {
+    const tab = { opener: {}, location: { href: "" }, close: vi.fn() };
+    const open = vi.fn(() => tab);
+    vi.stubGlobal("open", open);
+    renderTab(subscription(), (url, init) =>
+      url.endsWith("/subscription/billing-link") && init?.method === "POST"
+        ? jsonResponse({ url: "https://checkout.stripe.test/x", expiresAt: "2026-08-24T00:00:00.000Z" })
+        : undefined,
+    );
+    await screen.findByTestId("subscription-tab");
+    await userEvent.click(screen.getByTestId("card-billing-open"));
+    await waitFor(() => expect(tab.location.href).toBe("https://checkout.stripe.test/x"));
+    expect(open).toHaveBeenCalledWith("", "_blank");
+    expect(tab.opener).toBeNull();
+    expect(screen.queryByTestId("card-billing-link-result")).toBeNull();
+  });
+
+  it("card billing: closes the opened tab when the link can't be made", async () => {
+    const tab = { opener: {}, location: { href: "" }, close: vi.fn() };
+    vi.stubGlobal("open", vi.fn(() => tab));
+    renderTab(subscription(), (url, init) =>
+      url.endsWith("/subscription/billing-link") && init?.method === "POST"
+        ? jsonResponse({ error: { code: "price_not_set", message: "No monthly price is set." } }, 409)
+        : undefined,
+    );
+    await screen.findByTestId("subscription-tab");
+    await userEvent.click(screen.getByTestId("card-billing-open"));
+    await screen.findByTestId("card-billing-error");
+    expect(tab.close).toHaveBeenCalled();
+  });
+
+  it("card billing: price_not_set points to the Plans page", async () => {
+    renderTab(subscription(), (url, init) =>
+      url.endsWith("/subscription/billing-link") && init?.method === "POST"
+        ? jsonResponse({ error: { code: "price_not_set", message: "No monthly price is set." } }, 409)
+        : undefined,
+    );
+    await screen.findByTestId("subscription-tab");
+    await userEvent.click(screen.getByTestId("card-billing-copy"));
+    expect((await screen.findByTestId("card-billing-error")).textContent).toContain("Plans page");
   });
 
   it("maps arrears to the warning badge", async () => {
@@ -98,6 +166,7 @@ describe("SubscriptionTab", () => {
         return Promise.resolve(jsonResponse(subscription({ status: "suspended", suspendedAt: "2026-08-24T00:00:00.000Z" })));
       }
       if (url.endsWith(`/ops/api/tenants/${TENANT_ID}/subscription/invoices`)) return Promise.resolve(jsonResponse({ invoices: [] }));
+      if (url.endsWith(`/ops/api/tenants/${TENANT_ID}/subscription/contract`)) return Promise.resolve(jsonResponse(contract));
       return Promise.resolve(jsonResponse({}));
     });
 

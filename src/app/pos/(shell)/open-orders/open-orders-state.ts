@@ -58,6 +58,10 @@ export interface RawOpenOrder {
   /** The DiningTable's real label for a dine-in order; null for a counter order. */
   tableLabel: string | null;
   ownerId: string;
+  /** restiq-backend#210: the owner's name; optional for an older backend. */
+  ownerName?: string | null;
+  /** A counter order's customer token number; null for a table order. */
+  tokenNumber?: number | null;
   status: OpenOrderStatus;
   /** ISO timestamp. */
   createdAt: string;
@@ -71,6 +75,9 @@ export interface OpenOrderEntry {
   tableLabel: string | null;
   /** Raw owner id - no staff-name lookup exists server-side yet, see file header. Callers compare against currentStaffId (isOwnOrder) to show "You" instead of the raw id for the viewer's own orders. */
   ownerStaffId: string;
+  /** The owner's name, or null when unknown (restiq-web#343: never shown as a raw id). */
+  ownerName: string | null;
+  tokenNumber: number | null;
   status: OpenOrderStatus;
   /** ISO timestamp - mirrors table-map-state.ts's TableOrderSummary.openedAt naming. */
   openedAt: string;
@@ -88,6 +95,8 @@ export function toOpenOrderEntry(raw: RawOpenOrder): OpenOrderEntry {
     origin: raw.tableId === null ? "counter" : "table",
     tableLabel: raw.tableLabel ?? raw.tableId,
     ownerStaffId: raw.ownerId,
+    ownerName: raw.ownerName ?? null,
+    tokenNumber: raw.tokenNumber ?? null,
     status: raw.status,
     openedAt: raw.createdAt,
     itemCount: raw.lines.reduce((sum, line) => sum + line.quantity, 0),
@@ -105,7 +114,8 @@ export function isOwnOrder(order: OpenOrderEntry, currentStaffId: string): boole
 }
 
 export function originLabel(order: OpenOrderEntry): string {
-  return order.origin === "table" ? `Table ${order.tableLabel ?? "?"}` : "Counter";
+  if (order.origin === "table") return `Table ${order.tableLabel ?? "?"}`;
+  return order.tokenNumber != null ? `Counter · Token #${order.tokenNumber}` : "Counter";
 }
 
 export function elapsedLabel(openedAt: string, now: Date = new Date()): string {

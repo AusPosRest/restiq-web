@@ -6,23 +6,10 @@
 import { Check, Plus, Trash2 } from "lucide-react";
 import { useState } from "react";
 import { Button } from "@/components/ui/button";
-import { opsApi } from "../../api";
+import { opsApi, type PlanPriceView } from "../../api";
+import { useOpsLoad } from "../../use-ops-load";
 import { FieldError, SelectField, TextAreaField, TextField, ToggleField } from "./fields";
-import {
-  BrandsOutletsData,
-  BusinessData,
-  CountryCode,
-  DEFAULT_GST_RATE,
-  OUTLET_TYPES,
-  OwnerInviteData,
-  StepErrors,
-  SubscriptionData,
-  TAX_PROFILES,
-  TaxData,
-  SLUG_PATTERN,
-  TIMEZONES,
-  emptyOutlet,
-} from "./wizard-state";
+import { BrandsOutletsData, BusinessData, CountryCode, DEFAULT_GST_RATE, OUTLET_TYPES, OwnerInviteData, StepErrors, SubscriptionData, TAX_PROFILES, TaxData, SLUG_PATTERN, TIMEZONES, emptyOutlet, timezoneFor, PLAN_CURRENCY_SYMBOL, annualDiscountPercent, planPrice, recommendedPlan } from "./wizard-state";
 
 interface StepProps<T> {
   data: T;
@@ -148,7 +135,7 @@ export function BusinessStep({ data, errors, onChange, onFieldBlur }: StepProps<
             id="onb-contact-phone"
             label="Phone Number"
             type="tel"
-            placeholder="+91 00000 00000"
+            placeholder="With country code, e.g. +61 or +91"
             value={data.contactPhone}
             error={errors.contactPhone}
             onChange={(contactPhone) => set({ contactPhone })}
@@ -205,7 +192,7 @@ export function TaxStep({ data, errors, onChange, onFieldBlur }: StepProps<TaxDa
       <TextField
         id="onb-registration-number"
         label={isIndia ? "GSTIN" : "ABN"}
-        placeholder={isIndia ? "29ABCDE1234F1Z5" : "11-digit ABN"}
+        placeholder={isIndia ? "15-character GSTIN" : "11-digit ABN"}
         value={data.registrationNumber}
         error={errors.registrationNumber}
         onChange={(registrationNumber) => set({ registrationNumber })}
@@ -360,7 +347,7 @@ export function OutletsStep({
             <SelectField
               id={`onb-outlet-${index}-timezone`}
               label="Timezone"
-              value={outlet.timezone}
+              value={timezoneFor(country, outlet.timezone)}
               error={errors[`outlets.${index}.timezone`]}
               options={TIMEZONES[country].map((zone) => ({ value: zone, label: zone }))}
               onChange={(timezone) => setOutlet(index, { timezone })}
@@ -385,29 +372,37 @@ const PLANS = [
   {
     value: "standard" as const,
     name: "Standard",
-    tagline: "Essential features for single-location quick service restaurants.",
-    monthly: 49,
-    features: ["Up to 3 POS devices per outlet", "Basic menu management", "Standard end-of-day reporting", "Email support (24hr SLA)"],
+    tagline: "For a single outlet.",
+    // PE-4: only what RESTIQ does today - no device limits, analytics API or inventory it doesn't have.
+    features: ["POS till, kitchen display and QR ordering", "Menu, floor plan and staff management", "Sales and payment reports"],
   },
   {
     value: "enterprise" as const,
     name: "Enterprise",
-    tagline: "Advanced fleet management for multi-location franchises.",
-    monthly: 129,
-    recommended: true,
-    features: ["Unlimited POS devices", "Centralized multi-location menus", "Real-time analytics API", "Advanced inventory syncing", "24/7 priority phone support"],
+    tagline: "For two or more outlets and franchises.",
+    features: ["Everything in Standard", "Two or more outlets and brands", "One owner console for every outlet"],
   },
 ];
 
-export function SubscriptionStep({ data, errors, onChange }: Omit<StepProps<SubscriptionData>, "onFieldBlur">) {
+export function SubscriptionStep({
+  data,
+  errors,
+  onChange,
+  country,
+  outletCount,
+}: Omit<StepProps<SubscriptionData>, "onFieldBlur"> & { country: CountryCode; outletCount: number }) {
   const annual = data.billingPeriod === "annual";
+  const recommended = recommendedPlan(outletCount);
+  // Plan prices are edited on the Plans page (restiq-backend#201); until they load, cards read "Price on quote".
+  const prices = useOpsLoad<{ prices: PlanPriceView[] }>("plan-prices").data?.prices ?? [];
+  const discount = annualDiscountPercent(prices, country);
   return (
     <div className="space-y-6">
       <div role="radiogroup" aria-label="Billing period" className="inline-flex rounded-lg border border-border bg-muted p-1">
         {(
           [
             { value: "monthly", label: "Monthly billing" },
-            { value: "annual", label: "Annual billing · -20%" },
+            { value: "annual", label: discount > 0 ? `Annual billing (save ${discount}%)` : "Annual billing" },
           ] as const
         ).map(({ value, label }) => (
           <button
@@ -429,7 +424,7 @@ export function SubscriptionStep({ data, errors, onChange }: Omit<StepProps<Subs
       <div className="grid gap-5 lg:grid-cols-2">
         {PLANS.map((plan) => {
           const selected = data.plan === plan.value;
-          const price = annual ? Math.round(plan.monthly * 0.8) : plan.monthly;
+          const price = planPrice(prices, plan.value, country, annual);
           return (
             <button
               key={plan.value}
@@ -442,7 +437,7 @@ export function SubscriptionStep({ data, errors, onChange }: Omit<StepProps<Subs
                 selected ? "border-primary bg-primary/5" : "border-border bg-muted/40 hover:border-primary/50"
               }`}
             >
-              {plan.recommended ? (
+              {plan.value === recommended ? (
                 <span className="font-label absolute -top-3 left-6 rounded-md bg-primary px-2 py-1 text-xs font-semibold uppercase tracking-wider text-primary-foreground">
                   Recommended
                 </span>
@@ -450,8 +445,14 @@ export function SubscriptionStep({ data, errors, onChange }: Omit<StepProps<Subs
               <span className="font-headline text-lg font-semibold">{plan.name}</span>
               <span className="mt-1 text-sm text-muted-foreground">{plan.tagline}</span>
               <span className="font-headline mt-4 text-3xl font-semibold">
-                A${price}
-                <span className="font-sans text-sm font-normal text-muted-foreground"> / outlet / month</span>
+                {price === null ? (
+                  <span data-testid={`onb-plan-${plan.value}-price`}>Price on quote</span>
+                ) : (
+                  <>
+                    <span data-testid={`onb-plan-${plan.value}-price`}>{PLAN_CURRENCY_SYMBOL[country]}{Number.isInteger(price) ? price : price.toFixed(2)}</span>
+                    <span className="font-sans text-sm font-normal text-muted-foreground"> / outlet / month</span>
+                  </>
+                )}
               </span>
               <ul className="mt-5 space-y-2.5">
                 {plan.features.map((feature) => (
@@ -474,6 +475,14 @@ export function SubscriptionStep({ data, errors, onChange }: Omit<StepProps<Subs
         })}
       </div>
       <FieldError error={errors.plan} id="onb-plan-error" />
+      {/* restiq-backend#213: a Test tenant gets simulated payments and email and is left out of the platform figures. */}
+      <ToggleField
+        id="onb-test-mode"
+        label="Test tenant"
+        description="For demos and trials: card and QR payments are simulated, emails go to the operators' inbox, and the tenant is left out of the platform figures. Switch it to Live from the tenant page when it starts trading."
+        checked={data.testMode}
+        onChange={(testMode) => onChange({ ...data, testMode })}
+      />
     </div>
   );
 }

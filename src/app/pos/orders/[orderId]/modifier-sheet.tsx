@@ -162,7 +162,7 @@ function SheetBody({ item, currency, busy, onCancel, onConfirm }: Readonly<Modif
                 data-testid="modifier-sheet-instructions"
                 value={specialInstructions}
                 rows={2}
-                maxLength={500}
+                maxLength={200}
                 disabled={busy}
                 placeholder="e.g. less oil, extra crispy..."
                 onChange={(event) => setSpecialInstructions(event.target.value)}

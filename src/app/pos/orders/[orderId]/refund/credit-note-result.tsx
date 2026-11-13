@@ -11,13 +11,14 @@
 // each line names an `orderLineId` rather than carrying its own item/variant
 // name - resolved here against the original order's lines (`lines` prop,
 // same "raw id, resolved where we can, never fabricated" posture
-// order-taking-state.ts already established). `refundMethod`/`reasonLabel`/
-// `notes` are gone too - the real DTO has one plain `reason` string.
+// order-taking-state.ts already established). `reasonLabel`/`notes` are
+// gone too - the real DTO has one plain `reason` string. `method` (how the
+// money went back, restiq-backend#221) is shown as "Refunded by".
 import Link from "next/link";
 import { Button } from "@/components/ui/button";
 import { formatMinor } from "../../../(shell)/shift/shift-state";
 import type { OrderLineView } from "../order-taking-state";
-import type { CreditNoteView } from "./refund-state";
+import { refundMethodLabel, type CreditNoteView } from "./refund-state";
 
 export function CreditNoteResult({
   creditNote,
@@ -60,7 +61,10 @@ export function CreditNoteResult({
           </div>
         </dl>
 
-        <p className="mt-3 text-xs text-muted-foreground">Reason: {creditNote.reason}</p>
+        <p data-testid="credit-note-method" className="mt-3 text-sm text-foreground">
+          Refunded by: {refundMethodLabel(creditNote.method)}
+        </p>
+        <p className="mt-1 text-xs text-muted-foreground">Reason: {creditNote.reason}</p>
       </div>
 
       <Button asChild size="sm" variant="outline" data-testid="credit-note-done">

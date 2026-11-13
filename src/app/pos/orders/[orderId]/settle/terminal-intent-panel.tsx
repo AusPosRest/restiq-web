@@ -6,12 +6,18 @@
 // succeed), approved (Done returns to the keypad), or declined / timed out /
 // cancelled (Try again). Phase logic is electronic-tender-state.ts's
 // intentPanelPhase; only the rendering lives here.
+//
+// Stripe reader intents (restiq-web#429) add: "Tap, insert or swipe on
+// <reader>" with a spinner, sandbox-only Simulate approve/decline, and on a
+// failure Stripe's reason with Retry (same amount, same reader) and "Use
+// another method". Texts come from card-reader-state.ts.
 import { useEffect, useState } from "react";
-import { CreditCard } from "lucide-react";
+import { CreditCard, Loader2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { formatCountdown, INTENT_STATUS_LABEL, intentExpiresInMs, isAwaitingServerExpiry, type PaymentIntentView } from "@/lib/payment-intent";
 import { formatMinor } from "../../../(shell)/shift/shift-state";
 import { intentPanelPhase } from "./electronic-tender-state";
+import { readerFailureText, readerWaitingText, showSimulateControls } from "./card-reader-state";
 
 export interface TerminalIntentPanelProps {
   intent: PaymentIntentView;
@@ -19,9 +25,14 @@ export interface TerminalIntentPanelProps {
   busy: boolean;
   onCancel: () => void;
   onDismiss: () => void;
+  /** Re-sends the same amount to the reader (Stripe reader intents only). */
+  onRetry?: (amountMinor: number) => void;
+  /** Sandbox test card on a Stripe reader; buttons hide once `sandbox` is false. */
+  onSimulate?: (outcome: "approve" | "decline") => void;
+  sandbox?: boolean;
 }
 
-export function TerminalIntentPanel({ intent, currency, busy, onCancel, onDismiss }: Readonly<TerminalIntentPanelProps>) {
+export function TerminalIntentPanel({ intent, currency, busy, onCancel, onDismiss, onRetry, onSimulate, sandbox = false }: Readonly<TerminalIntentPanelProps>) {
   const [now, setNow] = useState(() => Date.now());
   useEffect(() => {
     const id = setInterval(() => setNow(Date.now()), 1_000);
@@ -29,11 +40,13 @@ export function TerminalIntentPanel({ intent, currency, busy, onCancel, onDismis
   }, []);
 
   const phase = intentPanelPhase(intent, isAwaitingServerExpiry(intent, now));
+  const onReader = intent.provider === "stripe";
+  const failure = readerFailureText(intent);
 
   return (
     <section data-testid="intent-panel" data-phase={phase} className="flex min-h-fit flex-1 flex-col items-center justify-center gap-3 p-6 text-center">
       <CreditCard className={`size-8 ${phase === "paid" ? "text-status-available" : phase === "retry" ? "text-status-alert" : "text-primary"}`} aria-hidden="true" />
-      <p className="font-label text-xs font-semibold uppercase tracking-wider text-muted-foreground">Card terminal</p>
+      <p className="font-label text-xs font-semibold uppercase tracking-wider text-muted-foreground">{onReader ? intent.readerLabel || "Card reader" : "Card terminal"}</p>
       <p data-testid="intent-amount" className="font-headline text-3xl font-bold tabular-nums text-foreground">
         {formatMinor(intent.amountMinor, currency)}
       </p>
@@ -42,6 +55,28 @@ export function TerminalIntentPanel({ intent, currency, busy, onCancel, onDismis
         {phase === "retry" && intent.failureReason === "declined" ? " - the card was declined" : ""}
       </p>
 
+      {failure && (
+        <p data-testid="intent-failure-reason" className="text-sm font-semibold text-status-alert">
+          {failure}
+        </p>
+      )}
+
+      {phase === "showing" && onReader && (
+        <p data-testid="intent-reader-waiting" className="flex items-center gap-2 text-base font-semibold text-foreground">
+          <Loader2 className="size-4 animate-spin text-primary" aria-hidden="true" />
+          {readerWaitingText(intent.readerLabel)}
+        </p>
+      )}
+      {phase === "showing" && onSimulate && showSimulateControls(intent, sandbox) && (
+        <div className="flex gap-2">
+          <Button size="sm" variant="ghost" data-testid="intent-simulate-approve" disabled={busy} onClick={() => onSimulate("approve")}>
+            Simulate approve
+          </Button>
+          <Button size="sm" variant="ghost" data-testid="intent-simulate-decline" disabled={busy} onClick={() => onSimulate("decline")}>
+            Simulate decline
+          </Button>
+        </div>
+      )}
       {phase === "showing" && (
         <>
           <p data-testid="intent-countdown" className="font-mono text-sm tabular-nums text-muted-foreground">
@@ -57,9 +92,14 @@ export function TerminalIntentPanel({ intent, currency, busy, onCancel, onDismis
           Done
         </Button>
       )}
+      {phase === "retry" && onReader && onRetry && (
+        <Button data-testid="intent-reader-retry" disabled={busy} onClick={() => onRetry(intent.amountMinor)}>
+          Retry
+        </Button>
+      )}
       {phase === "retry" && (
         <Button variant="outline" data-testid="intent-retry" onClick={onDismiss}>
-          Try again
+          {onReader ? "Use another method" : "Choose how to pay"}
         </Button>
       )}
     </section>

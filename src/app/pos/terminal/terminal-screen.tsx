@@ -221,7 +221,14 @@ export function TerminalScreen({ outletId, outletName }: Readonly<{ outletId: st
               <p data-testid="terminal-last-result" className="text-sm text-zinc-400">
                 {approved ? "Approved" : "Declined"} · {formatMinor(last.amountMinor, last.currency)}
               </p>
-              {approved && <p className="text-xs text-zinc-500">Remove card · keep the receipt</p>}
+              {approved && last.failureReason === "late_capture_refund_due" ? (
+                // restiq-backend#208 (SE-28): the bill was settled another way before this card went through.
+                <p data-testid="terminal-refund-due" role="alert" className="text-xs font-semibold text-amber-400">
+                  This bill was already paid - refund this card payment to the customer
+                </p>
+              ) : (
+                approved && <p className="text-xs text-zinc-500">Remove card · keep the receipt</p>
+              )}
             </section>
           ) : current ? (
             <section data-testid={`terminal-request-${current.id}`} className="flex flex-1 flex-col items-center gap-4">

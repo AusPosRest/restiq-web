@@ -18,6 +18,7 @@
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { LogOut } from "lucide-react";
+import { TenantTestBadge } from "@/components/tenant-test-badge";
 
 export type KdsMode = "station" | "expo" | "bumped" | "all-day";
 
@@ -59,6 +60,7 @@ export function KdsHeader({ activeMode, stationName }: Readonly<{ activeMode: Kd
           <p data-testid="kds-header-title" className="font-headline text-lg font-bold tracking-tight text-foreground uppercase">
             {stationName ?? "Kitchen Display"}
           </p>
+          <TenantTestBadge endpoint="/pos/api/tenant" testId="kds-test-badge" />
           {activeMode === "station" && (
             <Link
               href="/kds?reselect=1"

@@ -1,25 +1,16 @@
 "use client";
 
 // P13 Device Status & Attendance (SPEC CAP-11). Read-only: a real attendance
-// list (today's CAP-1 clock events) plus a device status panel that is
-// always mocked and always visibly marked as such (DESIGN.md's
-// PrinterStatusChip/OfflineIndicatorPill, "(demo)" in the DOM, not just a
-// tooltip). Five-state pattern per EXPERIENCE.md, same as shift-screen.tsx:
-// skeleton while loading, inline retry on failure, content once landed.
-//
-// RECONCILED (2026-09-02, restiq-web#98): the real route is
-// `outlets/:outletId/attendance` (no `/today`) - see `../../api.ts`'s
-// `AttendanceView` header for the full reasoning. There is no connectivity
-// signal anywhere in that response (not even a mocked one, unlike the
-// printer's real `printerStatus`) - `OfflineIndicatorPill` below is passed a
-// permanently-static "online" prop rather than a fabricated response field,
-// keeping DESIGN.md's two-chip layout honest about what's real (the printer
-// chip) vs. purely decorative (this one).
+// list (today's CAP-1 clock events) plus this browser's real connectivity
+// (restiq-web#343, PE-19: no mocked "(demo)" chips in a production till -
+// printers and terminals report in on the owner's Devices page). Five-state
+// pattern per EXPERIENCE.md: skeleton while loading, inline retry on failure,
+// content once landed. Route: `outlets/:outletId/attendance` (see
+// `../../api.ts`'s `AttendanceView` header).
 import { usePosLoad } from "../../use-pos-load";
 import type { AttendanceView } from "../../api";
 import { LoadErrorPanel, Skeleton } from "./data-states";
 import { AttendanceList } from "./attendance-list";
-import { PrinterStatusChip } from "./printer-status-chip";
 import { OfflineIndicatorPill } from "./offline-indicator-pill";
 
 export function DeviceStatusScreen({ outletId }: Readonly<{ outletId: string }>) {
@@ -44,9 +35,9 @@ export function DeviceStatusScreen({ outletId }: Readonly<{ outletId: string }>)
         <div data-testid="device-status-content" className="grid flex-1 grid-cols-1 gap-6 lg:grid-cols-2">
           <section>
             <h2 className="mb-3 font-headline text-base font-semibold">Device status</h2>
-            <div data-testid="pos-device-status-demo-notice" className="flex flex-wrap items-center gap-3 rounded-lg border border-border/40 bg-card px-5 py-4">
-              <PrinterStatusChip status={data.printerStatus.status} />
-              <OfflineIndicatorPill status="online" />
+            {/* PE-19: only real signals - this browser's connectivity. Printers and terminals report in on the owner's Devices page. */}
+            <div data-testid="pos-device-status-panel" className="flex flex-wrap items-center gap-3 rounded-lg border border-border/40 bg-card px-5 py-4">
+              <OfflineIndicatorPill />
             </div>
           </section>
 

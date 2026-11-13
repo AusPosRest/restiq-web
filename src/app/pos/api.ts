@@ -101,6 +101,11 @@ export function startOrder(outletId: string, tableId: string): Promise<RawOrder>
  * audited (actor + reason) same as other mutations, but it isn't one of
  * CAP-8's six manager-gated actions, so no PIN and no required reason.
  */
+/** CU-26: ends a table's abandoned QR guest session so the next guests start fresh (POST /pos/v1/tables/:id/close-session). */
+export function closeTableSession(tableId: string): Promise<{ closed: true }> {
+  return posApi<{ closed: true }>(`tables/${encodeURIComponent(tableId)}/close-session`, { method: "POST" });
+}
+
 export function transferOrder(orderId: string, newOwnerStaffId: string, reason?: string): Promise<RawOrder> {
   return posApi<RawOrder>(`orders/${orderId}/transfer`, {
     method: "POST",
@@ -156,6 +161,22 @@ export function sendOrderToKitchen(orderId: string, menu?: Pick<PosMenuView, "it
 
 export function removeOrderLine(orderId: string, lineId: string, menu?: Pick<PosMenuView, "items">): Promise<OrderView> {
   return posApi<RawOrder>(`orders/${orderId}/lines/${lineId}`, { method: "DELETE" }).then((raw) => toOrderView(raw, menu));
+}
+
+/** restiq-backend#210 (CU-15): takes back a line the kitchen already has - a manager PIN and reason are checked server-side. */
+export function voidOrderLine(orderId: string, lineId: string, managerPin: string, reason: string, menu?: Pick<PosMenuView, "items">): Promise<OrderView> {
+  return posApi<RawOrder>(`orders/${orderId}/lines/${lineId}/void`, { method: "POST", body: JSON.stringify({ managerPin, reason }) }).then((raw) =>
+    toOrderView(raw, menu),
+  );
+}
+
+/** restiq-backend#210 (PE-16/CU-27): throws away an order with nothing on it. 409 `order_not_empty` once anything is on it. */
+export function discardOrder(orderId: string): Promise<null> {
+  return posApi<null>(`orders/${orderId}`, { method: "DELETE" });
+}
+
+export function fetchOrder(orderId: string, menu?: Pick<PosMenuView, "items">): Promise<OrderView> {
+  return posApi<RawOrder>(`orders/${orderId}`).then((raw) => toOrderView(raw, menu));
 }
 
 /**
@@ -349,7 +370,7 @@ export type {
   PendingTender,
   PostableTenderMethod,
 } from "./orders/[orderId]/settle/bill-state";
-import type { FinalizeBillInput, BillView } from "./orders/[orderId]/settle/bill-state";
+import type { BillTenderMethod, FinalizeBillInput, BillView } from "./orders/[orderId]/settle/bill-state";
 
 /**
  * Create-or-fetch the Bill for an order. `POST orders/:orderId/bill`
@@ -443,6 +464,8 @@ export interface InvoiceTenderView {
 export interface InvoiceCreditNoteView {
   id: string;
   amountMinor: number;
+  /** How the money went back; null on a note issued before this was recorded (restiq-backend#221). */
+  method: BillTenderMethod | null;
   reason: string;
   createdAt: string;
 }
@@ -453,13 +476,20 @@ export interface InvoiceCreditNoteView {
 // `tenders`/`creditNotes` are always empty. Finalized bills are unchanged.
 export interface InvoiceView {
   invoiceNumber: string | null;
+  /** restiq-backend#213: rung up while the tenant was in Test mode - print "not a valid tax invoice". */
+  testMode?: boolean;
   status?: "open" | "finalized";
-  title: "Tax Invoice" | "Invoice" | "Receipt" | "Bill";
+  title: "Tax Invoice" | "Bill of Supply" | "Invoice" | "Receipt" | "Bill";
   /** null for an open (pro-forma) bill - it is issued at finalize. */
   issuedAt: string | null;
   currency: string;
   seller: InvoiceSellerView;
   lines: InvoiceLineView[];
+  /** IN GST invoice only (restiq-backend#212): SAC 996331 and the seller's GSTIN state. Absent on older print-job snapshots. */
+  sacCode?: string | null;
+  placeOfSupply?: string | null;
+  /** The counter token the customer was called by; null for a table order. */
+  tokenNumber?: number | null;
   subtotalMinor: number;
   discountMinor: number | null;
   discountReason: string | null;
@@ -486,6 +516,8 @@ export interface PrintJobView {
   payload: InvoiceView;
   createdAt: string;
   printedAt: string | null;
+  /** restiq-backend#210: on the POST response only - false when no printer will pick the job up. */
+  printerAvailable?: boolean;
 }
 
 // --- Device topology (issue #210 / restiq-backend#134). Each call names this
@@ -544,6 +576,8 @@ export interface CreatePaymentIntentInput {
   amountMinor: number;
   /** Client-generated idempotency key - a retried POST with the same key returns the same intent. */
   clientKey: string;
+  /** Stripe reader to push the payment to (restiq-web#429) - required by the server once the outlet has readers. */
+  readerId?: string;
 }
 
 export function createPaymentIntent(billId: string, input: CreatePaymentIntentInput): Promise<PaymentIntentView> {
@@ -561,10 +595,25 @@ export function cancelPaymentIntent(intentId: string): Promise<PaymentIntentView
   return posApi<PaymentIntentView>(`payment-intents/${encodeURIComponent(intentId)}/cancel`, { method: "POST" });
 }
 
+/** GET bills/:id/intents/active (#286) - the bill's still-waiting card terminal payment, Stripe reader or simulated, or null. */
+export function getActiveBillIntent(billId: string): Promise<{ intent: PaymentIntentView | null }> {
+  return posApi<{ intent: PaymentIntentView | null }>(`bills/${encodeURIComponent(billId)}/intents/active`);
+}
+
 export function listPendingPaymentIntents(outletId: string): Promise<PaymentIntentView[]> {
   return posApi<PaymentIntentView[]>(`outlets/${encodeURIComponent(outletId)}/payment-intents${deviceQuery()}`);
 }
 
+/** `success`/`failure` drive the simulated terminal, and on a sandbox Stripe reader present an approving/declining test card (404 with a live key). */
 export function simulatePaymentIntent(intentId: string, outcome: "success" | "failure"): Promise<PaymentIntentView> {
   return posApi<PaymentIntentView>(`payment-intents/${encodeURIComponent(intentId)}/simulate`, { method: "POST", body: JSON.stringify({ outcome }) });
+}
+
+// --- Stripe card readers (restiq-web#429 / restiq-backend#286). The outlet's
+// registered smart readers; an empty list means today's simulated terminal.
+import type { CardReaderView } from "@/lib/card-readers";
+export type { CardReaderView };
+
+export function listCardReaders(outletId: string): Promise<{ readers: CardReaderView[] }> {
+  return posApi<{ readers: CardReaderView[] }>(`outlets/${encodeURIComponent(outletId)}/card-readers`);
 }

@@ -14,10 +14,12 @@ import { Button } from "@/components/ui/button";
 import { AdminApiError, exportPayments, fetchPayments } from "../../api";
 import { LoadErrorPanel, Skeleton } from "../data-states";
 import { KpiStatCard } from "../dashboard/kpi-stat-card";
-import { formatPriceMinor } from "../menu/menu-state";
+import { formatMoney } from "@/lib/money";
+import { tenderMethodLabel } from "@/lib/tender-labels";
 import type { OutletView } from "../menu/menu-state";
 import { useOutlets } from "../outlet-context";
 import { useToast } from "../toast";
+import { DateRangeFilter } from "./date-range-filter";
 import { downloadReportExport } from "./reports-state";
 import {
   appendPaymentsPage,
@@ -34,12 +36,6 @@ import {
   type PaymentsResponse,
 } from "./payments-state";
 
-const CURRENCY = "INR";
-
-const DATE_INPUT_CLASS =
-  "h-9 rounded-lg border border-border bg-input px-2.5 text-sm text-foreground focus:outline-none focus-visible:ring-2 focus-visible:ring-ring";
-const FILTER_LABEL_CLASS = "font-label mb-1 block text-[10px] font-semibold uppercase tracking-wider text-muted-foreground";
-
 function LoadingShell() {
   return (
     <div className="space-y-6" data-testid="payments-loading">
@@ -55,9 +51,10 @@ function LoadingShell() {
 }
 
 export function Payments() {
-  const { outlets, loading: outletsLoading, selectedOutletId } = useOutlets();
+  const { outlets, loading: outletsLoading, failed: outletsFailed, reload: reloadOutlets, selectedOutletId } = useOutlets();
 
   if (outletsLoading) return <LoadingShell />;
+  if (outletsFailed) return <LoadErrorPanel testId="payments-outlets-load-error" message="Your outlets couldn't be loaded." onRetry={reloadOutlets} />;
 
   if (outlets.length === 0) {
     return (
@@ -173,36 +170,7 @@ function OutletPayments({ outlet }: Readonly<{ outlet: OutletView }>) {
         </Button>
       </div>
 
-      <div className="flex flex-wrap items-end gap-3 rounded-lg border border-border/40 bg-card p-4">
-        <div>
-          <label htmlFor="payments-filter-from" className={FILTER_LABEL_CLASS}>
-            From
-          </label>
-          <input
-            id="payments-filter-from"
-            data-testid="payments-filter-from"
-            type="date"
-            value={range.fromDate}
-            max={range.toDate}
-            onChange={(event) => setRange((current) => ({ ...current, fromDate: event.target.value }))}
-            className={DATE_INPUT_CLASS}
-          />
-        </div>
-        <div>
-          <label htmlFor="payments-filter-to" className={FILTER_LABEL_CLASS}>
-            To
-          </label>
-          <input
-            id="payments-filter-to"
-            data-testid="payments-filter-to"
-            type="date"
-            value={range.toDate}
-            min={range.fromDate}
-            onChange={(event) => setRange((current) => ({ ...current, toDate: event.target.value }))}
-            className={DATE_INPUT_CLASS}
-          />
-        </div>
-      </div>
+      <DateRangeFilter idPrefix="payments" range={range} onChange={setRange} />
 
       {failed && <LoadErrorPanel testId="payments-load-error" message="Payments couldn't be loaded." onRetry={retry} />}
 
@@ -230,34 +198,41 @@ function PaymentsView({
   onLoadMore,
   loadingMore,
 }: Readonly<{ data: PaymentsResponse; outlet: OutletView; onLoadMore: () => void; loadingMore: boolean }>) {
-  const { totals } = data;
+  const { totals, currency } = data;
 
   return (
     <div className="flex flex-col gap-6">
-      <div className="grid grid-cols-2 gap-3 lg:grid-cols-4 xl:grid-cols-7" data-testid="payments-totals">
+      <div className="grid grid-cols-2 gap-3 lg:grid-cols-4 xl:grid-cols-8" data-testid="payments-totals">
         <KpiStatCard testId="payments-totals-count" label="Bills">
           <p className="text-2xl font-semibold tabular-nums">{totals.count.toLocaleString()}</p>
         </KpiStatCard>
         <KpiStatCard testId="payments-totals-subtotal" label="Subtotal">
-          <p className="text-2xl font-semibold tabular-nums">{formatPriceMinor(totals.subtotalMinor, CURRENCY)}</p>
+          <p className="text-2xl font-semibold tabular-nums">{formatMoney(totals.subtotalMinor, currency)}</p>
         </KpiStatCard>
         <KpiStatCard testId="payments-totals-discount" label="Discount">
-          <p className="text-2xl font-semibold tabular-nums">{formatPriceMinor(totals.discountMinor, CURRENCY)}</p>
+          <p className="text-2xl font-semibold tabular-nums">{formatMoney(totals.discountMinor, currency)}</p>
         </KpiStatCard>
         <KpiStatCard testId="payments-totals-tax" label="Tax">
-          <p className="text-2xl font-semibold tabular-nums">{formatPriceMinor(totals.taxMinor, CURRENCY)}</p>
+          <p className="text-2xl font-semibold tabular-nums">{formatMoney(totals.taxMinor, currency)}</p>
         </KpiStatCard>
         <KpiStatCard testId="payments-totals-total" label="Total">
-          <p className="text-2xl font-semibold tabular-nums">{formatPriceMinor(totals.totalMinor, CURRENCY)}</p>
+          <p className="text-2xl font-semibold tabular-nums">{formatMoney(totals.totalMinor, currency)}</p>
         </KpiStatCard>
         <KpiStatCard testId="payments-totals-tendered" label="Tendered">
-          <p className="text-2xl font-semibold tabular-nums">{formatPriceMinor(totals.tenderedMinor, CURRENCY)}</p>
+          <p className="text-2xl font-semibold tabular-nums">{formatMoney(totals.tenderedMinor, currency)}</p>
         </KpiStatCard>
         <KpiStatCard testId="payments-totals-refunded" label="Refunded">
-          <p className="text-2xl font-semibold tabular-nums">{formatPriceMinor(totals.refundedMinor, CURRENCY)}</p>
+          <p className="text-2xl font-semibold tabular-nums">{formatMoney(totals.refundedMinor, currency)}</p>
+        </KpiStatCard>
+        <KpiStatCard testId="payments-totals-net" label="Net sales">
+          <p className="text-2xl font-semibold tabular-nums">{formatMoney(totals.netMinor, currency)}</p>
         </KpiStatCard>
       </div>
 
+      {/* PE-27: eleven columns can't fit a phone - say the table scrolls. */}
+      <p className="mb-2 text-xs text-muted-foreground sm:hidden" data-testid="payments-scroll-hint">
+        Swipe the table sideways to see every column.
+      </p>
       <div className="overflow-x-auto rounded-lg border border-border/40 bg-card">
         {data.items.length === 0 ? (
           <div data-testid="payments-empty" className="flex flex-col items-center gap-2 px-8 py-16 text-center">
@@ -284,7 +259,7 @@ function PaymentsView({
             </thead>
             <tbody>
               {data.items.map((row) => (
-                <PaymentRowLine key={row.billId} row={row} timeZone={outlet.timezone} />
+                <PaymentRowLine key={row.billId} row={row} timeZone={outlet.timezone} currency={currency} />
               ))}
             </tbody>
           </table>
@@ -303,12 +278,12 @@ function PaymentsView({
   );
 }
 
-function PaymentRowLine({ row, timeZone }: Readonly<{ row: PaymentRow; timeZone: string }>) {
+function PaymentRowLine({ row, timeZone, currency }: Readonly<{ row: PaymentRow; timeZone: string; currency: string }>) {
   const refunded = refundedMinorFor(row);
 
   return (
     <tr data-testid={`payments-row-${row.billId}`} className="h-14 border-b border-border/20 last:border-b-0">
-      <td className="px-4 text-muted-foreground">{formatBillTime(row.finalizedAt, timeZone)}</td>
+      <td className="px-4 text-muted-foreground">{formatBillTime(row.finalizedAt, timeZone, currency)}</td>
       <td className="px-4">
         <Link
           href={`/pos/bills/${row.billId}/invoice`}
@@ -321,29 +296,36 @@ function PaymentRowLine({ row, timeZone }: Readonly<{ row: PaymentRow; timeZone:
       <td className="px-4 text-muted-foreground">{tableOrTokenLabel(row)}</td>
       <td className="px-4 text-muted-foreground">{sourceLabel(row.source)}</td>
       <td className="px-4 text-muted-foreground">{row.cashierName ?? "—"}</td>
-      <td className="px-4 text-right tabular-nums">{formatPriceMinor(row.subtotalMinor, CURRENCY)}</td>
+      <td className="px-4 text-right tabular-nums">{formatMoney(row.subtotalMinor, currency)}</td>
       <td className="px-4 text-right tabular-nums" title={row.discountReason ?? undefined}>
-        {row.discountMinor ? formatPriceMinor(row.discountMinor, CURRENCY) : "—"}
+        {row.discountMinor ? formatMoney(row.discountMinor, currency) : "—"}
       </td>
       <td className="px-4 text-right tabular-nums">
         {taxLines(row).map((line, i) => (
           <div key={i}>
             {line.label && <span className="text-xs text-muted-foreground">{line.label}: </span>}
-            {formatPriceMinor(line.amountMinor, CURRENCY)}
+            {formatMoney(line.amountMinor, currency)}
           </div>
         ))}
       </td>
-      <td className="px-4 text-right tabular-nums font-medium">{formatPriceMinor(row.totalMinor, CURRENCY)}</td>
+      <td className="px-4 text-right tabular-nums font-medium">{formatMoney(row.totalMinor, currency)}</td>
       <td className="px-4">
         <div className="flex flex-wrap gap-1">
           {row.tenders.map((tender, i) => (
             <span key={i} className="inline-flex items-center rounded-[6px] border border-border/60 bg-accent/40 px-2 py-0.5 text-xs">
-              {tender.method}={formatPriceMinor(tender.amountMinor, CURRENCY)}
+              {tenderMethodLabel(tender.method)} {formatMoney(tender.amountMinor, currency)}
             </span>
           ))}
         </div>
       </td>
-      <td className="px-4 text-right tabular-nums">{refunded ? formatPriceMinor(refunded, CURRENCY) : "—"}</td>
+      <td className="px-4 text-right tabular-nums">
+        {refunded ? formatMoney(refunded, currency) : "—"}
+        {row.creditNotes.some((note) => note.method) && (
+          <div data-testid={`payments-row-${row.billId}-refund-methods`} className="text-xs text-muted-foreground">
+            {[...new Set(row.creditNotes.flatMap((note) => (note.method ? [tenderMethodLabel(note.method)] : [])))].join(", ")}
+          </div>
+        )}
+      </td>
     </tr>
   );
 }

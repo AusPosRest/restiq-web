@@ -4,10 +4,122 @@ Format per `coding-standards/conventions/issue-workflow.md`. Earlier work is
 logged, per feature and date, in `wiki/tasks/completed.md`; this file starts
 with the payments epic.
 
+
+## Unreleased - per-restaurant billing contracts (#433)
+
+- Ops: tenant Subscription tab has a "Billing contract" card: typed line items (description, qty, amount per billing period, every period or one-time) that replace the plan price; "Start from plan price", live per-period and next-invoice totals, saved with an audited reason. Billed one-time lines are read-only; with card billing active, changes apply from the next invoice, and a Stripe sync failure is shown inline (the contract stays saved; Save again retries).
+
+## Unreleased - owner console gaps from the full demo (#431)
+
+- Menu: a new add-on group's options take an extra price ("Bacon +A$4.50"); blank is free, negative or invalid prices are blocked.
+- Devices: every enrolment code generated this visit stays listed, newest first, labelled with its device type (older codes keep working until used or expired).
+- Payments report: kiosk orders are labelled "Kiosk" instead of "POS".
+
+## Unreleased - card readers (#429)
+
+- Ops: tenant Payments tab lists, registers (incl. a sandbox simulated reader) and removes Stripe card readers, and manages that tenant's reader orders; new Reader orders page across tenants; reader prices per country on Plans.
+- Owner admin: Settings > Card readers shows their readers and orders and lets them order readers, paid now with the card on file.
+- POS: the card terminal tender sends the payment to the outlet's Stripe reader (picker when several, offline readers unavailable), waits for the tap with Cancel, shows declines with Retry; sandbox shows Simulate approve / decline. Outlets without readers keep the simulated terminal.
+
 ## [Unreleased]
 
 ### Added
-- **Run on a Windows till** (#304). Server code reads the API address from `RESTIQ_API_URL` when the app starts, falling back to `NEXT_PUBLIC_API_URL`, and `RESTIQ_STANDALONE=1 pnpm build` makes a standalone build (`.next/standalone/server.js`). The Windows hub till can run this same build against its own local POS service without a rebuild. Vercel is unchanged.
+- **Run on a Windows till** (#304). Server code reads the API address from `RESTIQ_API_URL` when the app starts, falling back to `NEXT_PUBLIC_API_URL`, and `RESTIQ_STANDALONE=1 pnpm build` makes a standalone build (`.next/standalone/server.js`). The Windows hub till can run this same build against its own local POS service without a rebuild. The Cloudflare Workers build is unchanged (OpenNext already builds standalone).
+- **Stripe onboarding you can follow** (#427, needs restiq-backend#284 onboarding fields): the ops Payments tab's Stripe account card is a stepper (account created → owner details sent → card payments → payouts to the bank) with a "What Stripe still needs" list (title, Stripe's problem text, Overdue / Due now / Later, what it blocks, whether it waits on the owner or on Stripe) and an "All set" line when nothing is due. "Continue on Stripe" (or "Set up Stripe account") opens the onboarding link straight in a new tab; "Copy link for owner" copies it. The Subscription tab's card billing gets the same "Open checkout" / "Copy link for owner" pair. `/stripe/done` is a full-screen dark result page (animated check, still under reduced motion; clock for an expired link; cancelled checkout) that counts down and returns operators to the tenant's Payments or Subscription tab and owners to `<slug>.<base domain>/admin`, with a "Go now" button.
+- **Guests pay by card on their phone** (#427, needs restiq-backend#284): when the bill carries `cardPayments` (a Live tenant with an active Stripe account), "Pay your share" and "Pay full bill" open Stripe's Payment Element on the restaurant's connected account (Apple Pay / Google Pay only where ops allowed them) instead of the simulated outcome picker. After paying, the screen syncs the payment with the server; a 3-D Secure redirect comes back to checkout and syncs once. If the bill lags behind, it shows "Payment received — updating your bill" with a Refresh. Test-mode tenants keep the simulated flow. Ops Payments tab: Card can't be turned off (Apple Pay and Google Pay run on card payments). New deps `@stripe/stripe-js` 10.3.0, `@stripe/react-stripe-js` 7.0.1.
+- **Stripe payments in the ops console** (#425, needs restiq-backend#282): tenant detail has a Payments tab (Stripe connect status, onboarding link to copy or open, accepted methods Card / Apple Pay / Google Pay, platform fee percent + fixed; saves are audited). The Subscription tab gains Card billing with a billing link. New public `/stripe/done` page is where Stripe sends owners afterwards.
+- **Dev environment** (#423): `pnpm run deploy:dev` builds with the dev API (`restiq-backend-dev.fly.dev`) and base domain and deploys the `restiq-web-dev` Worker on `dev.niftypos.com.au/*`.
+
+### Changed
+- **Production domain is niftypos.com.au** (#421): Worker routes, `NEXT_PUBLIC_API_URL` (`https://api.niftypos.com.au`) and `NEXT_PUBLIC_BASE_DOMAIN` move off dailypos.shop; tenant subdomains are now `<slug>.niftypos.com.au`.
+
+### Fixed
+- **Guide video on iPhone** (#419): `/guides/making-demo-videos/video` (route handler) serves the demo video with byte ranges (206/416), because Cloudflare static assets ignore Range and iOS Safari won't play without it; the guide's `<video>` uses it.
+
+### Added
+- **Guide page: how we make the demo videos** (#417): static page at `/guides/making-demo-videos/` (`public/guides/making-demo-videos/`) with the 2-minute demo video embedded; explains the scripted recording, JSON plan, ElevenLabs voice and ffmpeg build, and how to make a custom video.
+
+### Fixed
+- **Android release key in asset links** (#413): `/.well-known/assetlinks.json` also lists the restiq-android release-key fingerprint, so the signed app (1.0.1) runs full-screen without Chrome's URL bar.
+- **Outlet load failure** (#408): when the outlet list fails to load, Settings > Outlet/Capabilities, Devices, Floor plan and Reports > Payments show an error with Retry instead of "No outlets yet" (`OutletContext` now exposes `failed` and `reload`).
+- **Dashboard "As of" timezone** (#409): the freshness badge uses the selected outlet's timezone, like the reports, not the browser's.
+
+### Added
+- **Cloudflare Workers deploy** (#397): `pnpm preview` / `pnpm run deploy` build the app with OpenNext and publish it as the `restiq-web` Worker on `dailypos.shop` and `*.dailypos.shop` (ADR-015).
+- **Sydney region label** (#399): the ops console's tenant overview shows `au-sydney` as "Australia (Sydney)" and flags Indian tenants hosted there ("no Indian region yet").
+- **GST split rounding setting** (#369, needs restiq-backend#244): Settings > Tax Registration lets an India owner choose how CGST/SGST are rounded on odd paisa: Exact total (default, ₹289 @5%: ₹7.22 + ₹7.23 = ₹14.45), Equal halves rounded half up (₹7.23 + ₹7.23) or Equal halves rounded half to even (₹7.22 + ₹7.22). The settle screen's discount preview follows the bill's `gstSplitRounding`.
+- **QR special instructions** (#363, needs restiq-backend#231): guests can add an optional note of up to 200 characters on item detail and review it beneath the cart line. Blank notes are omitted.
+- **Outlet tab** (#329, needs restiq-backend outlets PATCH): Settings > Outlet (now the default settings tab) lets the owner edit the selected outlet's name, address and timezone; outlet type stays read-only. The go-live checklist's "Outlet details" step links here instead of just "Mark as done".
+- **Test / Live mode** (#346, needs restiq-backend#213): operators switch a tenant between Test and Live from its page (confirmed and audited); new tenants can start in Test from the wizard. Test tenants are badged TEST in the Platform Console, the owner console, the POS and the KDS, and their invoices and receipts say "Test mode - not a valid tax invoice".
+- **Plans by country** (#337): the Plans page shows India and Australia in separate sections, each with its currency, instead of one mixed table.
+- **Plans page** (#323, needs restiq-backend#201): Platform Console > Plans lets operators set each country's Standard and Enterprise price per outlet per month (blank = on quote) and the annual discount, with an audited reason. The onboarding wizard reads these prices; nothing is hard-coded any more.
+- **India plan prices** (#321): the onboarding wizard prices Indian tenants in rupees: Standard ₹499 and Enterprise ₹999 per outlet per month (₹399 / ₹799 billed annually), instead of "Price on quote".
+- **Mail inbox simulator** (#318, needs restiq-backend#198): `/simulator/inbox` lists every email the backend would have sent (owner invites, password resets) when it runs with `MAIL_PROVIDER=simulator`. Newest first, filter by address, clickable links, refreshes every 5 seconds.
+- **Mail inbox moved into the ops console** (#325): the inbox is now `/ops/inbox` in the Platform Console, reading the backend's authenticated `GET /ops/v1/dev-inbox` instead of the public `/dev/v1/inbox`. `/simulator/inbox` redirects there.
+- **Show password toggle** (#327): the six password fields (ops login, admin login, accept invite, reset password) have an eye icon to reveal the typed password.
+- **Staff work at chosen outlets** (#316, needs restiq-backend#197): Add staff and the staff list let the owner pick the outlets each person works at ("Every outlet" by default). Their PIN only signs in there; a till of another outlet says they aren't set up to work there.
+
+### Fixed
+- **Guest QR and kiosk currency** (#403): the empty cart and the guest bill/checkout price in the tenant's currency (A$ for an Australian tenant) instead of ₹ - read from the menu, since the backend's empty cart falls back to INR.
+- **Pay at the counter** (#404, needs restiq-backend#278): when the guest bill says `paymentsAvailable: false`, or a pay attempt returns 409 `provider_unavailable`, the guest checkout shows "Please pay at the counter" instead of the payment sheet; the kiosk says "Card payment isn't available here yet - please pay at the counter".
+- **POS Refund reachable again** (#405): each finalised bill in POS > Payments has a Refund link to its refund screen (manager PIN still asked there). The settle screen stays without it (#226).
+- **Large cash tender check** (#406): the settle keypad keeps whole rupees/dollars (#306) while the shift float and blind count key cents, so it now asks before adding cash over 10x what is still due (typing 6000 for 60 recorded a 6,000 tender).
+- **Card terminal only when one exists** (#407): once the server says the till has no card terminal, the option is hidden for the rest of the tab's session and the cashier is told to record the card as External.
+- **Counter doesn't send to the kitchen before payment** (#361): Charge on the QSR counter no longer sends the order to the kitchen before finalising. The backend fires the kitchen inside a successful finalize, so a failed payment (for example no open shift) leaves no ticket for an unpaid order on the KDS; the error is shown and the cart is kept.
+- **Settle screen tax lines add up after a discount** (#369, AP-pe-6 / AP-se-20): with a discount entered, CGST/SGST (or GST) are shown on the discounted value, as finalize charges them, so Discount + tax lines add up to TOTAL (₹737.50 with 25% off: CGST ₹13.83 + SGST ₹13.83, TOTAL ₹580.78). GST is rounded once and split CGST = floor(half), SGST = remainder (restiq-backend#244). Without a pending discount the bill's own figures are shown as the server sent them.
+- **Menu variants, kitchen and QR tables** (#344, needs restiq-backend#211): adding Half to a dish keeps the full portion on sale; portions are priced when added (also on Add Item); dishes the till or QR can't sell are flagged; prices show paise; items can be sent to a kitchen station and marked veg/non-veg; the kitchen display reports in to Devices, wraps its tickets and drops day-old leftovers; expo keeps paid orders until cooked; diners learn a table is taken before building a cart, and an abandoned table frees up after 30 minutes.
+- **Simulator devices sign in** (#346, PE-26 / CU-25): each simulated device opens in its own window on its own `sim-<id>.localhost` address, so its login cookie is kept; the simulator page lists the devices with Focus, Close and Re-open.
+- **/demo publishes no operator login** (#346, PE-30): `/demo` and `/simulator` answer 404 in production unless `DEMO_PAGES=on`; `/demo` lists only Test-mode tenants' logins.
+- **Console polish** (#346): agreements hint (PE-1), A$ label (PE-3), shipped-only plan features (PE-4), resumed wizard prefills the owner (PE-5), wizard draft/phone/switch/button fixes (PE-6), branding preview in the tenant's name, currency and tax (PE-8), QR sheet layout and PNG text (CU-8 / PE-20), KDS heartbeat (PE-25), owner console at 390 px (PE-27), used/invalid invite links (PE-31), RESTIQ naming and setup page header (PE-32), staff without email (CU-3).
+- **Import page, tax number check, QR sheet PDF** (#354, needs restiq-backend#222): the menu import page sits inside the owner console (sidebar and header) and offers "Continue your import" for an upload not yet added to the menu (also in the Menu page's import dialog) (PE-11); wizard step 2 says "Another restaurant on RESTIQ already uses this GSTIN/ABN" before step 3, without naming it (PE-6); the floor plan's QR sheet is one "Print or save as PDF" button giving A4 pages of cards instead of a ZIP of PNGs (PE-20 / CU-8).
+- **Simulator devices sign in** (#346, PE-26 / CU-25): each simulated device opens in its own window on its own `sim-<id>.localhost` address, so its login cookie is kept; the simulator page lists the devices with Focus, Close and Re-open.
+- **/demo publishes no operator login** (#346, PE-30): `/demo` and `/simulator` answer 404 in production unless `DEMO_PAGES=on`; `/demo` lists only Test-mode tenants' logins.
+- **Console polish** (#346): agreements hint (PE-1), A$ label (PE-3), shipped-only plan features (PE-4), resumed wizard prefills the owner (PE-5), wizard draft/phone/switch/button fixes (PE-6), branding preview in the tenant's name, currency and tax (PE-8), QR sheet layout and PNG text (CU-8 / PE-20), KDS heartbeat (PE-25), owner console at 390 px (PE-27), used/invalid invite links (PE-31), RESTIQ naming and setup page header (PE-32), staff without email (CU-3).
+- **Menu variants, kitchen and QR tables** (#344, needs restiq-backend#211): adding Half to a dish keeps the full portion on sale; portions are priced when added (also on Add Item); dishes the till or QR can't sell are flagged; prices show paise; items can be sent to a kitchen station and marked veg/non-veg; the kitchen display reports in to Devices, wraps its tickets and drops day-old leftovers; expo keeps paid orders until cooked; diners learn a table is taken before building a cart, and an abandoned table frees up after 30 minutes.
+- **Simulator devices are separate** (#339): on localhost each simulator frame loads from its own `*.localhost` address, so a POS till, KDS and kiosk are separate devices with their own logins. Device frames open the enrolment screen first. The Guest QR preset can be pointed at a real table with `NEXT_PUBLIC_SIMULATOR_GUEST_QR_PATH`.
+- **POS mode toggle (#335).** The QSR counter and the table map now share one header (same title, toggle position and padding) with a Counter ⇄ Tables switch (knob on the current mode, one tap flips it), replacing the "Switch to Table Mode" / "Switch to Counter Mode" links.
+- **Item drawer stays open on inline edits (#333).** Adding or removing a variant, or changing the photo, no longer closes the drawer; only Save closes it.
+- **Directory search no longer flickers (#333).** The current results stay on screen while the next search loads, instead of flashing the loading skeleton on every keystroke.
+- Owner console walkthrough bugs (#330):
+  - **Add Item has a price.** Creating a menu item now asks for its price and posts it (dine-in, reason "Initial price") right after the item is created, the same way a price change saves; before, a new item had no price until someone opened it again and changed one.
+  - **Menu list stays in sync.** A category's item count now goes up when an item is created in it (and moves with the item between categories), and the list's price column updates as soon as a price change saves, instead of waiting for a reload.
+  - **Invite link copy.** The ops invite link no longer says "No email is sent in this prototype" - it now says the link was emailed and this copy is a backup, matching the mail inbox simulator that actually sends it.
+
+### Fixed (Binflow first-run walkthrough, 2026-10-08)
+- **POS money** (#306):
+  - Cash above the total now gives change: the screen shows "Change due ₹43.70", Finalise works, and the cash is posted net of change so the bill sums exactly.
+  - The payment keypad takes whole rupees/dollars (1100 is ₹1100, not ₹11). Exact remaining still covers paise and cents.
+  - The bill lists CGST and SGST (or GST) lines instead of one Tax line.
+  - A counter sale's Charge sends its lines to the kitchen before finalising, so counter orders reach the kitchen screen.
+  - A paid order is read-only: no quantity or remove buttons, and its button reads "View bill".
+- **Tills, kitchen screens and device pages** (#308, with restiq-backend#187):
+  - A kitchen screen signs in after enrolling. Continue goes through the PIN pad bound to its restaurant, not to a page that said "set POS_TENANT_ID".
+  - An enrolled till signs in to its own outlet without the outlet chooser, and shows the restaurant's name instead of an id. The device card shows the outlet name.
+  - The mocked "Online" / "Printer Ready" pills and the made-up "App Version v2.4.1" are gone.
+  - A wrong PIN says "Wrong PIN. Try again."
+  - Opening a new code on a device that's already set up says it wasn't used.
+  - Un-enrol sits behind "Set this device up as something else".
+- **Platform Console first run** (#310, with restiq-backend#189/#191):
+  - Dashboard KPIs are real.
+  - The empty dashboard links to onboarding.
+  - Subscriptions is folded into the tenant page.
+  - The Dead-Letter Queue is renamed Failed syncs.
+  - The Agreements page says to publish before the first onboarding.
+  - The tenant Capabilities tab shows each outlet's real (owner) switches, read-only. The unused tenant toggles and the ops Branding tab are gone.
+  - Delete tenant moves to a danger zone.
+  - The wizard prices plans per market (India: on quote) and recommends a plan from the outlet count. It clears fixed errors as you type, pre-fills the owner from the primary contact, and keeps the invite link inside its card.
+- **Owner console first run** (#312, with restiq-backend#193):
+  - **Go live can be reached.** Floor plan and menu get "Mark as done", the checklist shows "You're live" for a tenant that is already live, and a **Setup** sidebar link leads back to it.
+  - The invite page names the restaurant and email and states the password rule.
+  - A banner asks the owner to sign the current platform agreement.
+  - The dashboard shows times in the viewer's clock (it showed UTC) and only today's Sales, since nothing records margin, labour or waste.
+  - Unbuilt reports are hidden.
+  - Branding offers the logo URL only (the upload could never be saved) and the preview says "Your restaurant".
+  - Adding staff issues their PIN straight away. Revoke access is a quieter button.
+  - The enrol drawer names the outlet.
+  - Stations read "Screen only - no printer for this station".
+
+### Added
 - **Restaurant addresses** (#302, web half of restiq-backend#183). Each restaurant lives at its own subdomain. The sign-in pages name the restaurant at its address, POS sign-in finds the restaurant from the address when no terminal binding or POS_TENANT_ID is set, and the new-tenant wizard has a Subdomain field that checks the name is free. Our server forwards the address to the API, which refuses a session from another restaurant.
 - **Owner password reset** (#300, web half of restiq-backend#181). "Forgot your password?" on the owner sign-in sends a reset link by email; the link opens a page to choose a new password, and the owner signs in again (every older session is ended).
 - **Set up an outlet from its type** (D2). An outlet with no stations shows a "Set up for my outlet type" button on the floor-plan page that creates the stations, tables and switches for a dine-in restaurant, counter, cloud kitchen or food-court stall. Every station row can now be removed (with a confirm step); everything the setup makes can be edited or removed.

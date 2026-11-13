@@ -45,7 +45,7 @@ export interface ProductPayload {
 
 export const EMPTY_FORM: ProductForm = { name: "", shortName: "", nameHindi: "", vegMarker: "", photoUrl: "", category: "", price: "", currency: "INR", tags: "" };
 
-export const CURRENCY_LABEL: Record<CatalogCurrency, string> = { INR: "India (₹)", AUD: "Australia ($)" };
+export const CURRENCY_LABEL: Record<CatalogCurrency, string> = { INR: "India (₹)", AUD: "Australia (A$)" };
 
 export function formFromProduct(product: CatalogProduct): ProductForm {
   return {

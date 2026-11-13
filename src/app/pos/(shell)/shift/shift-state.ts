@@ -5,12 +5,11 @@
 // menu-state.ts#formatPriceMinor even though the shape is the same idea -
 // this is the pos realm's own small copy, not a stray duplicate.
 
-const CURRENCY_SYMBOLS: Record<string, string> = { INR: "₹" };
+import { formatMoney } from "@/lib/money";
 
 /** Cash amounts render with paise, unlike menu prices - an over/short of a few paise still matters. */
 export function formatMinor(amountMinor: number, currency = "INR"): string {
-  const symbol = CURRENCY_SYMBOLS[currency] ?? `${currency} `;
-  return `${symbol}${(amountMinor / 100).toFixed(2)}`;
+  return formatMoney(amountMinor, currency);
 }
 
 /** BlindCountKeypad/AmountKeypad build up a plain digit string (cents-first, calculator-style); this turns it into minor units. */

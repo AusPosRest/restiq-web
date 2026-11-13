@@ -53,9 +53,10 @@ export function WaitingOnPanel({
                     {formatElapsed(entry.firedAt, nowMs)}
                   </p>
                 </div>
-                <p className="mt-0.5 text-xs text-muted-foreground">
+                <p data-testid={`kds-waiting-on-${entry.line.id}-where`} className="mt-0.5 text-xs text-muted-foreground">
                   {entry.stationName ?? "Unrouted"} - {ticketDisplayNumber(entry)}
-                  {entry.tableLabel ? ` - ${entry.tableLabel}` : ""}
+                  {/* PE-21: a table order already reads "Table T2"; only a token order adds its table. */}
+                  {entry.tableLabel && entry.tokenNumber != null ? ` - Table ${entry.tableLabel}` : ""}
                 </p>
               </li>
             );

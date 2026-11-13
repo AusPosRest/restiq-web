@@ -1,6 +1,6 @@
 "use client";
 
-import { Activity, CreditCard, FilePenLine, Inbox, LayoutDashboard, MonitorSmartphone, Package, Store } from "lucide-react";
+import { Activity, CreditCard, FilePenLine, Inbox, LayoutDashboard, Mail, MonitorSmartphone, Package, Store, Truck } from "lucide-react";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 
@@ -11,11 +11,13 @@ const navItems = [
   { href: "/ops", label: "Dashboard", icon: LayoutDashboard, testId: "ops-nav-dashboard" },
   { href: "/ops/tenants", label: "Tenants", icon: Store, testId: "ops-nav-tenants" },
   { href: "/ops/devices", label: "Devices", icon: MonitorSmartphone, testId: "ops-nav-devices" },
-  { href: "/ops/subscriptions", label: "Subscriptions", icon: CreditCard, testId: "ops-nav-subscriptions" },
   { href: "/ops/sync-health", label: "Sync Health", icon: Activity, testId: "ops-nav-sync-health" },
-  { href: "/ops/dlq", label: "Dead-Letter Queue", icon: Inbox, testId: "ops-nav-dlq" },
+  { href: "/ops/dlq", label: "Failed syncs", icon: Inbox, testId: "ops-nav-dlq" },
   { href: "/ops/agreements", label: "Agreements", icon: FilePenLine, testId: "ops-nav-agreements" },
   { href: "/ops/catalog", label: "Catalog", icon: Package, testId: "ops-nav-catalog" },
+  { href: "/ops/plans", label: "Plans", icon: CreditCard, testId: "ops-nav-plans" },
+  { href: "/ops/reader-orders", label: "Reader orders", icon: Truck, testId: "ops-nav-reader-orders" },
+  { href: "/ops/inbox", label: "Mail inbox", icon: Mail, testId: "ops-nav-inbox" },
 ];
 
 export function SidebarNav() {

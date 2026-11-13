@@ -35,6 +35,8 @@ function item(overrides: Partial<MenuItemView> = {}): MenuItemView {
 describe("formatPriceMinor", () => {
   it("renders whole-currency-unit prices with the right symbol", () => {
     expect(formatPriceMinor(32000, "INR")).toBe("₹320");
+    // PE-12: never rounded away - the bill charges the paise.
+    expect(formatPriceMinor(28950, "INR")).toBe("₹289.50");
   });
 
   it("falls back to the currency code for an unmapped currency", () => {

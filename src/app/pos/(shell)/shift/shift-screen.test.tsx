@@ -1,4 +1,4 @@
-import { cleanup, render, screen } from "@testing-library/react";
+import { cleanup, render, screen, waitFor } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { ShiftScreen } from "./shift-screen";
@@ -39,14 +39,18 @@ function stubFetch() {
       ];
       return Promise.resolve(jsonResponse(currentShift));
     }
+    if (url.endsWith("/pos/api/menu") && menuCurrency) return Promise.resolve(jsonResponse({ currency: menuCurrency, categories: [], items: [] }));
     return Promise.resolve(jsonResponse({ error: { code: "not_found", message: "unhandled" } }, 404));
   });
   vi.stubGlobal("fetch", fetchMock);
   return fetchMock;
 }
 
+let menuCurrency: string | null = null;
+
 beforeEach(() => {
   currentShift = null;
+  menuCurrency = null;
 });
 afterEach(() => {
   cleanup();
@@ -66,6 +70,15 @@ describe("ShiftScreen - open shift", () => {
     await userEvent.click(screen.getByTestId("open-shift-keypad-digit-0"));
     expect(screen.getByTestId("open-shift-keypad-display").textContent).toBe("₹5.00");
     expect(screen.getByTestId("open-shift-submit")).toHaveProperty("disabled", false);
+  });
+
+  it("PE-10: an Australian till counts its float in A$", async () => {
+    menuCurrency = "AUD";
+    stubFetch();
+    render(<ShiftScreen outletId="outlet-1" />);
+    await screen.findByTestId("open-shift-form");
+    await userEvent.click(screen.getByTestId("open-shift-keypad-digit-5"));
+    await waitFor(() => expect(screen.getByTestId("open-shift-keypad-display").textContent).toBe("A$0.05"));
   });
 
   it("opens a shift with the entered float and shows the dashboard", async () => {

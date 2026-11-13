@@ -14,6 +14,13 @@ const STYLES: Record<string, string> = {
   healthy: "border-status-healthy/50 bg-status-healthy/10 text-status-healthy",
   lagging: "border-status-warning/50 bg-status-warning/10 text-status-warning",
   silent: "border-status-critical/50 bg-status-critical/10 text-status-critical",
+  // Reader orders (restiq-web#429).
+  paid: "border-status-warning/50 bg-status-warning/10 text-status-warning",
+  ordered: "border-status-pending/50 bg-status-pending/10 text-status-pending",
+  shipped: "border-status-pending/50 bg-status-pending/10 text-status-pending",
+  delivered: "border-status-healthy/50 bg-status-healthy/10 text-status-healthy",
+  payment_failed: "border-status-critical/50 bg-status-critical/10 text-status-critical",
+  cancelled: "border-border bg-accent text-muted-foreground",
   unknown: "border-border bg-accent text-muted-foreground",
 };
 

@@ -14,6 +14,7 @@ import { createPortal } from "react-dom";
 import { GuestApiError } from "../api-client";
 import { formatMinor } from "../cart/cart-state";
 import { createOrFetchBill, fetchInvoice, payAll, type GuestBillView, type GuestInvoiceView } from "../checkout/checkout-api";
+import { DATE_LOCALE } from "@/lib/datetime";
 
 const TRAY_ID = "kiosk-receipt-tray";
 const TENDER_LABEL: Record<string, string> = { card_terminal: "Card", card_online: "Card", cash: "Cash", upi_manual: "UPI", upi_intent: "UPI", upi_qr: "UPI" };
@@ -24,7 +25,13 @@ type PayState =
   | { kind: "busy"; label: string }
   | { kind: "tap"; bill: GuestBillView; declined: boolean }
   | { kind: "paid"; invoice: GuestInvoiceView }
+  | { kind: "counter" }
   | { kind: "error"; message: string };
+
+// Issue #404: no payment provider here (restiq-backend#278) - the bill says so, or pay-all 409s.
+function isProviderUnavailable(error: unknown): boolean {
+  return error instanceof GuestApiError && error.code === "provider_unavailable";
+}
 
 function errorMessage(error: unknown): string {
   return error instanceof GuestApiError && error.status !== 0 ? error.message : "Couldn't reach the restaurant - please try again or pay at the counter.";
@@ -44,9 +51,10 @@ export function KioskPay({ orderId, tokenNumber, currency }: Readonly<{ orderId:
     try {
       const bill = await createOrFetchBill(orderId);
       if (bill.status === "finalized") await finish(bill);
+      else if (bill.paymentsAvailable === false) setState({ kind: "counter" });
       else setState({ kind: "tap", bill, declined: false });
     } catch (error) {
-      setState({ kind: "error", message: errorMessage(error) });
+      setState(isProviderUnavailable(error) ? { kind: "counter" } : { kind: "error", message: errorMessage(error) });
     }
   }
 
@@ -55,7 +63,7 @@ export function KioskPay({ orderId, tokenNumber, currency }: Readonly<{ orderId:
     try {
       await finish(await payAll(bill.id, { simulatedOutcome: "success" }));
     } catch (error) {
-      setState({ kind: "error", message: errorMessage(error) });
+      setState(isProviderUnavailable(error) ? { kind: "counter" } : { kind: "error", message: errorMessage(error) });
     }
   }
 
@@ -111,6 +119,12 @@ export function KioskPay({ orderId, tokenNumber, currency }: Readonly<{ orderId:
         </>
       )}
 
+      {state.kind === "counter" && (
+        <p role="status" data-testid="kiosk-pay-at-counter" className="py-4 text-sm font-medium text-foreground">
+          Card payment isn&apos;t available here yet - please pay at the counter.
+        </p>
+      )}
+
       {state.kind === "paid" && (
         <>
           <p data-testid="kiosk-pay-paid" className="inline-flex items-center gap-2 font-headline text-xl font-semibold text-foreground">
@@ -164,8 +178,9 @@ function Row({ label, value, bold, testId }: Readonly<{ label: string; value: st
 }
 
 // An 80 mm-style thermal strip: white paper, black monospace, dashed rules,
-// the token number big enough to read across the counter.
-function KioskReceipt({ invoice, tokenNumber }: Readonly<{ invoice: GuestInvoiceView; tokenNumber: number }>) {
+// the token number big enough to read across the counter. Also the table
+// diner's receipt after checkout (CU-24), where there is no token.
+export function KioskReceipt({ invoice, tokenNumber = null }: Readonly<{ invoice: GuestInvoiceView; tokenNumber?: number | null }>) {
   const money = (amountMinor: number) => formatMinor(amountMinor, invoice.currency);
   const ref = useRef<HTMLElement>(null);
   // The slot sits below the kiosk screen, usually under the fold - bring the paper into view as it feeds.
@@ -192,10 +207,17 @@ function KioskReceipt({ invoice, tokenNumber }: Readonly<{ invoice: GuestInvoice
       <p className="text-center font-bold">
         {invoice.title} {invoice.invoiceNumber}
       </p>
-      {invoice.issuedAt && <p className="text-center">{new Date(invoice.issuedAt).toLocaleString([], { dateStyle: "short", timeStyle: "short" })}</p>}
-      <p data-testid="kiosk-receipt-token" className="my-2 text-center text-[28px] font-bold leading-8">
-        #{tokenNumber}
-      </p>
+      {invoice.testMode && (
+        <p data-testid="kiosk-receipt-test-mode" className="text-center font-bold uppercase">
+          Test mode - not a valid tax invoice
+        </p>
+      )}
+      {invoice.issuedAt && <p className="text-center">{new Date(invoice.issuedAt).toLocaleString(DATE_LOCALE, { dateStyle: "short", timeStyle: "short" })}</p>}
+      {tokenNumber != null && (
+        <p data-testid="kiosk-receipt-token" className="my-2 text-center text-[28px] font-bold leading-8">
+          #{tokenNumber}
+        </p>
+      )}
       <Rule />
       {invoice.lines.map((line, index) => (
         <Row key={index} label={`${line.quantity} x ${line.name}`} value={money(line.lineTotalMinor)} />

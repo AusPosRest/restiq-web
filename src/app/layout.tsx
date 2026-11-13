@@ -15,7 +15,7 @@ const geistMono = Geist_Mono({
 });
 
 export const metadata: Metadata = {
-  title: "Restiq",
+  title: "RESTIQ",
   description: "Point of sale for restaurants, burger shops and snack bars",
   // iOS home-screen app (issue #222): full screen, named RESTIQ under the icon.
   appleWebApp: { capable: true, title: "RESTIQ", statusBarStyle: "black" },

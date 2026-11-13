@@ -85,14 +85,14 @@ describe("Reports", () => {
     expect(fetchMock).toHaveBeenCalledTimes(2);
   });
 
-  it("groups report cards by category and shows the backend's honest message for reports with no data source yet", async () => {
+  it("hides reports with no data source yet instead of showing a PENDING card (walkthrough fix)", async () => {
     stubFetch();
     renderReports();
 
-    await screen.findByTestId("reports-category-sales");
-    expect(screen.getByTestId("report-card-sales-summary-message").textContent).toBe("Available once POS Core Loop is live");
-    expect(screen.getByTestId("report-card-sales-summary-pending")).toBeTruthy();
-    expect(screen.queryByTestId("report-card-sales-summary-export")).toBeNull();
+    await screen.findByTestId("reports-category-menu");
+    expect(screen.queryByTestId("reports-category-sales")).toBeNull();
+    expect(screen.queryByTestId("report-card-sales-summary-pending")).toBeNull();
+    expect(screen.getByTestId("reports-top-items-link").getAttribute("href")).toBe("/admin/reports/top-items");
   });
 
   it("shows a working Export CSV action for a real report", async () => {

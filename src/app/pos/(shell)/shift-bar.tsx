@@ -29,12 +29,13 @@
 // CAP-11 (device & staff attendance status, story 11) adds the same shape of
 // plain nav link to /pos/status - the attendance list and mocked device
 // panel fetch on that screen itself.
-import { ClipboardList, LogOut, MonitorSmartphone, Receipt, Wallet, Wifi } from "lucide-react";
+import { ClipboardList, LogOut, MonitorSmartphone, Receipt, Wallet } from "lucide-react";
 import Link from "next/link";
 import { useState } from "react";
 import { useRouter } from "next/navigation";
 import { clockOut } from "../api";
 import { LoadErrorPanel } from "./data-states";
+import { OfflineIndicatorPill } from "./status/offline-indicator-pill";
 import type { PosStaffDisplay } from "@/lib/pos-session";
 
 async function signOut(): Promise<void> {
@@ -68,13 +69,7 @@ export function ShiftBar({ initial }: Readonly<{ initial: PosStaffDisplay | null
     <header data-testid="pos-shift-bar" className="flex h-14 items-center justify-between gap-3 border-b border-border/40 bg-card px-6">
       <div className="flex items-center gap-4">
         <p className="font-headline text-sm font-bold tracking-tight text-primary">RESTIQ</p>
-        <span
-          data-testid="pos-status-online"
-          title="Mocked - no real connectivity signal in this prototype (demo)"
-          className="flex items-center gap-1.5 rounded-full bg-accent px-3 py-1 text-xs font-medium text-status-available"
-        >
-          <Wifi className="size-3.5" aria-hidden="true" /> Online
-        </span>
+        <OfflineIndicatorPill testId="pos-status-online" />
       </div>
 
       {failed ? (

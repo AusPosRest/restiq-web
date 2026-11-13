@@ -4,6 +4,7 @@ import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useState } from "react";
 import { Button } from "@/components/ui/button";
+import { PasswordInput } from "@/components/password-input";
 
 const GENERIC_ERROR = "Incorrect email or password";
 const LOCKED_OUT_ERROR = "Too many sign-in attempts. Please try again later.";
@@ -85,11 +86,11 @@ export function LoginForm({ nextPath, sessionExpired, passwordReset = false }: {
         <label htmlFor="admin-login-password" className="font-label text-xs font-semibold uppercase tracking-wider text-muted-foreground">
           Password
         </label>
-        <input
+        <PasswordInput
           id="admin-login-password"
           data-testid="admin-login-password"
+          toggleTestId="admin-login-password-toggle"
           name="password"
-          type="password"
           autoComplete="current-password"
           required
           aria-invalid={error === GENERIC_ERROR || undefined}

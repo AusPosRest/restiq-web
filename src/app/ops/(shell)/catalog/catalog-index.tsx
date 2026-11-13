@@ -66,7 +66,7 @@ export function CatalogIndex() {
     <section className="flex flex-1 flex-col">
       <div className="flex flex-wrap items-start justify-between gap-4">
         <div>
-          <h1 className="font-headline text-2xl font-semibold">Product directory</h1>
+          <h1 className="font-headline text-2xl font-semibold">Catalog</h1>
           <p className="mt-1 text-sm text-muted-foreground">
             Products every tenant can search and copy into their own menu. A tenant edits its copy; nothing here changes for them afterwards.
           </p>

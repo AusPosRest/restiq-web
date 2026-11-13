@@ -17,7 +17,9 @@ import Link from "next/link";
 import { useState } from "react";
 import { useRouter } from "next/navigation";
 import { Button } from "@/components/ui/button";
-import { PosApiError, transferOrder } from "../../api";
+import { discardOrder, PosApiError, transferOrder } from "../../api";
+import { saveCounterOrderId } from "../../counter/counter-session";
+import { staffLabel } from "../../orders/[orderId]/order-taking-state";
 import { LoadErrorPanel, Skeleton } from "../../data-states";
 import { usePosLoad } from "../../use-pos-load";
 import { TransferOwnershipDialog } from "../../table-map/transfer-ownership-dialog";
@@ -52,6 +54,21 @@ function OpenOrdersLoaded({
   const [pendingTransfer, setPendingTransfer] = useState<{ orderId: string; label: string; ownerName: string } | null>(null);
   const [busy, setBusy] = useState(false);
   const [actionError, setActionError] = useState<string | null>(null);
+
+  function handleDiscard(order: OpenOrderEntry) {
+    setBusy(true);
+    setActionError(null);
+    discardOrder(order.id)
+      .then(onReload)
+      .catch((error: unknown) => setActionError(error instanceof PosApiError ? error.message : "Couldn't discard this order."))
+      .finally(() => setBusy(false));
+  }
+
+  // A counter order resumes on the counter screen it was rung up on, not the table screen (CU-13).
+  function handleResumeCounter(order: OpenOrderEntry) {
+    saveCounterOrderId(currentStaffId, order.id);
+    router.push("/pos/counter");
+  }
 
   function handleTransferConfirm(reason: string) {
     if (!pendingTransfer) return;
@@ -115,10 +132,13 @@ function OpenOrdersLoaded({
                     key={order.id}
                     order={order}
                     own={isOwnOrder(order, currentStaffId)}
+                    currentStaffId={currentStaffId}
                     busy={busy}
+                    onDiscard={() => handleDiscard(order)}
+                    onResumeCounter={() => handleResumeCounter(order)}
                     onTakeOver={() => {
                       setActionError(null);
-                      setPendingTransfer({ orderId: order.id, label: originLabel(order), ownerName: order.ownerStaffId });
+                      setPendingTransfer({ orderId: order.id, label: originLabel(order), ownerName: staffLabel(order.ownerStaffId, order.ownerName, currentStaffId) });
                     }}
                   />
                 ))}
@@ -153,22 +173,46 @@ function OpenOrdersLoaded({
 function OrderRow({
   order,
   own,
+  currentStaffId,
   busy,
+  onDiscard,
+  onResumeCounter,
   onTakeOver,
-}: Readonly<{ order: OpenOrderEntry; own: boolean; busy: boolean; onTakeOver: () => void }>) {
+}: Readonly<{
+  order: OpenOrderEntry;
+  own: boolean;
+  currentStaffId: string;
+  busy: boolean;
+  onDiscard: () => void;
+  onResumeCounter: () => void;
+  onTakeOver: () => void;
+}>) {
   return (
     <tr data-testid={`open-order-${order.id}`} className="border-b border-border/20 last:border-0">
       <td className="px-4 py-3 font-medium">{originLabel(order)}</td>
-      <td className="px-4 py-3">{own ? "You" : order.ownerStaffId}</td>
+      <td className="px-4 py-3">{staffLabel(order.ownerStaffId, order.ownerName, currentStaffId)}</td>
       <td className="px-4 py-3">{OPEN_ORDER_STATUS_LABEL[order.status]}</td>
       <td className="px-4 py-3 tabular-nums">{elapsedLabel(order.openedAt)}</td>
       <td className="px-4 py-3 tabular-nums">{order.itemCount}</td>
       <td className="px-4 py-3 tabular-nums">{formatMinor(order.totalMinor)}</td>
       <td className="px-4 py-3 text-right">
         {own ? (
-          <Button asChild size="sm" data-testid={`open-order-resume-${order.id}`}>
-            <Link href={`/pos/orders/${order.id}`}>Resume</Link>
-          </Button>
+          <div className="flex justify-end gap-2">
+            {order.itemCount === 0 && (
+              <Button variant="outline" size="sm" disabled={busy} data-testid={`open-order-discard-${order.id}`} onClick={onDiscard}>
+                Discard
+              </Button>
+            )}
+            {order.origin === "counter" ? (
+              <Button size="sm" data-testid={`open-order-resume-${order.id}`} onClick={onResumeCounter}>
+                Resume
+              </Button>
+            ) : (
+              <Button asChild size="sm" data-testid={`open-order-resume-${order.id}`}>
+                <Link href={`/pos/orders/${order.id}`}>Resume</Link>
+              </Button>
+            )}
+          </div>
         ) : (
           <Button variant="outline" size="sm" disabled={busy} data-testid={`open-order-take-over-${order.id}`} onClick={onTakeOver}>
             Take over

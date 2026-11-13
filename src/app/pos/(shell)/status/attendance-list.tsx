@@ -8,9 +8,10 @@
 // clock-out entry to show, so there's nothing left to render but the
 // clock-in time.
 import type { AttendanceEntry } from "../../api";
+import { DATE_LOCALE } from "@/lib/datetime";
 
 function formatTime(iso: string): string {
-  return new Date(iso).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" });
+  return new Date(iso).toLocaleTimeString(DATE_LOCALE, { hour: "2-digit", minute: "2-digit" });
 }
 
 export function AttendanceList({ staff }: Readonly<{ staff: AttendanceEntry[] }>) {

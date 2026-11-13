@@ -26,6 +26,7 @@ export interface CartLineView {
   quantity: number;
   unitPriceMinor: number;
   modifiers: CartLineModifierView[];
+  note?: string | null;
   lineTotalMinor: number;
   createdAt: string;
 }

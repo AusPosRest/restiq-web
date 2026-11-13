@@ -6,7 +6,17 @@
 // availability) returns only `{ available, reason }` - no outlet display
 // name - so unlike the pre-reconciliation guess, this never had a name to
 // show in the first place.
-export function UnavailableView() {
+// CU-21: a table staff already have an order on gets its own line - the diner
+// learns it here, not after filling a cart.
+export function UnavailableView({ tableBusy = false }: Readonly<{ tableBusy?: boolean }>) {
+  if (tableBusy) {
+    return (
+      <main data-testid="qr-table-busy" className="flex min-h-screen flex-1 flex-col items-center justify-center px-6 py-12 text-center">
+        <h1 className="font-headline text-xl font-semibold text-foreground">This table already has an order</h1>
+        <p className="mt-4 max-w-sm text-base text-muted-foreground">Our staff are looking after this table - please ask your server to add anything you&apos;d like.</p>
+      </main>
+    );
+  }
   return (
     <main
       data-testid="qr-unavailable"

@@ -77,10 +77,12 @@ describe("formatPriceMinor", () => {
   it("renders whole-currency-unit amounts, no decimals", () => {
     expect(formatPriceMinor(34000)).toBe("₹340");
     expect(formatPriceMinor(0)).toBe("₹0");
+    expect(formatPriceMinor(28950)).toBe("₹289.50");
   });
 
-  it("falls back to the currency code for an unknown symbol", () => {
-    expect(formatPriceMinor(500, "AUD")).toBe("AUD 5");
+  it("shows A$ for AUD (PE-10) and falls back to the currency code for an unknown symbol", () => {
+    expect(formatPriceMinor(500, "AUD")).toBe("A$5");
+    expect(formatPriceMinor(500, "NZD")).toBe("NZD 5");
   });
 });
 
@@ -216,8 +218,8 @@ describe("computeOrderTotalMinor", () => {
 // seats no longer gate this - `seatNumber` is optional metadata only, so
 // an order with unseated (or entirely unseated) lines can still be sent.
 
-function lineWithSeat(seatNumber: number | null): Pick<OrderLineView, "seatNumber"> {
-  return { seatNumber };
+function lineWithSeat(seatNumber: number | null, sentToKitchen = false): Pick<OrderLineView, "seatNumber" | "sentToKitchen"> {
+  return { seatNumber, sentToKitchen };
 }
 
 describe("canSendToKitchen", () => {
@@ -235,9 +237,15 @@ describe("canSendToKitchen", () => {
     expect(canSendToKitchen({ lines, status: "open" })).toBe(true);
   });
 
-  it("blocks an order that has already been sent to the kitchen", () => {
-    const lines = [lineWithSeat(1)] as OrderLineView[];
+  it("blocks an order whose every line the kitchen already has", () => {
+    const lines = [lineWithSeat(1, true)] as OrderLineView[];
     expect(canSendToKitchen({ lines, status: "sent" })).toBe(false);
+  });
+
+  it("allows sending items added after the first send - they wait on the till (CU-15)", () => {
+    const lines = [lineWithSeat(1, true), lineWithSeat(null, false)] as OrderLineView[];
+    expect(canSendToKitchen({ lines, status: "sent" })).toBe(true);
+    expect(canSendToKitchen({ lines, status: "closed" })).toBe(false);
   });
 });
 
@@ -326,7 +334,7 @@ describe("toOrderLineView", () => {
 describe("toOrderView", () => {
   it("maps every real field and derives totalMinor from the mapped lines", () => {
     const order = toOrderView(rawOrder({ lines: [rawLine({ quantity: 1 })] }), MENU_FOR_MAPPING);
-    expect(order).toMatchObject({ id: "order-1", tableId: "table-4", tableLabel: "T4", status: "open", ownerStaffName: "staff-1", tokenNumber: null });
+    expect(order).toMatchObject({ id: "order-1", tableId: "table-4", tableLabel: "T4", status: "open", ownerStaffId: "staff-1", ownerName: null, tokenNumber: null });
     expect(order.totalMinor).toBe(34000);
   });
 

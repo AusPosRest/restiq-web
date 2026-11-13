@@ -41,12 +41,12 @@ function paymentRow(overrides: Partial<PaymentRow> = {}): PaymentRow {
       { method: "cash", amountMinor: 60000, createdAt: "2026-09-03T08:05:00.000Z" },
       { method: "card", amountMinor: 40000, createdAt: "2026-09-03T08:05:00.000Z" },
     ],
-    creditNotes: [{ id: "cn-1", amountMinor: 1000, reason: "Wrong item", createdAt: "2026-09-03T08:10:00.000Z" }],
+    creditNotes: [{ id: "cn-1", amountMinor: 1000, method: "upi_manual", reason: "Wrong item", createdAt: "2026-09-03T08:10:00.000Z" }],
     ...overrides,
   };
 }
 
-const TOTALS = { count: 2, subtotalMinor: 150000, discountMinor: 5000, taxMinor: 8000, totalMinor: 233000, tenderedMinor: 233000, refundedMinor: 1000 };
+const TOTALS = { count: 2, subtotalMinor: 150000, discountMinor: 5000, taxMinor: 8000, totalMinor: 233000, tenderedMinor: 233000, refundedMinor: 1000, netMinor: 232000 };
 
 function firstPageResponse(): PaymentsResponse {
   return {
@@ -68,6 +68,7 @@ function firstPageResponse(): PaymentsResponse {
         creditNotes: [],
       }),
     ],
+    currency: "INR",
     nextCursor: "cursor-2",
     totals: TOTALS,
   };
@@ -76,6 +77,7 @@ function firstPageResponse(): PaymentsResponse {
 function secondPageResponse(): PaymentsResponse {
   return {
     items: [paymentRow({ billId: "bill-3", billNumber: 503, tableLabel: "T9", taxBreakdown: undefined, tenders: [], creditNotes: [] })],
+    currency: "INR",
     nextCursor: null,
     totals: { ...TOTALS, count: 3 },
   };
@@ -147,21 +149,25 @@ describe("Payments", () => {
     });
 
     expect(screen.getByTestId("payments-totals-count").textContent).toContain("2");
-    expect(screen.getByTestId("payments-totals-total").textContent).toContain("2330");
-    expect(screen.getByTestId("payments-totals-refunded").textContent).toContain("10");
+    expect(screen.getByTestId("payments-totals-total").textContent).toContain("₹2,330.00");
+    expect(screen.getByTestId("payments-totals-refunded").textContent).toContain("₹10.00");
+    // PE-33: net of refunds, to the paisa.
+    expect(screen.getByTestId("payments-totals-net").textContent).toContain("₹2,320.00");
 
     const row = screen.getByTestId("payments-row-bill-1");
     expect(within(row).getByTestId("payments-row-bill-1-link").textContent).toBe("#501");
     expect(within(row).getByTestId("payments-row-bill-1-link").getAttribute("href")).toBe("/pos/bills/bill-1/invoice");
     expect(row.textContent).toContain("CGST (2.5%)");
     expect(row.textContent).toContain("SGST (2.5%)");
-    expect(row.textContent).toContain("cash=");
-    expect(row.textContent).toContain("card=");
+    // PE-23: plain tender names, never raw keys.
+    expect(row.textContent).toContain("Cash ₹");
+    expect(row.textContent).not.toContain("cash=");
+    expect(within(row).getByTestId("payments-row-bill-1-refund-methods").textContent).toBe("UPI");
 
     const tokenRow = screen.getByTestId("payments-row-bill-2");
     expect(tokenRow.textContent).toContain("Token #7");
     expect(tokenRow.textContent).toContain("QR");
-    expect(tokenRow.textContent).toContain("upi=");
+    expect(tokenRow.textContent).toContain("upi ₹");
   });
 
   it("Load more appends rows using nextCursor and reflects the new page's totals", async () => {
@@ -221,7 +227,7 @@ describe("Payments", () => {
   });
 
   it("shows an empty state when there are no payments in range", async () => {
-    stubFetch({ payments: () => jsonResponse({ items: [], nextCursor: null, totals: { count: 0, subtotalMinor: 0, discountMinor: 0, taxMinor: 0, totalMinor: 0, tenderedMinor: 0, refundedMinor: 0 } }) });
+    stubFetch({ payments: () => jsonResponse({ currency: "INR", items: [], nextCursor: null, totals: { count: 0, subtotalMinor: 0, discountMinor: 0, taxMinor: 0, totalMinor: 0, tenderedMinor: 0, refundedMinor: 0, netMinor: 0 } }) });
     renderPayments();
 
     expect(await screen.findByTestId("payments-empty")).toBeTruthy();

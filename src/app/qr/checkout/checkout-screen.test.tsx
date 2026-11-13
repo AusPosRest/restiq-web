@@ -18,6 +18,11 @@ function routedFetch(handlers: Record<string, () => Response>): ReturnType<typeo
   });
 }
 
+// Issue #403: the bill's currency comes from the menu - the cart the order emptied falls back to INR.
+function menuIn(currency: string) {
+  return { outletId: "out1", categories: [{ id: "c1", name: "Mains", sortOrder: 0, items: [{ id: "i1", priceMinor: 500, currency, variants: [] }] }] };
+}
+
 const TWO_GUEST_BILL: GuestBillView = {
   id: "b1",
   orderId: "o1",
@@ -54,6 +59,58 @@ describe("CheckoutScreen", () => {
     expect(screen.getByTestId("checkout-no-order")).toBeTruthy();
   });
 
+  it("CU-24/PE-10: splits the tax like the till, prices in the tenant's currency, and offers a receipt once paid", async () => {
+    const split = {
+      ...TWO_GUEST_BILL,
+      taxBreakdown: [
+        { label: "CGST", ratePercent: 2.5, amountMinor: 1250 },
+        { label: "SGST", ratePercent: 2.5, amountMinor: 1250 },
+      ],
+    };
+    const fetchMock = routedFetch({
+      "POST /qr/api/orders/o1/bill": () => jsonResponse(200, split),
+      "GET /qr/api/menu": () => jsonResponse(200, menuIn("INR")),
+    });
+    vi.stubGlobal("fetch", fetchMock);
+    render(<CheckoutScreen orderId="o1" myGuestId="g1" />);
+    const summary = await screen.findByTestId("checkout-bill-summary");
+    expect(summary.textContent).toContain("CGST (2.5%)₹12.50");
+    expect(summary.textContent).toContain("SGST (2.5%)₹12.50");
+    expect(summary.textContent).not.toContain("Tax₹");
+    cleanup();
+
+    const paid = { ...split, status: "finalized" as const, billNumber: 12, subtotalMinor: 1500, totalMinor: 1500, taxBreakdown: [{ label: "GST", ratePercent: 10, amountMinor: 136 }], pricesIncludeTax: true };
+    const invoice = {
+      invoiceNumber: "12",
+      title: "Tax Invoice",
+      issuedAt: "2026-10-11T08:00:00.000Z",
+      currency: "AUD",
+      seller: { legalEntityName: "Harbour Pty Ltd", registrationLabel: "ABN", registrationNumber: "51824753556", outletName: "Bondi", outletAddress: "1 Beach Rd" },
+      lines: [{ name: "Flat White", quantity: 3, unitPriceMinor: 500, lineTotalMinor: 1500 }],
+      subtotalMinor: 1500,
+      discountMinor: null,
+      taxBreakdown: [{ label: "GST", ratePercent: 10, amountMinor: 136 }],
+      taxMinor: 136,
+      totalMinor: 1500,
+      tenders: [{ method: "upi_qr", amountMinor: 1500, createdAt: "2026-10-11T08:00:00.000Z" }],
+      footerMessage: null,
+    };
+    vi.stubGlobal(
+      "fetch",
+      routedFetch({
+        "POST /qr/api/orders/o1/bill": () => jsonResponse(200, paid),
+        "GET /qr/api/menu": () => jsonResponse(200, menuIn("AUD")),
+        "GET /qr/api/bills/b1/invoice": () => jsonResponse(200, invoice),
+      }),
+    );
+    render(<CheckoutScreen orderId="o1" myGuestId="g1" />);
+    await screen.findByTestId("checkout-settled");
+    await waitFor(() => expect(screen.getByTestId("checkout-settled").textContent).toContain("A$15.00"));
+    await userEvent.click(screen.getByTestId("checkout-show-receipt"));
+    expect((await screen.findByTestId("kiosk-receipt")).textContent).toContain("Flat White");
+    expect(screen.getByTestId("kiosk-receipt-total").textContent).toContain("A$15.00");
+  });
+
   it("renders the same bill on a 200 (any guest re-requesting an order that already has one - restiq-backend#98 made the POST idempotent per order, resolving the create race with no client-side fallback)", async () => {
     const fetchMock = routedFetch({
       "POST /qr/api/orders/o1/bill": () => jsonResponse(200, TWO_GUEST_BILL),
@@ -64,7 +121,7 @@ describe("CheckoutScreen", () => {
 
     expect(await screen.findByTestId("checkout-bill-summary")).toBeTruthy();
     expect(screen.getByTestId("checkout-total").textContent).toBe("₹525.00");
-    expect(fetchMock.mock.calls).toHaveLength(1);
+    expect(fetchMock.mock.calls.filter(([url]) => String(url).includes("/bill"))).toHaveLength(1);
   });
 
   it("renders every guest's share, with the caller's own row emphasized and the only one offering a pay action", async () => {
@@ -192,5 +249,48 @@ describe("CheckoutScreen", () => {
     await userEvent.click(retry);
 
     await waitFor(() => expect(screen.getByTestId("checkout-bill-summary")).toBeTruthy());
+  });
+
+  it("issue #403: an AUD tenant's bill is in A$, even though the emptied cart says INR", async () => {
+    vi.stubGlobal(
+      "fetch",
+      routedFetch({
+        "POST /qr/api/orders/o1/bill": () => jsonResponse(201, { ...TWO_GUEST_BILL, totalMinor: 3100 }),
+        "GET /qr/api/cart": () => jsonResponse(200, { currency: "INR", guests: [], totalMinor: 0 }),
+        "GET /qr/api/menu": () => jsonResponse(200, menuIn("AUD")),
+      }),
+    );
+    render(<CheckoutScreen orderId="o1" myGuestId="g1" />);
+
+    expect((await screen.findByTestId("checkout-total")).textContent).toBe("A$31.00");
+    expect(screen.getByTestId("checkout-bill-summary").textContent).not.toContain("₹");
+  });
+
+  it("issue #404: no pay sheet when the bill says payments aren't available - pay at the counter instead", async () => {
+    vi.stubGlobal("fetch", routedFetch({ "POST /qr/api/orders/o1/bill": () => jsonResponse(201, { ...TWO_GUEST_BILL, paymentsAvailable: false }) }));
+    render(<CheckoutScreen orderId="o1" myGuestId="g1" />);
+
+    expect((await screen.findByTestId("checkout-pay-at-counter")).textContent).toContain("Please pay at the counter");
+    expect(screen.queryByTestId("checkout-pay-own")).toBeNull();
+    expect(screen.queryByTestId("checkout-mode-all")).toBeNull();
+    expect(screen.queryByTestId("checkout-payment-sheet")).toBeNull();
+  });
+
+  it("issue #404: a provider_unavailable 409 closes the sheet and shows pay at the counter", async () => {
+    vi.stubGlobal(
+      "fetch",
+      routedFetch({
+        "POST /qr/api/orders/o1/bill": () => jsonResponse(201, TWO_GUEST_BILL),
+        "POST /qr/api/bills/b1/shares/g1/pay": () =>
+          jsonResponse(409, { error: { code: "provider_unavailable", message: "Paying from your phone is not available here yet - please pay at the counter" } }),
+      }),
+    );
+    render(<CheckoutScreen orderId="o1" myGuestId="g1" />);
+    await userEvent.click(await screen.findByTestId("checkout-pay-own"));
+    await userEvent.click(screen.getByTestId("checkout-simulate-success"));
+
+    expect((await screen.findByTestId("checkout-pay-at-counter")).textContent).toContain("Please pay at the counter");
+    expect(screen.queryByTestId("checkout-payment-sheet")).toBeNull();
+    expect(screen.queryByTestId("checkout-pay-own")).toBeNull();
   });
 });

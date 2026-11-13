@@ -52,17 +52,15 @@ describe("DeviceStatusScreen", () => {
     expect(screen.queryByTestId("attendance-list")).toBeNull();
   });
 
-  it("visibly marks the mocked device status as a placeholder in the DOM, not just a code comment", async () => {
+  it("shows only real status - the browser's own connectivity, no made-up printer or (demo) text (PE-19)", async () => {
     vi.stubGlobal("fetch", vi.fn().mockResolvedValue(jsonResponse(ATTENDANCE_VIEW)));
 
     render(<DeviceStatusScreen outletId={OUTLET_ID} />);
 
-    const printerChip = await screen.findByTestId("pos-printer-status-chip");
-    const connectivityPill = screen.getByTestId("pos-connectivity-status-pill");
-    expect(printerChip.textContent).toContain("(demo)");
-    expect(connectivityPill.textContent).toContain("(demo)");
-    expect(printerChip.getAttribute("title")).toContain("Mocked");
-    expect(connectivityPill.getAttribute("title")).toContain("Mocked");
+    const connectivityPill = await screen.findByTestId("pos-connectivity-status-pill");
+    expect(connectivityPill.textContent).toBe("Online");
+    expect(screen.queryByTestId("pos-printer-status-chip")).toBeNull();
+    expect(screen.getByTestId("device-status-content").textContent).not.toContain("(demo)");
   });
 
   it("shows an inline error with retry when the load fails", async () => {

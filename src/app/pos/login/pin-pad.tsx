@@ -17,8 +17,9 @@
 // added `retryAfterSeconds` to the 429, so the countdown runs to the real
 // end of the window; 30s is only the fallback for an older API.
 import { Delete } from "lucide-react";
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useRef, useState, useSyncExternalStore } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
+import { getDeviceSecret } from "@/lib/device-secret";
 import { clearTerminalBinding, getTabDeviceId, getTerminalBinding, saveTabDeviceId, saveTerminalBinding, type TerminalBinding } from "../terminal-binding";
 import {
   appendDigit,
@@ -102,7 +103,8 @@ async function postJson(path: string, body: unknown): Promise<SubmitResult> {
   }
   const errBody = (await res.json().catch(() => ({}))) as ErrorBody;
   if (res.status === 401) {
-    return { kind: "invalid", message: errorMessage(errBody, "Incorrect PIN") };
+    // The API's "Incorrect tenant or PIN" is deliberately vague; on a bound till it is simply a wrong PIN.
+    return { kind: "invalid", message: "Wrong PIN. Try again." };
   }
   return { kind: "failure", message: errorMessage(errBody, "Sign-in failed. Check your connection and try again.") };
 }
@@ -110,14 +112,19 @@ async function postJson(path: string, body: unknown): Promise<SubmitResult> {
 function submitPin(pin: string, tenantId: string | undefined): Promise<SubmitResult> {
   // restiq-backend#171: an enrolled till gets its own wrong-PIN allowance.
   const deviceId = getTabDeviceId() ?? undefined;
-  return postJson("/pos/auth/login", { pin, ...(tenantId ? { tenantId } : {}), ...(deviceId ? { deviceId } : {}) });
+  // restiq-backend#209: the secret from enrolment proves this really is that till.
+  const deviceSecret = deviceId ? getDeviceSecret(deviceId) : null;
+  return postJson("/pos/auth/login", { pin, ...(tenantId ? { tenantId } : {}), ...(deviceId ? { deviceId } : {}), ...(deviceSecret ? { deviceSecret } : {}) });
 }
 
 function submitOutletSelection(pendingToken: string, outletId: string): Promise<SubmitResult> {
   return postJson("/pos/auth/select-outlet", { pendingToken, outletId });
 }
 
+const subscribeNoop = () => () => {};
+
 export function PinPad({ nextPath }: { nextPath: string }) {
+  const deviceNoun = nextPath.startsWith("/kds") ? "kitchen display" : "till";
   const router = useRouter();
   const searchParams = useSearchParams();
   const [state, setState] = useState<PinScreenState>(INITIAL_PIN_STATE);
@@ -134,18 +141,26 @@ export function PinPad({ nextPath }: { nextPath: string }) {
   // synchronous setState-in-effect for React's linter to flag.
   const queryTenantId = searchParams.get("tenant");
   const queryDeviceId = searchParams.get("device");
+  const queryOutletId = searchParams.get("outlet") ?? undefined;
+  const queryTenantName = searchParams.get("name") ?? undefined;
+  // SE-21: the saved binding lives in localStorage, which the server render
+  // can't see - read it only after hydration so the first client render
+  // matches the server HTML (React error #418 otherwise).
+  const hydrated = useSyncExternalStore(subscribeNoop, () => true, () => false);
   const binding: TerminalBinding | null = rebound
     ? null
     : queryTenantId && queryDeviceId
-      ? { tenantId: queryTenantId, deviceId: queryDeviceId }
-      : getTerminalBinding();
+      ? { tenantId: queryTenantId, deviceId: queryDeviceId, ...(queryTenantName ? { tenantName: queryTenantName } : {}), ...(queryOutletId ? { outletId: queryOutletId } : {}) }
+      : hydrated
+        ? getTerminalBinding()
+        : null;
 
   useEffect(() => {
     if (!queryTenantId || !queryDeviceId) return;
-    saveTerminalBinding({ tenantId: queryTenantId, deviceId: queryDeviceId });
+    saveTerminalBinding({ tenantId: queryTenantId, deviceId: queryDeviceId, ...(queryTenantName ? { tenantName: queryTenantName } : {}), ...(queryOutletId ? { outletId: queryOutletId } : {}) });
     // This tab's own identity for print/terminal routing and the heartbeat (issue #210).
     saveTabDeviceId(queryDeviceId);
-  }, [queryTenantId, queryDeviceId]);
+  }, [queryTenantId, queryDeviceId, queryTenantName, queryOutletId]);
 
   function rebind() {
     clearTerminalBinding();
@@ -175,6 +190,12 @@ export function PinPad({ nextPath }: { nextPath: string }) {
       return;
     }
     if (result.kind === "outlet_selection") {
+      // A till enrolled to one outlet signs in there - no chooser, no chance of picking the wrong outlet.
+      const own = binding?.outletId;
+      if (own && result.outlets.some((outlet) => outlet.id === own)) {
+        void attemptOutletSelection(result.pendingToken, own);
+        return;
+      }
       setState({ step: "choosing-outlet", pendingToken: result.pendingToken, staff: result.staff, outlets: result.outlets });
       return;
     }
@@ -298,7 +319,8 @@ export function PinPad({ nextPath }: { nextPath: string }) {
       {binding ? (
         <div className="mt-6 flex flex-col items-center gap-1">
           <p data-testid="pos-terminal-binding" className="text-xs text-muted-foreground">
-            Terminal bound to {binding.tenantName ?? binding.tenantId}
+            {/* PE-21: a kitchen display signs in through this same PIN pad. */}
+            {binding.tenantName ? `This ${deviceNoun} belongs to ${binding.tenantName}` : `This ${deviceNoun} is linked to a restaurant`}
           </p>
           <button
             type="button"

@@ -109,7 +109,7 @@ function DialogBody({ onClose, tenants, fixedTenant }: Readonly<GenerateCodeDial
                   }}
                   className={SELECT_CLASSES}
                 >
-                  <option value="">Select a tenant...</option>
+                  <option value="">{tenants.length === 0 ? "No tenants yet - onboard one first" : "Select a tenant..."}</option>
                   {tenants.map((tenant) => (
                     <option key={tenant.id} value={tenant.id}>
                       {tenant.name}

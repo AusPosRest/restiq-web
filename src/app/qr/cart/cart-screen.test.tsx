@@ -116,6 +116,17 @@ describe("CartScreen", () => {
   });
   afterEach(cleanup);
 
+  it("renders special instructions beneath their cart line", async () => {
+    const cart = structuredClone(TWO_GUEST_CART);
+    Object.assign(cart.guests[0].lines[0], { note: "No onions please" });
+    vi.stubGlobal("fetch", routedFetch({ "GET /qr/api/cart": () => jsonResponse(200, cart) }));
+    render(<CartScreen myGuestId="g1" />);
+    const note = await screen.findByTestId("qr-cart-line-note");
+    expect(note.textContent).toBe("No onions please");
+    expect(screen.getByTestId("cart-line-l1").contains(note)).toBe(true);
+    expect(screen.getByTestId("cart-line-l2").querySelector('[data-testid="qr-cart-line-note"]')).toBeNull();
+  });
+
   it("groups by guest with per-guest subtotals and the combined total, rendered from the real shape", async () => {
     vi.stubGlobal("fetch", vi.fn().mockResolvedValue(jsonResponse(200, TWO_GUEST_CART)));
     render(<CartScreen myGuestId="g1" />);
@@ -124,7 +135,15 @@ describe("CartScreen", () => {
     expect(screen.getByTestId("cart-guest-g2")).toBeTruthy();
     expect(screen.getByTestId("cart-guest-subtotal-g1").textContent).toBe("₹680.00");
     expect(screen.getByTestId("cart-guest-subtotal-g2").textContent).toBe("₹320.00");
-    expect(screen.getByTestId("cart-total").textContent).toBe("₹1000.00");
+    expect(screen.getByTestId("cart-total").textContent).toBe("₹1,000.00");
+  });
+
+  it("CU-22/PE-24: offers a way back to the menu and says taxes come on the bill", async () => {
+    vi.stubGlobal("fetch", vi.fn().mockResolvedValue(jsonResponse(200, TWO_GUEST_CART)));
+    render(<CartScreen myGuestId="g1" />);
+    await screen.findByTestId("cart-guest-g1");
+    expect(screen.getByTestId("cart-add-more").getAttribute("href")).toBe("/qr/menu");
+    expect(screen.getByTestId("cart-tax-note").textContent).toBe("Plus applicable taxes, shown on your bill");
   });
 
   it("renders the signed-in guest's own lines editable and everyone else's read-only", async () => {
@@ -206,6 +225,21 @@ describe("CartScreen", () => {
     expect(await screen.findByTestId("cart-empty")).toBeTruthy();
     const link = screen.getByTestId("cart-empty-browse-menu") as HTMLAnchorElement;
     expect(link.getAttribute("href")).toBe("/qr/menu");
+  });
+
+  it("issue #403: an AUD tenant's empty cart totals in A$, even though the empty cart says INR", async () => {
+    vi.stubGlobal(
+      "fetch",
+      routedFetch({
+        "GET /qr/api/cart": () => jsonResponse(200, EMPTY_CART),
+        "GET /qr/api/menu": () => jsonResponse(200, { outletId: "o1", categories: [{ id: "c1", name: "Mains", sortOrder: 0, items: [{ id: "i1", priceMinor: 500, currency: "AUD", variants: [] }] }] }),
+      }),
+    );
+    render(<CartScreen myGuestId="g1" />);
+    await screen.findByTestId("cart-empty");
+
+    await waitFor(() => expect(screen.getByTestId("cart-total").textContent).toBe("A$0.00"));
+    expect(screen.getByTestId("cart-tax-note").textContent).toBe("Prices include GST");
   });
 
   it("shows a session-ended state on a 410, never a dead screen or auth error", async () => {

@@ -1,5 +1,6 @@
 // Pure wizard state: the five O4 steps, their field sets and validation
 // rules. No React, no fetch - unit-testable on its own.
+import type { PlanPriceView } from "../../api";
 
 export const STEP_COUNT = 5;
 
@@ -51,6 +52,8 @@ export interface BrandsOutletsData {
 export interface SubscriptionData {
   plan: "" | "standard" | "enterprise";
   billingPeriod: "monthly" | "annual";
+  /** restiq-backend#213: provision the tenant in Test mode. */
+  testMode: boolean;
 }
 
 export interface OwnerInviteData {
@@ -89,6 +92,16 @@ export const DEFAULT_GST_RATE: Record<CountryCode, string> = {
   AU: "10",
 };
 
+/**
+ * PE-9: the outlet's timezone as the country allows it. The first outlet is
+ * created before the country is picked (Asia/Kolkata), and an AU select
+ * can't show that value, so it displayed Sydney while saving Kolkata - both
+ * the select and the payload read the timezone through this instead.
+ */
+export function timezoneFor(country: CountryCode, timezone: string): string {
+  return TIMEZONES[country].includes(timezone) ? timezone : TIMEZONES[country][0];
+}
+
 export function emptyOutlet(country: CountryCode): OutletData {
   return { name: "", address: "", type: "", timezone: TIMEZONES[country][0] };
 }
@@ -107,7 +120,7 @@ export function emptyWizardData(): WizardData {
       gstRatePercent: DEFAULT_GST_RATE.IN,
     },
     brandsOutlets: { brandName: "", outlets: [emptyOutlet("IN")] },
-    subscription: { plan: "", billingPeriod: "monthly" },
+    subscription: { plan: "", billingPeriod: "monthly", testMode: false },
     ownerInvite: { email: "", firstName: "", lastName: "" },
   };
 }
@@ -147,6 +160,11 @@ export function validateBusiness(data: BusinessData): StepErrors {
   put("contactEmail", email(data.contactEmail, "Email address"));
   put("contactPhone", required(data.contactPhone, "Phone number"));
   return errors;
+}
+
+/** The GSTIN / ABN as it is sent to the API. */
+export function normalizedTaxNumber(number: string): string {
+  return number.trim().toUpperCase().replace(/\s/g, "");
 }
 
 export function validateTax(data: TaxData): StepErrors {
@@ -254,16 +272,58 @@ export function toSubmitPayload(data: WizardData): Record<string, unknown> {
     ...(slug.trim() ? { slug: slug.trim().toLowerCase() } : {}),
     tax: {
       country: data.tax.country,
-      registrationNumber: data.tax.registrationNumber.trim().toUpperCase().replace(/\s/g, ""),
+      registrationNumber: normalizedTaxNumber(data.tax.registrationNumber),
       legalEntityName: data.tax.legalEntityName,
       taxProfile: data.tax.taxProfile,
       ...(data.tax.country === "IN" && data.tax.fssaiLicense.trim() ? { fssaiLicense: data.tax.fssaiLicense.trim() } : {}),
-      compositionScheme: data.tax.compositionScheme,
+      // Composition is an Indian GST scheme only (PE-10).
+      compositionScheme: data.tax.country === "IN" && data.tax.compositionScheme,
       gstRegistered: data.tax.gstApplicable,
       ...(data.tax.gstApplicable ? { gstRatePercent: Number(data.tax.gstRatePercent) } : {}),
     },
-    brandsOutlets: data.brandsOutlets,
-    subscription: data.subscription,
+    brandsOutlets: {
+      ...data.brandsOutlets,
+      outlets: data.brandsOutlets.outlets.map((outlet) => ({ ...outlet, timezone: timezoneFor(data.tax.country, outlet.timezone) })),
+    },
+    subscription: { plan: data.subscription.plan, billingPeriod: data.subscription.billingPeriod },
+    ...(data.subscription.testMode ? { testMode: true } : {}),
     ownerInvite: data.ownerInvite,
   };
+}
+
+// --- Walkthrough fixes (Binflow, 2026-10-08).
+
+export const PLAN_CURRENCY_SYMBOL: Record<CountryCode, string> = { AU: "A$", IN: "₹" };
+
+/** Monthly (or annual-discounted) price per outlet in whole currency units, from the Plans page's list (restiq-backend#201); null = on quote or not loaded. */
+export function planPrice(prices: readonly PlanPriceView[], plan: "standard" | "enterprise", country: CountryCode, annual: boolean): number | null {
+  const row = prices.find((p) => p.country === country && p.plan === plan);
+  if (!row || row.monthlyPriceMinor === null) return null;
+  const monthly = row.monthlyPriceMinor / 100;
+  return annual ? Math.round((monthly * (100 - row.annualDiscountPercent)) / 100) : monthly;
+}
+
+/** The best annual saving in this market, for the billing toggle's label (0 = no annual discount). */
+export function annualDiscountPercent(prices: readonly PlanPriceView[], country: CountryCode): number {
+  return Math.max(0, ...prices.filter((p) => p.country === country).map((p) => p.annualDiscountPercent));
+}
+
+/** Standard is for one outlet; anything more is Enterprise. */
+export function recommendedPlan(outletCount: number): "standard" | "enterprise" {
+  return outletCount > 1 ? "enterprise" : "standard";
+}
+
+/** The owner is usually the primary contact from step 1 - fill only what is still blank. */
+export function prefillOwner(owner: OwnerInviteData, business: Pick<BusinessData, "contactName" | "contactEmail">): OwnerInviteData {
+  const [first = "", ...rest] = business.contactName.trim().split(/\s+/);
+  return {
+    email: owner.email || business.contactEmail.trim(),
+    firstName: owner.firstName || first,
+    lastName: owner.lastName || rest.join(" "),
+  };
+}
+
+/** Drops shown errors the user has since fixed, without surfacing new ones before Next/blur. */
+export function keepUnfixedErrors(shown: StepErrors, now: StepErrors): StepErrors {
+  return Object.fromEntries(Object.entries(shown).filter(([field]) => field in now));
 }

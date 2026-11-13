@@ -48,7 +48,7 @@ describe("PaymentsScreen", () => {
     render(<PaymentsScreen outletId={OUTLET_ID} />);
 
     expect(await screen.findByTestId("pos-payments-content")).toBeTruthy();
-    expect(screen.getByTestId("pos-payments-summary").textContent).toBe("3 payments · ₹420.00 · 2026-09-16");
+    expect(screen.getByTestId("pos-payments-summary").textContent).toBe("3 payments · ₹420.00 · 16 Sept 2026");
     expect(screen.getByTestId("pos-payments-total-cash").textContent).toContain("₹210.00");
     expect(screen.getByTestId("pos-payments-total-external").textContent).toContain("External");
 
@@ -58,6 +58,17 @@ describe("PaymentsScreen", () => {
     expect(screen.getByTestId("pos-payment-row-t1").textContent).toContain("Asha");
     expect(screen.getByTestId("pos-payment-row-t3").textContent).toContain("#2 · Token 14");
     expect(screen.getByTestId("pos-payment-row-t3").textContent).toContain("EFT-1");
+  });
+
+  it("offers Refund once per finalised bill, linking to that bill's refund screen (issue #405)", async () => {
+    vi.stubGlobal("fetch", vi.fn().mockResolvedValue(jsonResponse(VIEW)));
+    render(<PaymentsScreen outletId={OUTLET_ID} />);
+    await screen.findByTestId("pos-payments-content");
+
+    const links = screen.getAllByTestId(/^pos-payment-refund-/);
+    expect(links.map((link) => link.getAttribute("data-testid"))).toEqual(["pos-payment-refund-b2", "pos-payment-refund-b1"]);
+    expect(screen.getByTestId("pos-payment-refund-b2").getAttribute("href")).toBe("/pos/orders/o2/refund?billId=b2");
+    expect(screen.getByTestId("pos-payment-row-t3").contains(screen.getByTestId("pos-payment-refund-b2"))).toBe(true);
   });
 
   it("shows the empty state when nothing has been taken today", async () => {

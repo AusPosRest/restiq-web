@@ -5,9 +5,10 @@
 // shell's outlet switcher, so there's no tenant/outlet picker - only device
 // type.
 import { Dialog } from "radix-ui";
-import { useState } from "react";
+import Link from "next/link";
+import { useEffect, useState } from "react";
 import { Button } from "@/components/ui/button";
-import { AdminApiError, generateEnrolmentCode } from "../../api";
+import { AdminApiError, fetchOutletCapabilities, generateEnrolmentCode } from "../../api";
 import { useToast } from "../toast";
 import { CodeChip } from "./code-chip";
 import { DEVICE_TYPE_LABELS, DEVICE_TYPE_OPTIONS, type DeviceType, type EnrolmentCodeResult } from "./devices-state";
@@ -19,6 +20,8 @@ interface GenerateCodeDialogProps {
   open: boolean;
   onClose: () => void;
   outletId: string;
+  /** Shown so the owner knows which outlet the code enrols into (walkthrough fix). */
+  outletName?: string;
   onGenerated: (result: EnrolmentCodeResult) => void;
 }
 
@@ -26,11 +29,27 @@ export function GenerateCodeDialog(props: Readonly<GenerateCodeDialogProps>) {
   return props.open ? <DialogBody key="open" {...props} /> : null;
 }
 
-function DialogBody({ onClose, outletId, onGenerated }: Readonly<GenerateCodeDialogProps>) {
+function DialogBody({ onClose, outletId, outletName, onGenerated }: Readonly<GenerateCodeDialogProps>) {
   const toast = useToast();
   const [deviceType, setDeviceType] = useState<DeviceType>(DEVICE_TYPE_OPTIONS[0]);
   const [busy, setBusy] = useState(false);
   const [result, setResult] = useState<EnrolmentCodeResult | null>(null);
+  // PE-29: enrolling a kiosk while the outlet's Kiosk switch is off works, but
+  // every customer tap then fails - warn before the owner walks away.
+  const [kioskOff, setKioskOff] = useState(false);
+
+  useEffect(() => {
+    if (deviceType !== "kiosk") return;
+    let cancelled = false;
+    fetchOutletCapabilities(outletId)
+      .then((capabilities) => {
+        if (!cancelled) setKioskOff(!capabilities.some((capability) => capability.key === "kiosk" && capability.enabled));
+      })
+      .catch(() => {});
+    return () => {
+      cancelled = true;
+    };
+  }, [deviceType, outletId]);
 
   async function generate() {
     setBusy(true);
@@ -54,7 +73,14 @@ function DialogBody({ onClose, outletId, onGenerated }: Readonly<GenerateCodeDia
           className="admin-theme fixed right-0 top-0 z-50 h-full w-full max-w-md overflow-y-auto border-l border-border/60 bg-popover p-6 text-foreground shadow-xl"
         >
           <div className="flex items-center justify-between">
-            <Dialog.Title className="font-headline text-lg font-semibold">Enrol a device</Dialog.Title>
+            <div>
+              <Dialog.Title className="font-headline text-lg font-semibold">Enrol a device</Dialog.Title>
+              {outletName && (
+                <p data-testid="generate-code-outlet-name" className="text-sm text-muted-foreground">
+                  For {outletName}
+                </p>
+              )}
+            </div>
             <Dialog.Close
               aria-label="Close"
               data-testid="generate-code-close"
@@ -83,6 +109,16 @@ function DialogBody({ onClose, outletId, onGenerated }: Readonly<GenerateCodeDia
                 ))}
               </select>
             </div>
+
+            {deviceType === "kiosk" && kioskOff && (
+              <p role="alert" data-testid="generate-code-kiosk-off" className="rounded-lg border border-status-warning/60 bg-status-warning/10 p-3 text-sm text-status-warning">
+                Kiosk ordering is turned off for this outlet, so customers won&apos;t be able to order on this kiosk yet. Turn it on in{" "}
+                <Link href="/admin/settings/capabilities" data-testid="generate-code-kiosk-settings-link" className="font-semibold underline underline-offset-2">
+                  Settings › Capabilities
+                </Link>
+                .
+              </p>
+            )}
 
             {result && (
               <CodeChip key={result.code} code={result.code} expiresAt={result.expiresAt} onRegenerate={() => void generate()} regenerating={busy} />

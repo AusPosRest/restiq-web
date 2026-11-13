@@ -9,7 +9,7 @@
 // toolbar) so a brand-new outlet with zero floors can reach the Go-Live
 // Checklist's floor_plan step through the console - see floor-plan-state.ts
 // and api.ts's file headers for the create-endpoint contract this reuses.
-import { Download, LayoutGrid, Pencil, Printer as PrinterIcon, SlidersHorizontal, Table2, TableProperties, Trash2 } from "lucide-react";
+import { LayoutGrid, Pencil, Printer as PrinterIcon, SlidersHorizontal, Table2, TableProperties, Trash2 } from "lucide-react";
 import { useEffect, useState } from "react";
 import type { FormEvent } from "react";
 import QRCode from "qrcode";
@@ -26,7 +26,7 @@ import type { DiningTableView, FloorPlanView, FloorView, PrinterView, StationVie
 import { FloorPlanListView, type EditableTableField } from "./floor-plan-list-view";
 import { StationsPanel } from "./stations-panel";
 import { QR_OPTIONS, TableQrDialog } from "./table-qr-dialog";
-import { downloadUrl, guestOrderUrl, qrSheetHtml, qrZipPngFilename, renderTableQrPng, slug } from "./table-qr-state";
+import { guestOrderUrl } from "./table-qr-state";
 import { QrPrintSheet, type PrintQrCard } from "./qr-print-sheet";
 import { loadQrSheetTemplate, type QrSheetTemplate } from "./qr-sheet-template";
 import { QrSheetTemplateDialog } from "./qr-sheet-template-dialog";
@@ -44,9 +44,10 @@ function nextTempTableId(): string {
 }
 
 export function FloorPlan() {
-  const { outlets, loading: outletsLoading, selectedOutletId } = useOutlets();
+  const { outlets, loading: outletsLoading, failed: outletsFailed, reload: reloadOutlets, selectedOutletId } = useOutlets();
 
   if (outletsLoading) return <LoadingShell />;
+  if (outletsFailed) return <LoadErrorPanel testId="floor-plan-outlets-load-error" message="Your outlets couldn't be loaded." onRetry={reloadOutlets} />;
 
   if (outlets.length === 0) {
     return (
@@ -261,31 +262,17 @@ function FloorPlanEditor({ outletId, initial, onReload }: Readonly<{ outletId: s
     setPrintCards(await buildQrCards());
   }
 
-  // Same cards as the print sheet, now zipped alongside one standalone PNG
-  // per table (issue #175) - a print shop or designer can pull the HTML
-  // sheet, or drop the PNGs straight onto table stickers, without the app.
-  // jszip is lazy-imported so it never lands in the initial bundle - most
-  // floor-plan visits never click this button.
-  async function handleDownloadQrSheet() {
-    const cards = await buildQrCards();
-    const { default: JSZip } = await import("jszip");
-    const zip = new JSZip();
-    zip.file("qr-sheet.html", qrSheetHtml(cards, qrTemplate));
-    await Promise.all(
-      cards.map(async (card) => {
-        const png = await renderTableQrPng(card.table, card.floorName, card.url, qrTemplate);
-        zip.file(qrZipPngFilename(card.floorName, card.table.label), png.slice(png.indexOf(",") + 1), { base64: true });
-      }),
-    );
-    const blob = await zip.generateAsync({ type: "blob" });
-    const href = URL.createObjectURL(blob);
-    downloadUrl(`${slug(outletName)}-qr-codes.zip`, href);
-    URL.revokeObjectURL(href);
-  }
-
+  // PE-20 / CU-8: the browser's "Save as PDF" names the file after the page title, so the PDF is "<outlet> - QR codes".
   useEffect(() => {
-    if (printCards) window.print();
-  }, [printCards]);
+    if (!printCards) return;
+    const title = document.title;
+    const restore = () => {
+      document.title = title;
+    };
+    window.addEventListener("afterprint", restore, { once: true });
+    document.title = `${outletName} - QR codes`;
+    window.print();
+  }, [printCards, outletName]);
 
   return (
     <>
@@ -337,17 +324,15 @@ function FloorPlanEditor({ outletId, initial, onReload }: Readonly<{ outletId: s
                 onSettled={handleTableCreateSettled}
               />
               <Button size="sm" variant="secondary" data-testid="floor-plan-print-qr-sheet-button" onClick={() => void handlePrintQrSheet()}>
-                <PrinterIcon aria-hidden="true" /> Print QR sheet
-              </Button>
-              <Button size="sm" variant="secondary" data-testid="floor-plan-download-qr-sheet-button" onClick={() => void handleDownloadQrSheet()}>
-                <Download aria-hidden="true" /> Download QR sheet
+                <PrinterIcon aria-hidden="true" /> Print or save as PDF
               </Button>
               <Button size="sm" variant="secondary" data-testid="floor-plan-customise-qr-sheet-button" onClick={() => setQrTemplateDialogOpen(true)}>
                 <SlidersHorizontal aria-hidden="true" /> Customise sheet
               </Button>
             </div>
 
-            <div className="grid flex-1 grid-cols-[1fr_320px] gap-6">
+            {/* PE-27: side by side only when there is room - on a phone the canvas collapsed to a 30 px strip. */}
+            <div className="grid flex-1 grid-cols-1 gap-6 lg:grid-cols-[1fr_320px]">
               <div className="min-w-0">
                 {view === "canvas" ? (
                   <FloorPlanCanvas tables={tables} selectedFloorId={selectedFloorId} onTableMoved={handleTableMoved} onQrRequested={handleQrRequested} />
@@ -787,26 +772,37 @@ function AddTableControl({ outletId, floorId, tables, onOptimisticAdd, onSettled
           className={`${TOOLBAR_INPUT_CLASS} w-16`}
         />
       </div>
-      <input
-        type="number"
-        min={0}
-        aria-label={`${label || "New table"} X position`}
-        data-testid="floor-plan-add-table-x"
-        value={position.x}
-        disabled={submitting}
-        onChange={(event) => handlePositionChange("x", event.target.value)}
-        className={`${TOOLBAR_INPUT_CLASS} w-16`}
-      />
-      <input
-        type="number"
-        min={0}
-        aria-label={`${label || "New table"} Y position`}
-        data-testid="floor-plan-add-table-y"
-        value={position.y}
-        disabled={submitting}
-        onChange={(event) => handlePositionChange("y", event.target.value)}
-        className={`${TOOLBAR_INPUT_CLASS} w-16`}
-      />
+      {/* PE-20: the two position boxes were unlabeled numbers; say what they are. */}
+      <div>
+        <label htmlFor="floor-plan-add-table-x" className={TOOLBAR_LABEL_CLASS}>
+          From left
+        </label>
+        <input
+          id="floor-plan-add-table-x"
+          type="number"
+          min={0}
+          data-testid="floor-plan-add-table-x"
+          value={position.x}
+          disabled={submitting}
+          onChange={(event) => handlePositionChange("x", event.target.value)}
+          className={`${TOOLBAR_INPUT_CLASS} w-16`}
+        />
+      </div>
+      <div>
+        <label htmlFor="floor-plan-add-table-y" className={TOOLBAR_LABEL_CLASS}>
+          From top
+        </label>
+        <input
+          id="floor-plan-add-table-y"
+          type="number"
+          min={0}
+          data-testid="floor-plan-add-table-y"
+          value={position.y}
+          disabled={submitting}
+          onChange={(event) => handlePositionChange("y", event.target.value)}
+          className={`${TOOLBAR_INPUT_CLASS} w-16`}
+        />
+      </div>
       {overlapId && (
         <p data-testid="floor-plan-add-table-overlap-warning" className="w-full text-xs text-status-error">
           This position overlaps another table. Adjust X/Y before saving.

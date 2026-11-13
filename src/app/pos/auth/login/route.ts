@@ -40,7 +40,7 @@ function errorResponse(status: number, body: unknown): NextResponse {
 
 export async function POST(request: Request): Promise<NextResponse> {
   const body: unknown = await request.json().catch(() => null);
-  const { pin, tenantId: requestedTenantId, deviceId } = (body ?? {}) as { pin?: unknown; tenantId?: unknown; deviceId?: unknown };
+  const { pin, tenantId: requestedTenantId, deviceId, deviceSecret } = (body ?? {}) as { pin?: unknown; tenantId?: unknown; deviceId?: unknown; deviceSecret?: unknown };
   if (typeof pin !== "string" || !PIN_PATTERN.test(pin)) {
     return errorResponse(400, { error: { code: "validation_failed", message: "A 4-digit PIN is required" } });
   }
@@ -51,12 +51,16 @@ export async function POST(request: Request): Promise<NextResponse> {
   if (deviceId !== undefined && (typeof deviceId !== "string" || !UUID_PATTERN.test(deviceId))) {
     return errorResponse(400, { error: { code: "validation_failed", message: "deviceId must be a UUID" } });
   }
+  // restiq-backend#209: the secret the till got at enrolment - only with it does deviceId earn that allowance.
+  if (deviceSecret !== undefined && (typeof deviceSecret !== "string" || !deviceSecret || deviceSecret.length > 200)) {
+    return errorResponse(400, { error: { code: "validation_failed", message: "deviceSecret is not valid" } });
+  }
 
   const url = apiUrl();
   // A terminal's own binding wins, then the POS_TENANT_ID setting, then the restaurant whose address this is (D14).
   const tenantId = (requestedTenantId as string | undefined) ?? process.env.POS_TENANT_ID ?? (await fetchTenantByHost(hostOf(request.headers)))?.tenantId;
   if (!url || !tenantId) {
-    return errorResponse(500, { error: { code: "misconfigured", message: "No restaurant found for this address - open the till at its own address, or set POS_TENANT_ID" } });
+    return errorResponse(500, { error: { code: "misconfigured", message: "This till isn't linked to a restaurant yet. Set it up with a code from the owner console's Devices page." } });
   }
 
   let upstream: Response;
@@ -64,7 +68,7 @@ export async function POST(request: Request): Promise<NextResponse> {
     upstream = await fetch(`${url}/pos/v1/auth/login`, {
       method: "POST",
       headers: { "content-type": "application/json", ...clientIpHeaders(request) },
-      body: JSON.stringify({ tenantId, pin, deviceId }),
+      body: JSON.stringify({ tenantId, pin, deviceId, deviceSecret }),
       cache: "no-store",
     });
   } catch {

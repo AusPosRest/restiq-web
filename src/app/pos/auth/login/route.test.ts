@@ -73,6 +73,20 @@ describe("POST /pos/auth/login", () => {
     }
   });
 
+  it("forwards the till's enrolment secret, and refuses a malformed one (restiq-backend#209)", async () => {
+    const fetchMock = vi.fn().mockResolvedValue(upstreamJson(401, { error: { code: "invalid_pin", message: "Incorrect tenant or PIN" } }));
+    vi.stubGlobal("fetch", fetchMock);
+    const deviceId = "0193dddd-0000-7000-8000-000000000009";
+    await POST(jsonRequest({ pin: "1234", deviceId, deviceSecret: "dvs_abc" }));
+    const [, init] = fetchMock.mock.calls[0] as [string, RequestInit];
+    expect(JSON.parse(init.body as string)).toEqual({ tenantId: TENANT_ID, pin: "1234", deviceId, deviceSecret: "dvs_abc" });
+
+    fetchMock.mockClear();
+    expect((await POST(jsonRequest({ pin: "1234", deviceId, deviceSecret: 42 }))).status).toBe(400);
+    expect((await POST(jsonRequest({ pin: "1234", deviceId, deviceSecret: "x".repeat(201) }))).status).toBe(400);
+    expect(fetchMock).not.toHaveBeenCalled();
+  });
+
   it("rejects a malformed deviceId before calling the backend", async () => {
     const fetchMock = vi.fn();
     vi.stubGlobal("fetch", fetchMock);

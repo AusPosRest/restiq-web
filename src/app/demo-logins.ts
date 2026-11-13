@@ -22,3 +22,6 @@ export const DEMO_STAFF: DemoStaffLogin[] = [
   { tenant: "Bay Leaf Kitchens", name: "Anita Rao", role: "Owner", pin: "5340", email: "anita.pos@bayleaf.example" },
   { tenant: "Bay Leaf Kitchens", name: "Suresh Nair", role: "Accountant", pin: "1005", email: "suresh@bayleaf.example" },
 ];
+
+// The owner console login shown on /demo. Like DEMO_STAFF, shown only while its tenant is in Test mode (PE-30).
+export const DEMO_OWNER = { tenant: "Bay Leaf Kitchens", email: "anita@bayleaf.example", password: "BayLeaf#2026Demo" };

@@ -3,25 +3,24 @@
 // T4/T4a Menu Management (CAP-4): category sidebar + item DataTable + item
 // editor drawer, all on one screen so the list never loses context
 // (EXPERIENCE.md: "item editor as a drawer, not a full-page navigation").
-// Currency defaults to INR (same convention as CAP-3's menu import) - the
-// backend's menu endpoints carry no tenant-currency field to read instead.
+// Currency is the tenant's own (PE-10), read off the outlet list - INR only
+// until the outlets have loaded.
 import { LibraryBig, Plus, Search, Soup, Upload } from "lucide-react";
 import { Dialog } from "radix-ui";
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { Button } from "@/components/ui/button";
-import { fetchAllergens, fetchCategories, fetchCombos, fetchItems, fetchModifierGroups } from "../../api";
+import { type DirectoryProduct, fetchAllergens, fetchCategories, fetchCombos, fetchItems, fetchModifierGroups } from "../../api";
 import { MenuImport } from "../../menu-import";
 import { LoadErrorPanel, Skeleton } from "../data-states";
-import { useOutlets } from "../outlet-context";
+import { useOutlets, useTenantCurrency } from "../outlet-context";
 import { useToast } from "../toast";
+import { useAdminLoad } from "../use-admin-load";
 import { CategorySidebar } from "./category-sidebar";
 import { CombosPanel } from "./combos-panel";
 import { DirectoryDialog } from "./directory-dialog";
 import { ItemDrawer } from "./item-drawer";
 import { AllergenView, ALL_CATEGORY, CategoryView, ComboView, ItemView, ModifierGroupView, visibleItems } from "./menu-state";
 import { MenuTable } from "./menu-table";
-
-const CURRENCY = "INR";
 
 interface MenuData {
   items: ItemView[];
@@ -70,6 +69,7 @@ function useMenuData() {
 export function MenuManagement() {
   const { loading, failed, data, retry } = useMenuData();
   const { outlets, selectedOutletId } = useOutlets();
+  const currency = useTenantCurrency();
 
   const [items, setItems] = useState<ItemView[] | null>(null);
   const [categories, setCategories] = useState<CategoryView[] | null>(null);
@@ -83,9 +83,12 @@ export function MenuManagement() {
   const [importOpen, setImportOpen] = useState(false);
   const pushToast = useToast();
   const [directoryOpen, setDirectoryOpen] = useState(false);
+  // PE-13: no "Browse directory" while the platform catalog is empty - it would open an empty dialog.
+  const directory = useAdminLoad<{ products: DirectoryProduct[] }>("menu/directory");
+  const directoryEmpty = directory.data?.products.length === 0;
 
   const effectiveItems = useMemo(() => items ?? data?.items ?? [], [items, data]);
-  const effectiveCategories = categories ?? data?.categories ?? [];
+  const effectiveCategories = useMemo(() => categories ?? data?.categories ?? [], [categories, data]);
   const effectiveModifierGroups = modifierGroups ?? data?.modifierGroups ?? [];
   const effectiveAllergens = allergens ?? data?.allergens ?? [];
   const effectiveCombos = combos ?? data?.combos ?? [];
@@ -94,13 +97,26 @@ export function MenuManagement() {
 
   const upsertItem = useCallback(
     (updated: ItemView) => {
+      const previous = effectiveItems.find((item) => item.id === updated.id);
       setItems((current) => {
         const base = current ?? effectiveItems;
         const exists = base.some((item) => item.id === updated.id);
         return exists ? base.map((item) => (item.id === updated.id ? updated : item)) : [...base, updated];
       });
+      if (!previous) {
+        // A new item: its category's count was never incremented for it.
+        setCategories(effectiveCategories.map((c) => (c.id === updated.categoryId ? { ...c, itemCount: c.itemCount + 1 } : c)));
+      } else if (previous.categoryId !== updated.categoryId) {
+        setCategories(
+          effectiveCategories.map((c) => {
+            if (c.id === previous.categoryId) return { ...c, itemCount: Math.max(0, c.itemCount - 1) };
+            if (c.id === updated.categoryId) return { ...c, itemCount: c.itemCount + 1 };
+            return c;
+          }),
+        );
+      }
     },
-    [effectiveItems],
+    [effectiveItems, effectiveCategories],
   );
 
   function handleAvailabilityChanged(itemId: string, available: boolean) {
@@ -143,9 +159,11 @@ export function MenuManagement() {
           </p>
         </div>
         <div className={`flex flex-wrap gap-2 ${tab === "combos" ? "hidden" : ""}`}>
-          <Button variant="secondary" data-testid="menu-browse-directory" onClick={() => setDirectoryOpen(true)}>
-            <LibraryBig aria-hidden="true" /> Browse directory
-          </Button>
+          {!directoryEmpty && (
+            <Button variant="secondary" data-testid="menu-browse-directory" onClick={() => setDirectoryOpen(true)}>
+              <LibraryBig aria-hidden="true" /> Browse directory
+            </Button>
+          )}
           <Button variant="secondary" data-testid="menu-import-link" onClick={() => setImportOpen(true)}>
             <Upload aria-hidden="true" /> Import
           </Button>
@@ -176,7 +194,7 @@ export function MenuManagement() {
 
       {tab === "combos" ? (
         <div className="mt-4 flex flex-1">
-          <CombosPanel combos={effectiveCombos} items={effectiveItems} categories={effectiveCategories} currency={CURRENCY} onChanged={setCombos} />
+          <CombosPanel combos={effectiveCombos} items={effectiveItems} categories={effectiveCategories} currency={currency} onChanged={setCombos} />
         </div>
       ) : (
         <>
@@ -205,9 +223,15 @@ export function MenuManagement() {
 
             <div data-testid="menu-list-scroll" className="flex-1 overflow-auto rounded-lg border border-border/40 bg-card md:max-h-[max(20rem,calc(100dvh-17rem))]">
               {filtered.length === 0 ? (
-                <EmptyState filtered={filteredOrSearched} onClearFilters={() => { setCategory(ALL_CATEGORY); setSearch(""); }} onImport={() => setImportOpen(true)} onAddItem={() => setDrawerItem(null)} onBrowseDirectory={() => setDirectoryOpen(true)} />
+                <EmptyState filtered={filteredOrSearched} onClearFilters={() => { setCategory(ALL_CATEGORY); setSearch(""); }} onImport={() => setImportOpen(true)} onAddItem={() => setDrawerItem(null)} onBrowseDirectory={directoryEmpty ? undefined : () => setDirectoryOpen(true)} />
               ) : (
-                <MenuTable items={filtered} currency={CURRENCY} filterKey={`${category}|${search}`} onSelect={setDrawerItem} onAvailabilityChanged={handleAvailabilityChanged} />
+                <MenuTable
+                  items={filtered}
+                  currency={currency}
+                  filterKey={`${category}|${search}`}
+                  onSelect={setDrawerItem}
+                  onAvailabilityChanged={handleAvailabilityChanged}
+                />
               )}
             </div>
           </div>
@@ -225,12 +249,9 @@ export function MenuManagement() {
         outlets={outlets}
         selectedOutletId={selectedOutletId}
         defaultCategoryId={category !== ALL_CATEGORY ? category : (effectiveCategories[0]?.id ?? "")}
-        currency={CURRENCY}
+        currency={currency}
         onClose={() => setDrawerItem("closed")}
-        onSaved={(saved) => {
-          upsertItem(saved);
-          setDrawerItem("closed");
-        }}
+        onSaved={upsertItem}
         onDeleted={(deleted) => {
           setItems((current) => (current ?? effectiveItems).filter((i) => i.id !== deleted.id));
           setCategories(effectiveCategories.map((c) => (c.id === deleted.categoryId ? { ...c, itemCount: Math.max(0, c.itemCount - 1) } : c)));
@@ -269,7 +290,7 @@ function ImportDialog({ open, onClose, onCommitted }: Readonly<{ open: boolean; 
               ✕
             </button>
           </Dialog.Close>
-          <MenuImport onCommitted={onCommitted} />
+          <MenuImport onCommitted={onCommitted} resume />
         </Dialog.Content>
       </Dialog.Portal>
     </Dialog.Root>
@@ -282,7 +303,7 @@ function EmptyState({
   onImport,
   onAddItem,
   onBrowseDirectory,
-}: Readonly<{ filtered: boolean; onClearFilters: () => void; onImport: () => void; onAddItem: () => void; onBrowseDirectory: () => void }>) {
+}: Readonly<{ filtered: boolean; onClearFilters: () => void; onImport: () => void; onAddItem: () => void; onBrowseDirectory?: () => void }>) {
   return (
     <div className="flex flex-col items-center gap-3 px-8 py-16 text-center">
       <Soup className="size-8 text-muted-foreground" aria-hidden="true" />
@@ -296,11 +317,15 @@ function EmptyState({
       ) : (
         <div data-testid="menu-empty">
           <p className="font-headline text-lg font-medium">Your menu is empty</p>
-          <p className="mt-1 text-sm text-muted-foreground">Pick items from the product directory, import a menu, or add your first item.</p>
+          <p className="mt-1 text-sm text-muted-foreground">
+            {onBrowseDirectory ? "Pick items from the product directory, import a menu, or add your first item." : "Import a menu, or add your first item."}
+          </p>
           <div className="mt-3 flex flex-wrap justify-center gap-2">
-            <Button variant="secondary" size="sm" data-testid="menu-empty-directory" onClick={onBrowseDirectory}>
-              Browse directory
-            </Button>
+            {onBrowseDirectory && (
+              <Button variant="secondary" size="sm" data-testid="menu-empty-directory" onClick={onBrowseDirectory}>
+                Browse directory
+              </Button>
+            )}
             <Button variant="secondary" size="sm" data-testid="menu-empty-import" onClick={onImport}>
               Import menu
             </Button>

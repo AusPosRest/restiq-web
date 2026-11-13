@@ -2,21 +2,38 @@
 // the real-count strip and the per-outlet financial tiles. Financial tiles
 // render NoFinancialData instead of a value when the metric is unavailable
 // (no fake zero - see dashboard-state.ts's file header).
+// `href` makes the whole tile a link to the screen behind the number (CU-7).
 import type { LucideIcon } from "lucide-react";
+import Link from "next/link";
 
 export function KpiStatCard({
   testId,
   label,
   icon: Icon,
+  href,
   children,
-}: Readonly<{ testId: string; label: string; icon?: LucideIcon; children: React.ReactNode }>) {
-  return (
-    <div data-testid={testId} className="rounded-lg border border-border/40 bg-card p-5">
+}: Readonly<{ testId: string; label: string; icon?: LucideIcon; href?: string; children: React.ReactNode }>) {
+  const body = (
+    <>
       <p className="font-label flex items-center gap-1.5 text-xs font-semibold uppercase tracking-wider text-muted-foreground">
         {Icon && <Icon className="size-3.5 shrink-0" aria-hidden="true" />}
         {label}
       </p>
       <div className="mt-3">{children}</div>
+    </>
+  );
+  const className = "rounded-lg border border-border/40 bg-card p-5";
+  return href ? (
+    <Link
+      href={href}
+      data-testid={testId}
+      className={`${className} block transition-colors hover:border-primary/60 focus:outline-none focus-visible:ring-2 focus-visible:ring-ring`}
+    >
+      {body}
+    </Link>
+  ) : (
+    <div data-testid={testId} className={className}>
+      {body}
     </div>
   );
 }
@@ -32,9 +49,7 @@ export function CountValue({ testId, value }: Readonly<{ testId: string; value: 
 export function NoFinancialData({ testId }: Readonly<{ testId: string }>) {
   return (
     <p data-testid={testId} className="text-sm text-muted-foreground">
-      No sales data yet.
-      <br />
-      <span className="text-xs">Connect POS to see live figures.</span>
+      No sales yet today.
     </p>
   );
 }
