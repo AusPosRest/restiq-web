@@ -1013,7 +1013,7 @@ function ModifierGroupsSection({
                 value={optionPrice}
                 placeholder="+ price"
                 onChange={(event) => setOptionPrice(event.target.value)}
-                className={`${FIELD_CLASS} w-24`}
+                className={`${FIELD_CLASS} shrink-0 grow-0 basis-24`}
               />
               <Button
                 type="button"
