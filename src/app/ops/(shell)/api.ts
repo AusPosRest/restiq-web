@@ -295,12 +295,28 @@ export interface PaymentsView {
   stripeAccountId: string | null;
   status: "not_connected" | "onboarding" | "restricted" | "active";
   requirementsDue: number;
+  /** restiq-backend#284 onboarding UX: what Stripe has switched on and what it still needs. */
+  cardPaymentsActive: boolean;
+  payoutsActive: boolean;
+  /** The owner has been through Stripe's form at least once. */
+  detailsSubmitted: boolean;
+  requirements: StripeRequirement[];
   allowedMethods: PaymentMethod[];
   /** Platform fee in basis points (250 = 2.5%). */
   feePercentBps: number;
   /** Platform fixed fee per payment, minor units. */
   feeFixedMinor: string;
   currency: "AUD" | "INR";
+}
+
+/** One thing Stripe still needs before it switches a capability on. */
+export interface StripeRequirement {
+  code: string;
+  title: string;
+  problem: string | null;
+  urgency: "past_due" | "currently_due" | "eventually_due";
+  blocks: Array<"card_payments" | "payouts">;
+  waitingOn: "owner" | "stripe";
 }
 
 /** A single-use Stripe link ops copies to the owner. */

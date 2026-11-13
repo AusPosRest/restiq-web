@@ -6,7 +6,7 @@
 // pessimistic (spinner-in-button via ConfirmReasonDialog's busy state, then a
 // result toast) - never optimistic, per EXPERIENCE.md's money/fleet-affecting
 // rule.
-import { PauseCircle, PlayCircle, ShieldAlert } from "lucide-react";
+import { Copy, ExternalLink, PauseCircle, PlayCircle, ShieldAlert } from "lucide-react";
 import Link from "next/link";
 import { useState } from "react";
 import { Button } from "@/components/ui/button";
@@ -17,7 +17,7 @@ import { StatusBadge } from "../../status-badge";
 import { useToast } from "../../toast";
 import { useOpsLoad } from "../../use-ops-load";
 import { DATE_LOCALE } from "@/lib/datetime";
-import { StripeLinkResult } from "./stripe-link";
+import { copyToClipboard, openBlankTab, StripeLinkResult } from "./stripe-link";
 
 function formatDate(iso: string): string {
   return new Date(iso).toLocaleDateString(DATE_LOCALE, { day: "2-digit", month: "short", year: "numeric" });
@@ -34,23 +34,49 @@ export function SubscriptionTab({ tenantId, tenantStatus }: Readonly<{ tenantId:
   const [confirmKind, setConfirmKind] = useState<"suspend" | "reactivate" | null>(null);
   const [busy, setBusy] = useState(false);
   const [billingLink, setBillingLink] = useState<StripeLink | null>(null);
-  const [billingBusy, setBillingBusy] = useState(false);
+  const [billingBusy, setBillingBusy] = useState<"open" | "copy" | null>(null);
   const [billingError, setBillingError] = useState<{ priceNotSet: boolean; message: string } | null>(null);
 
-  async function createBillingLink() {
-    setBillingBusy(true);
+  async function requestBillingLink(): Promise<StripeLink | null> {
     setBillingError(null);
     try {
-      setBillingLink(await opsApi<StripeLink>(`tenants/${tenantId}/subscription/billing-link`, { method: "POST", body: "{}" }));
-      retry();
+      return await opsApi<StripeLink>(`tenants/${tenantId}/subscription/billing-link`, { method: "POST", body: "{}" });
     } catch (error) {
       setBillingError({
         priceNotSet: error instanceof OpsApiError && error.code === "price_not_set",
         message: error instanceof OpsApiError ? error.message : "Could not create the billing link.",
       });
-    } finally {
-      setBillingBusy(false);
+      return null;
     }
+  }
+
+  async function openCheckout() {
+    const tab = openBlankTab();
+    setBillingBusy("open");
+    const link = await requestBillingLink();
+    setBillingBusy(null);
+    if (!link) {
+      tab?.close();
+      return;
+    }
+    if (tab) {
+      tab.location.href = link.url;
+    } else {
+      setBillingLink(link);
+      toast({ kind: "error", message: "The browser blocked the new tab. Use Open below." });
+    }
+    retry();
+  }
+
+  async function copyBillingLink() {
+    setBillingBusy("copy");
+    const link = await requestBillingLink();
+    setBillingBusy(null);
+    if (!link) return;
+    setBillingLink(link);
+    if (await copyToClipboard(link.url)) toast({ kind: "success", message: "Link copied — send it to the owner" });
+    else toast({ kind: "error", message: "Could not copy. Copy the link from the box below." });
+    retry();
   }
 
   async function confirm(reason: string) {
@@ -174,9 +200,16 @@ export function SubscriptionTab({ tenantId, tenantStatus }: Readonly<{ tenantId:
           </span>
         </div>
         {(sub.cardBilling.status === "not_set_up" || sub.cardBilling.status === "canceled" || sub.cardBilling.status === "pending") && (
-          <Button className="mt-4" size="sm" data-testid="card-billing-link" disabled={billingBusy} onClick={() => void createBillingLink()}>
-            {billingBusy ? "Working..." : sub.cardBilling.status === "pending" ? "New billing link" : "Set up card billing"}
-          </Button>
+          <div className="mt-4 flex flex-wrap gap-2">
+            <Button size="sm" data-testid="card-billing-open" disabled={billingBusy !== null} onClick={() => void openCheckout()}>
+              <ExternalLink aria-hidden="true" />
+              {billingBusy === "open" ? "Opening..." : "Open checkout"}
+            </Button>
+            <Button size="sm" variant="secondary" data-testid="card-billing-copy" disabled={billingBusy !== null} onClick={() => void copyBillingLink()}>
+              <Copy aria-hidden="true" />
+              {billingBusy === "copy" ? "Working..." : "Copy link for owner"}
+            </Button>
+          </div>
         )}
         {billingError && (
           <p role="alert" className="mt-3 text-sm text-status-critical" data-testid="card-billing-error">

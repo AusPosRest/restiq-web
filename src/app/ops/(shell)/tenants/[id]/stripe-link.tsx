@@ -1,7 +1,7 @@
 "use client";
 
 // A single-use Stripe link ops hands to the owner (#425): read-only URL, Copy, Open in a
-// new tab, and when it expires.
+// new tab, and when it expires. Plus the open-in-a-new-tab / copy helpers both tabs use.
 import { Copy, ExternalLink } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { DATE_LOCALE } from "@/lib/datetime";
@@ -12,12 +12,8 @@ export function StripeLinkResult({ link, testId, note }: Readonly<{ link: Stripe
   const toast = useToast();
 
   async function copy() {
-    try {
-      await navigator.clipboard.writeText(link.url);
-      toast({ kind: "success", message: "Link copied." });
-    } catch {
-      toast({ kind: "error", message: "Could not copy. Select the link and copy it by hand." });
-    }
+    if (await copyToClipboard(link.url)) toast({ kind: "success", message: "Link copied." });
+    else toast({ kind: "error", message: "Could not copy. Select the link and copy it by hand." });
   }
 
   return (
@@ -49,4 +45,25 @@ export function StripeLinkResult({ link, testId, note }: Readonly<{ link: Stripe
       <p className="mt-1 text-xs text-muted-foreground">{note}</p>
     </div>
   );
+}
+
+/**
+ * Opens a blank tab inside the click handler, before any await, so popup blockers allow it;
+ * the caller points it at the Stripe link once that arrives (or closes it on error).
+ * null when the browser blocked it anyway. The opener is cut so Stripe's page can't reach back.
+ */
+export function openBlankTab(): Window | null {
+  const tab = window.open("", "_blank");
+  if (tab) tab.opener = null;
+  return tab;
+}
+
+/** Copies the link; false when the browser refused (the caller then shows the link to copy by hand). */
+export async function copyToClipboard(text: string): Promise<boolean> {
+  try {
+    await navigator.clipboard.writeText(text);
+    return true;
+  } catch {
+    return false;
+  }
 }
