@@ -5,9 +5,10 @@
 // resubmits to select-outlet.
 import { NextResponse } from "next/server";
 import { POS_SESSION_COOKIE, POS_SESSION_MAX_AGE_SECONDS, POS_STAFF_COOKIE } from "@/lib/pos-session";
+import { isHttpsRequest } from "@/lib/secure-cookie";
 import type { PosLoginResult } from "./types";
 
-export function posLoginResponse(result: PosLoginResult): NextResponse {
+export function posLoginResponse(result: PosLoginResult, request: Request): NextResponse {
   if (result.status === "select_outlet") {
     return NextResponse.json(result);
   }
@@ -16,7 +17,7 @@ export function posLoginResponse(result: PosLoginResult): NextResponse {
   const cookieOptions = {
     httpOnly: true,
     sameSite: "lax" as const,
-    secure: process.env.NODE_ENV === "production",
+    secure: isHttpsRequest(request),
     path: "/",
     maxAge: POS_SESSION_MAX_AGE_SECONDS,
   };

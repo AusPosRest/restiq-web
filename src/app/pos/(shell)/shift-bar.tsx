@@ -29,13 +29,16 @@
 // CAP-11 (device & staff attendance status, story 11) adds the same shape of
 // plain nav link to /pos/status - the attendance list and mocked device
 // panel fetch on that screen itself.
+//
+// restiq-web#437: the connectivity pill and Sync issues link come from
+// ../hub-status.tsx, whose poller lives in the /pos layout.
 import { ClipboardList, LogOut, MonitorSmartphone, Receipt, Wallet } from "lucide-react";
 import Link from "next/link";
 import { useState } from "react";
 import { useRouter } from "next/navigation";
 import { clockOut } from "../api";
+import { HubStatusStrip } from "../hub-status";
 import { LoadErrorPanel } from "./data-states";
-import { OfflineIndicatorPill } from "./status/offline-indicator-pill";
 import type { PosStaffDisplay } from "@/lib/pos-session";
 
 async function signOut(): Promise<void> {
@@ -69,7 +72,7 @@ export function ShiftBar({ initial }: Readonly<{ initial: PosStaffDisplay | null
     <header data-testid="pos-shift-bar" className="flex h-14 items-center justify-between gap-3 border-b border-border/40 bg-card px-6">
       <div className="flex items-center gap-4">
         <p className="font-headline text-sm font-bold tracking-tight text-primary">RESTIQ</p>
-        <OfflineIndicatorPill testId="pos-status-online" />
+        <HubStatusStrip pillTestId="pos-status-online" />
       </div>
 
       {failed ? (
