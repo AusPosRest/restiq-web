@@ -1,18 +1,17 @@
 "use client";
 
-// Stripe payments for one restaurant (#425, restiq-backend#282): connect status, the
-// onboarding link ops hands to the owner, which methods the POS accepts, and the platform
+// Stripe payments for one restaurant (#425, restiq-backend#282): connect progress and the
+// onboarding link (stripe-account-card.tsx), which methods the POS accepts, and the platform
 // fee. The save is audited, so it goes through the reason dialog.
 import { useState } from "react";
 import { Button } from "@/components/ui/button";
 import { opsApi, OpsApiError, PaymentMethod, PaymentsView, StripeLink } from "../../api";
 import { ConfirmReasonDialog } from "../../confirm-reason-dialog";
 import { LoadErrorPanel, Skeleton } from "../../data-states";
-import { StatusBadge } from "../../status-badge";
 import { useToast } from "../../toast";
 import { useOpsLoad } from "../../use-ops-load";
-import { ALL_METHODS, formFromPayments, isDirty, METHOD_LABELS, PaymentsForm, validatePaymentsForm } from "./payments-state";
-import { StripeLinkResult } from "./stripe-link";
+import { ALL_METHODS, CARD_REQUIRED, formFromPayments, isDirty, METHOD_LABELS, PaymentsForm, validatePaymentsForm } from "./payments-state";
+import { StripeAccountCard } from "./stripe-account-card";
 
 const INPUT_CLASSES =
   "w-full rounded-lg border border-border bg-input px-3 py-2 text-sm text-foreground focus:outline-none focus-visible:ring-2 focus-visible:ring-ring";
@@ -48,27 +47,12 @@ export function PaymentsTab({ tenantId }: Readonly<{ tenantId: string }>) {
 function PaymentsBody({ tenantId, view, reload, link, setLink }: Readonly<{ tenantId: string; view: PaymentsView; reload: () => void; link: StripeLink | null; setLink: (link: StripeLink) => void }>) {
   const toast = useToast();
   const [form, setForm] = useState<PaymentsForm>(() => formFromPayments(view));
-  const [linkBusy, setLinkBusy] = useState(false);
   const [confirming, setConfirming] = useState(false);
   const [saving, setSaving] = useState(false);
   const [saveError, setSaveError] = useState<string | null>(null);
 
   const patch = validatePaymentsForm(form);
   const formError = "error" in patch ? patch.error : null;
-  const done = view.status === "active" && view.requirementsDue === 0;
-
-  async function createLink() {
-    setLinkBusy(true);
-    try {
-      const result = await opsApi<StripeLink & { payments: PaymentsView }>(`tenants/${tenantId}/payments/onboarding-link`, { method: "POST", body: "{}" });
-      setLink({ url: result.url, expiresAt: result.expiresAt });
-      reload();
-    } catch (error) {
-      toast({ kind: "error", message: error instanceof OpsApiError ? error.message : "Could not create the onboarding link." });
-    } finally {
-      setLinkBusy(false);
-    }
-  }
 
   async function save(reason: string) {
     if ("error" in patch) return;
@@ -93,34 +77,7 @@ function PaymentsBody({ tenantId, view, reload, link, setLink }: Readonly<{ tena
 
   return (
     <div className="grid max-w-3xl gap-4" data-testid="payments-tab">
-      <div className="rounded-lg border border-border/40 bg-card p-5">
-        <h2 className="font-headline text-lg font-semibold">Stripe account</h2>
-        <div className="mt-2 flex flex-wrap items-center gap-2">
-          <StatusBadge status={view.status === "restricted" ? "needs info" : view.status} testId="payments-status" />
-          {view.requirementsDue > 0 && (
-            <span className="text-sm text-muted-foreground" data-testid="payments-requirements">
-              {view.requirementsDue} {view.requirementsDue === 1 ? "item" : "items"} Stripe still needs
-            </span>
-          )}
-          {view.stripeAccountId && (
-            <span className="font-mono text-xs text-muted-foreground" data-testid="payments-account-id">
-              {view.stripeAccountId}
-            </span>
-          )}
-        </div>
-        {!done && (
-          <Button className="mt-4" size="sm" data-testid="payments-onboarding-link" disabled={linkBusy} onClick={() => void createLink()}>
-            {linkBusy ? "Working..." : view.status === "not_connected" ? "Create Stripe account & onboarding link" : "New onboarding link"}
-          </Button>
-        )}
-        {link && (
-          <StripeLinkResult
-            link={link}
-            testId="payments-link"
-            note="Send this link to the restaurant owner. It works once and expires in a few minutes."
-          />
-        )}
-      </div>
+      <StripeAccountCard tenantId={tenantId} view={view} reload={reload} link={link} setLink={setLink} />
 
       <form
         className="rounded-lg border border-border/40 bg-card p-5"
@@ -139,6 +96,9 @@ function PaymentsBody({ tenantId, view, reload, link, setLink }: Readonly<{ tena
                   type="checkbox"
                   data-testid={`payments-method-${method}`}
                   checked={form.methods.includes(method)}
+                  // Card can be ticked back on (an old setting) but never off.
+                  disabled={method === "card" && form.methods.includes("card")}
+                  aria-describedby={method === "card" ? "payments-card-hint" : undefined}
                   onChange={(event) => toggle(method, event.target.checked)}
                   className="size-4 rounded border-border focus-visible:ring-2 focus-visible:ring-ring"
                 />
@@ -146,6 +106,9 @@ function PaymentsBody({ tenantId, view, reload, link, setLink }: Readonly<{ tena
               </label>
             ))}
           </div>
+          <p id="payments-card-hint" className="mt-2 text-xs text-muted-foreground" data-testid="payments-card-hint">
+            {CARD_REQUIRED}
+          </p>
         </fieldset>
 
         <h3 className="font-headline mt-6 text-base font-semibold">Platform fee</h3>

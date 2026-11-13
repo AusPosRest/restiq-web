@@ -90,8 +90,39 @@ describe("SubscriptionTab", () => {
     await screen.findByTestId("subscription-tab");
     expect(screen.getByTestId("card-billing-status").textContent).toBe("not set up");
     expect(screen.getByTestId("card-billing-amount").textContent).toContain("49.00");
-    await userEvent.click(screen.getByTestId("card-billing-link"));
+    await userEvent.click(screen.getByTestId("card-billing-copy"));
     expect((await screen.findByTestId("card-billing-link-result-url") as HTMLInputElement).value).toBe("https://checkout.stripe.test/x");
+  });
+
+  it("card billing: Open checkout opens the tab inside the click, then points it at Checkout", async () => {
+    const tab = { opener: {}, location: { href: "" }, close: vi.fn() };
+    const open = vi.fn(() => tab);
+    vi.stubGlobal("open", open);
+    renderTab(subscription(), (url, init) =>
+      url.endsWith("/subscription/billing-link") && init?.method === "POST"
+        ? jsonResponse({ url: "https://checkout.stripe.test/x", expiresAt: "2026-08-24T00:00:00.000Z" })
+        : undefined,
+    );
+    await screen.findByTestId("subscription-tab");
+    await userEvent.click(screen.getByTestId("card-billing-open"));
+    await waitFor(() => expect(tab.location.href).toBe("https://checkout.stripe.test/x"));
+    expect(open).toHaveBeenCalledWith("", "_blank");
+    expect(tab.opener).toBeNull();
+    expect(screen.queryByTestId("card-billing-link-result")).toBeNull();
+  });
+
+  it("card billing: closes the opened tab when the link can't be made", async () => {
+    const tab = { opener: {}, location: { href: "" }, close: vi.fn() };
+    vi.stubGlobal("open", vi.fn(() => tab));
+    renderTab(subscription(), (url, init) =>
+      url.endsWith("/subscription/billing-link") && init?.method === "POST"
+        ? jsonResponse({ error: { code: "price_not_set", message: "No monthly price is set." } }, 409)
+        : undefined,
+    );
+    await screen.findByTestId("subscription-tab");
+    await userEvent.click(screen.getByTestId("card-billing-open"));
+    await screen.findByTestId("card-billing-error");
+    expect(tab.close).toHaveBeenCalled();
   });
 
   it("card billing: price_not_set points to the Plans page", async () => {
@@ -101,7 +132,7 @@ describe("SubscriptionTab", () => {
         : undefined,
     );
     await screen.findByTestId("subscription-tab");
-    await userEvent.click(screen.getByTestId("card-billing-link"));
+    await userEvent.click(screen.getByTestId("card-billing-copy"));
     expect((await screen.findByTestId("card-billing-error")).textContent).toContain("Plans page");
   });
 
