@@ -432,6 +432,8 @@ const FOOTER_LINKS = [
   { href: "/kds", label: "Kitchen display (staff PIN)", testId: "landing-footer-kds" },
   { href: "/admin/login", label: "Owner console", testId: "landing-footer-admin" },
   { href: "/ops/login", label: "Platform operators", testId: "landing-footer-ops" },
+  // Stable link: always the latest release in AusPosRest/restiq-downloads.
+  { href: "https://github.com/AusPosRest/restiq-downloads/releases/latest/download/RESTIQ-POS-Setup.exe", label: "Windows app (download)", testId: "landing-footer-windows" },
 ];
 
 function SiteFooter() {
