@@ -70,6 +70,9 @@ export function POST(request: NextRequest, ctx: { params: Promise<{ path: string
 export function PUT(request: NextRequest, ctx: { params: Promise<{ path: string[] }> }): Promise<NextResponse> {
   return forward(request, ctx.params);
 }
+export function PATCH(request: NextRequest, ctx: { params: Promise<{ path: string[] }> }): Promise<NextResponse> {
+  return forward(request, ctx.params);
+}
 export function DELETE(request: NextRequest, ctx: { params: Promise<{ path: string[] }> }): Promise<NextResponse> {
   return forward(request, ctx.params);
 }
