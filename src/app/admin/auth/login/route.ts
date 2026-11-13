@@ -2,6 +2,7 @@
 // httpOnly cookie - the token never reaches client-side JS. The API base
 // comes from the environment only (house rule: no hostnames in source).
 import { NextResponse } from "next/server";
+import { apiUrl } from "@/lib/api-url";
 import { clientIpHeaders } from "@/lib/client-ip-headers";
 import { ADMIN_SESSION_COOKIE, ADMIN_SESSION_MAX_AGE_SECONDS } from "@/lib/admin-session";
 
@@ -21,14 +22,14 @@ export async function POST(request: Request): Promise<NextResponse> {
     return errorResponse(400, "validation_failed", "email and password are required");
   }
 
-  const apiUrl = process.env.NEXT_PUBLIC_API_URL;
-  if (!apiUrl) {
+  const url = apiUrl();
+  if (!url) {
     return errorResponse(500, "misconfigured", "NEXT_PUBLIC_API_URL is not set");
   }
 
   let upstream: Response;
   try {
-    upstream = await fetch(`${apiUrl}/admin/v1/auth/login`, {
+    upstream = await fetch(`${url}/admin/v1/auth/login`, {
       method: "POST",
       headers: { "content-type": "application/json", ...clientIpHeaders(request) },
       body: JSON.stringify({ email, password }),

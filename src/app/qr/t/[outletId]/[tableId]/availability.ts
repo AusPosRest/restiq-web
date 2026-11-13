@@ -13,6 +13,8 @@
 //     200 { available: boolean, reason?: "not_found" | "qr_ordering_disabled" | "table_busy" }
 // CU-21 (restiq-backend#211): with the tableId it also says "table_busy" when
 // staff already have an order on this table - told before any cart is built.
+import { apiUrl } from "@/lib/api-url";
+
 export type AvailabilityReason = "not_found" | "qr_ordering_disabled" | "table_busy";
 
 export type AvailabilityResult =
@@ -21,13 +23,13 @@ export type AvailabilityResult =
   | { kind: "unreachable" };
 
 export async function checkAvailability(outletId: string, tableId?: string): Promise<AvailabilityResult> {
-  const apiUrl = process.env.NEXT_PUBLIC_API_URL;
-  if (!apiUrl) return { kind: "unreachable" };
+  const url = apiUrl();
+  if (!url) return { kind: "unreachable" };
 
   let upstream: Response;
   try {
     const query = tableId ? `?tableId=${encodeURIComponent(tableId)}` : "";
-    upstream = await fetch(`${apiUrl}/guest/v1/outlets/${outletId}/availability${query}`, { cache: "no-store" });
+    upstream = await fetch(`${url}/guest/v1/outlets/${outletId}/availability${query}`, { cache: "no-store" });
   } catch {
     return { kind: "unreachable" };
   }

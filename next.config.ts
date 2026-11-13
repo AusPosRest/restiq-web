@@ -19,6 +19,11 @@ const nextConfig: NextConfig = {
 
   // Stops Next writing AGENTS.md and CLAUDE.md into the repo on every dev run.
   agentRules: false,
+
+  // restiq-web#304: the Windows hub till runs a standalone build pointed at
+  // its own local POS service via RESTIQ_API_URL, set at start - not build.
+  // Opt-in so plain `next build` is unchanged; OpenNext forces standalone on its own.
+  ...(process.env.RESTIQ_STANDALONE === "1" && { output: "standalone" as const }),
 };
 
 export default nextConfig;

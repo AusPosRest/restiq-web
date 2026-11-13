@@ -1,6 +1,7 @@
 // Sets a new owner password from the emailed token. Success is 204 from the backend (every older
 // session is ended there); the owner then signs in with the new password, so no cookie is set here.
 import { NextResponse } from "next/server";
+import { apiUrl } from "@/lib/api-url";
 
 function errorResponse(status: number, code: string, message: string): NextResponse {
   return NextResponse.json({ error: { code, message } }, { status });
@@ -13,12 +14,12 @@ export async function POST(request: Request): Promise<NextResponse> {
     return errorResponse(400, "validation_failed", "token and password are required");
   }
 
-  const apiUrl = process.env.NEXT_PUBLIC_API_URL;
-  if (!apiUrl) return errorResponse(500, "misconfigured", "NEXT_PUBLIC_API_URL is not set");
+  const url = apiUrl();
+  if (!url) return errorResponse(500, "misconfigured", "NEXT_PUBLIC_API_URL is not set");
 
   let upstream: Response;
   try {
-    upstream = await fetch(`${apiUrl}/admin/v1/auth/reset-password`, {
+    upstream = await fetch(`${url}/admin/v1/auth/reset-password`, {
       method: "POST",
       headers: { "content-type": "application/json" },
       body: JSON.stringify({ token, password }),

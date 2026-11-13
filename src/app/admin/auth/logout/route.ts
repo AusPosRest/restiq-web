@@ -1,3 +1,4 @@
+import { apiUrl } from "@/lib/api-url";
 import { NextRequest, NextResponse } from "next/server";
 import { ADMIN_LOGIN_PATH, ADMIN_SESSION_COOKIE } from "@/lib/admin-session";
 import { tenantHostHeaders } from "@/lib/tenant-host-headers";
@@ -6,9 +7,9 @@ import { tenantHostHeaders } from "@/lib/tenant-host-headers";
 // cookie stops working too. Best effort - the cookie is cleared whatever the API says.
 export async function POST(request: NextRequest): Promise<NextResponse> {
   const token = request.cookies.get(ADMIN_SESSION_COOKIE)?.value;
-  const apiUrl = process.env.NEXT_PUBLIC_API_URL;
-  if (token && apiUrl) {
-    await fetch(`${apiUrl}/admin/v1/auth/logout`, {
+  const url = apiUrl();
+  if (token && url) {
+    await fetch(`${url}/admin/v1/auth/logout`, {
       method: "POST",
       headers: { authorization: `Bearer ${token}`, ...tenantHostHeaders(request) },
       cache: "no-store",

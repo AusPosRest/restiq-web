@@ -1,3 +1,5 @@
+import { apiUrl } from "@/lib/api-url";
+
 export interface InviteDetails {
   restaurantName: string;
   email: string;
@@ -16,10 +18,10 @@ export type InviteLookup =
 // restiq-backend#193: who this invite is for. PE-31: a used or invalid link says so up front instead of
 // showing a password form that only fails after it is filled in.
 export async function lookupInvite(token: string): Promise<InviteLookup> {
-  const apiUrl = process.env.NEXT_PUBLIC_API_URL;
-  if (!apiUrl) return { kind: "unknown" };
+  const url = apiUrl();
+  if (!url) return { kind: "unknown" };
   try {
-    const res = await fetch(`${apiUrl}/admin/v1/auth/invite-details`, {
+    const res = await fetch(`${url}/admin/v1/auth/invite-details`, {
       method: "POST",
       headers: { "content-type": "application/json" },
       body: JSON.stringify({ token }),

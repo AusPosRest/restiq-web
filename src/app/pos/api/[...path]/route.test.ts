@@ -21,6 +21,7 @@ describe("pos API pass-through", () => {
   });
   afterEach(() => {
     vi.unstubAllGlobals();
+    delete process.env.RESTIQ_API_URL;
   });
 
   it("rejects a request with no pos session", async () => {
@@ -79,6 +80,18 @@ describe("pos API pass-through", () => {
     const request = requestWithCookie("https://web.example.test/pos/api/..%2Fadmin");
     const res = await GET(request, { params: Promise.resolve({ path: ["../admin"] }) });
     expect(res.status).toBe(404);
+  });
+
+  it("forwards to RESTIQ_API_URL when set, overriding NEXT_PUBLIC_API_URL (restiq-web#304)", async () => {
+    process.env.RESTIQ_API_URL = "http://127.0.0.1:8080";
+    const fetchMock = vi.fn().mockResolvedValue(new Response(JSON.stringify({ outletId: "o1" }), { status: 200 }));
+    vi.stubGlobal("fetch", fetchMock);
+
+    const request = requestWithCookie("https://web.example.test/pos/api/table-map");
+    await GET(request, { params: Promise.resolve({ path: ["table-map"] }) });
+
+    const [upstreamUrl] = fetchMock.mock.calls[0] as [string, RequestInit];
+    expect(upstreamUrl).toBe("http://127.0.0.1:8080/pos/v1/table-map");
   });
 
   it("passes an upstream 502 through when the API is unreachable", async () => {

@@ -4,6 +4,7 @@
 // src/platform/pos-jwt.ts) plus the chosen outlet for the real pos session.
 // Mirrors ../login/route.ts's cookie-issuing shape via session-cookies.ts.
 import { NextResponse } from "next/server";
+import { apiUrl } from "@/lib/api-url";
 import { posLoginResponse } from "../session-cookies";
 import type { PosLoginResult } from "../types";
 
@@ -21,14 +22,14 @@ export async function POST(request: Request): Promise<NextResponse> {
     return errorResponse(400, { error: { code: "validation_failed", message: "outletId is required" } });
   }
 
-  const apiUrl = process.env.NEXT_PUBLIC_API_URL;
-  if (!apiUrl) {
+  const url = apiUrl();
+  if (!url) {
     return errorResponse(500, { error: { code: "misconfigured", message: "NEXT_PUBLIC_API_URL is not set" } });
   }
 
   let upstream: Response;
   try {
-    upstream = await fetch(`${apiUrl}/pos/v1/auth/select-outlet`, {
+    upstream = await fetch(`${url}/pos/v1/auth/select-outlet`, {
       method: "POST",
       headers: { "content-type": "application/json" },
       body: JSON.stringify({ pendingToken, outletId }),

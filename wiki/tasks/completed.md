@@ -1538,3 +1538,8 @@ faked.
   for a reload. The ops invite link's "No email is sent in this prototype"
   line is replaced with copy that matches the mail simulator actually
   sending it. Tests: item-drawer, menu-management.
+- **2026-10-07 - API address at run time, standalone build (#304).** `src/lib/api-url.ts`
+  reads `RESTIQ_API_URL` at call time, falling back to `NEXT_PUBLIC_API_URL` (which Next
+  inlines at build time). All server-side reads use it (25 after merging main). `RESTIQ_STANDALONE=1` sets
+  `output: "standalone"` so the Windows hub till (offline sync design) can start the
+  built app with plain Node against its local POS service. Tests: api-url, POS API route.

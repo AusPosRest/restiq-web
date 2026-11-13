@@ -1,3 +1,4 @@
+import { apiUrl } from "@/lib/api-url";
 import type { Metadata } from "next";
 import { cookies } from "next/headers";
 import { redirect } from "next/navigation";
@@ -13,12 +14,12 @@ export const dynamic = "force-dynamic";
 // MAIL_PROVIDER=simulator (restiq-backend#198). Read server-side with the
 // operator's session, so it needs no CORS.
 async function fetchInbox(to: string | undefined): Promise<InboxResult | "unauthorized"> {
-  const apiUrl = process.env.NEXT_PUBLIC_API_URL;
-  if (!apiUrl) return { kind: "unreachable" };
+  const url = apiUrl();
+  if (!url) return { kind: "unreachable" };
   const token = (await cookies()).get(OPS_SESSION_COOKIE)?.value;
   if (!token) return "unauthorized";
   try {
-    const res = await fetch(`${apiUrl}/ops/v1/dev-inbox${to ? `?to=${encodeURIComponent(to)}` : ""}`, {
+    const res = await fetch(`${url}/ops/v1/dev-inbox${to ? `?to=${encodeURIComponent(to)}` : ""}`, {
       headers: { authorization: `Bearer ${token}` },
       cache: "no-store",
     });

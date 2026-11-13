@@ -1,4 +1,5 @@
 import { NextResponse, type NextRequest } from "next/server";
+import { apiUrl } from "@/lib/api-url";
 import { POS_SESSION_COOKIE, POS_STAFF_COOKIE } from "@/lib/pos-session";
 
 // restiq-backend#169: POST /pos/v1/auth/logout ends this staff member's
@@ -7,9 +8,9 @@ import { POS_SESSION_COOKIE, POS_STAFF_COOKIE } from "@/lib/pos-session";
 // whatever the API says, so Sign out always signs this device out.
 export async function POST(request: NextRequest): Promise<NextResponse> {
   const token = request.cookies.get(POS_SESSION_COOKIE)?.value;
-  const apiUrl = process.env.NEXT_PUBLIC_API_URL;
-  if (token && apiUrl) {
-    await fetch(`${apiUrl}/pos/v1/auth/logout`, {
+  const url = apiUrl();
+  if (token && url) {
+    await fetch(`${url}/pos/v1/auth/logout`, {
       method: "POST",
       headers: { authorization: `Bearer ${token}` },
       cache: "no-store",

@@ -7,6 +7,8 @@
 //   POST ops/v1/auth/login {email,password} -> { token, operator }
 //   GET  ops/v1/tenants    -> { tenants: [{ name, testMode, ... }] }
 //   GET  ops/v1/devices    -> { devices: DeviceListItem[], nextCursor, total }
+import { apiUrl } from "@/lib/api-url";
+
 // restiq-web#346 (PE-30): /demo shows only tenants in Test mode - their devices and their logins.
 export interface LandingDevice {
   id: string;
@@ -47,13 +49,13 @@ export function deviceOpenHref(device: Pick<LandingDevice, "id" | "tenantId" | "
 }
 
 export async function fetchLandingDevices(): Promise<LandingDevicesResult> {
-  const apiUrl = process.env.NEXT_PUBLIC_API_URL;
+  const url = apiUrl();
   const email = process.env.DEMO_OPS_EMAIL;
   const password = process.env.DEMO_OPS_PASSWORD;
-  if (!apiUrl || !email || !password) return { kind: "unavailable" };
+  if (!url || !email || !password) return { kind: "unavailable" };
 
   try {
-    const loginRes = await fetch(`${apiUrl}/ops/v1/auth/login`, {
+    const loginRes = await fetch(`${url}/ops/v1/auth/login`, {
       method: "POST",
       headers: { "content-type": "application/json" },
       body: JSON.stringify({ email, password }),
@@ -66,14 +68,14 @@ export async function fetchLandingDevices(): Promise<LandingDevicesResult> {
     // ponytail: one page at the API's max page size rather than a cursor
     // loop - fine for a demo-scale fleet; add pagination if it outgrows 100.
     const headers = { authorization: `Bearer ${loginBody.token}` };
-    const tenantsRes = await fetch(`${apiUrl}/ops/v1/tenants?limit=100`, { headers, cache: "no-store" });
+    const tenantsRes = await fetch(`${url}/ops/v1/tenants?limit=100`, { headers, cache: "no-store" });
     if (!tenantsRes.ok) return { kind: "unavailable" };
     const tenantsBody = (await tenantsRes.json().catch(() => null)) as { tenants?: { id: string; name: string; testMode?: boolean }[] } | null;
     if (!tenantsBody?.tenants) return { kind: "unavailable" };
     const testTenants = tenantsBody.tenants.filter((tenant) => tenant.testMode === true);
     const testTenantIds = new Set(testTenants.map((tenant) => tenant.id));
 
-    const devicesRes = await fetch(`${apiUrl}/ops/v1/devices?limit=100`, { headers, cache: "no-store" });
+    const devicesRes = await fetch(`${url}/ops/v1/devices?limit=100`, { headers, cache: "no-store" });
     if (!devicesRes.ok) return { kind: "unavailable" };
     const body = (await devicesRes.json().catch(() => null)) as { devices?: LandingDevice[] } | null;
     if (!body?.devices) return { kind: "unavailable" };
