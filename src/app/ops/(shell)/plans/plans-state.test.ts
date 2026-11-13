@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
 import type { PlanPriceView } from "../api";
-import { formFromPrice, isDirty, validatePlanPriceForm } from "./plans-state";
+import type { ReaderPriceView } from "@/lib/card-readers";
+import { formFromPrice, isDirty, readerPriceForm, validatePlanPriceForm, validateReaderPrice } from "./plans-state";
 
 const ROW: PlanPriceView = { country: "IN", plan: "standard", monthlyPriceMinor: 49900, annualDiscountPercent: 20, currency: "INR", updatedAt: "" };
 
@@ -21,5 +22,22 @@ describe("plans-state", () => {
   it("knows when a row was edited", () => {
     expect(isDirty({ price: "499", discount: "20" }, ROW)).toBe(false);
     expect(isDirty({ price: "599", discount: "20" }, ROW)).toBe(true);
+  });
+});
+
+describe("reader prices", () => {
+  const READER: ReaderPriceView = { country: "AU", model: "s700", displayName: "Stripe Reader S700", priceMinor: "34900", updatedAt: "" };
+
+  it("shows a string or number price as major units, blank when not for sale", () => {
+    expect(readerPriceForm(READER)).toBe("349");
+    expect(readerPriceForm({ ...READER, priceMinor: 34950 })).toBe("349.5");
+    expect(readerPriceForm({ ...READER, priceMinor: null })).toBe("");
+  });
+
+  it("validates a reader price", () => {
+    expect(validateReaderPrice("349.50")).toEqual({ priceMinor: 34950 });
+    expect(validateReaderPrice(" ")).toEqual({ priceMinor: null });
+    expect(validateReaderPrice("0")).toHaveProperty("error");
+    expect(validateReaderPrice("abc")).toHaveProperty("error");
   });
 });

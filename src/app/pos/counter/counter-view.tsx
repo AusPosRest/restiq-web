@@ -518,7 +518,16 @@ function CounterLoaded({
           <div className="flex w-full shrink-0 flex-col lg:w-80">
             <div className="flex flex-col lg:min-h-0 lg:flex-1 lg:overflow-y-auto">
               {terminal.intent ? (
-                <TerminalIntentPanel intent={terminal.intent} currency={menu.currency} busy={terminal.busy} onCancel={terminal.cancel} onDismiss={terminal.dismiss} />
+                <TerminalIntentPanel
+                  intent={terminal.intent}
+                  currency={menu.currency}
+                  busy={terminal.busy}
+                  onCancel={terminal.cancel}
+                  onDismiss={terminal.dismiss}
+                  onRetry={terminal.send}
+                  onSimulate={terminal.simulate}
+                  sandbox={terminal.sandbox}
+                />
               ) : (
                 <TenderKeypad
                   currency={menu.currency}
@@ -529,6 +538,9 @@ function CounterLoaded({
                   onRemoveTender={handleRemoveTender}
                   onSendToTerminal={terminal.available ? terminal.send : undefined}
                   terminalBusy={terminal.busy}
+                  readers={terminal.readers}
+                  readerId={terminal.readerId}
+                  onSelectReader={terminal.selectReader}
                   changeMinor={cashChangeMinor(totalMinor, bill, pendingTenders, menu.currency)}
                   cashLocked={shiftOpen === false}
                 />

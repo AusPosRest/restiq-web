@@ -12,6 +12,7 @@ const TABS = [
   { href: "/admin/settings/branding", label: "Branding", testId: "settings-tab-branding" },
   { href: "/admin/settings/tax-registration", label: "Tax Registration", testId: "settings-tab-tax-registration" },
   { href: "/admin/settings/capabilities", label: "Capabilities", testId: "settings-tab-capabilities" },
+  { href: "/admin/settings/card-readers", label: "Card readers", testId: "settings-tab-card-readers" },
   { href: "/admin/settings/agreement", label: "Agreement", testId: "settings-tab-agreement" },
 ];
 

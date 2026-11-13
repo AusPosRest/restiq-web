@@ -11,13 +11,17 @@ import { LoadErrorPanel, Skeleton } from "../../data-states";
 import { useToast } from "../../toast";
 import { useOpsLoad } from "../../use-ops-load";
 import { ALL_METHODS, CARD_REQUIRED, formFromPayments, isDirty, METHOD_LABELS, PaymentsForm, validatePaymentsForm } from "./payments-state";
+import { ReaderOrdersTable } from "../../reader-orders/reader-orders-table";
+import { CardReadersCard } from "./card-readers-card";
 import { StripeAccountCard } from "./stripe-account-card";
 
 const INPUT_CLASSES =
   "w-full rounded-lg border border-border bg-input px-3 py-2 text-sm text-foreground focus:outline-none focus-visible:ring-2 focus-visible:ring-ring";
 const LABEL_CLASSES = "font-label mb-1.5 block text-xs font-semibold uppercase tracking-wider text-muted-foreground";
 
-export function PaymentsTab({ tenantId }: Readonly<{ tenantId: string }>) {
+type OutletOption = { id: string; name: string; address: string };
+
+export function PaymentsTab({ tenantId, outlets }: Readonly<{ tenantId: string; outlets: OutletOption[] }>) {
   const { loading, failed, status, data, retry } = useOpsLoad<{ payments: PaymentsView }>(`tenants/${tenantId}/payments`);
   // Lives here, not in PaymentsBody: the reload after creating a link remounts the body.
   const [link, setLink] = useState<StripeLink | null>(null);
@@ -41,10 +45,10 @@ export function PaymentsTab({ tenantId }: Readonly<{ tenantId: string }>) {
     return <LoadErrorPanel message="Payments could not be loaded." onRetry={retry} testId="payments-error" />;
   }
   const view = data.payments;
-  return <PaymentsBody key={JSON.stringify(formFromPayments(view))} tenantId={tenantId} view={view} reload={retry} link={link} setLink={setLink} />;
+  return <PaymentsBody key={JSON.stringify(formFromPayments(view))} tenantId={tenantId} outlets={outlets} view={view} reload={retry} link={link} setLink={setLink} />;
 }
 
-function PaymentsBody({ tenantId, view, reload, link, setLink }: Readonly<{ tenantId: string; view: PaymentsView; reload: () => void; link: StripeLink | null; setLink: (link: StripeLink) => void }>) {
+function PaymentsBody({ tenantId, outlets, view, reload, link, setLink }: Readonly<{ tenantId: string; outlets: OutletOption[]; view: PaymentsView; reload: () => void; link: StripeLink | null; setLink: (link: StripeLink) => void }>) {
   const toast = useToast();
   const [form, setForm] = useState<PaymentsForm>(() => formFromPayments(view));
   const [confirming, setConfirming] = useState(false);
@@ -78,6 +82,14 @@ function PaymentsBody({ tenantId, view, reload, link, setLink }: Readonly<{ tena
   return (
     <div className="grid max-w-3xl gap-4" data-testid="payments-tab">
       <StripeAccountCard tenantId={tenantId} view={view} reload={reload} link={link} setLink={setLink} />
+      <CardReadersCard tenantId={tenantId} outlets={outlets} stripeActive={view.status === "active"} />
+      <section className="rounded-lg border border-border/40 bg-card p-5" data-testid="tenant-reader-orders" aria-labelledby="tenant-reader-orders-heading">
+        <h2 id="tenant-reader-orders-heading" className="font-headline text-lg font-semibold">
+          Reader orders
+        </h2>
+        <p className="mb-4 mt-1 text-sm text-muted-foreground">Readers the owner has bought from Settings ▸ Card readers.</p>
+        <ReaderOrdersTable path={`tenants/${tenantId}/reader-orders`} showTenant={false} emptyText="The owner hasn't ordered any readers." />
+      </section>
 
       <form
         className="rounded-lg border border-border/40 bg-card p-5"

@@ -576,6 +576,8 @@ export interface CreatePaymentIntentInput {
   amountMinor: number;
   /** Client-generated idempotency key - a retried POST with the same key returns the same intent. */
   clientKey: string;
+  /** Stripe reader to push the payment to (restiq-web#429) - required by the server once the outlet has readers. */
+  readerId?: string;
 }
 
 export function createPaymentIntent(billId: string, input: CreatePaymentIntentInput): Promise<PaymentIntentView> {
@@ -597,6 +599,16 @@ export function listPendingPaymentIntents(outletId: string): Promise<PaymentInte
   return posApi<PaymentIntentView[]>(`outlets/${encodeURIComponent(outletId)}/payment-intents${deviceQuery()}`);
 }
 
+/** `success`/`failure` drive the simulated terminal, and on a sandbox Stripe reader present an approving/declining test card (404 with a live key). */
 export function simulatePaymentIntent(intentId: string, outcome: "success" | "failure"): Promise<PaymentIntentView> {
   return posApi<PaymentIntentView>(`payment-intents/${encodeURIComponent(intentId)}/simulate`, { method: "POST", body: JSON.stringify({ outcome }) });
+}
+
+// --- Stripe card readers (restiq-web#429 / restiq-backend#286). The outlet's
+// registered smart readers; an empty list means today's simulated terminal.
+import type { CardReaderView } from "@/lib/card-readers";
+export type { CardReaderView };
+
+export function listCardReaders(outletId: string): Promise<{ readers: CardReaderView[] }> {
+  return posApi<{ readers: CardReaderView[] }>(`outlets/${encodeURIComponent(outletId)}/card-readers`);
 }

@@ -203,7 +203,16 @@ function BillSettleLoaded({
         ) : (
           <div className="flex flex-1 flex-col">
             {terminal.intent ? (
-              <TerminalIntentPanel intent={terminal.intent} currency={menu.currency} busy={terminal.busy} onCancel={terminal.cancel} onDismiss={terminal.dismiss} />
+              <TerminalIntentPanel
+                intent={terminal.intent}
+                currency={menu.currency}
+                busy={terminal.busy}
+                onCancel={terminal.cancel}
+                onDismiss={terminal.dismiss}
+                onRetry={terminal.send}
+                onSimulate={terminal.simulate}
+                sandbox={terminal.sandbox}
+              />
             ) : (
               <TenderKeypad
                 currency={menu.currency}
@@ -214,6 +223,9 @@ function BillSettleLoaded({
                 onRemoveTender={handleRemoveTender}
                 onSendToTerminal={terminal.available ? terminal.send : undefined}
                 terminalBusy={terminal.busy}
+                readers={terminal.readers}
+                readerId={terminal.readerId}
+                onSelectReader={terminal.selectReader}
                 changeMinor={cashChangeMinor(totalMinor, bill, pendingTenders, menu.currency)}
                 cashLocked={shiftOpen === false}
               />
