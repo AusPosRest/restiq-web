@@ -79,8 +79,9 @@ export function CardPaymentSheet(props: Readonly<CardSheetProps>) {
           {startError}
         </p>
       ) : start ? (
-        <Elements stripe={stripeFor(config)} options={{ clientSecret: start.clientSecret }}>
-          <CardPayForm {...props} intentId={start.intentId} />
+        // The sheet is dark: Stripe's "night" theme matches it.
+        <Elements stripe={stripeFor(config)} options={{ clientSecret: start.clientSecret, appearance: { theme: "night" } }}>
+          <CardPayForm {...props} intentId={start.intentId} country={start.currency === "INR" ? "IN" : "AU"} />
         </Elements>
       ) : (
         <p role="status" data-testid="checkout-card-loading" className="mt-4 text-sm text-muted-foreground">
@@ -94,7 +95,7 @@ export function CardPaymentSheet(props: Readonly<CardSheetProps>) {
   );
 }
 
-function CardPayForm({ intentId, myGuestId, config, onPaid, onPending, onCancel }: Readonly<CardSheetProps & { intentId: string }>) {
+function CardPayForm({ intentId, country, myGuestId, config, onPaid, onPending, onCancel }: Readonly<CardSheetProps & { intentId: string; country: "AU" | "IN" }>) {
   const stripe = useStripe();
   const elements = useElements();
   const [busy, setBusy] = useState(false);
@@ -132,7 +133,8 @@ function CardPayForm({ intentId, myGuestId, config, onPaid, onPending, onCancel 
         void pay();
       }}
     >
-      <PaymentElement options={{ wallets: walletOptions(config.allowedMethods) }} />
+      {/* Country follows the restaurant, not the guest's IP. */}
+      <PaymentElement options={{ wallets: walletOptions(config.allowedMethods), defaultValues: { billingDetails: { address: { country } } } }} />
       {error ? (
         <p role="alert" data-testid="checkout-card-error" className="mt-3 text-sm text-error-soft">
           {error}

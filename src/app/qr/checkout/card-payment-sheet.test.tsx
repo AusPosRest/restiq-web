@@ -77,7 +77,7 @@ describe("checkout card payments (#427)", () => {
     expect(screen.queryByTestId("checkout-simulate-success")).toBeNull();
     await screen.findByTestId("stripe-payment-element");
     expect(loadStripe).toHaveBeenCalledWith("pk_test_1", { stripeAccount: "acct_1" });
-    expect(paymentElementOptions).toHaveBeenLastCalledWith({ wallets: { applePay: "auto", googlePay: "never" } });
+    expect(paymentElementOptions).toHaveBeenLastCalledWith({ wallets: { applePay: "auto", googlePay: "never" }, defaultValues: { billingDetails: { address: { country: "AU" } } } });
     const startCall = fetchMock.mock.calls.find(([url]) => url === "/qr/api/bills/b1/card-payment");
     expect(JSON.parse(String(startCall?.[1]?.body))).toEqual({ guestId: "g1" });
 
