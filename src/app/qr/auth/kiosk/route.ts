@@ -47,5 +47,5 @@ export async function POST(request: Request): Promise<NextResponse> {
   const data = (await upstream.json()) as KioskStartResult;
   // No table and no shareable PIN on a kiosk - the display record keeps the
   // same shape so cart/checkout pages parse it unchanged.
-  return guestSessionResponse(data.token, { outletId, tableId: "", guestName: "Kiosk", pin: "" });
+  return guestSessionResponse(data.token, { outletId, tableId: "", guestName: "Kiosk", pin: "" }, request);
 }

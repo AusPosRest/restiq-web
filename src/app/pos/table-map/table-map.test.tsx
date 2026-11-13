@@ -127,6 +127,20 @@ describe("TableMap", () => {
     expect((startCall?.[1] as RequestInit | undefined)?.method).toBe("POST");
   });
 
+  it("shows the hub's 423 offline_locked message when new sales are locked (restiq-web#437)", async () => {
+    const user = userEvent.setup();
+    const message = "New sales are paused until this till syncs. You can still close open bills.";
+    stubFetch((url) => {
+      if (url.endsWith(`/pos/api/outlets/${OUTLET_ID}/table-map`)) return jsonResponse(tables());
+      if (url.endsWith(`/tables/t1/order`)) return jsonResponse({ error: { code: "offline_locked", message } }, 423);
+      throw new Error(`unexpected fetch ${url}`);
+    });
+    renderTableMap();
+    await user.click(await screen.findByTestId("table-tile-t1"));
+    expect((await screen.findByTestId("table-map-action-error")).textContent).toContain(message);
+    expect(push).not.toHaveBeenCalled();
+  });
+
   it("reflects the server's real owner after a get-or-claim race (openOrClaimTable can return a pre-existing order owned by someone else), requiring transfer on a second tap instead of a silent open", async () => {
     const user = userEvent.setup();
     const claimedOrder = { id: "order-t1", tenantId: "t", outletId: OUTLET_ID, tableId: "t1", ownerId: "staff-other", ownerName: "Other", status: "open", tokenNumber: null, createdAt: "now", updatedAt: "now", lines: [] };

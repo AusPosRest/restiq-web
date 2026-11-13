@@ -29,13 +29,20 @@
 // CAP-11 (device & staff attendance status, story 11) adds the same shape of
 // plain nav link to /pos/status - the attendance list and mocked device
 // panel fetch on that screen itself.
-import { ClipboardList, LogOut, MonitorSmartphone, Receipt, Wallet } from "lucide-react";
+//
+// restiq-web#437 (HUB-BUILD-PLAN W2/W3): the one exception to "no fetch" is
+// the hub status poll (use-hub-status.ts), which stops at the cloud's 404. On
+// a hub the bar also shows the lock banner and a Sync issues link, the link
+// only after the hub lets this staff member read the list (`settle_bills`,
+// D-7 - the POS has no permission list of its own; the API decides).
+import { ClipboardList, CloudAlert, LogOut, MonitorSmartphone, Receipt, Wallet } from "lucide-react";
 import Link from "next/link";
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
-import { clockOut } from "../api";
+import { clockOut, listHubRejections } from "../api";
 import { LoadErrorPanel } from "./data-states";
-import { OfflineIndicatorPill } from "./status/offline-indicator-pill";
+import { HubLockBanner, OfflineIndicatorPill } from "./status/offline-indicator-pill";
+import { useHubStatus } from "./status/use-hub-status";
 import type { PosStaffDisplay } from "@/lib/pos-session";
 
 async function signOut(): Promise<void> {
@@ -46,6 +53,20 @@ export function ShiftBar({ initial }: Readonly<{ initial: PosStaffDisplay | null
   const router = useRouter();
   const [clockingOut, setClockingOut] = useState(false);
   const [failed, setFailed] = useState(false);
+  const hub = useHubStatus();
+  const onHub = hub !== null;
+  const [canSeeSyncIssues, setCanSeeSyncIssues] = useState(false);
+
+  useEffect(() => {
+    if (!onHub) return;
+    let cancelled = false;
+    void listHubRejections()
+      .then(() => !cancelled && setCanSeeSyncIssues(true))
+      .catch(() => undefined);
+    return () => {
+      cancelled = true;
+    };
+  }, [onHub]);
 
   async function handleClockOut() {
     setClockingOut(true);
@@ -66,61 +87,91 @@ export function ShiftBar({ initial }: Readonly<{ initial: PosStaffDisplay | null
   }
 
   return (
-    <header data-testid="pos-shift-bar" className="flex h-14 items-center justify-between gap-3 border-b border-border/40 bg-card px-6">
-      <div className="flex items-center gap-4">
-        <p className="font-headline text-sm font-bold tracking-tight text-primary">RESTIQ</p>
-        <OfflineIndicatorPill testId="pos-status-online" />
-      </div>
-
-      {failed ? (
-        <LoadErrorPanel testId="pos-shift-bar-error" message="Couldn't clock out." onRetry={() => void handleClockOut()} />
-      ) : initial ? (
+    <>
+      <header data-testid="pos-shift-bar" className="flex h-14 items-center justify-between gap-3 border-b border-border/40 bg-card px-6">
         <div className="flex items-center gap-4">
-          <div className="text-right">
-            <p data-testid="pos-shift-bar-staff-name" className="text-sm font-medium text-foreground">
-              {initial.staff.name}
-            </p>
-            <p data-testid="pos-shift-bar-clock-status" className="text-xs text-muted-foreground">
-              {initial.outlet.name}
-            </p>
+          <p className="font-headline text-sm font-bold tracking-tight text-primary">RESTIQ</p>
+          <OfflineIndicatorPill testId="pos-status-online" hub={hub} />
+        </div>
+
+        {failed ? (
+          <LoadErrorPanel testId="pos-shift-bar-error" message="Couldn't clock out." onRetry={() => void handleClockOut()} />
+        ) : initial ? (
+          <div className="flex items-center gap-4">
+            <div className="text-right">
+              <p data-testid="pos-shift-bar-staff-name" className="text-sm font-medium text-foreground">
+                {initial.staff.name}
+              </p>
+              <p data-testid="pos-shift-bar-clock-status" className="text-xs text-muted-foreground">
+                {initial.outlet.name}
+              </p>
+            </div>
+            <Link
+              href="/pos/open-orders"
+              data-testid="pos-shift-bar-open-orders-link"
+              className="flex items-center gap-1.5 rounded-lg px-2 py-1.5 text-xs font-medium text-muted-foreground transition-colors hover:bg-accent hover:text-foreground focus:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+            >
+              <ClipboardList className="size-3.5" aria-hidden="true" /> Open orders
+            </Link>
+            <Link
+              href="/pos/shift"
+              data-testid="pos-shift-bar-shift-link"
+              className="flex items-center gap-1.5 rounded-lg px-2 py-1.5 text-xs font-medium text-muted-foreground transition-colors hover:bg-accent hover:text-foreground focus:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+            >
+              <Wallet className="size-3.5" aria-hidden="true" /> Shift
+            </Link>
+            <Link
+              href="/pos/payments"
+              data-testid="pos-shift-bar-payments-link"
+              className="flex items-center gap-1.5 rounded-lg px-2 py-1.5 text-xs font-medium text-muted-foreground transition-colors hover:bg-accent hover:text-foreground focus:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+            >
+              <Receipt className="size-3.5" aria-hidden="true" /> Payments
+            </Link>
+            <Link
+              href="/pos/status"
+              data-testid="pos-shift-bar-status-link"
+              className="flex items-center gap-1.5 rounded-lg px-2 py-1.5 text-xs font-medium text-muted-foreground transition-colors hover:bg-accent hover:text-foreground focus:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+            >
+              <MonitorSmartphone className="size-3.5" aria-hidden="true" /> Status
+            </Link>
+            {hub && canSeeSyncIssues && (
+              <Link
+                href="/pos/sync-issues"
+                data-testid="pos-shift-bar-sync-issues-link"
+                className="flex items-center gap-1.5 rounded-lg px-2 py-1.5 text-xs font-medium text-muted-foreground transition-colors hover:bg-accent hover:text-foreground focus:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+              >
+                <CloudAlert className="size-3.5" aria-hidden="true" /> Sync issues
+                {hub.rejections + hub.orphans > 0 && (
+                  <span data-testid="pos-shift-bar-sync-issues-count" className="rounded-full bg-status-alert px-1.5 text-[10px] font-semibold text-white">
+                    {hub.rejections + hub.orphans}
+                  </span>
+                )}
+              </Link>
+            )}
+            <button
+              type="button"
+              data-testid="pos-shift-bar-clock-out"
+              disabled={clockingOut}
+              onClick={() => void handleClockOut()}
+              className="rounded-lg border border-primary/50 px-3 py-1.5 text-xs font-semibold text-primary transition-colors hover:bg-primary/10 focus:outline-none focus-visible:ring-2 focus-visible:ring-ring disabled:opacity-50"
+            >
+              Clock Out
+            </button>
+            <button
+              type="button"
+              data-testid="pos-shift-bar-sign-out"
+              onClick={() => void handleSignOut()}
+              aria-label="Sign out"
+              className="flex items-center gap-1.5 rounded-lg px-2 py-1.5 text-xs text-muted-foreground transition-colors hover:bg-accent hover:text-foreground focus:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+            >
+              <LogOut className="size-3.5" aria-hidden="true" /> Sign out
+            </button>
           </div>
-          <Link
-            href="/pos/open-orders"
-            data-testid="pos-shift-bar-open-orders-link"
-            className="flex items-center gap-1.5 rounded-lg px-2 py-1.5 text-xs font-medium text-muted-foreground transition-colors hover:bg-accent hover:text-foreground focus:outline-none focus-visible:ring-2 focus-visible:ring-ring"
-          >
-            <ClipboardList className="size-3.5" aria-hidden="true" /> Open orders
-          </Link>
-          <Link
-            href="/pos/shift"
-            data-testid="pos-shift-bar-shift-link"
-            className="flex items-center gap-1.5 rounded-lg px-2 py-1.5 text-xs font-medium text-muted-foreground transition-colors hover:bg-accent hover:text-foreground focus:outline-none focus-visible:ring-2 focus-visible:ring-ring"
-          >
-            <Wallet className="size-3.5" aria-hidden="true" /> Shift
-          </Link>
-          <Link
-            href="/pos/payments"
-            data-testid="pos-shift-bar-payments-link"
-            className="flex items-center gap-1.5 rounded-lg px-2 py-1.5 text-xs font-medium text-muted-foreground transition-colors hover:bg-accent hover:text-foreground focus:outline-none focus-visible:ring-2 focus-visible:ring-ring"
-          >
-            <Receipt className="size-3.5" aria-hidden="true" /> Payments
-          </Link>
-          <Link
-            href="/pos/status"
-            data-testid="pos-shift-bar-status-link"
-            className="flex items-center gap-1.5 rounded-lg px-2 py-1.5 text-xs font-medium text-muted-foreground transition-colors hover:bg-accent hover:text-foreground focus:outline-none focus-visible:ring-2 focus-visible:ring-ring"
-          >
-            <MonitorSmartphone className="size-3.5" aria-hidden="true" /> Status
-          </Link>
-          <button
-            type="button"
-            data-testid="pos-shift-bar-clock-out"
-            disabled={clockingOut}
-            onClick={() => void handleClockOut()}
-            className="rounded-lg border border-primary/50 px-3 py-1.5 text-xs font-semibold text-primary transition-colors hover:bg-primary/10 focus:outline-none focus-visible:ring-2 focus-visible:ring-ring disabled:opacity-50"
-          >
-            Clock Out
-          </button>
+        ) : (
+          // Shouldn't happen - the proxy only lets a request in here with a
+          // valid pos_session, and the login/select-outlet routes always set
+          // pos_staff alongside it. Falls back to just Sign out rather than
+          // a dead end if the display cookie is ever missing anyway.
           <button
             type="button"
             data-testid="pos-shift-bar-sign-out"
@@ -130,22 +181,9 @@ export function ShiftBar({ initial }: Readonly<{ initial: PosStaffDisplay | null
           >
             <LogOut className="size-3.5" aria-hidden="true" /> Sign out
           </button>
-        </div>
-      ) : (
-        // Shouldn't happen - the proxy only lets a request in here with a
-        // valid pos_session, and the login/select-outlet routes always set
-        // pos_staff alongside it. Falls back to just Sign out rather than
-        // a dead end if the display cookie is ever missing anyway.
-        <button
-          type="button"
-          data-testid="pos-shift-bar-sign-out"
-          onClick={() => void handleSignOut()}
-          aria-label="Sign out"
-          className="flex items-center gap-1.5 rounded-lg px-2 py-1.5 text-xs text-muted-foreground transition-colors hover:bg-accent hover:text-foreground focus:outline-none focus-visible:ring-2 focus-visible:ring-ring"
-        >
-          <LogOut className="size-3.5" aria-hidden="true" /> Sign out
-        </button>
-      )}
-    </header>
+        )}
+      </header>
+      <HubLockBanner hub={hub} />
+    </>
   );
 }

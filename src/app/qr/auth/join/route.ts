@@ -65,5 +65,5 @@ export async function POST(request: Request): Promise<NextResponse> {
   }
 
   const data = (await upstream.json()) as GuestJoinResult;
-  return guestSessionResponse(data.token, { outletId, tableId, guestName: name.trim(), pin });
+  return guestSessionResponse(data.token, { outletId, tableId, guestName: name.trim(), pin }, request);
 }

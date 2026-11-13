@@ -1627,3 +1627,37 @@ Inside the RESTIQ Windows app (AusPosRest/restiq-desktop) the page gets
 - `openDrawerForTenders(tenders)` - after a successful finalise on the counter
   or table settle screen, opens the drawer when any tender is `cash`. The bill
   is already final, so a drawer failure is only logged.
+
+## Offline hub: LAN sign-in, hub status, Sync issues (issue #437)
+
+HUB-BUILD-PLAN W1-W3, built against the H6 contract (backend not built yet).
+
+- **LAN cookies (W1):** POS (and so KDS, which rides `pos_session`) and QR/kiosk
+  session cookies are `secure` only when the request came over https
+  (`src/lib/secure-cookie.ts#isHttpsRequest`: URL protocol or
+  `x-forwarded-proto: https`), not by `NODE_ENV`. A till on the shop hub over
+  plain `http://192.168.x.x` can sign in. Admin/ops cookies are unchanged.
+- **Hub status (W2):** `ShiftBar` calls `useHubStatus()`
+  (`(shell)/status/use-hub-status.ts`), polling `GET pos/v1/hub/status` every
+  10 s. A 404 means "not on a hub": it stops polling and the pill keeps the
+  browser online/offline signal. On a hub the pill (`pos-status-online`,
+  `data-hub="true"`) reads "Online" or "Offline · N sales waiting to sync"
+  (`outboxDepth`), and `HubLockBanner` (`pos-hub-lock-banner`,
+  `data-reason`) shows under the bar while `locked`: offline-limit says new
+  sales are paused since `mustSyncBefore` and open bills can still be closed
+  and printed (D-8); revoked says the owner removed the till. A 423
+  `offline_locked` on a new sale shows its message through the existing
+  `PosApiError` error displays (e.g. `table-map-action-error`).
+- **Sync issues (W3):** `/pos/sync-issues` lists `GET pos/v1/hub/rejections`
+  (time, source "Rejected by cloud" / "Never synced", type, code, message) with
+  an Acknowledge button per row (`POST .../:opId/acknowledge`, row removed on
+  204, hub message shown on failure). The shift-bar link
+  (`pos-shift-bar-sync-issues-link`, count badge = rejections + orphans) shows
+  only on a hub and only after `hub/rejections` answers 200 - the POS has no
+  permission list, so the hub's `settle_bills` check (D-7) decides.
+- **Tests:** `pos/auth/session-cookies.test.ts`, `qr/auth/session-cookies.test.ts`,
+  `status/offline-indicator-pill.test.tsx`, `status/use-hub-status.test.tsx`,
+  `sync-issues/sync-issues-screen.test.tsx`, hub cases in `shift-bar.test.tsx`,
+  423 case in `table-map.test.tsx`.
+- **Backend dependency:** H6 must put `settle_bills` on `hub/rejections` (and
+  acknowledge), or every staff member will see the link.

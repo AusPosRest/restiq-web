@@ -60,5 +60,5 @@ export async function POST(request: Request): Promise<NextResponse> {
   }
 
   const data = (await upstream.json()) as GuestStartResult;
-  return guestSessionResponse(data.token, { outletId, tableId, guestName: name.trim(), pin: data.pin });
+  return guestSessionResponse(data.token, { outletId, tableId, guestName: name.trim(), pin: data.pin }, request);
 }

@@ -45,5 +45,5 @@ export async function POST(request: Request): Promise<NextResponse> {
   }
 
   const data = (await upstream.json()) as PosLoginResult;
-  return posLoginResponse(data);
+  return posLoginResponse(data, request);
 }

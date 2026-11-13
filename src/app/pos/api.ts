@@ -617,3 +617,38 @@ export type { CardReaderView };
 export function listCardReaders(outletId: string): Promise<{ readers: CardReaderView[] }> {
   return posApi<{ readers: CardReaderView[] }>(`outlets/${encodeURIComponent(outletId)}/card-readers`);
 }
+
+// --- Offline hub (HUB-BUILD-PLAN H6, restiq-web#437). Only the shop's local hub
+// serves these; the cloud answers 404, which callers read as "not on a hub".
+export interface HubStatus {
+  online: boolean;
+  lastSyncAt: string | null;
+  outboxDepth: number;
+  mustSyncBefore: string | null;
+  locked: boolean;
+  lockReason: "offline_limit" | "revoked" | null;
+  rejections: number;
+  orphans: number;
+}
+
+export interface HubRejection {
+  opId: string;
+  type: string;
+  code: string;
+  message: string;
+  at: string;
+  source: "cloud" | "orphan";
+}
+
+export function getHubStatus(): Promise<HubStatus> {
+  return posApi<HubStatus>("hub/status");
+}
+
+/** Gated on `settle_bills` by the hub (D-7): a 403 means this staff member may not see Sync issues. */
+export function listHubRejections(): Promise<{ items: HubRejection[] }> {
+  return posApi<{ items: HubRejection[] }>("hub/rejections");
+}
+
+export function acknowledgeHubRejection(opId: string): Promise<null> {
+  return posApi<null>(`hub/rejections/${encodeURIComponent(opId)}/acknowledge`, { method: "POST" });
+}

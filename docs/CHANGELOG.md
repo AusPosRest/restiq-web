@@ -5,6 +5,11 @@ logged, per feature and date, in `wiki/tasks/completed.md`; this file starts
 with the payments epic.
 
 
+## Unreleased - offline hub status and sync issues (#437)
+
+- POS/KDS and QR/kiosk sign-in work over plain http on the shop LAN: session cookies are `secure` only on https requests.
+- POS on a shop hub: the status pill shows "Online" or "Offline · N sales waiting to sync", a red banner explains when new sales are locked (offline too long, or till removed), and managers (`settle_bills`) get a Sync issues screen to review and acknowledge rejected or never-synced sales. Off a hub nothing changes.
+
 ## Unreleased - per-restaurant billing contracts (#433)
 
 - Ops: tenant Subscription tab has a "Billing contract" card: typed line items (description, qty, amount per billing period, every period or one-time) that replace the plan price; "Start from plan price", live per-period and next-invoice totals, saved with an audited reason. Billed one-time lines are read-only; with card billing active, changes apply from the next invoice, and a Stripe sync failure is shown inline (the contract stays saved; Save again retries).
