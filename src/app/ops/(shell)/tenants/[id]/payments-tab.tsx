@@ -20,6 +20,8 @@ const LABEL_CLASSES = "font-label mb-1.5 block text-xs font-semibold uppercase t
 
 export function PaymentsTab({ tenantId }: Readonly<{ tenantId: string }>) {
   const { loading, failed, status, data, retry } = useOpsLoad<{ payments: PaymentsView }>(`tenants/${tenantId}/payments`);
+  // Lives here, not in PaymentsBody: the reload after creating a link remounts the body.
+  const [link, setLink] = useState<StripeLink | null>(null);
 
   if (loading) {
     return (
@@ -40,13 +42,12 @@ export function PaymentsTab({ tenantId }: Readonly<{ tenantId: string }>) {
     return <LoadErrorPanel message="Payments could not be loaded." onRetry={retry} testId="payments-error" />;
   }
   const view = data.payments;
-  return <PaymentsBody key={JSON.stringify(formFromPayments(view))} tenantId={tenantId} view={view} reload={retry} />;
+  return <PaymentsBody key={JSON.stringify(formFromPayments(view))} tenantId={tenantId} view={view} reload={retry} link={link} setLink={setLink} />;
 }
 
-function PaymentsBody({ tenantId, view, reload }: Readonly<{ tenantId: string; view: PaymentsView; reload: () => void }>) {
+function PaymentsBody({ tenantId, view, reload, link, setLink }: Readonly<{ tenantId: string; view: PaymentsView; reload: () => void; link: StripeLink | null; setLink: (link: StripeLink) => void }>) {
   const toast = useToast();
   const [form, setForm] = useState<PaymentsForm>(() => formFromPayments(view));
-  const [link, setLink] = useState<StripeLink | null>(null);
   const [linkBusy, setLinkBusy] = useState(false);
   const [confirming, setConfirming] = useState(false);
   const [saving, setSaving] = useState(false);
