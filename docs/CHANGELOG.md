@@ -8,6 +8,7 @@ with the payments epic.
 
 ### Added
 - **Stripe payments in the ops console** (#425, needs restiq-backend#282): tenant detail has a Payments tab (Stripe connect status, onboarding link to copy or open, accepted methods Card / Apple Pay / Google Pay, platform fee percent + fixed; saves are audited). The Subscription tab gains Card billing with a billing link. New public `/stripe/done` page is where Stripe sends owners afterwards.
+- **Dev environment** (#423): `pnpm run deploy:dev` builds with the dev API (`restiq-backend-dev.fly.dev`) and base domain and deploys the `restiq-web-dev` Worker on `dev.niftypos.com.au/*`.
 
 ### Changed
 - **Production domain is niftypos.com.au** (#421): Worker routes, `NEXT_PUBLIC_API_URL` (`https://api.niftypos.com.au`) and `NEXT_PUBLIC_BASE_DOMAIN` move off dailypos.shop; tenant subdomains are now `<slug>.niftypos.com.au`.
