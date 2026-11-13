@@ -5,6 +5,10 @@ logged, per feature and date, in `wiki/tasks/completed.md`; this file starts
 with the payments epic.
 
 
+## Unreleased - per-restaurant billing contracts (#433)
+
+- Ops: tenant Subscription tab has a "Billing contract" card: typed line items (description, qty, amount per billing period, every period or one-time) that replace the plan price; "Start from plan price", live per-period and next-invoice totals, saved with an audited reason. Billed one-time lines are read-only; with card billing active, changes apply from the next invoice, and a Stripe sync failure is shown inline (the contract stays saved; Save again retries).
+
 ## Unreleased - owner console gaps from the full demo (#431)
 
 - Menu: a new add-on group's options take an extra price ("Bacon +A$4.50"); blank is free, negative or invalid prices are blocked.
