@@ -30,7 +30,8 @@ export interface PaymentIntentView {
   /** Set for a per-guest share intent; null for a whole-bill (pay-all or POS) intent. */
   shareGuestId: string | null;
   rail: PaymentRail;
-  provider: PaymentProviderKind;
+  /** `stripe` = a card_terminal intent on a Stripe smart reader (restiq-web#429) - not a configurable settings provider. */
+  provider: PaymentProviderKind | "stripe";
   amountMinor: number;
   currency: "INR" | "AUD";
   status: PaymentIntentStatus;
@@ -42,6 +43,9 @@ export interface PaymentIntentView {
   succeededAt: string | null;
   /** The Tender written by the confirmation - set only once `status === "succeeded"` (ADR-001). */
   tenderId: string | null;
+  /** Stripe smart reader the POS sent this card_terminal intent to (restiq-web#429); absent/null for the simulated terminal. */
+  readerId?: string | null;
+  readerLabel?: string | null;
 }
 
 export const PAYMENT_RAIL_LABEL: Record<PaymentRail, string> = {

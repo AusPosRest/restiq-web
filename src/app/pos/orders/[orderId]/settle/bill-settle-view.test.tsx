@@ -536,6 +536,19 @@ describe("BillSettleView - card terminal (issue #188)", () => {
     expect(screen.getByTestId("intent-cancel")).toBeTruthy();
   });
 
+  it("#286: brings back a Stripe reader payment still waiting after a reload (it is never in the terminal queue)", async () => {
+    const onReader = { ...pending, provider: "stripe", readerId: "rdr-1", readerLabel: "Counter 1" };
+    stubFetch({
+      "GET bills/bill-1/intents/active": () => jsonResponse({ intent: onReader }),
+      "GET outlets/outlet-1/payment-intents": () => jsonResponse([]),
+      "GET payment-intents/pi-1": () => jsonResponse(onReader),
+    });
+    render(<BillSettleView orderId={ORDER_ID} />);
+    const panel = await screen.findByTestId("intent-panel");
+    expect(panel.getAttribute("data-phase")).toBe("showing");
+    expect(screen.getByTestId("intent-cancel")).toBeTruthy();
+  });
+
   it("shows the server's plain reason when there is no card terminal, and keeps the other ways to pay (PE-22)", async () => {
     const message = "No card terminal is set up for this till. Take the card on your own machine and record it as External, or choose Cash or UPI.";
     stubFetch({ "POST bills/bill-1/intents": () => jsonResponse({ error: { code: "no_terminal", message } }, 409) });
@@ -594,5 +607,167 @@ describe("BillSettleView - card terminal (issue #188)", () => {
     await userEvent.click(screen.getByTestId("intent-retry"));
     expect(screen.getByTestId("tender-remaining").textContent).toBe("₹819.00");
     expect(screen.queryByTestId("tender-captured-list")).toBeNull();
+  });
+});
+
+describe("BillSettleView - Stripe card readers (restiq-web#429)", () => {
+  const readerIntent: PaymentIntentView = {
+    id: "pi-s1",
+    billId: "bill-1",
+    shareGuestId: null,
+    rail: "card_terminal",
+    provider: "stripe",
+    amountMinor: 81900,
+    currency: "INR",
+    status: "pending",
+    failureReason: null,
+    providerRef: "pi_123",
+    client: {},
+    createdAt: "2026-11-13T10:00:00.000Z",
+    expiresAt: "2099-01-01T00:00:00.000Z",
+    succeededAt: null,
+    tenderId: null,
+    readerId: "rdr-front",
+    readerLabel: "Front counter",
+  };
+  const front = { id: "rdr-front", outletId: "outlet-1", outletName: "Main", label: "Front counter", deviceType: "stripe_s700", serialNumber: "S1", status: "online", simulated: true };
+  const bar = { ...front, id: "rdr-bar", label: "Bar", serialNumber: "S2" };
+  const patio = { ...front, id: "rdr-patio", label: "Patio", serialNumber: "S3", status: "offline" };
+
+  it("auto-picks a single reader, sends its id, waits on it, and records the tender like the terminal flow", async () => {
+    let polls = 0;
+    const captured = { id: "tender-s1", method: "card_terminal" as const, amountMinor: 81900, paymentIntentId: "pi-s1", riskAcknowledged: false, createdAt: "2026-11-13T10:00:30.000Z" };
+    stubFetch({
+      "GET outlets/outlet-1/card-readers": () => jsonResponse({ readers: [front] }),
+      "POST bills/bill-1/intents": (init) => {
+        expect(JSON.parse(String(init?.body))).toMatchObject({ rail: "card_terminal", amountMinor: 81900, readerId: "rdr-front" });
+        return jsonResponse(readerIntent, 201);
+      },
+      "GET payment-intents/pi-s1": () => {
+        polls += 1;
+        return jsonResponse(polls < 2 ? readerIntent : { ...readerIntent, status: "succeeded", tenderId: "tender-s1" });
+      },
+      "GET bills/bill-1": () => jsonResponse(makeBill({ tenders: [captured] })),
+    });
+    render(<BillSettleView orderId={ORDER_ID} />);
+    await screen.findByTestId("bill-summary");
+
+    await userEvent.click(screen.getByTestId("tender-method-card_terminal"));
+    expect((await screen.findByTestId("tender-reader-single")).textContent).toContain("Front counter");
+    await userEvent.click(screen.getByTestId("tender-fill-remaining"));
+
+    expect((await screen.findByTestId("intent-reader-waiting")).textContent).toBe("Tap, insert or swipe on Front counter");
+    expect(screen.getByTestId("intent-amount").textContent).toBe("₹819.00");
+    expect(screen.getByTestId("intent-cancel")).toBeTruthy();
+
+    const panel = screen.getByTestId("intent-panel");
+    await waitFor(() => expect(panel.getAttribute("data-phase")).toBe("paid"), { timeout: 4000 });
+    await userEvent.click(screen.getByTestId("intent-dismiss"));
+    expect(screen.getByTestId("tender-captured-server-tender-s1")).toBeTruthy();
+    await waitFor(() => expect(screen.getByTestId("finalize-bill").hasAttribute("disabled")).toBe(false));
+  });
+
+  it("offers a picker with several readers, shows an offline one as unavailable, and sends the chosen one", async () => {
+    stubFetch({
+      "GET outlets/outlet-1/card-readers": () => jsonResponse({ readers: [front, bar, patio] }),
+      "POST bills/bill-1/intents": (init) => {
+        expect(JSON.parse(String(init?.body)).readerId).toBe("rdr-bar");
+        return jsonResponse({ ...readerIntent, readerId: "rdr-bar", readerLabel: "Bar" }, 201);
+      },
+      "GET payment-intents/pi-s1": () => jsonResponse({ ...readerIntent, readerId: "rdr-bar", readerLabel: "Bar" }),
+    });
+    render(<BillSettleView orderId={ORDER_ID} />);
+    await screen.findByTestId("bill-summary");
+    await userEvent.click(screen.getByTestId("tender-method-card_terminal"));
+
+    expect((await screen.findByTestId("tender-reader-rdr-front")).getAttribute("aria-pressed")).toBe("true");
+    const offline = screen.getByTestId("tender-reader-rdr-patio");
+    expect(offline.hasAttribute("disabled")).toBe(true);
+    expect(offline.textContent).toContain("offline");
+
+    await userEvent.click(screen.getByTestId("tender-reader-rdr-bar"));
+    expect(screen.getByTestId("tender-reader-rdr-bar").getAttribute("aria-pressed")).toBe("true");
+    await userEvent.click(screen.getByTestId("tender-fill-remaining"));
+    expect((await screen.findByTestId("intent-reader-waiting")).textContent).toBe("Tap, insert or swipe on Bar");
+  });
+
+  it("can't send when the only reader is offline", async () => {
+    stubFetch({ "GET outlets/outlet-1/card-readers": () => jsonResponse({ readers: [patio] }) });
+    render(<BillSettleView orderId={ORDER_ID} />);
+    await screen.findByTestId("bill-summary");
+    await userEvent.click(screen.getByTestId("tender-method-card_terminal"));
+    expect((await screen.findByTestId("tender-reader-single")).textContent).toContain("offline");
+    expect(screen.getByTestId("tender-fill-remaining").hasAttribute("disabled")).toBe(true);
+  });
+
+  it("simulates a decline in sandbox, shows Stripe's reason, and Retry re-sends the same amount", async () => {
+    const declined = { ...readerIntent, status: "failed" as const, failureReason: "Your card was declined." };
+    let created = 0;
+    let declinedYet = false;
+    stubFetch({
+      "GET outlets/outlet-1/card-readers": () => jsonResponse({ readers: [front] }),
+      "POST bills/bill-1/intents": (init) => {
+        created += 1;
+        expect(JSON.parse(String(init?.body))).toMatchObject({ amountMinor: 81900, readerId: "rdr-front" });
+        return jsonResponse(created === 1 ? readerIntent : { ...readerIntent, id: "pi-s2" }, 201);
+      },
+      "GET payment-intents/pi-s1": () => jsonResponse(declinedYet ? declined : readerIntent),
+      "GET payment-intents/pi-s2": () => jsonResponse({ ...readerIntent, id: "pi-s2" }),
+      "POST payment-intents/pi-s1/simulate": (init) => {
+        expect(JSON.parse(String(init?.body))).toEqual({ outcome: "failure" });
+        declinedYet = true;
+        return jsonResponse(declined);
+      },
+    });
+    render(<BillSettleView orderId={ORDER_ID} />);
+    await screen.findByTestId("bill-summary");
+    await userEvent.click(screen.getByTestId("tender-method-card_terminal"));
+    await screen.findByTestId("tender-reader-single");
+    await userEvent.click(screen.getByTestId("tender-fill-remaining"));
+
+    await userEvent.click(await screen.findByTestId("intent-simulate-decline"));
+    expect((await screen.findByTestId("intent-failure-reason")).textContent).toBe("Your card was declined.");
+    expect(screen.getByTestId("intent-retry").textContent).toBe("Use another method");
+
+    await userEvent.click(screen.getByTestId("intent-reader-retry"));
+    await waitFor(() => expect(created).toBe(2));
+    await screen.findByTestId("intent-reader-waiting");
+  });
+
+  it("hides the simulate buttons after a 404 (live key)", async () => {
+    stubFetch({
+      "GET outlets/outlet-1/card-readers": () => jsonResponse({ readers: [front] }),
+      "POST bills/bill-1/intents": () => jsonResponse(readerIntent, 201),
+      "GET payment-intents/pi-s1": () => jsonResponse(readerIntent),
+      "POST payment-intents/pi-s1/simulate": () => jsonResponse({ error: { code: "not_found", message: "Not found" } }, 404),
+    });
+    render(<BillSettleView orderId={ORDER_ID} />);
+    await screen.findByTestId("bill-summary");
+    await userEvent.click(screen.getByTestId("tender-method-card_terminal"));
+    await screen.findByTestId("tender-reader-single");
+    await userEvent.click(screen.getByTestId("tender-fill-remaining"));
+
+    await userEvent.click(await screen.findByTestId("intent-simulate-approve"));
+    await waitFor(() => expect(screen.queryByTestId("intent-simulate-approve")).toBeNull());
+    expect(screen.queryByTestId("intent-error")).toBeNull();
+    expect(screen.getByTestId("intent-reader-waiting")).toBeTruthy();
+  });
+
+  it("Cancel on a reader intent calls the existing cancel", async () => {
+    const fetchMock = stubFetch({
+      "GET outlets/outlet-1/card-readers": () => jsonResponse({ readers: [front] }),
+      "POST bills/bill-1/intents": () => jsonResponse(readerIntent, 201),
+      "GET payment-intents/pi-s1": () => jsonResponse(readerIntent),
+      "POST payment-intents/pi-s1/cancel": () => jsonResponse({ ...readerIntent, status: "cancelled" }),
+    });
+    render(<BillSettleView orderId={ORDER_ID} />);
+    await screen.findByTestId("bill-summary");
+    await userEvent.click(screen.getByTestId("tender-method-card_terminal"));
+    await screen.findByTestId("tender-reader-single");
+    await userEvent.click(screen.getByTestId("tender-fill-remaining"));
+    await userEvent.click(await screen.findByTestId("intent-cancel"));
+
+    await waitFor(() => expect(screen.getByTestId("intent-panel").getAttribute("data-phase")).toBe("retry"));
+    expect(fetchMock.mock.calls.some(([input, init]) => String(input).includes("payment-intents/pi-s1/cancel") && init?.method === "POST")).toBe(true);
   });
 });

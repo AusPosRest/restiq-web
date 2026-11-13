@@ -261,7 +261,7 @@ export function TenantDetailPage() {
           <DevicesTable tenantId={tenant.id} tenantName={tenant.name} tenantOutlets={detail.outlets.map((o) => ({ id: o.id, name: o.name }))} />
         )}
         {tab === "subscription" && <SubscriptionTab tenantId={tenant.id} tenantStatus={tenant.status} />}
-        {tab === "payments" && <PaymentsTab tenantId={tenant.id} />}
+        {tab === "payments" && <PaymentsTab tenantId={tenant.id} outlets={detail.outlets.map((o) => ({ id: o.id, name: o.name, address: o.address }))} />}
         {tab === "capabilities" && <CapabilitiesTab outlets={detail.outlets} />}
         {tab === "owners" && <OwnersTab detail={detail} />}
         {tab === "agreements" && <AgreementsTab tenantId={tenant.id} />}

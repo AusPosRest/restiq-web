@@ -4,6 +4,13 @@ Format per `coding-standards/conventions/issue-workflow.md`. Earlier work is
 logged, per feature and date, in `wiki/tasks/completed.md`; this file starts
 with the payments epic.
 
+
+## Unreleased - card readers (#429)
+
+- Ops: tenant Payments tab lists, registers (incl. a sandbox simulated reader) and removes Stripe card readers, and manages that tenant's reader orders; new Reader orders page across tenants; reader prices per country on Plans.
+- Owner admin: Settings > Card readers shows their readers and orders and lets them order readers, paid now with the card on file.
+- POS: the card terminal tender sends the payment to the outlet's Stripe reader (picker when several, offline readers unavailable), waits for the tap with Cancel, shows declines with Retry; sandbox shows Simulate approve / decline. Outlets without readers keep the simulated terminal.
+
 ## [Unreleased]
 
 ### Added
