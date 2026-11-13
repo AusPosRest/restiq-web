@@ -144,6 +144,13 @@ export interface SubscriptionView {
   currentPeriodEnd: string;
   suspendedAt: string | null;
   graceWindowHours: number;
+  /** restiq-backend#282: card billing on the platform's Stripe account. */
+  cardBilling: {
+    status: "not_set_up" | "pending" | "active" | "past_due" | "canceled";
+    /** What each period charges; null when no price is set. */
+    amountMinor: string | null;
+    currency: "AUD" | "INR";
+  };
 }
 
 export interface InvoiceView {
@@ -277,4 +284,27 @@ export interface PlanPriceView {
   annualDiscountPercent: number;
   currency: "AUD" | "INR";
   updatedAt: string;
+}
+
+// --- Stripe payments for a restaurant (restiq-backend#282).
+
+export type PaymentMethod = "card" | "apple_pay" | "google_pay";
+
+export interface PaymentsView {
+  tenantId: string;
+  stripeAccountId: string | null;
+  status: "not_connected" | "onboarding" | "restricted" | "active";
+  requirementsDue: number;
+  allowedMethods: PaymentMethod[];
+  /** Platform fee in basis points (250 = 2.5%). */
+  feePercentBps: number;
+  /** Platform fixed fee per payment, minor units. */
+  feeFixedMinor: string;
+  currency: "AUD" | "INR";
+}
+
+/** A single-use Stripe link ops copies to the owner. */
+export interface StripeLink {
+  url: string;
+  expiresAt: string;
 }

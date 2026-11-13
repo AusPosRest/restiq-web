@@ -18,12 +18,13 @@ import { useOpsLoad } from "../../use-ops-load";
 import { DevicesTable } from "../../devices/devices-table";
 import { CapabilitiesTab } from "./capabilities-tab";
 import { AgreementsTab } from "./agreements-tab";
+import { PaymentsTab } from "./payments-tab";
 import { SubscriptionTab } from "./subscription-tab";
 import { OutletsTab, OverviewTab, OwnersTab } from "./tabs";
 import { DATE_LOCALE } from "@/lib/datetime";
 
 // Branding is the owner's job (Settings > Branding); ops no longer edits it (walkthrough cut).
-const TABS = ["overview", "outlets", "devices", "subscription", "capabilities", "owners", "agreements"] as const;
+const TABS = ["overview", "outlets", "devices", "subscription", "payments", "capabilities", "owners", "agreements"] as const;
 export type TabKey = (typeof TABS)[number];
 
 type LifecycleAction = "activate" | "deactivate" | "reactivate" | "delete";
@@ -94,6 +95,7 @@ const TAB_LABELS: Record<TabKey, string> = {
   outlets: "Outlets",
   devices: "Devices",
   subscription: "Subscription",
+  payments: "Payments",
   capabilities: "Capabilities",
   owners: "Owners",
   agreements: "Agreements",
@@ -259,6 +261,7 @@ export function TenantDetailPage() {
           <DevicesTable tenantId={tenant.id} tenantName={tenant.name} tenantOutlets={detail.outlets.map((o) => ({ id: o.id, name: o.name }))} />
         )}
         {tab === "subscription" && <SubscriptionTab tenantId={tenant.id} tenantStatus={tenant.status} />}
+        {tab === "payments" && <PaymentsTab tenantId={tenant.id} />}
         {tab === "capabilities" && <CapabilitiesTab outlets={detail.outlets} />}
         {tab === "owners" && <OwnersTab detail={detail} />}
         {tab === "agreements" && <AgreementsTab tenantId={tenant.id} />}

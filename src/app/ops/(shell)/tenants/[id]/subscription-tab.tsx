@@ -7,14 +7,17 @@
 // result toast) - never optimistic, per EXPERIENCE.md's money/fleet-affecting
 // rule.
 import { PauseCircle, PlayCircle, ShieldAlert } from "lucide-react";
+import Link from "next/link";
 import { useState } from "react";
-import { InvoiceView, opsApi, OpsApiError, SubscriptionView } from "../../api";
+import { Button } from "@/components/ui/button";
+import { InvoiceView, opsApi, OpsApiError, StripeLink, SubscriptionView } from "../../api";
 import { ConfirmReasonDialog } from "../../confirm-reason-dialog";
 import { LoadErrorPanel, Skeleton } from "../../data-states";
 import { StatusBadge } from "../../status-badge";
 import { useToast } from "../../toast";
 import { useOpsLoad } from "../../use-ops-load";
 import { DATE_LOCALE } from "@/lib/datetime";
+import { StripeLinkResult } from "./stripe-link";
 
 function formatDate(iso: string): string {
   return new Date(iso).toLocaleDateString(DATE_LOCALE, { day: "2-digit", month: "short", year: "numeric" });
@@ -30,6 +33,25 @@ export function SubscriptionTab({ tenantId, tenantStatus }: Readonly<{ tenantId:
   const invoices = useOpsLoad<{ invoices: InvoiceView[] }>(`tenants/${tenantId}/subscription/invoices`);
   const [confirmKind, setConfirmKind] = useState<"suspend" | "reactivate" | null>(null);
   const [busy, setBusy] = useState(false);
+  const [billingLink, setBillingLink] = useState<StripeLink | null>(null);
+  const [billingBusy, setBillingBusy] = useState(false);
+  const [billingError, setBillingError] = useState<{ priceNotSet: boolean; message: string } | null>(null);
+
+  async function createBillingLink() {
+    setBillingBusy(true);
+    setBillingError(null);
+    try {
+      setBillingLink(await opsApi<StripeLink>(`tenants/${tenantId}/subscription/billing-link`, { method: "POST", body: "{}" }));
+      retry();
+    } catch (error) {
+      setBillingError({
+        priceNotSet: error instanceof OpsApiError && error.code === "price_not_set",
+        message: error instanceof OpsApiError ? error.message : "Could not create the billing link.",
+      });
+    } finally {
+      setBillingBusy(false);
+    }
+  }
 
   async function confirm(reason: string) {
     if (!confirmKind) return;
@@ -138,6 +160,39 @@ export function SubscriptionTab({ tenantId, tenantStatus }: Readonly<{ tenantId:
               -hour grace window.
             </span>
           </div>
+        )}
+      </div>
+
+      <div className="rounded-lg border border-border/40 bg-card p-5" data-testid="card-billing">
+        <h3 className="font-headline text-base font-semibold">Card billing</h3>
+        <div className="mt-2 flex flex-wrap items-center gap-3 text-sm">
+          <StatusBadge status={sub.cardBilling.status} testId="card-billing-status" />
+          <span className="text-muted-foreground" data-testid="card-billing-amount">
+            {sub.cardBilling.amountMinor === null
+              ? "No price set"
+              : `${sub.cardBilling.currency} ${formatAmount(sub.cardBilling.amountMinor)} per ${sub.billingPeriod === "annual" ? "year" : "month"}`}
+          </span>
+        </div>
+        {(sub.cardBilling.status === "not_set_up" || sub.cardBilling.status === "canceled" || sub.cardBilling.status === "pending") && (
+          <Button className="mt-4" size="sm" data-testid="card-billing-link" disabled={billingBusy} onClick={() => void createBillingLink()}>
+            {billingBusy ? "Working..." : sub.cardBilling.status === "pending" ? "New billing link" : "Set up card billing"}
+          </Button>
+        )}
+        {billingError && (
+          <p role="alert" className="mt-3 text-sm text-status-critical" data-testid="card-billing-error">
+            {billingError.message}
+            {billingError.priceNotSet && (
+              <>
+                {" "}
+                <Link href="/ops/plans" className="underline">
+                  Set the price on the Plans page.
+                </Link>
+              </>
+            )}
+          </p>
+        )}
+        {billingLink && (
+          <StripeLinkResult link={billingLink} testId="card-billing-link-result" note="Send this link to the restaurant owner. They enter a card once and it is charged automatically each period." />
         )}
       </div>
 
