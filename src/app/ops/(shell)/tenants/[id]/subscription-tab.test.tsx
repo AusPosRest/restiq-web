@@ -20,6 +20,7 @@ function subscription(overrides: Partial<SubscriptionView> = {}): SubscriptionVi
     currentPeriodEnd: "2026-08-31T00:00:00.000Z",
     suspendedAt: null,
     graceWindowHours: 72,
+    cardBilling: { status: "not_set_up", amountMinor: "4900", currency: "AUD" },
     ...overrides,
   };
 }
@@ -78,6 +79,30 @@ describe("SubscriptionTab", () => {
     expect(screen.getByTestId("subscription-suspended-banner")).toBeTruthy();
     expect(screen.getByTestId("subscription-reactivate")).toBeTruthy();
     expect(screen.queryByTestId("subscription-suspend")).toBeNull();
+  });
+
+  it("card billing: shows status and amount, creates a billing link", async () => {
+    renderTab(subscription(), (url, init) =>
+      url.endsWith("/subscription/billing-link") && init?.method === "POST"
+        ? jsonResponse({ url: "https://checkout.stripe.test/x", expiresAt: "2026-08-24T00:00:00.000Z" })
+        : undefined,
+    );
+    await screen.findByTestId("subscription-tab");
+    expect(screen.getByTestId("card-billing-status").textContent).toBe("not set up");
+    expect(screen.getByTestId("card-billing-amount").textContent).toContain("49.00");
+    await userEvent.click(screen.getByTestId("card-billing-link"));
+    expect((await screen.findByTestId("card-billing-link-result-url") as HTMLInputElement).value).toBe("https://checkout.stripe.test/x");
+  });
+
+  it("card billing: price_not_set points to the Plans page", async () => {
+    renderTab(subscription(), (url, init) =>
+      url.endsWith("/subscription/billing-link") && init?.method === "POST"
+        ? jsonResponse({ error: { code: "price_not_set", message: "No monthly price is set." } }, 409)
+        : undefined,
+    );
+    await screen.findByTestId("subscription-tab");
+    await userEvent.click(screen.getByTestId("card-billing-link"));
+    expect((await screen.findByTestId("card-billing-error")).textContent).toContain("Plans page");
   });
 
   it("maps arrears to the warning badge", async () => {
