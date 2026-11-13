@@ -650,6 +650,7 @@ function DrawerBody({
             <ModifierGroupsSection
               catalog={modifierGroupCatalog}
               selectedIds={selectedGroupIds}
+              currency={currency}
               onToggle={(id) => void handleToggleModifierGroup(id)}
               onCreate={async (input) => {
                 const created = await createModifierGroup(input);
@@ -903,11 +904,13 @@ function PriceRow({
 function ModifierGroupsSection({
   catalog,
   selectedIds,
+  currency,
   onToggle,
   onCreate,
 }: Readonly<{
   catalog: ModifierGroupView[];
   selectedIds: string[];
+  currency: string;
   onToggle: (id: string) => void;
   onCreate: (input: { name: string; minSelections: number; maxSelections: number; modifiers: Array<{ name: string; priceMinor: number }> }) => Promise<void>;
 }>) {
@@ -916,6 +919,9 @@ function ModifierGroupsSection({
   const [min, setMin] = useState(0);
   const [max, setMax] = useState(1);
   const [optionName, setOptionName] = useState("");
+  // #431: the add-on's extra charge; blank means free.
+  const [optionPrice, setOptionPrice] = useState("");
+  const optionPriceError = optionPrice.trim() ? priceInputError(optionPrice) : undefined;
   const [options, setOptions] = useState<Array<{ name: string; priceMinor: number }>>([]);
   const draftGroup = { name, minSelections: min, maxSelections: max, modifiers: options.map((o, i) => ({ id: String(i), ...o })) };
   const draftErrors = validateModifierGroup(draftGroup);
@@ -978,7 +984,10 @@ function ModifierGroupsSection({
           <div className="space-y-1">
             {options.map((option, index) => (
               <div key={index} className="flex items-center justify-between text-sm">
-                <span>{option.name}</span>
+                <span>
+                  {option.name}
+                  {option.priceMinor > 0 && <span className="ml-2 text-muted-foreground">+{formatPriceMinor(option.priceMinor, currency)}</span>}
+                </span>
                 <button type="button" onClick={() => setOptions((current) => current.filter((_, i) => i !== index))} className="text-muted-foreground hover:text-status-error">
                   ✕
                 </button>
@@ -997,20 +1006,35 @@ function ModifierGroupsSection({
                 onChange={(event) => setOptionName(event.target.value)}
                 className={`${FIELD_CLASS} flex-1`}
               />
+              <input
+                data-testid="new-modifier-group-option-price"
+                aria-label="Extra price"
+                inputMode="decimal"
+                value={optionPrice}
+                placeholder="+ price"
+                onChange={(event) => setOptionPrice(event.target.value)}
+                className={`${FIELD_CLASS} w-24`}
+              />
               <Button
                 type="button"
                 variant="secondary"
                 size="sm"
                 data-testid="new-modifier-group-add-option"
-                disabled={!optionName.trim()}
+                disabled={!optionName.trim() || optionPriceError !== undefined}
                 onClick={() => {
-                  setOptions((current) => [...current, { name: optionName.trim(), priceMinor: 0 }]);
+                  setOptions((current) => [...current, { name: optionName.trim(), priceMinor: majorStringToPriceMinor(optionPrice) ?? 0 }]);
                   setOptionName("");
+                  setOptionPrice("");
                 }}
               >
                 + Add option
               </Button>
             </div>
+            {optionPriceError && (
+              <p data-testid="new-modifier-group-option-price-error" className="text-xs text-status-error">
+                {optionPriceError}
+              </p>
+            )}
           </div>
           <div className="flex justify-end gap-2">
             <Button type="button" variant="secondary" size="sm" onClick={() => setCreating(false)}>

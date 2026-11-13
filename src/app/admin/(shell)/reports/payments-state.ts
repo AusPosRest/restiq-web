@@ -29,7 +29,7 @@ import type { TaxBreakdownEntry } from "@/lib/tax-lines";
 export type { TaxLine } from "@/lib/tax-lines";
 export type PaymentTaxBreakdownEntry = TaxBreakdownEntry;
 
-export type PaymentSource = "pos" | "qr";
+export type PaymentSource = "pos" | "qr" | "kiosk";
 
 export interface PaymentRow {
   billId: string;
@@ -160,7 +160,7 @@ export function tableOrTokenLabel(row: Pick<PaymentRow, "tableLabel" | "tokenNum
 }
 
 export function sourceLabel(source: PaymentSource): string {
-  return source === "qr" ? "QR" : "POS";
+  return { pos: "POS", qr: "QR", kiosk: "Kiosk" }[source];
 }
 
 export { taxLines } from "@/lib/tax-lines";

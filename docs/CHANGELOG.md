@@ -5,6 +5,12 @@ logged, per feature and date, in `wiki/tasks/completed.md`; this file starts
 with the payments epic.
 
 
+## Unreleased - owner console gaps from the full demo (#431)
+
+- Menu: a new add-on group's options take an extra price ("Bacon +A$4.50"); blank is free, negative or invalid prices are blocked.
+- Devices: every enrolment code generated this visit stays listed, newest first, labelled with its device type (older codes keep working until used or expired).
+- Payments report: kiosk orders are labelled "Kiosk" instead of "POS".
+
 ## Unreleased - card readers (#429)
 
 - Ops: tenant Payments tab lists, registers (incl. a sandbox simulated reader) and removes Stripe card readers, and manages that tenant's reader orders; new Reader orders page across tenants; reader prices per country on Plans.

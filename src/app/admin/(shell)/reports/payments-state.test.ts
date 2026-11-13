@@ -103,6 +103,7 @@ describe("sourceLabel", () => {
   it("maps pos to POS and qr to QR", () => {
     expect(sourceLabel("pos")).toBe("POS");
     expect(sourceLabel("qr")).toBe("QR");
+    expect(sourceLabel("kiosk")).toBe("Kiosk");
   });
 });
 

@@ -16,7 +16,8 @@ export function CodeChip({
   expiresAt,
   onRegenerate,
   regenerating,
-}: Readonly<{ code: string; expiresAt: string; onRegenerate: () => void; regenerating?: boolean }>) {
+  title = "Active enrolment code",
+}: Readonly<{ code: string; expiresAt: string; onRegenerate: () => void; regenerating?: boolean; title?: string }>) {
   const [remaining, setRemaining] = useState(() => secondsRemaining(expiresAt, Date.now()));
   const [copied, setCopied] = useState(false);
   // Scan-to-enrol (issue #200): the phone/tablet opens /device with the code
@@ -37,7 +38,7 @@ export function CodeChip({
 
   return (
     <div data-testid="device-code-chip" className="rounded-lg border border-border/60 bg-card p-5 text-center">
-      <p className="font-label text-xs font-semibold uppercase tracking-wider text-muted-foreground">Active enrolment code</p>
+      <p className="font-label text-xs font-semibold uppercase tracking-wider text-muted-foreground">{title}</p>
       <div
         className={`mt-3 inline-flex items-center gap-2 rounded-lg border px-5 py-3 font-mono text-2xl font-bold tracking-widest ${
           expired ? "border-border text-muted-foreground/50" : "border-primary/50 text-primary"

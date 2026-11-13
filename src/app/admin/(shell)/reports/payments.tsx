@@ -19,6 +19,7 @@ import { tenderMethodLabel } from "@/lib/tender-labels";
 import type { OutletView } from "../menu/menu-state";
 import { useOutlets } from "../outlet-context";
 import { useToast } from "../toast";
+import { DateRangeFilter } from "./date-range-filter";
 import { downloadReportExport } from "./reports-state";
 import {
   appendPaymentsPage,
@@ -34,10 +35,6 @@ import {
   type PaymentRow,
   type PaymentsResponse,
 } from "./payments-state";
-
-const DATE_INPUT_CLASS =
-  "h-9 rounded-lg border border-border bg-input px-2.5 text-sm text-foreground focus:outline-none focus-visible:ring-2 focus-visible:ring-ring";
-const FILTER_LABEL_CLASS = "font-label mb-1 block text-[10px] font-semibold uppercase tracking-wider text-muted-foreground";
 
 function LoadingShell() {
   return (
@@ -173,36 +170,7 @@ function OutletPayments({ outlet }: Readonly<{ outlet: OutletView }>) {
         </Button>
       </div>
 
-      <div className="flex flex-wrap items-end gap-3 rounded-lg border border-border/40 bg-card p-4">
-        <div>
-          <label htmlFor="payments-filter-from" className={FILTER_LABEL_CLASS}>
-            From
-          </label>
-          <input
-            id="payments-filter-from"
-            data-testid="payments-filter-from"
-            type="date"
-            value={range.fromDate}
-            max={range.toDate}
-            onChange={(event) => setRange((current) => ({ ...current, fromDate: event.target.value }))}
-            className={DATE_INPUT_CLASS}
-          />
-        </div>
-        <div>
-          <label htmlFor="payments-filter-to" className={FILTER_LABEL_CLASS}>
-            To
-          </label>
-          <input
-            id="payments-filter-to"
-            data-testid="payments-filter-to"
-            type="date"
-            value={range.toDate}
-            min={range.fromDate}
-            onChange={(event) => setRange((current) => ({ ...current, toDate: event.target.value }))}
-            className={DATE_INPUT_CLASS}
-          />
-        </div>
-      </div>
+      <DateRangeFilter idPrefix="payments" range={range} onChange={setRange} />
 
       {failed && <LoadErrorPanel testId="payments-load-error" message="Payments couldn't be loaded." onRetry={retry} />}
 

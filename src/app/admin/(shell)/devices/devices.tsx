@@ -17,7 +17,7 @@ import { DevicesTable } from "./devices-table";
 import { GenerateCodeDialog } from "./generate-code-dialog";
 import { PrinterConfigPanel } from "./printer-config-panel";
 import { Topology } from "./topology";
-import type { AdminDeviceView, EnrolmentCodeResult } from "./devices-state";
+import { DEVICE_TYPE_LABELS, type AdminDeviceView, type EnrolmentCodeResult } from "./devices-state";
 import type { PrinterView, StationView } from "../floor-plan/floor-plan-state";
 
 export function Devices() {
@@ -112,7 +112,9 @@ function DevicesEditor({ outletId, outletName, initial }: Readonly<{ outletId: s
   const [now, setNow] = useState(() => Date.now());
   const [printers, setPrinters] = useState<PrinterView[]>(initial.printers);
   const [stations, setStations] = useState<StationView[]>(initial.stations);
-  const [activeCode, setActiveCode] = useState<EnrolmentCodeResult | null>(null);
+  // #431: every code issued this visit stays listed (newest first) - an older
+  // code keeps working until it is used or expires, so hiding it was misleading.
+  const [codes, setCodes] = useState<EnrolmentCodeResult[]>([]);
   const [generateOpen, setGenerateOpen] = useState(false);
   const [view, setView] = useState<ViewKey>("devices");
   // Remove device (issue #215): confirm with a reason, then revoke - the row
@@ -197,8 +199,18 @@ function DevicesEditor({ outletId, outletName, initial }: Readonly<{ outletId: s
       {view === "devices" && (
         <div className="grid grid-cols-1 gap-6 2xl:grid-cols-[minmax(0,1fr)_320px]">
           <DevicesTable devices={devices} onRemove={setRemoveTarget} />
-          {activeCode ? (
-            <CodeChip key={activeCode.code} code={activeCode.code} expiresAt={activeCode.expiresAt} onRegenerate={() => setGenerateOpen(true)} />
+          {codes.length > 0 ? (
+            <div data-testid="devices-code-list" className="space-y-3">
+              {codes.map((c) => (
+                <CodeChip
+                  key={c.code}
+                  code={c.code}
+                  expiresAt={c.expiresAt}
+                  title={`${DEVICE_TYPE_LABELS[c.deviceType]} code`}
+                  onRegenerate={() => setGenerateOpen(true)}
+                />
+              ))}
+            </div>
           ) : (
             <div data-testid="devices-no-active-code" className="flex flex-col items-center justify-center gap-2 rounded-lg border border-dashed border-border/60 bg-card/50 p-5 text-center text-sm text-muted-foreground">
               No active enrolment code. Enrol a device to generate one.
@@ -227,7 +239,7 @@ function DevicesEditor({ outletId, outletName, initial }: Readonly<{ outletId: s
         onConfirm={(reason) => void handleConfirmRemove(reason)}
       />
 
-      <GenerateCodeDialog open={generateOpen} onClose={() => setGenerateOpen(false)} outletId={outletId} outletName={outletName} onGenerated={setActiveCode} />
+      <GenerateCodeDialog open={generateOpen} onClose={() => setGenerateOpen(false)} outletId={outletId} outletName={outletName} onGenerated={(code) => setCodes((current) => [code, ...current.filter((c) => c.code !== code.code)])} />
     </div>
   );
 }

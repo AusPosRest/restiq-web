@@ -390,6 +390,34 @@ describe("ItemDrawer modifier group validation messaging", () => {
     expect(putCall?.[0]).toBe("/admin/api/menu/items/item-1/modifier-groups");
     expect(JSON.parse((putCall?.[1] as RequestInit).body as string)).toEqual({ modifierGroupIds: ["group-1"] });
   });
+
+  it("sends each add-on's extra price and blocks an invalid one (#431)", async () => {
+    const fetchMock = stubFetch({
+      onPost: (url) => (url === "/admin/api/menu/modifier-groups" ? jsonResponse({ id: "g2", name: "Add-ons", minSelections: 0, maxSelections: 1, modifiers: [] }, 201) : undefined),
+    });
+    renderDrawer();
+
+    await userEvent.click(screen.getByTestId("item-add-modifier-group"));
+    await userEvent.type(screen.getByTestId("new-modifier-group-name"), "Add-ons");
+    await userEvent.type(screen.getByTestId("new-modifier-group-option-name"), "Bacon");
+    await userEvent.type(screen.getByTestId("new-modifier-group-option-price"), "-1");
+    expect(screen.getByTestId("new-modifier-group-option-price-error").textContent).toBe("Price can't be negative.");
+    expect(screen.getByTestId("new-modifier-group-add-option")).toHaveProperty("disabled", true);
+
+    await userEvent.clear(screen.getByTestId("new-modifier-group-option-price"));
+    await userEvent.type(screen.getByTestId("new-modifier-group-option-price"), "4.50");
+    await userEvent.click(screen.getByTestId("new-modifier-group-add-option"));
+    await userEvent.type(screen.getByTestId("new-modifier-group-option-name"), "Avocado");
+    await userEvent.click(screen.getByTestId("new-modifier-group-add-option"));
+    await userEvent.click(screen.getByTestId("new-modifier-group-save"));
+
+    await waitFor(() => expect(fetchMock.mock.calls.some(([url]) => url === "/admin/api/menu/modifier-groups")).toBe(true));
+    const postCall = fetchMock.mock.calls.find(([url]) => url === "/admin/api/menu/modifier-groups");
+    expect(JSON.parse((postCall?.[1] as RequestInit).body as string).modifiers).toEqual([
+      { name: "Bacon", priceMinor: 450 },
+      { name: "Avocado", priceMinor: 0 },
+    ]);
+  });
 });
 
 describe("ItemDrawer price - current vs pending distinction", () => {

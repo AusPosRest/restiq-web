@@ -19,6 +19,7 @@ import type { AdminDeviceView, DeviceType, EnrolmentCodeResult } from "./(shell)
 import type { RoleView, StaffView } from "./(shell)/staff/staff-state";
 import { filenameFromContentDisposition, type ReportExport } from "./(shell)/reports/reports-state";
 import type { PaymentsResponse } from "./(shell)/reports/payments-state";
+import type { TopItemsResponse } from "./(shell)/reports/top-items-state";
 
 export class AdminApiError extends Error {
   constructor(
@@ -638,10 +639,12 @@ export function revokeStaffPin(staffId: string, reason: string): Promise<StaffVi
 // adminApi always parses the response as JSON, which a CSV export body is
 // not - this fetches and reads the blob directly instead, same reasoning as
 // uploadMenuImport's FormData special-case.
-export async function exportReport(reportKey: string, format: string): Promise<ReportExport> {
+// Shared by every CSV export below: fetch, surface the backend's error
+// envelope on failure, and name the download from Content-Disposition.
+async function fetchExport(path: string, fallbackFilename: string): Promise<ReportExport> {
   let res: Response;
   try {
-    res = await fetch(`/admin/api/reports/${reportKey}/export?format=${encodeURIComponent(format)}`);
+    res = await fetch(`/admin/api/${path}`);
   } catch {
     throw new AdminApiError("The API could not be reached", 0);
   }
@@ -651,8 +654,12 @@ export async function exportReport(reportKey: string, format: string): Promise<R
     throw new AdminApiError(error?.message ?? "The export failed", res.status, error?.code);
   }
   const blob = await res.blob();
-  const filename = filenameFromContentDisposition(res.headers.get("content-disposition")) ?? `${reportKey}.${format}`;
+  const filename = filenameFromContentDisposition(res.headers.get("content-disposition")) ?? fallbackFilename;
   return { filename, blob };
+}
+
+export function exportReport(reportKey: string, format: string): Promise<ReportExport> {
+  return fetchExport(`reports/${reportKey}/export?format=${encodeURIComponent(format)}`, `${reportKey}.${format}`);
 }
 
 // --- Payments history (issue #137, web half; restiq-backend#104, landing in
@@ -683,21 +690,19 @@ export function fetchPayments(params: FetchPaymentsParams): Promise<PaymentsResp
   return adminApi<PaymentsResponse>(`reports/payments?${paymentsSearchParams(params).toString()}`);
 }
 
-export async function exportPayments(params: Omit<FetchPaymentsParams, "cursor" | "limit">): Promise<ReportExport> {
-  let res: Response;
-  try {
-    res = await fetch(`/admin/api/reports/payments/export?${paymentsSearchParams(params).toString()}`);
-  } catch {
-    throw new AdminApiError("The API could not be reached", 0);
-  }
-  if (!res.ok) {
-    const body: unknown = await res.json().catch(() => null);
-    const error = (body as { error?: { code?: string; message?: string } } | null)?.error;
-    throw new AdminApiError(error?.message ?? "The export failed", res.status, error?.code);
-  }
-  const blob = await res.blob();
-  const filename = filenameFromContentDisposition(res.headers.get("content-disposition")) ?? "payments.csv";
-  return { filename, blob };
+export function exportPayments(params: Omit<FetchPaymentsParams, "cursor" | "limit">): Promise<ReportExport> {
+  return fetchExport(`reports/payments/export?${paymentsSearchParams(params).toString()}`, "payments.csv");
+}
+
+// --- Top-selling items (restiq-web#431 item 4, restiq-backend#288). Same
+// outletId/from/to filter as payments, no pagination: { currency, items }.
+
+export function fetchTopItems(params: Omit<FetchPaymentsParams, "cursor" | "limit">): Promise<TopItemsResponse> {
+  return adminApi<TopItemsResponse>(`reports/top-items?${paymentsSearchParams(params).toString()}`);
+}
+
+export function exportTopItems(params: Omit<FetchPaymentsParams, "cursor" | "limit">): Promise<ReportExport> {
+  return fetchExport(`reports/top-items/export?${paymentsSearchParams(params).toString()}`, "top-items.csv");
 }
 
 // --- Tax registration (issue #140, web half; restiq-backend#108, landing in
