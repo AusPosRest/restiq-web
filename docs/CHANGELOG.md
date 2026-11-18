@@ -5,6 +5,11 @@ logged, per feature and date, in `wiki/tasks/completed.md`; this file starts
 with the payments epic.
 
 
+## Unreleased - install banner off the till, POS at 390px (#373, #384)
+
+- The "Install RESTIQ" banner no longer shows on /pos or /kds, so it can't cover TOTAL, Charge or the PIN pad. It still shows on the owner console and other pages.
+- Checked the waiter path at 390x844 (PIN pad, table map, order screen with menu grid, settle): no sideways scroll and every main button is visible and tappable. No layout change was needed.
+
 ## Unreleased - offline hub status and sync issues (#437)
 
 - POS/KDS and QR/kiosk sign-in work over plain http on the shop LAN: session cookies are `secure` only on https requests.

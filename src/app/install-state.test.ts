@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vitest";
 import { installMode, isIos, type InstallEnv } from "./install-state";
 
-const base: InstallEnv = { standalone: false, ios: false, promptReady: false, dismissed: false, path: "/pos/login" };
+const base: InstallEnv = { standalone: false, ios: false, promptReady: false, dismissed: false, path: "/admin" };
 
 describe("installMode", () => {
   it("offers the browser prompt on Android/Chrome once it's ready", () => {
@@ -18,6 +18,14 @@ describe("installMode", () => {
     expect(installMode({ ...base, ios: true, dismissed: true })).toBeNull();
     expect(installMode({ ...base, ios: true, path: "/qr/kiosk/out-1" })).toBeNull();
     expect(installMode({ ...base, ios: true, path: "/" })).toBeNull(); // public marketing page (issue #262)
+  });
+
+  it("never covers the till or kitchen screens (issue #373)", () => {
+    for (const path of ["/pos", "/pos/login", "/pos/orders/o-1/settle", "/kds", "/kds/station-1"]) {
+      expect(installMode({ ...base, ios: true, path })).toBeNull();
+      expect(installMode({ ...base, promptReady: true, path })).toBeNull();
+    }
+    expect(installMode({ ...base, ios: true, path: "/posters" })).toBe("ios");
   });
 });
 
