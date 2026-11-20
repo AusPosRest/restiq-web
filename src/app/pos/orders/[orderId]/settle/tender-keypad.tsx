@@ -182,7 +182,7 @@ export function TenderKeypad({
                   data-testid={`tender-remove-${index}`}
                   aria-label="Remove this tender"
                   onClick={() => onRemoveTender(index)}
-                  className="flex size-5 items-center justify-center rounded-md text-muted-foreground hover:bg-accent hover:text-status-alert"
+                  className="flex size-10 items-center justify-center rounded-md text-muted-foreground lg:size-5 hover:bg-accent hover:text-status-alert"
                 >
                   <X className="size-3.5" aria-hidden="true" />
                 </button>
@@ -196,7 +196,7 @@ export function TenderKeypad({
         <p className="font-label mb-1.5 text-xs font-semibold uppercase tracking-wider text-muted-foreground">Payment method</p>
         {/* Fits as many >=6.5rem buttons as the column holds (issue #240) - two in the
             counter's narrow tender column, one row on the wide settle screen. */}
-        <div data-testid="tender-method-group" className="grid grid-cols-[repeat(auto-fit,minmax(6.5rem,1fr))] gap-2">
+        <div data-testid="tender-method-group" className="grid auto-rows-fr grid-cols-[repeat(auto-fit,minmax(6.5rem,1fr))] gap-2">
           {methods.map((option) => (
             <button
               key={option}
@@ -279,6 +279,7 @@ export function TenderKeypad({
           type="button"
           variant="outline"
           size="sm"
+          className="h-10"
           data-testid="tender-fill-remaining"
           disabled={blocked || remainingMinor <= 0 || !referenceReady || (isTerminal && !terminalReady)}
           onClick={() => submit(fillMinor)}
@@ -288,7 +289,7 @@ export function TenderKeypad({
         {quickNotes.length > 0 && remainingMinor > 0 && (
           <div data-testid="tender-quick-notes" className="flex flex-wrap justify-center gap-2">
             {quickNotes.map((note) => (
-              <Button key={note} type="button" variant="outline" size="sm" data-testid={`tender-quick-note-${note}`} onClick={() => submit(note)}>
+              <Button key={note} type="button" variant="outline" size="sm" data-testid={`tender-quick-note-${note}`} className="h-10" onClick={() => submit(note)}>
                 {formatMinor(note, currency)}
               </Button>
             ))}

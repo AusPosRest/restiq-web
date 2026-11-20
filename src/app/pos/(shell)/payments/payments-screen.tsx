@@ -94,7 +94,7 @@ export function PaymentsScreen({ outletId }: Readonly<{ outletId: string }>) {
               No payments have been taken at this outlet yet today.
             </p>
           ) : (
-            <div className="overflow-x-auto rounded-lg border border-border/40 bg-card">
+            <div className="relative overflow-x-auto rounded-lg border border-border/40 bg-card">
               <table className="w-full text-sm" data-testid="pos-payments-table">
                 <thead>
                   <tr className="h-10 border-b border-border/40">
