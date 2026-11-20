@@ -4,10 +4,12 @@ import {
   blocksLabel,
   CARD_REQUIRED,
   formFromPayments,
+  groupRequirements,
   isDirty,
   majorToMinor,
   minorToMajor,
   percentToBps,
+  requirementsSummary,
   sortRequirements,
   stripeSteps,
   validatePaymentsForm,
@@ -97,5 +99,26 @@ describe("payments-state", () => {
     expect(blocksLabel(["payouts"])).toBe("Blocks payouts");
     expect(blocksLabel([])).toBeNull();
     expect(waitingOnLabel("stripe")).toBe("Stripe is reviewing");
+  });
+
+  it("groups repeated requirements into one row per title and summarises them (#441)", () => {
+    const r = (code: string, title: string, over: Partial<StripeRequirement> = {}): StripeRequirement => ({ code, title, problem: null, urgency: "past_due", blocks: ["card_payments"], waitingOn: "owner", ...over });
+    const requirements = sortRequirements([
+      r("owners.1", "Owners and directors", { urgency: "eventually_due" }),
+      r("owners.2", "Owners and directors", { blocks: ["payouts"], problem: "Name does not match." }),
+      r("owners.3", "Owners and directors", { problem: "Name does not match." }),
+      r("owners.4", "Owners and directors", { waitingOn: "stripe" }),
+      r("bank", "Bank account for payouts", { urgency: "currently_due", blocks: [] }),
+    ]);
+    const groups = groupRequirements(requirements);
+    expect(groups.map((g) => [g.title, g.waitingOn, g.count])).toEqual([
+      ["Owners and directors", "owner", 3],
+      ["Owners and directors", "stripe", 1],
+      ["Bank account for payouts", "owner", 1],
+    ]);
+    // The most urgent row decides the chip; blocks are merged; a repeated problem shows once.
+    expect(groups[0]).toMatchObject({ code: "owners.2", urgency: "past_due", blocks: ["payouts", "card_payments"], problems: ["Name does not match."] });
+    expect(requirementsSummary(requirements)).toBe("Stripe still needs 5 things · 3 overdue · waiting on the owner");
+    expect(requirementsSummary([r("x", "X", { urgency: "currently_due", waitingOn: "stripe" })])).toBe("Stripe still needs 1 thing · Stripe is reviewing");
   });
 });

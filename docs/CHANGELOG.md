@@ -5,6 +5,11 @@ logged, per feature and date, in `wiki/tasks/completed.md`; this file starts
 with the payments epic.
 
 
+## Unreleased - shorter "what Stripe still needs" list (#441)
+
+- Platform Console, tenant Payments tab: the list of what Stripe still needs is now one line ("Stripe still needs 19 things · 19 overdue · waiting on the owner") that opens on click. Repeats are merged into one row per title with a count, so 19 rows become 6. A list of three rows or fewer starts open.
+- Anything Stripe rejected is shown above the list, so it is visible without opening it.
+
 ## Unreleased - install banner off the till, POS at 390px (#373, #384)
 
 - The "Install RESTIQ" banner no longer shows on /pos or /kds, so it can't cover TOTAL, Charge or the PIN pad. It still shows on the owner console and other pages.
