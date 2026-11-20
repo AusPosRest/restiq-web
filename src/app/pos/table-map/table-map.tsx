@@ -163,7 +163,7 @@ function TableMapLoaded({
         {actionError && (
           <div role="alert" data-testid="table-map-action-error" className="rounded-lg border border-status-alert/40 bg-card px-4 py-3 text-sm text-status-alert">
             {actionError}{" "}
-            <button type="button" className="underline" onClick={() => setActionError(null)}>
+            <button type="button" className="inline-flex min-h-10 min-w-10 items-center justify-center underline" onClick={() => setActionError(null)}>
               Dismiss
             </button>
           </div>

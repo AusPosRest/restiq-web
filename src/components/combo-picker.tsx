@@ -61,7 +61,7 @@ export function ComboPicker({
         <Dialog.Content
           data-testid="combo-picker"
           aria-describedby={undefined}
-          className={`${themeClass} fixed inset-x-0 bottom-0 z-50 mx-auto flex max-h-[90vh] max-w-2xl flex-col rounded-t-2xl border-t border-border/60 bg-popover text-foreground shadow-xl`}
+          className={`${themeClass} fixed inset-x-0 bottom-0 z-50 mx-auto flex max-h-[90dvh] max-w-2xl flex-col rounded-t-2xl border-t border-border/60 bg-popover text-foreground shadow-xl`}
         >
           <div className="flex items-start justify-between gap-4 px-5 pb-3 pt-5 sm:px-6">
             <div>

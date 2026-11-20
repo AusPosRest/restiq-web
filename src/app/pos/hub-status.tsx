@@ -58,7 +58,7 @@ export function HubStatusStrip({ pillTestId }: Readonly<{ pillTestId?: string }>
         <Link
           href="/pos/sync-issues"
           data-testid="pos-shift-bar-sync-issues-link"
-          className="flex items-center gap-1.5 rounded-lg px-2 py-1.5 text-xs font-medium text-muted-foreground transition-colors hover:bg-accent hover:text-foreground focus:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+          className="flex min-h-10 items-center gap-1.5 rounded-lg px-2 py-1.5 text-xs font-medium text-muted-foreground transition-colors hover:bg-accent hover:text-foreground focus:outline-none focus-visible:ring-2 focus-visible:ring-ring"
         >
           <CloudAlert className="size-3.5" aria-hidden="true" /> Sync issues
           {open > 0 && (

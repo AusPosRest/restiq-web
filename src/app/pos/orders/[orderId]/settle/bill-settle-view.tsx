@@ -167,7 +167,7 @@ function BillSettleLoaded({
   return (
     <div data-testid="bill-settle-view" className="flex flex-1 flex-col">
       <header className="flex items-center gap-4 border-b border-border/60 px-4 py-3 sm:px-6">
-        <Link href={`/pos/orders/${orderId}`} data-testid="back-to-order" className="text-sm text-primary underline-offset-4 hover:underline">
+        <Link href={`/pos/orders/${orderId}`} data-testid="back-to-order" className="inline-flex min-h-10 items-center text-sm text-primary underline-offset-4 hover:underline">
           ← Back to order
         </Link>
         <p className="font-headline text-lg font-bold text-primary">RESTIQ POS</p>

@@ -351,7 +351,7 @@ export function TerminalScreen({ outletId, outletName }: Readonly<{ outletId: st
                   type="button"
                   data-testid="terminal-cancel"
                   onClick={onCancel}
-                  className="text-xs font-semibold text-red-400 hover:underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-amber-500"
+                  className="inline-flex min-h-10 items-center px-2 text-xs font-semibold text-red-400 hover:underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-amber-500"
                 >
                   {cancelLabel}
                 </button>

@@ -35,7 +35,7 @@ function DialogBody({ originLabel, ownerName, busy, onCancel, onConfirm }: Reado
         <Dialog.Overlay className="fixed inset-0 z-40 bg-black/60" />
         <Dialog.Content
           data-testid="transfer-ownership-dialog"
-          className="pos-theme fixed left-1/2 top-1/2 z-50 w-full max-w-md -translate-x-1/2 -translate-y-1/2 rounded-lg border border-border/60 bg-popover p-6 text-foreground shadow-xl"
+          className="pos-theme fixed left-1/2 top-1/2 z-50 w-full max-w-md -translate-x-1/2 -translate-y-1/2 max-h-[calc(100dvh-1rem)] overflow-y-auto rounded-lg border border-border/60 bg-popover p-6 text-foreground shadow-xl"
         >
           <Dialog.Title className="font-headline text-lg font-semibold">Transfer ownership — {originLabel}</Dialog.Title>
           <Dialog.Description className="mt-2 text-sm text-muted-foreground">

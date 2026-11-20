@@ -155,7 +155,7 @@ function DialogBody({
         <Dialog.Content
           data-testid="manager-pin-dialog"
           onKeyDown={handleKeyDown}
-          className="fixed left-1/2 top-1/2 z-50 w-full max-w-sm -translate-x-1/2 -translate-y-1/2 rounded-lg border border-border/60 bg-popover p-6 text-foreground shadow-xl"
+          className="fixed left-1/2 top-1/2 z-50 w-full max-w-sm -translate-x-1/2 -translate-y-1/2 max-h-[calc(100dvh-1rem)] overflow-y-auto rounded-lg border border-border/60 bg-popover p-6 text-foreground shadow-xl"
         >
           <Dialog.Title data-testid="manager-pin-dialog-title" className="text-lg font-semibold">
             Manager approval — {actionTitle}

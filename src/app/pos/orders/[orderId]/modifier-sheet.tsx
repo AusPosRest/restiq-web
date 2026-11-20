@@ -65,7 +65,7 @@ function SheetBody({ item, currency, busy, onCancel, onConfirm }: Readonly<Modif
         <Dialog.Overlay className="fixed inset-0 z-40 bg-black/60" />
         <Dialog.Content
           data-testid="modifier-sheet"
-          className="pos-theme fixed inset-x-0 bottom-0 z-50 max-h-[85vh] overflow-y-auto rounded-t-2xl border-t border-border/60 bg-popover p-6 text-foreground shadow-xl"
+          className="pos-theme fixed inset-x-0 bottom-0 z-50 max-h-[85dvh] overflow-y-auto rounded-t-2xl border-t border-border/60 bg-popover p-6 text-foreground shadow-xl"
         >
           <div className="flex items-start justify-between gap-4">
             <Dialog.Title data-testid="modifier-sheet-title" className="font-headline text-lg font-semibold">
@@ -81,7 +81,7 @@ function SheetBody({ item, currency, busy, onCancel, onConfirm }: Readonly<Modif
                 aria-label="Close"
                 disabled={busy}
                 onClick={onCancel}
-                className="rounded-md p-1 text-muted-foreground hover:bg-accent hover:text-accent-foreground"
+                className="flex size-10 items-center justify-center rounded-md text-muted-foreground hover:bg-accent hover:text-accent-foreground"
               >
                 ✕
               </button>
@@ -183,7 +183,7 @@ function SheetBody({ item, currency, busy, onCancel, onConfirm }: Readonly<Modif
                   aria-label="Decrease quantity"
                   disabled={busy || quantity <= 1}
                   onClick={() => setQuantity((q) => Math.max(1, q - 1))}
-                  className="size-8 rounded-md text-lg font-semibold text-foreground hover:bg-accent disabled:opacity-40"
+                  className="size-10 rounded-md text-lg font-semibold text-foreground hover:bg-accent disabled:opacity-40"
                 >
                   −
                 </button>
@@ -196,7 +196,7 @@ function SheetBody({ item, currency, busy, onCancel, onConfirm }: Readonly<Modif
                   aria-label="Increase quantity"
                   disabled={busy}
                   onClick={() => setQuantity((q) => q + 1)}
-                  className="size-8 rounded-md text-lg font-semibold text-foreground hover:bg-accent"
+                  className="size-10 rounded-md text-lg font-semibold text-foreground hover:bg-accent"
                 >
                   +
                 </button>
