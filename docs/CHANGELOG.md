@@ -5,6 +5,10 @@ logged, per feature and date, in `wiki/tasks/completed.md`; this file starts
 with the payments epic.
 
 
+## Unreleased - install banner off the till, POS at 390px (#373, #384)
+
+- The "Install RESTIQ" banner no longer shows on /pos or /kds, so it can't cover TOTAL, Charge or the PIN pad. It still shows on the owner console and other pages.
+- Checked the waiter path at 390x844 (PIN pad, table map, order screen with menu grid, settle): no sideways scroll and every main button is visible and tappable. No layout change was needed.
 ## Unreleased - POS on a phone (#443, #444, #445)
 
 - Every POS dialog (manager PIN, discount, log cash movement, transfer table) now fits the screen and scrolls inside itself, so Approve and Cancel are reachable in landscape; the modifier and combo sheets size to the visible screen.
