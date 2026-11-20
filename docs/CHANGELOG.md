@@ -5,6 +5,10 @@ logged, per feature and date, in `wiki/tasks/completed.md`; this file starts
 with the payments epic.
 
 
+## Unreleased - reorder an item already sent to the kitchen (#442)
+
+- POS order screen: tapping a plain item whose line is already in the kitchen now adds a new line instead of failing with "line already sent". An unsent line of the same item still just gets its quantity bumped.
+
 ## Unreleased - offline hub status and sync issues (#437)
 
 - POS/KDS and QR/kiosk sign-in work over plain http on the shop LAN: session cookies are `secure` only on https requests.
