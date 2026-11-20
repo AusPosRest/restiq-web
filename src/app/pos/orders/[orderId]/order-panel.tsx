@@ -153,7 +153,7 @@ export function OrderPanel({
                         aria-label="Decrease quantity"
                         disabled={isBusy}
                         onClick={() => onDecrement(line)}
-                        className="flex size-7 items-center justify-center rounded-md border border-border text-foreground hover:bg-accent disabled:opacity-40"
+                        className="flex size-10 items-center lg:size-7 justify-center rounded-md border border-border text-foreground hover:bg-accent disabled:opacity-40"
                       >
                         <Minus className="size-3.5" aria-hidden="true" />
                       </button>
@@ -166,7 +166,7 @@ export function OrderPanel({
                         aria-label="Increase quantity"
                         disabled={isBusy}
                         onClick={() => onIncrement(line)}
-                        className="flex size-7 items-center justify-center rounded-md border border-border text-foreground hover:bg-accent disabled:opacity-40"
+                        className="flex size-10 items-center lg:size-7 justify-center rounded-md border border-border text-foreground hover:bg-accent disabled:opacity-40"
                       >
                         <Plus className="size-3.5" aria-hidden="true" />
                       </button>
@@ -179,7 +179,7 @@ export function OrderPanel({
                       aria-label={`Remove ${line.itemName}`}
                       disabled={isBusy}
                       onClick={() => onRemove(line)}
-                      className="ml-auto flex size-7 items-center justify-center rounded-md text-muted-foreground hover:bg-accent hover:text-status-alert disabled:opacity-40"
+                      className="ml-auto flex size-10 items-center lg:size-7 justify-center rounded-md text-muted-foreground hover:bg-accent hover:text-status-alert disabled:opacity-40"
                     >
                       <Trash2 className="size-3.5" aria-hidden="true" />
                     </button>
@@ -190,7 +190,7 @@ export function OrderPanel({
                       data-testid={`order-line-void-${line.id}`}
                       disabled={isBusy}
                       onClick={() => onVoid(line)}
-                      className="ml-auto rounded-md px-2 py-1 text-xs font-semibold text-muted-foreground hover:bg-accent hover:text-status-alert disabled:opacity-40"
+                      className="ml-auto min-h-10 rounded-md px-2 py-1 text-xs lg:min-h-0 font-semibold text-muted-foreground hover:bg-accent hover:text-status-alert disabled:opacity-40"
                     >
                       Void…
                     </button>

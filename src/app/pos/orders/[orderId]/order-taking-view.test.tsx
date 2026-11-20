@@ -242,6 +242,47 @@ describe("OrderTakingView", () => {
     void fetchMock;
   });
 
+  it("tapping a plain item whose only line is already in the kitchen adds a new line instead of patching the sent one (regression for #442)", async () => {
+    const user = userEvent.setup();
+    const sentNaan = {
+      id: "line-sent-naan",
+      orderId: ORDER_ID,
+      itemId: "item-naan",
+      variantId: null,
+      quantity: 1,
+      unitPriceMinor: 14000,
+      seatNumber: null,
+      addedByStaffId: CURRENT_STAFF_ID,
+      sentToKitchen: true,
+      createdAt: new Date().toISOString(),
+      modifiers: [],
+    };
+    const afterAdd = order({ status: "sent", lines: [sentNaan, { ...sentNaan, id: "line-new-naan", sentToKitchen: false }] });
+    let addCalls = 0;
+    let patchCalls = 0;
+    stubFetch((url, init) => {
+      if (url.includes("/menu")) return jsonResponse(MENU);
+      if (url.endsWith("/lines") && init?.method === "POST") {
+        addCalls += 1;
+        return jsonResponse(afterAdd);
+      }
+      if (init?.method === "PATCH") {
+        patchCalls += 1;
+        return jsonResponse({ code: "line_sent" }, 409);
+      }
+      return jsonResponse(order({ status: "sent", lines: [sentNaan] }));
+    });
+    renderView();
+    await waitFor(() => expect(screen.getByTestId("order-line-line-sent-naan")).toBeTruthy());
+
+    await user.click(screen.getByTestId("category-tab-cat-breads"));
+    await user.click(screen.getByTestId("item-tile-item-naan"));
+    await waitFor(() => expect(addCalls).toBe(1));
+
+    expect(patchCalls).toBe(0);
+    await waitFor(() => expect(screen.getByTestId("order-line-line-new-naan")).toBeTruthy());
+  });
+
   it("an item with a required modifier group blocks add until it's satisfied", async () => {
     const user = userEvent.setup();
     stubFetch((url) => (url.includes("/menu") ? jsonResponse(MENU) : jsonResponse(order())));

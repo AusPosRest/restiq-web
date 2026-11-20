@@ -136,7 +136,11 @@ function OrderTakingLoaded({
     // its quantity bumped - the same effect as pressing the line's own "+"
     // stepper - rather than a second, redundant line for the same item
     // (restiq-web#63: repeat taps were always POSTing a brand-new line).
-    const existingLine = order.lines.find((line) => line.itemId === item.id && line.variantId === null && line.modifiers.length === 0);
+    // A line the kitchen already has can't change (409 line_sent), so a
+    // reorder gets its own new line (restiq-web#442).
+    const existingLine = order.lines.find(
+      (line) => line.itemId === item.id && line.variantId === null && line.modifiers.length === 0 && !line.sentToKitchen,
+    );
     if (existingLine) {
       handleIncrement(existingLine);
       return;
@@ -243,7 +247,7 @@ function OrderTakingLoaded({
           <p className="font-headline text-lg font-bold text-primary">RESTIQ POS</p>
           <p className="font-label text-xs font-semibold uppercase tracking-wider text-muted-foreground">{orderOriginLabel(order)}</p>
         </div>
-        <Link href="/pos/table-map" data-testid="back-to-table-map" className="text-sm text-primary underline-offset-4 hover:underline">
+        <Link href="/pos/table-map" data-testid="back-to-table-map" className="inline-flex min-h-10 items-center text-sm text-primary underline-offset-4 hover:underline">
           ← Back to table map
         </Link>
         <div className="relative ml-auto w-80 max-w-full">
@@ -276,7 +280,7 @@ function OrderTakingLoaded({
       {actionError && (
         <div role="alert" data-testid="order-taking-action-error" className="mx-6 mt-4 rounded-lg border border-status-alert/40 bg-card px-4 py-3 text-sm text-status-alert">
           {actionError}{" "}
-          <button type="button" className="underline" onClick={() => setActionError(null)}>
+          <button type="button" className="inline-flex min-h-10 min-w-10 items-center justify-center underline" onClick={() => setActionError(null)}>
             Dismiss
           </button>
         </div>

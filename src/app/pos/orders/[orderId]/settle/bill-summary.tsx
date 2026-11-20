@@ -105,7 +105,7 @@ export function BillSummary({
                           aria-label="Decrease quantity"
                           disabled={isBusy}
                           onClick={() => onDecrement!(line)}
-                          className="flex size-6 items-center justify-center rounded-md border border-border text-foreground hover:bg-accent disabled:opacity-40"
+                          className="flex size-10 items-center lg:size-6 justify-center rounded-md border border-border text-foreground hover:bg-accent disabled:opacity-40"
                         >
                           <Minus className="size-3" aria-hidden="true" />
                         </button>
@@ -118,7 +118,7 @@ export function BillSummary({
                           aria-label="Increase quantity"
                           disabled={isBusy}
                           onClick={() => onIncrement!(line)}
-                          className="flex size-6 items-center justify-center rounded-md border border-border text-foreground hover:bg-accent disabled:opacity-40"
+                          className="flex size-10 items-center lg:size-6 justify-center rounded-md border border-border text-foreground hover:bg-accent disabled:opacity-40"
                         >
                           <Plus className="size-3" aria-hidden="true" />
                         </button>
@@ -157,7 +157,7 @@ export function BillSummary({
                         aria-label="Remove line"
                         disabled={isBusy}
                         onClick={() => onRemove!(line)}
-                        className="flex size-6 items-center justify-center rounded-md text-muted-foreground hover:bg-accent hover:text-status-alert disabled:opacity-40"
+                        className="flex size-10 items-center lg:size-6 justify-center rounded-md text-muted-foreground hover:bg-accent hover:text-status-alert disabled:opacity-40"
                       >
                         <Trash2 className="size-3.5" aria-hidden="true" />
                       </button>
