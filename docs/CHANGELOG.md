@@ -11,6 +11,10 @@ with the payments epic.
 - Shift, Open orders and Payments no longer scroll sideways on a 390px phone: the shift-bar links scroll inside the bar instead; desktop is unchanged.
 - Small controls (line steppers, remove/void, tender remove, sheet close and quantity, Exact remaining, quick cash notes, back links, error Dismiss, terminal Cancel, shift-bar links) are at least 40px on phones and tablets; Payment method buttons are all the same height.
 
+## Unreleased - reorder an item already sent to the kitchen (#442)
+
+- POS order screen: tapping a plain item whose line is already in the kitchen now adds a new line instead of failing with "line already sent". An unsent line of the same item still just gets its quantity bumped.
+
 ## Unreleased - offline hub status and sync issues (#437)
 
 - POS/KDS and QR/kiosk sign-in work over plain http on the shop LAN: session cookies are `secure` only on https requests.

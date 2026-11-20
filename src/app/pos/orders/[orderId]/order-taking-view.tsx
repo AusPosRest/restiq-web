@@ -136,7 +136,11 @@ function OrderTakingLoaded({
     // its quantity bumped - the same effect as pressing the line's own "+"
     // stepper - rather than a second, redundant line for the same item
     // (restiq-web#63: repeat taps were always POSTing a brand-new line).
-    const existingLine = order.lines.find((line) => line.itemId === item.id && line.variantId === null && line.modifiers.length === 0);
+    // A line the kitchen already has can't change (409 line_sent), so a
+    // reorder gets its own new line (restiq-web#442).
+    const existingLine = order.lines.find(
+      (line) => line.itemId === item.id && line.variantId === null && line.modifiers.length === 0 && !line.sentToKitchen,
+    );
     if (existingLine) {
       handleIncrement(existingLine);
       return;
