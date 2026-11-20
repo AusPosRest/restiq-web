@@ -3,13 +3,13 @@
 // Payments tab > Stripe account (restiq-backend#284 onboarding UX): where the restaurant is
 // on the way to taking cards, what Stripe still needs and from whom, and one click to carry
 // on in Stripe (or a link to copy for the owner).
-import { AlertTriangle, Check, CheckCircle2, Copy, ExternalLink } from "lucide-react";
+import { AlertTriangle, Check, CheckCircle2, ChevronRight, Copy, ExternalLink } from "lucide-react";
 import { useState } from "react";
 import { Button } from "@/components/ui/button";
 import { opsApi, OpsApiError, PaymentsView, StripeLink } from "../../api";
 import { StatusBadge } from "../../status-badge";
 import { useToast } from "../../toast";
-import { blocksLabel, sortRequirements, StepState, stripeSteps, URGENCY_LABELS, waitingOnLabel } from "./payments-state";
+import { blocksLabel, groupRequirements, requirementsSummary, sortRequirements, StepState, stripeSteps, URGENCY_LABELS, waitingOnLabel } from "./payments-state";
 import { copyToClipboard, openBlankTab, StripeLinkResult } from "./stripe-link";
 
 const MARKER: Record<StepState, string> = {
@@ -37,6 +37,7 @@ export function StripeAccountCard({
   const [busy, setBusy] = useState<"open" | "copy" | null>(null);
   const steps = stripeSteps(view);
   const requirements = sortRequirements(view.requirements);
+  const groups = groupRequirements(requirements);
   const allSet = view.status === "active" && requirements.length === 0;
 
   async function requestLink(): Promise<StripeLink | null> {
@@ -120,34 +121,45 @@ export function StripeAccountCard({
       )}
 
       {requirements.length > 0 && (
-        <section className="mt-6" aria-labelledby="payments-requirements-heading" data-testid="payments-requirements">
-          <h3 id="payments-requirements-heading" className="font-label text-xs font-semibold uppercase tracking-wider text-muted-foreground">
-            What Stripe still needs ({requirements.length})
-          </h3>
-          <ul className="mt-2 divide-y divide-border/30 rounded-lg border border-border/40">
-            {requirements.map((r) => {
-              const blocks = blocksLabel(r.blocks);
-              return (
-                <li key={r.code} className="px-4 py-3" data-testid={`payments-requirement-${r.code}`}>
-                  <div className="flex flex-wrap items-center gap-2">
-                    <span className="mr-auto text-sm font-medium">{r.title}</span>
-                    <span className={`${CHIP} ${URGENCY_CHIP[r.urgency]}`}>{URGENCY_LABELS[r.urgency]}</span>
-                  </div>
-                  {r.problem && (
-                    <p className="mt-2 flex items-start gap-1.5 rounded-md bg-status-warning/10 px-2.5 py-1.5 text-xs text-status-warning">
-                      <AlertTriangle aria-hidden="true" className="mt-px size-3.5 shrink-0" />
-                      {r.problem}
+        <div className="mt-6">
+          {/* What Stripe rejected stays in view; the full list is a click away (issue #441). */}
+          {groups
+            .filter((g) => g.problems.length > 0)
+            .map((g) => (
+              <p key={g.code} className="mb-2 flex items-start gap-1.5 rounded-md bg-status-warning/10 px-2.5 py-1.5 text-xs text-status-warning" data-testid={`payments-problem-${g.code}`}>
+                <AlertTriangle aria-hidden="true" className="mt-px size-3.5 shrink-0" />
+                <span>
+                  <span className="font-semibold">{g.title}:</span> {g.problems.join(" ")}
+                </span>
+              </p>
+            ))}
+          <details open={groups.length <= 3} className="group rounded-lg border border-border/40" data-testid="payments-requirements">
+            <summary className="flex cursor-pointer items-center gap-2 px-4 py-3 text-sm font-medium [&::-webkit-details-marker]:hidden" data-testid="payments-requirements-toggle">
+              <ChevronRight aria-hidden="true" className="size-4 shrink-0 text-muted-foreground transition-transform group-open:rotate-90" />
+              {requirementsSummary(requirements)}
+            </summary>
+            <ul className="divide-y divide-border/30 border-t border-border/40">
+              {groups.map((g) => {
+                const blocks = blocksLabel(g.blocks);
+                return (
+                  <li key={g.code} className="px-4 py-3" data-testid={`payments-requirement-${g.code}`}>
+                    <div className="flex flex-wrap items-center gap-2">
+                      <span className="mr-auto text-sm font-medium">
+                        {g.title}
+                        {g.count > 1 && <span className="ml-2 text-xs font-normal text-muted-foreground">×{g.count}</span>}
+                      </span>
+                      <span className={`${CHIP} ${URGENCY_CHIP[g.urgency]}`}>{URGENCY_LABELS[g.urgency]}</span>
+                    </div>
+                    <p className="mt-1.5 text-xs text-muted-foreground">
+                      {blocks && <span>{blocks} · </span>}
+                      <span>Waiting on: {waitingOnLabel(g.waitingOn)}</span>
                     </p>
-                  )}
-                  <p className="mt-1.5 text-xs text-muted-foreground">
-                    {blocks && <span>{blocks} · </span>}
-                    <span>Waiting on: {waitingOnLabel(r.waitingOn)}</span>
-                  </p>
-                </li>
-              );
-            })}
-          </ul>
-        </section>
+                  </li>
+                );
+              })}
+            </ul>
+          </details>
+        </div>
       )}
 
       {!allSet && (

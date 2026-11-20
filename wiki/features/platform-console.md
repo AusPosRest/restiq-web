@@ -160,3 +160,7 @@ first 12 characters of the SHA-256 evidence hash with the full hash in the
 - **Not built (by design):** photo upload (https URL only, until the item
   photo upload from #142 lands and the same regex can be shared), bulk CSV
   import into the directory, "which tenants imported this" counts.
+
+## Tenant Payments tab - what Stripe still needs (issue #441)
+
+The Stripe account card (`tenants/[id]/stripe-account-card.tsx`) shows the outstanding Stripe requirements as one collapsible line: total, how many are overdue and who they wait on. Opening it lists one row per title with a count (`groupRequirements` in `payments-state.ts`); a list of three rows or fewer starts open. Anything Stripe rejected is shown above the list so it is never hidden. Grouping is done in the web from the `requirements` array the API already returns.

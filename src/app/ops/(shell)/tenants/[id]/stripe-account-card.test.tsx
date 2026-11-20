@@ -41,11 +41,28 @@ describe("StripeAccountCard", () => {
     expect(screen.getByTestId("payments-step-payouts").dataset.state).toBe("current");
     const row = screen.getByTestId("payments-requirement-external_account");
     expect(row.textContent).toContain("Overdue");
-    expect(row.textContent).toContain("The account number is invalid.");
     expect(row.textContent).toContain("Blocks payouts");
     expect(row.textContent).toContain("Waiting on: Owner");
+    // What Stripe rejected sits outside the collapsible list, and a short list starts open.
+    expect(screen.getByTestId("payments-problem-external_account").textContent).toBe("Bank account: The account number is invalid.");
+    expect(screen.getByTestId("payments-requirements").contains(screen.getByTestId("payments-problem-external_account"))).toBe(false);
+    expect((screen.getByTestId("payments-requirements") as HTMLDetailsElement).open).toBe(true);
     expect(screen.getByTestId("payments-continue").textContent).toContain("Continue on Stripe");
     expect(screen.queryByTestId("payments-all-set")).toBeNull();
+  });
+
+  it("collapses a long list and shows one row per title with a count (#441)", () => {
+    const titles = ["Owners and directors", "Owners and directors", "Owners and directors", "Business details", "Bank account for payouts", "Accept Stripe's terms", "Support phone"];
+    renderCard({
+      ...VIEW,
+      requirements: titles.map((title, i): PaymentsView["requirements"][number] => ({ code: `req_${i}`, title, problem: null, urgency: "past_due", blocks: ["card_payments"], waitingOn: "owner" })),
+    });
+    expect((screen.getByTestId("payments-requirements") as HTMLDetailsElement).open).toBe(false);
+    expect(screen.getByTestId("payments-requirements-toggle").textContent).toBe("Stripe still needs 7 things · 7 overdue · waiting on the owner");
+    expect(screen.getAllByTestId(/^payments-requirement-req_/)).toHaveLength(5);
+    expect(screen.getByTestId("payments-requirement-req_0").textContent).toContain("Owners and directors×3");
+    expect(screen.getByTestId("payments-requirement-req_3").textContent).not.toContain("×");
+    expect(screen.getByTestId("payments-continue")).toBeTruthy();
   });
 
   it("says All set and hides the buttons when active with nothing due", () => {

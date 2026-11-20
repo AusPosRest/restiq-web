@@ -135,6 +135,43 @@ export function sortRequirements(requirements: StripeRequirement[]): StripeRequi
   return [...requirements].sort((a, b) => rank(a) - rank(b));
 }
 
+/** Requirements that share a title and who they wait on, shown as one row (issue #441). */
+export interface RequirementGroup {
+  /** The first requirement's code: a stable key for the row. */
+  code: string;
+  title: string;
+  count: number;
+  urgency: StripeRequirement["urgency"];
+  waitingOn: StripeRequirement["waitingOn"];
+  blocks: StripeRequirement["blocks"];
+  problems: string[];
+}
+
+/** Merges repeats. Takes sortRequirements output, so a group's first row is its most urgent. */
+export function groupRequirements(sorted: StripeRequirement[]): RequirementGroup[] {
+  const groups = new Map<string, RequirementGroup>();
+  for (const r of sorted) {
+    const key = `${r.title}|${r.waitingOn}`;
+    const group = groups.get(key);
+    if (!group) {
+      groups.set(key, { code: r.code, title: r.title, count: 1, urgency: r.urgency, waitingOn: r.waitingOn, blocks: [...r.blocks], problems: r.problem ? [r.problem] : [] });
+      continue;
+    }
+    group.count += 1;
+    for (const b of r.blocks) if (!group.blocks.includes(b)) group.blocks.push(b);
+    if (r.problem && !group.problems.includes(r.problem)) group.problems.push(r.problem);
+  }
+  return [...groups.values()];
+}
+
+/** "Stripe still needs 19 things · 19 overdue · waiting on the owner". */
+export function requirementsSummary(requirements: StripeRequirement[]): string {
+  const total = requirements.length;
+  const overdue = requirements.filter((r) => r.urgency === "past_due").length;
+  const who = requirements.some((r) => r.waitingOn === "owner") ? "waiting on the owner" : "Stripe is reviewing";
+  return [`Stripe still needs ${total} ${total === 1 ? "thing" : "things"}`, ...(overdue ? [`${overdue} overdue`] : []), who].join(" · ");
+}
+
 /** "Blocks card payments and payouts"; null when it blocks nothing yet. */
 export function blocksLabel(blocks: StripeRequirement["blocks"]): string | null {
   const names = (["card_payments", "payouts"] as const).filter((b) => blocks.includes(b)).map((b) => (b === "card_payments" ? "card payments" : "payouts"));
