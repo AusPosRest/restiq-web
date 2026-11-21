@@ -5,6 +5,10 @@ logged, per feature and date, in `wiki/tasks/completed.md`; this file starts
 with the payments epic.
 
 
+## Unreleased - Platform Console sidebar stays put (#440)
+
+- Fixed: the Platform Console sidebar no longer scrolls away with a long page. It stays at window height, with **Sign out** always in view, and scrolls on its own on a short window.
+
 ## Unreleased - service mode: open a restaurant as its owner (#449)
 
 - Added: Platform Console, tenants list (new Service column) and tenant page: **Open as store** asks for a reason, then opens that restaurant's owner console in a new tab in service mode. Disabled for an inactive tenant.

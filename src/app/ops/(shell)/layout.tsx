@@ -21,7 +21,8 @@ export default function OpsShellLayout({
 
   return (
     <div className="flex min-h-screen flex-1">
-      <aside className="hidden w-60 shrink-0 flex-col border-r border-border/40 bg-card md:flex">
+      {/* restiq-web#440: pinned at window height, like the owner console's - it used to scroll away with the page. */}
+      <aside className="sticky top-0 hidden h-screen w-60 shrink-0 flex-col overflow-y-auto border-r border-border/40 bg-card md:flex">
         <div className="px-6 py-6">
           <p className="font-headline text-2xl font-bold tracking-tight text-primary">RESTIQ</p>
           <p className="font-label mt-1 text-xs font-semibold uppercase tracking-wider text-muted-foreground">
