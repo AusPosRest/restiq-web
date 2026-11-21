@@ -26,6 +26,11 @@ describe("decideAdminRoute", () => {
     expect(decideAdminRoute("/admin/auth/accept-invite", "", undefined)).toEqual({ allow: true });
   });
 
+  it("allows the service-mode handoff without a session, even over an expired one (restiq-web#449)", () => {
+    expect(decideAdminRoute("/admin/auth/service", "", undefined)).toEqual({ allow: true });
+    expect(decideAdminRoute("/admin/auth/service", "", fakeToken(oneHourAgo))).toEqual({ allow: true });
+  });
+
   it("redirects unauthenticated /admin requests to login with the return URL", () => {
     const decision = decideAdminRoute("/admin/onboarding", "?step=menu", undefined);
     expect(decision).toEqual({

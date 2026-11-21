@@ -5,6 +5,12 @@ logged, per feature and date, in `wiki/tasks/completed.md`; this file starts
 with the payments epic.
 
 
+## Unreleased - service mode: open a restaurant as its owner (#449)
+
+- Added: Platform Console, tenants list (new Service column) and tenant page: **Open as store** asks for a reason, then opens that restaurant's owner console in a new tab in service mode. Disabled for an inactive tenant.
+- Added: owner console, service mode: an amber bar on every signed-in page names the restaurant and the operator, counts down the 1-hour session and has **Exit service mode** (the sidebar's Sign out reads the same). The agreement can be read but not signed, and card readers can't be ordered; the "please sign" strip is hidden.
+- Added: the sign-in page explains an expired service link and an ended service session.
+
 ## Unreleased - shorter "what Stripe still needs" list (#441)
 
 - Platform Console, tenant Payments tab: the list of what Stripe still needs is now one line ("Stripe still needs 19 things · 19 overdue · waiting on the owner") that opens on click. Repeats are merged into one row per title with a count, so 19 rows become 6. A list of three rows or fewer starts open.

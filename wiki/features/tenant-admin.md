@@ -1429,3 +1429,11 @@ mocked-fetch component tests (`reports.test.tsx`,
 - **Agreement banner.** It shows on every console page until the current agreement version is signed.
 - **Dashboard.** Only **Sales today** is shown, because margin, labour and waste have no data source. "As of" uses the viewer's clock.
 - **Branding.** The logo is saved as a URL; the backend stores no uploaded files.
+
+## Service mode - an operator inside the console (issue #449)
+
+- **Getting in:** `POST /admin/auth/service` (public, form body `code`) swaps the Platform Console's handoff code for a 1-hour admin token via `POST /admin/v1/auth/service-session`, sets `admin_session` (same flags as sign-in, max-age at most 3600) and redirects to `/admin`. Any failure goes to `/admin/login?service=expired` with no cookie.
+- **The bar:** `admin/service-mode.tsx`. `AdminTenantProvider` loads `GET tenant` once per page and shares it; `ServiceModeBar` shows when `service` is set: restaurant, operator email, "Ends in N min" (refreshed every minute) and **Exit service mode**. Mounted in the shell layout (above sidebar and top bar) and on the setup checklist (`onboarding/page.tsx`), not on the public login, invite or reset pages. Hidden in print. Not pinned on scroll, so the sticky sidebar is untouched.
+- **Owner-only actions:** the agreement can be read but not signed (`agreement-owner-only`), card readers can't be ordered (`reader-order-owner-only`), and the "please sign" strip is hidden. The API refuses these and logout with 403 `service_mode_forbidden` anyway.
+- **Leaving:** the bar's button and the sidebar's (relabelled) Sign out post to `/admin/auth/logout`. For an `svc: true` token it skips the API logout (that would end the owner's sessions), clears the cookie and shows "Service mode ended. You can close this tab."
+

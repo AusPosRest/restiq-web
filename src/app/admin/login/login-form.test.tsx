@@ -48,6 +48,17 @@ describe("LoginForm", () => {
     expect(screen.getByTestId("admin-login-reset-banner").textContent).toContain("password was changed");
   });
 
+  it("explains an expired or ended service-mode tab, and ignores other values (restiq-web#449)", () => {
+    render(<LoginForm nextPath="/admin" sessionExpired={false} service="expired" />);
+    expect(screen.getByTestId("admin-login-service-banner").textContent).toBe("This service link has expired. Open the store again from the Platform Console.");
+    cleanup();
+    render(<LoginForm nextPath="/admin" sessionExpired={false} service="ended" />);
+    expect(screen.getByTestId("admin-login-service-banner").textContent).toBe("Service mode ended. You can close this tab.");
+    cleanup();
+    render(<LoginForm nextPath="/admin" sessionExpired={false} service="toString" />);
+    expect(screen.queryByTestId("admin-login-service-banner")).toBeNull();
+  });
+
   it("names the restaurant on the sign-in page at its own address, and stays generic elsewhere (D14)", async () => {
     tenantLookup.mockResolvedValue({ tenantId: "t-1", slug: "bayleaf", displayName: "Bay Leaf Kitchens", status: "active", country: "IN", currency: "INR", branding: {} });
     render(await AdminLoginPage({ searchParams: Promise.resolve({}) }));

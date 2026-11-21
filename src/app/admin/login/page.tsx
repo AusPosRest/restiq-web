@@ -14,7 +14,7 @@ const highlights = [
 export default async function AdminLoginPage({
   searchParams,
 }: {
-  searchParams: Promise<{ next?: string; expired?: string; reset?: string }>;
+  searchParams: Promise<{ next?: string; expired?: string; reset?: string; service?: string }>;
 }) {
   const params = await searchParams;
   // D14: at a restaurant's own address the page names the restaurant.
@@ -48,7 +48,7 @@ export default async function AdminLoginPage({
           ) : null}
           <h1 className="font-headline text-3xl font-semibold">Sign in to Owner Console</h1>
           <p className="mt-2 text-sm text-muted-foreground">Owner credentials required</p>
-          <LoginForm nextPath={sanitizeAdminNextPath(params.next)} sessionExpired={params.expired === "1"} passwordReset={params.reset === "1"} />
+          <LoginForm nextPath={sanitizeAdminNextPath(params.next)} sessionExpired={params.expired === "1"} passwordReset={params.reset === "1"} service={params.service} />
         </div>
         <p className="mt-16 text-center text-xs text-muted-foreground">
           Restaurant owners &middot; secure access

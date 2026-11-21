@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { decodeTokenSubject, tokenIsExpired } from "./session-token";
+import { decodeTokenSubject, tokenIsExpired, tokenIsServiceSession } from "./session-token";
 
 function fakeToken(exp: number): string {
   const payload = Buffer.from(JSON.stringify({ sub: "x", exp })).toString("base64url");
@@ -37,5 +37,19 @@ describe("decodeTokenSubject", () => {
   it("returns null when the payload has no sub", () => {
     const payload = Buffer.from(JSON.stringify({ exp: 1 })).toString("base64url");
     expect(decodeTokenSubject(`header.${payload}.signature`)).toBeNull();
+  });
+});
+
+describe("tokenIsServiceSession (restiq-web#449)", () => {
+  const token = (payload: object) => `header.${Buffer.from(JSON.stringify(payload)).toString("base64url")}.signature`;
+
+  it("is true only for svc: true", () => {
+    expect(tokenIsServiceSession(token({ sub: "x", svc: true }))).toBe(true);
+    expect(tokenIsServiceSession(token({ sub: "x" }))).toBe(false);
+    expect(tokenIsServiceSession(token({ sub: "x", svc: "true" }))).toBe(false);
+  });
+
+  it("is false for a malformed token", () => {
+    expect(tokenIsServiceSession("not-a-jwt")).toBe(false);
   });
 });

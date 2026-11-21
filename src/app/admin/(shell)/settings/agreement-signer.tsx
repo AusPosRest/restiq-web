@@ -11,6 +11,7 @@ import { CheckCircle2 } from "lucide-react";
 import { useState } from "react";
 import { Button } from "@/components/ui/button";
 import { AdminApiError, agreementFileUrl, AgreementSignatureView, OwnerAgreementView, signAgreement } from "../../api";
+import { OwnerOnlyNote, useServiceMode } from "../../service-mode";
 import { LoadErrorPanel, Skeleton } from "../data-states";
 import { useToast } from "../toast";
 import { useAdminLoad } from "../use-admin-load";
@@ -64,8 +65,10 @@ function AgreementView({
   const [signerName, setSignerName] = useState("");
   const [accepted, setAccepted] = useState(false);
   const [signing, setSigning] = useState(false);
+  // restiq-web#449: a signature has to come from the owner's own account; the API refuses it in service mode too.
+  const serviceMode = useServiceMode() !== null;
 
-  const canSign = signerName.trim().length > 0 && accepted && !signing;
+  const canSign = signerName.trim().length > 0 && accepted && !signing && !serviceMode;
   const previous = history.filter((entry) => entry.agreementVersionId !== current.id);
 
   async function handleSign() {
@@ -146,33 +149,40 @@ function AgreementView({
           }}
         >
           <h3 className="font-headline text-base font-semibold">Sign this agreement</h3>
-          <div>
-            <label htmlFor="agreement-signer-name" className="font-label mb-1 block text-xs font-semibold uppercase tracking-wider text-muted-foreground">
-              Your full name (this is your signature)
+          {serviceMode && (
+            <OwnerOnlyNote testId="agreement-owner-only" title="Only the owner can sign">
+              A signature has to come from the restaurant&apos;s own account. In service mode you can read the agreement, but not sign it.
+            </OwnerOnlyNote>
+          )}
+          <fieldset disabled={serviceMode} className="space-y-4">
+            <div>
+              <label htmlFor="agreement-signer-name" className="font-label mb-1 block text-xs font-semibold uppercase tracking-wider text-muted-foreground">
+                Your full name (this is your signature)
+              </label>
+              <input
+                id="agreement-signer-name"
+                data-testid="agreement-signer-name"
+                type="text"
+                autoComplete="name"
+                maxLength={200}
+                value={signerName}
+                onChange={(event) => setSignerName(event.target.value)}
+                className={FIELD_CLASS}
+              />
+            </div>
+            <label className="flex items-start gap-2 text-sm">
+              <input
+                type="checkbox"
+                data-testid="agreement-accept"
+                checked={accepted}
+                onChange={(event) => setAccepted(event.target.checked)}
+                className="mt-0.5 size-4 rounded border-border accent-primary focus-visible:ring-2 focus-visible:ring-ring"
+              />
+              <span>
+                I have read the agreement above and agree to version {current.version} on behalf of my business. My name, email and the time of signing will be recorded.
+              </span>
             </label>
-            <input
-              id="agreement-signer-name"
-              data-testid="agreement-signer-name"
-              type="text"
-              autoComplete="name"
-              maxLength={200}
-              value={signerName}
-              onChange={(event) => setSignerName(event.target.value)}
-              className={FIELD_CLASS}
-            />
-          </div>
-          <label className="flex items-start gap-2 text-sm">
-            <input
-              type="checkbox"
-              data-testid="agreement-accept"
-              checked={accepted}
-              onChange={(event) => setAccepted(event.target.checked)}
-              className="mt-0.5 size-4 rounded border-border accent-primary focus-visible:ring-2 focus-visible:ring-ring"
-            />
-            <span>
-              I have read the agreement above and agree to version {current.version} on behalf of my business. My name, email and the time of signing will be recorded.
-            </span>
-          </label>
+          </fieldset>
           <div className="flex justify-end border-t border-border/40 pt-4">
             <Button type="submit" data-testid="agreement-sign" disabled={!canSign}>
               {signing ? "Signing..." : "Sign agreement"}
