@@ -244,7 +244,8 @@ export function TenantsTable() {
                 <th className="font-label px-4 text-left text-xs font-semibold uppercase tracking-wider text-muted-foreground">Status</th>
                 <th className="font-label px-4 text-left text-xs font-semibold uppercase tracking-wider text-muted-foreground">Health</th>
                 <SortHeader label="Created" column="createdAt" query={query} onSort={(column) => navigate(withSort(query, column))} testId="tenants-sort-created" className="hidden sm:table-cell" />
-                <th className="font-label px-4 text-right text-xs font-semibold uppercase tracking-wider text-muted-foreground">Service</th>
+                {/* restiq-web#449: on a phone the button lives on the tenant's own page (PE-27 keeps this table to three columns there). */}
+                <th className="font-label hidden px-4 text-right text-xs font-semibold uppercase tracking-wider text-muted-foreground sm:table-cell">Service</th>
               </tr>
             </thead>
             <tbody>
@@ -288,7 +289,7 @@ export function TenantsTable() {
                     <td className="hidden px-4 tabular-nums text-muted-foreground sm:table-cell">
                       {new Date(tenant.createdAt).toLocaleDateString(DATE_LOCALE, { day: "numeric", month: "short", year: "numeric" })}
                     </td>
-                    <td className="px-4 text-right">
+                    <td className="hidden px-4 text-right sm:table-cell">
                       <OpenAsStoreButton
                         tenantId={tenant.id}
                         tenantName={tenant.name}
