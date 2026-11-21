@@ -174,3 +174,4 @@ An operator can open one restaurant's owner console for support, without the own
 - **Where the form goes:** `serviceHandoffUrl` uses `https://<slug>.<NEXT_PUBLIC_BASE_DOMAIN>/admin/auth/service` only when the slug and base domain are valid and this console is itself served on the base domain; otherwise (localhost, a dev host, no slug) the same-origin path.
 - **Ends:** after 1 hour, when the operator exits service mode in the owner tab, or when they sign out of the Platform Console (enforced by the API).
 
+- **Address that does not answer (issue #451):** before posting the code, the console probes the restaurant's address (`fetch` in `no-cors` mode, 4 s). If it cannot be reached (no DNS or certificate, as on dev unless the address is set up by hand), the code is posted to the console's own `/admin/auth/service` instead.

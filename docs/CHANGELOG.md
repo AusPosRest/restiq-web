@@ -10,6 +10,7 @@ with the payments epic.
 - Added: Platform Console, tenants list (new Service column) and tenant page: **Open as store** asks for a reason, then opens that restaurant's owner console in a new tab in service mode. Disabled for an inactive tenant.
 - Added: owner console, service mode: an amber bar on every signed-in page names the restaurant and the operator, counts down the 1-hour session and has **Exit service mode** (the sidebar's Sign out reads the same). The agreement can be read but not signed, and card readers can't be ordered; the "please sign" strip is hidden.
 - Added: the sign-in page explains an expired service link and an ended service session.
+- Fixed (#451): **Open as store** no longer dies on a restaurant address that does not exist (every restaurant on dev): if the address does not answer, the handoff uses the console's own address. A fresh session reads "Ends in 60 min", not 61.
 
 ## Unreleased - shorter "what Stripe still needs" list (#441)
 
