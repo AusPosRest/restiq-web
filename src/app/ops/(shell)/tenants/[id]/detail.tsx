@@ -15,6 +15,7 @@ import { LoadErrorPanel, Skeleton } from "../../data-states";
 import { StatusBadge } from "../../status-badge";
 import { useToast } from "../../toast";
 import { useOpsLoad } from "../../use-ops-load";
+import { OpenAsStoreButton } from "../open-as-store";
 import { DevicesTable } from "../../devices/devices-table";
 import { CapabilitiesTab } from "./capabilities-tab";
 import { AgreementsTab } from "./agreements-tab";
@@ -213,6 +214,7 @@ export function TenantDetailPage() {
           </p>
         </div>
         <div className="flex items-center gap-2">
+          <OpenAsStoreButton tenantId={tenant.id} tenantName={tenant.name} status={tenant.status} />
           {tenant.status === "provisioning" && (
             <Button data-testid="tenant-activate" onClick={() => setLifecycleAction("activate")}>
               <Rocket aria-hidden="true" /> Activate tenant

@@ -7,6 +7,7 @@ import userEvent from "@testing-library/user-event";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import type { OwnerAgreementView } from "../../api";
 import { ToastProvider } from "../toast";
+import { AdminTenantProvider } from "../../service-mode";
 import { AgreementSigner } from "./agreement-signer";
 
 const CURRENT = { id: "0192aaaa-0000-7000-8000-000000000002", version: 2, title: "Platform Services Agreement (2026)", hasFile: true, fileName: "psa.pdf", sizeBytes: 20480, fileSha256: "b".repeat(64), publishedAt: "2026-09-01T10:00:00.000Z" };
@@ -125,5 +126,23 @@ describe("AgreementSigner", () => {
     vi.stubGlobal("fetch", vi.fn(() => Promise.resolve(jsonResponse({ error: { code: "boom", message: "boom" } }, 500))));
     renderSigner();
     await screen.findByTestId("agreement-load-error");
+  });
+
+  it("lets an operator in service mode read but not sign (restiq-web#449)", async () => {
+    const tenant = { name: "Bombay Bistro", testMode: false, service: { operatorEmail: "op@restiq.test", expiresAt: "2099-01-01T00:00:00.000Z" } };
+    vi.stubGlobal("fetch", vi.fn((input: RequestInfo | URL) =>
+      Promise.resolve(jsonResponse(String(input).endsWith("/admin/api/tenant") ? tenant : { current: CURRENT, signature: null, history: [] })),
+    ));
+    render(
+      <AdminTenantProvider>
+        <ToastProvider>
+          <AgreementSigner />
+        </ToastProvider>
+      </AdminTenantProvider>,
+    );
+    expect((await screen.findByTestId("agreement-owner-only")).textContent).toContain("Only the owner can sign");
+    expect(screen.getByTestId("agreement-viewer")).toBeTruthy();
+    expect(screen.getByTestId("agreement-signer-name").matches(":disabled")).toBe(true);
+    expect((screen.getByTestId("agreement-sign") as HTMLButtonElement).disabled).toBe(true);
   });
 });

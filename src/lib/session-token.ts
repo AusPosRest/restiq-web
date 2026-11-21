@@ -34,3 +34,19 @@ export function decodeTokenSubject(token: string): string | null {
     return null;
   }
 }
+
+/**
+ * restiq-web#449: true for an operator's service-mode session (`svc: true` in the admin token's
+ * payload). Decoded, not verified - it only picks the logout path; the API enforces what a
+ * service session may do.
+ */
+export function tokenIsServiceSession(token: string): boolean {
+  try {
+    const [, payload] = token.split(".");
+    if (!payload) return false;
+    const decoded: unknown = JSON.parse(atob(payload.replace(/-/g, "+").replace(/_/g, "/")));
+    return typeof decoded === "object" && decoded !== null && (decoded as { svc?: unknown }).svc === true;
+  } catch {
+    return false;
+  }
+}

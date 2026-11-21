@@ -6,6 +6,7 @@
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import type { OwnerAgreementView } from "../api";
+import { useServiceMode } from "../service-mode";
 import { useAdminLoad } from "./use-admin-load";
 
 export function needsSignature(view: OwnerAgreementView | null): boolean {
@@ -15,7 +16,9 @@ export function needsSignature(view: OwnerAgreementView | null): boolean {
 export function AgreementBanner() {
   const pathname = usePathname();
   const { data } = useAdminLoad<OwnerAgreementView>("agreement");
-  if (pathname.startsWith("/admin/settings/agreement") || !needsSignature(data)) return null;
+  // restiq-web#449: an operator in service mode can't sign, so don't ask them to.
+  const service = useServiceMode();
+  if (service || pathname.startsWith("/admin/settings/agreement") || !needsSignature(data)) return null;
   return (
     <div role="status" data-testid="agreement-banner" className="flex flex-wrap items-center justify-between gap-3 border-b border-primary/30 bg-primary/10 px-4 py-2.5 text-sm sm:px-6 print:hidden">
       <span>Please read and sign the RESTIQ platform agreement (version {data?.current?.version}).</span>

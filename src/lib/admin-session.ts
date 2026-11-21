@@ -9,11 +9,13 @@ export const ADMIN_SESSION_COOKIE = "admin_session";
 export const ADMIN_SESSION_MAX_AGE_SECONDS = 12 * 60 * 60;
 
 export const ADMIN_LOGIN_PATH = "/admin/login";
-/** Reachable without a session: login, its route handler, accepting an owner invite, and password reset. */
+/** Reachable without a session: login, its route handler, accepting an owner invite, password reset, and the service-mode handoff. */
 const PUBLIC_ADMIN_PATHS = new Set([
   ADMIN_LOGIN_PATH,
   "/admin/auth/login",
   "/admin/auth/accept-invite",
+  // restiq-web#449: an operator's service-mode handoff arrives before there is a session.
+  "/admin/auth/service",
   // Password reset: asking for the link and using it both happen before there is a session.
   "/admin/forgot-password",
   "/admin/reset-password",

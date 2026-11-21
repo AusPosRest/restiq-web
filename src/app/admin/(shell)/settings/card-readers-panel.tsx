@@ -19,6 +19,7 @@ import {
 import { formatDate } from "@/lib/datetime";
 import { formatPrice } from "@/lib/money";
 import { adminApi, AdminApiError } from "../../api";
+import { OwnerOnlyNote, useServiceMode } from "../../service-mode";
 import type { OutletView } from "../menu/menu-state";
 import { LoadErrorPanel, Skeleton } from "../data-states";
 import { useOutlets } from "../outlet-context";
@@ -128,7 +129,9 @@ function OrderReader({
   const total = orderTotalMinor(prices, form.model, form.quantity);
   const checked = validateOrderForm(form, prices);
   const formError = "error" in checked ? checked.error : null;
-  const canOrder = cardOnFile && prices.length > 0;
+  // restiq-web#449: an order charges the restaurant's card, so only the owner places one; the API refuses it in service mode too.
+  const serviceMode = useServiceMode() !== null;
+  const canOrder = cardOnFile && prices.length > 0 && !serviceMode;
 
   function update(patch: Partial<OrderForm>) {
     setError(null);
@@ -172,6 +175,13 @@ function OrderReader({
         </p>
       ) : (
         <p className="mt-1 text-sm text-muted-foreground">Charged now to the card your subscription is billed to.</p>
+      )}
+      {serviceMode && (
+        <div className="mt-3">
+          <OwnerOnlyNote testId="reader-order-owner-only" title="Only the owner can order readers">
+            An order is charged to the restaurant&apos;s card, so it has to come from the restaurant&apos;s own account. In service mode you can see readers and orders, but not order.
+          </OwnerOnlyNote>
+        </div>
       )}
 
       <form

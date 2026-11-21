@@ -10,7 +10,24 @@ const GENERIC_ERROR = "Incorrect email or password";
 const LOCKED_OUT_ERROR = "Too many sign-in attempts. Please try again later.";
 const FAILURE_ERROR = "Sign-in failed. Check your connection and try again.";
 
-export function LoginForm({ nextPath, sessionExpired, passwordReset = false }: { nextPath: string; sessionExpired: boolean; passwordReset?: boolean }) {
+// restiq-web#449: where an operator's service-mode tab lands when its link was refused or it was exited.
+const SERVICE_NOTICES: Record<string, string> = {
+  expired: "This service link has expired. Open the store again from the Platform Console.",
+  ended: "Service mode ended. You can close this tab.",
+};
+
+export function LoginForm({
+  nextPath,
+  sessionExpired,
+  passwordReset = false,
+  service,
+}: {
+  nextPath: string;
+  sessionExpired: boolean;
+  passwordReset?: boolean;
+  service?: string;
+}) {
+  const serviceNotice = service && Object.hasOwn(SERVICE_NOTICES, service) ? SERVICE_NOTICES[service] : null;
   const router = useRouter();
   const [error, setError] = useState<string | null>(null);
   const [pending, setPending] = useState(false);
@@ -52,6 +69,16 @@ export function LoginForm({ nextPath, sessionExpired, passwordReset = false }: {
           className="rounded-lg border border-status-active/40 bg-status-active/10 px-4 py-3 text-sm text-status-active"
         >
           Your password was changed. Sign in with the new one.
+        </p>
+      ) : null}
+
+      {serviceNotice ? (
+        <p
+          role="status"
+          data-testid="admin-login-service-banner"
+          className="rounded-lg border border-status-warning/40 bg-status-warning/10 px-4 py-3 text-sm text-status-warning"
+        >
+          {serviceNotice}
         </p>
       ) : null}
 

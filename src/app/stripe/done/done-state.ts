@@ -2,6 +2,8 @@
 // Operators (ops cookie present) go back to the tenant's tab; owners go to their admin.
 // tenant and slug come from the query string, so they are checked before they become URLs.
 
+import { BASE_DOMAIN as DOMAIN, TENANT_SLUG as SLUG } from "@/lib/tenant-by-host";
+
 export type DoneKind = "success" | "expired" | "cancelled";
 
 export interface DoneResult {
@@ -23,8 +25,6 @@ export interface DoneInput {
 }
 
 const TENANT = /^[0-9a-f-]{1,64}$/i;
-const SLUG = /^[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?$/;
-const DOMAIN = /^[a-z0-9.-]+(?::\d+)?$/i;
 
 export function doneResult({ flow, tenant, slug, cancelled, isOperator, baseDomain }: DoneInput): DoneResult {
   const billing = flow === "billing";

@@ -3,6 +3,10 @@
 // (no match, API down, no address) is null - callers fall back to the generic RESTIQ look.
 import { apiUrl } from "@/lib/api-url";
 
+// A slug and base domain checked before they become part of a URL (/stripe/done, restiq-web#449's service handoff).
+export const TENANT_SLUG = /^[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?$/;
+export const BASE_DOMAIN = /^[a-z0-9.-]+(?::\d+)?$/i;
+
 export interface TenantPublic {
   tenantId: string;
   slug: string;

@@ -12,6 +12,7 @@ import { TenantListResult } from "../api";
 import { LoadErrorPanel, Skeleton } from "../data-states";
 import { StatusBadge } from "../status-badge";
 import { useOpsLoad } from "../use-ops-load";
+import { OpenAsStoreButton } from "./open-as-store";
 import {
   clearFilters,
   COUNTRY_OPTIONS,
@@ -243,13 +244,15 @@ export function TenantsTable() {
                 <th className="font-label px-4 text-left text-xs font-semibold uppercase tracking-wider text-muted-foreground">Status</th>
                 <th className="font-label px-4 text-left text-xs font-semibold uppercase tracking-wider text-muted-foreground">Health</th>
                 <SortHeader label="Created" column="createdAt" query={query} onSort={(column) => navigate(withSort(query, column))} testId="tenants-sort-created" className="hidden sm:table-cell" />
+                {/* restiq-web#449: on a phone the button lives on the tenant's own page (PE-27 keeps this table to three columns there). */}
+                <th className="font-label hidden px-4 text-right text-xs font-semibold uppercase tracking-wider text-muted-foreground sm:table-cell">Service</th>
               </tr>
             </thead>
             <tbody>
               {loading &&
                 Array.from({ length: 5 }, (_, row) => (
                   <tr key={row} className="h-12 border-b border-border/20" data-testid={row === 0 ? "tenants-loading" : undefined}>
-                    {Array.from({ length: 7 }, (_, col) => (
+                    {Array.from({ length: 8 }, (_, col) => (
                       <td key={col} className="px-4">
                         <Skeleton className="h-4" />
                       </td>
@@ -285,6 +288,15 @@ export function TenantsTable() {
                     </td>
                     <td className="hidden px-4 tabular-nums text-muted-foreground sm:table-cell">
                       {new Date(tenant.createdAt).toLocaleDateString(DATE_LOCALE, { day: "numeric", month: "short", year: "numeric" })}
+                    </td>
+                    <td className="hidden px-4 text-right sm:table-cell">
+                      <OpenAsStoreButton
+                        tenantId={tenant.id}
+                        tenantName={tenant.name}
+                        status={tenant.status}
+                        variant="outline"
+                        className="border-primary bg-primary/10 text-primary hover:bg-primary/20 hover:text-primary"
+                      />
                     </td>
                   </tr>
                 ))}

@@ -3,6 +3,7 @@ import { cleanup, render, screen, waitFor } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import type { TenantListItem } from "../api";
+import { ToastProvider } from "../toast";
 import { TenantsTable } from "./tenants-table";
 
 const replace = vi.fn();
@@ -48,13 +49,13 @@ describe("TenantsTable", () => {
 
   it("shows skeleton rows while loading", () => {
     vi.stubGlobal("fetch", vi.fn().mockReturnValue(new Promise(() => undefined)));
-    render(<TenantsTable />);
+    render(<ToastProvider><TenantsTable /></ToastProvider>);
     expect(screen.getByTestId("tenants-loading")).toBeTruthy();
   });
 
   it("renders rows and opens detail on row click", async () => {
     vi.stubGlobal("fetch", vi.fn().mockResolvedValue(listResponse([tenant({})])));
-    render(<TenantsTable />);
+    render(<ToastProvider><TenantsTable /></ToastProvider>);
     const row = await screen.findByTestId("tenants-row-0192aaaa-0000-7000-8000-000000000001");
     expect(row.textContent).toContain("Bombay Bistro Group");
     await userEvent.click(row);
@@ -64,7 +65,7 @@ describe("TenantsTable", () => {
   it("badges Test-mode tenants TEST and shows each tenant's health (#213, PE-2)", async () => {
     const testId = "0192aaaa-0000-7000-8000-000000000002";
     vi.stubGlobal("fetch", vi.fn().mockResolvedValue(listResponse([tenant({ health: "lagging" }), tenant({ id: testId, name: "Demo Diner", testMode: true })])));
-    render(<TenantsTable />);
+    render(<ToastProvider><TenantsTable /></ToastProvider>);
     expect((await screen.findByTestId(`tenants-test-badge-${testId}`)).textContent).toBe("Test");
     expect(screen.queryByTestId("tenants-test-badge-0192aaaa-0000-7000-8000-000000000001")).toBeNull();
     expect(screen.getByTestId("tenants-row-0192aaaa-0000-7000-8000-000000000001").textContent).toContain("lagging");
@@ -72,7 +73,7 @@ describe("TenantsTable", () => {
 
   it("shows the true-empty state with a New tenant CTA when nothing exists", async () => {
     vi.stubGlobal("fetch", vi.fn().mockResolvedValue(listResponse([])));
-    render(<TenantsTable />);
+    render(<ToastProvider><TenantsTable /></ToastProvider>);
     expect(await screen.findByTestId("tenants-empty")).toBeTruthy();
     expect(screen.getByTestId("tenants-empty-new")).toBeTruthy();
     expect(screen.queryByTestId("tenants-filtered-empty")).toBeNull();
@@ -81,7 +82,7 @@ describe("TenantsTable", () => {
   it("shows the filtered-empty state with clear-filters when filters hide everything", async () => {
     search = "status=active";
     vi.stubGlobal("fetch", vi.fn().mockResolvedValue(listResponse([])));
-    render(<TenantsTable />);
+    render(<ToastProvider><TenantsTable /></ToastProvider>);
     expect(await screen.findByTestId("tenants-filtered-empty")).toBeTruthy();
     expect(screen.queryByTestId("tenants-empty")).toBeNull();
     await userEvent.click(screen.getByTestId("tenants-filtered-empty-clear"));
@@ -94,7 +95,7 @@ describe("TenantsTable", () => {
       .mockResolvedValueOnce(new Response("{}", { status: 500 }))
       .mockResolvedValue(listResponse([tenant({})]));
     vi.stubGlobal("fetch", fetchMock);
-    render(<TenantsTable />);
+    render(<ToastProvider><TenantsTable /></ToastProvider>);
     const panel = await screen.findByTestId("tenants-error");
     expect(panel).toBeTruthy();
     await userEvent.click(screen.getByTestId("tenants-error-retry"));
@@ -106,7 +107,7 @@ describe("TenantsTable", () => {
   it("mirrors filter changes into the URL and removes chips per filter", async () => {
     search = "status=active&country=IN";
     vi.stubGlobal("fetch", vi.fn().mockResolvedValue(listResponse([tenant({ status: "active" })])));
-    render(<TenantsTable />);
+    render(<ToastProvider><TenantsTable /></ToastProvider>);
     const chips = await screen.findByTestId("tenants-filter-chips");
     expect(chips.textContent).toContain("Status: active");
     expect(chips.textContent).toContain("Country: IN");
@@ -120,7 +121,7 @@ describe("TenantsTable", () => {
 
   it("renders the inactive status badge and offers it in the status filter", async () => {
     vi.stubGlobal("fetch", vi.fn().mockResolvedValue(listResponse([tenant({ status: "inactive" })])));
-    render(<TenantsTable />);
+    render(<ToastProvider><TenantsTable /></ToastProvider>);
     const row = await screen.findByTestId("tenants-row-0192aaaa-0000-7000-8000-000000000001");
     expect(row.textContent).toContain("inactive");
 
@@ -130,7 +131,7 @@ describe("TenantsTable", () => {
 
   it("puts sort state in the URL when a header is clicked", async () => {
     vi.stubGlobal("fetch", vi.fn().mockResolvedValue(listResponse([tenant({})])));
-    render(<TenantsTable />);
+    render(<ToastProvider><TenantsTable /></ToastProvider>);
     await screen.findByTestId("tenants-table");
     await userEvent.click(screen.getByTestId("tenants-sort-name"));
     expect(replace).toHaveBeenCalledWith("/ops/tenants?sort=name");

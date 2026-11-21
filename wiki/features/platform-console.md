@@ -164,3 +164,13 @@ first 12 characters of the SHA-256 evidence hash with the full hash in the
 ## Tenant Payments tab - what Stripe still needs (issue #441)
 
 The Stripe account card (`tenants/[id]/stripe-account-card.tsx`) shows the outstanding Stripe requirements as one collapsible line: total, how many are overdue and who they wait on. Opening it lists one row per title with a count (`groupRequirements` in `payments-state.ts`); a list of three rows or fewer starts open. Anything Stripe rejected is shown above the list so it is never hidden. Grouping is done in the web from the `requirements` array the API already returns.
+
+## Open as store - service mode (issue #449)
+
+An operator can open one restaurant's owner console for support, without the owner's password.
+
+- **Where:** **Open as store** in the tenants list (Service column, outline amber) and in the tenant page header (before Activate/Deactivate/Reactivate). Disabled for an inactive tenant. In the list the button stops click and Enter from reaching the row.
+- **Flow:** the confirm dialog asks for a reason (audited). On confirm the console opens a blank tab straight away (so popup blockers allow it), calls `POST tenants/:id/service-session { reason }` for a 60-second code, then POSTs the code in a hidden form to `/admin/auth/service` in that tab. The code is never put in a URL. On failure the blank tab closes and a toast explains (409: "This tenant is inactive. Reactivate it first.").
+- **Where the form goes:** `serviceHandoffUrl` uses `https://<slug>.<NEXT_PUBLIC_BASE_DOMAIN>/admin/auth/service` only when the slug and base domain are valid and this console is itself served on the base domain; otherwise (localhost, a dev host, no slug) the same-origin path.
+- **Ends:** after 1 hour, when the operator exits service mode in the owner tab, or when they sign out of the Platform Console (enforced by the API).
+
