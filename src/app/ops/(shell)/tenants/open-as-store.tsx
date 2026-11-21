@@ -27,6 +27,19 @@ export function serviceHandoffUrl(slug: string | null, baseDomain: string | unde
   return `https://${slug}.${baseDomain}${HANDOFF_PATH}`;
 }
 
+/**
+ * restiq-web#451: does the restaurant's own address answer? Dev has none unless one is set up by
+ * hand, and the new tab died on the missing name. Any response counts; a DNS or TLS failure throws.
+ */
+async function reachable(handoffUrl: string): Promise<boolean> {
+  try {
+    await fetch(new URL("/admin/login", handoffUrl).href, { mode: "no-cors", cache: "no-store", signal: AbortSignal.timeout(4000) });
+    return true;
+  } catch {
+    return false;
+  }
+}
+
 interface ServiceSession {
   code: string;
   slug: string | null;
@@ -55,7 +68,9 @@ export function OpenAsStoreButton({
       const session = await opsApi<ServiceSession>(`tenants/${tenantId}/service-session`, { method: "POST", body: JSON.stringify({ reason }) });
       const form = document.createElement("form");
       form.method = "post";
-      form.action = serviceHandoffUrl(session.slug, process.env.NEXT_PUBLIC_BASE_DOMAIN, window.location.hostname);
+      const url = serviceHandoffUrl(session.slug, process.env.NEXT_PUBLIC_BASE_DOMAIN, window.location.hostname);
+      // An address that does not answer falls back to this console's own, where the owner console lives too.
+      form.action = url === HANDOFF_PATH || (await reachable(url)) ? url : HANDOFF_PATH;
       // A blocked popup leaves no tab to fill: open the store in this one rather than lose the code.
       form.target = tab ? target : "_self";
       form.hidden = true;

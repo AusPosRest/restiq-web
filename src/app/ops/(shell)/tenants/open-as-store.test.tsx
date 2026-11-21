@@ -116,6 +116,37 @@ describe("OpenAsStoreButton", () => {
     expect((submitted[0].elements.namedItem("code") as HTMLInputElement).value).toBe("hc_secret");
   });
 
+  // restiq-web#451: dev has no per-restaurant addresses, so the new tab died on a name that does not exist.
+  it.each([
+    ["answers", true, "https://bayleaf.localhost/admin/auth/service"],
+    ["cannot be reached", false, "http://localhost:3000/admin/auth/service"],
+  ])("hands off to the restaurant's address only when it %s", async (_label, up, expected) => {
+    vi.stubEnv("NEXT_PUBLIC_BASE_DOMAIN", "localhost");
+    vi.stubGlobal("open", vi.fn().mockReturnValue({ opener: null, close: vi.fn() }));
+    const fetchMock = vi.fn((url: string) =>
+      url.startsWith("/ops/api/")
+        ? Promise.resolve(new Response(JSON.stringify({ code: "hc_secret", slug: "bayleaf", expiresInSeconds: 60 }), { status: 200 }))
+        : up
+          ? Promise.resolve(new Response(null))
+          : Promise.reject(new TypeError("Failed to fetch")),
+    );
+    vi.stubGlobal("fetch", fetchMock);
+    const submitted: HTMLFormElement[] = [];
+    vi.spyOn(HTMLFormElement.prototype, "submit").mockImplementation(function (this: HTMLFormElement) {
+      submitted.push(this);
+    });
+
+    renderInRow("active");
+    await userEvent.click(screen.getByTestId("open-as-store-t-1"));
+    await userEvent.type(screen.getByTestId("confirm-reason"), "Menu help");
+    await userEvent.click(screen.getByTestId("confirm-submit"));
+
+    await waitFor(() => expect(submitted).toHaveLength(1));
+    expect(fetchMock).toHaveBeenCalledWith("https://bayleaf.localhost/admin/login", expect.objectContaining({ mode: "no-cors" }));
+    expect(submitted[0].action).toBe(expected);
+    vi.unstubAllEnvs();
+  });
+
   it("closes the blank tab and explains an inactive tenant", async () => {
     const tab = { opener: {} as unknown, close: vi.fn() };
     vi.stubGlobal("open", vi.fn().mockReturnValue(tab));

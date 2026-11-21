@@ -37,7 +37,8 @@ export function useServiceMode(): ServiceInfo | null {
 }
 
 export function minutesLeft(expiresAt: string, now: number): number {
-  return Math.max(0, Math.ceil((Date.parse(expiresAt) - now) / 60_000));
+  // Nearest, not up: expiresAt is the server's clock, and a browser a few seconds behind showed 61 (restiq-web#451).
+  return Math.max(0, Math.round((Date.parse(expiresAt) - now) / 60_000));
 }
 
 export function ServiceModeBar() {

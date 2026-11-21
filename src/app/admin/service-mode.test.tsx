@@ -46,9 +46,11 @@ describe("ServiceModeBar", () => {
 });
 
 describe("minutesLeft", () => {
-  it("rounds up and never goes below zero", () => {
+  it("rounds to the nearest minute and never goes below zero", () => {
     const now = Date.parse("2026-11-21T10:00:00.000Z");
     expect(minutesLeft("2026-11-21T10:59:30.000Z", now)).toBe(60);
+    // restiq-web#451: a browser clock a few seconds behind the server must not turn a fresh 60 minutes into 61.
+    expect(minutesLeft("2026-11-21T11:00:20.000Z", now)).toBe(60);
     expect(minutesLeft("2026-11-21T09:00:00.000Z", now)).toBe(0);
   });
 });
