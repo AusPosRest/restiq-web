@@ -637,7 +637,7 @@ done now, this is what actually happened:
 - **Money entry never uses the OS numeric keyboard.** `AmountKeypad`
 - **Whole units on the shift keypads (issue #370):** the opening float, cash movement and drawer count pass `onDecimal`, so an entry is whole rupees / dollars with an optional decimal part (`1000` = 1,000.00, `523.45` = 523.45); the bottom-left key is `.` and Clear sits under the readout. The tender keypad stays whole units with no decimals, the discount keypad a percent.
   (`src/app/pos/shift/amount-keypad.tsx`) is a shared calculator-style digit
-  grid (press digits to build up minor units, cents-first) used for the
+  grid (digits build up the amount - whole units on the shift keypads, see above) used for the
   opening float, a movement's amount, and the blind count - reused rather
   than three separate `<input type="number">` fields, per EXPERIENCE.md's
   "numeric entry always via a large on-screen keypad component" rule.
