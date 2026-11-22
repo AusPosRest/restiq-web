@@ -12,7 +12,7 @@ export function formatMinor(amountMinor: number, currency = "INR"): string {
   return formatMoney(amountMinor, currency);
 }
 
-/** BlindCountKeypad/AmountKeypad build up a plain digit string (cents-first, calculator-style); this turns it into minor units. */
+/** A plain digit string as a whole number - the tender keypad's whole rupees / dollars and the discount percent. */
 export function digitsToMinor(digits: string): number {
   return digits === "" ? 0 : parseInt(digits, 10);
 }
@@ -21,6 +21,25 @@ export function appendDigit(digits: string, digit: string, maxDigits = 9): strin
   if (digits.length >= maxDigits) return digits;
   const next = digits === "0" ? digit : digits + digit;
   return next.replace(/^0+(?=\d)/, "");
+}
+
+// restiq-web#370: the shift keypads (float, cash movement, drawer count) used to read digits as paise,
+// so 1000 opened a Rs 10 float while the tender keypad on the same till read it as Rs 1,000. An entry is
+// now whole rupees / dollars with an optional decimal part for paise / cents: "1000", "523.4", "523.45".
+
+/** A whole-units entry in minor units. Integer maths - no float rounding on money. */
+export function entryToMinor(entry: string): number {
+  const [whole, fraction = ""] = entry.split(".");
+  return parseInt(whole || "0", 10) * 100 + parseInt(fraction.padEnd(2, "0"), 10);
+}
+
+/** Adds a digit or "." to an entry: one decimal point, two decimals, `maxWholeDigits` before the point. */
+export function appendEntryKey(entry: string, key: string, maxWholeDigits = 7): string {
+  const [whole, fraction] = entry.split(".");
+  if (key === ".") return fraction === undefined ? `${whole || "0"}.` : entry;
+  if (fraction !== undefined) return fraction.length >= 2 ? entry : entry + key;
+  const next = (whole + key).replace(/^0+(?=\d)/, "");
+  return next.length > maxWholeDigits ? entry : next;
 }
 
 export function validateOpeningFloat(digits: string): string | null {
@@ -35,7 +54,7 @@ export interface MovementFormErrors {
 
 export function validateMovementForm(digits: string, reason: string): MovementFormErrors {
   const errors: MovementFormErrors = {};
-  if (digits.length === 0 || digitsToMinor(digits) <= 0) errors.amount = "Enter an amount greater than zero.";
+  if (entryToMinor(digits) <= 0) errors.amount = "Enter an amount greater than zero.";
   if (reason.trim().length === 0) errors.reason = "Enter a reason to continue.";
   return errors;
 }

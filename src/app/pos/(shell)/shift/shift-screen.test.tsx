@@ -68,7 +68,7 @@ describe("ShiftScreen - open shift", () => {
     await userEvent.click(screen.getByTestId("open-shift-keypad-digit-5"));
     await userEvent.click(screen.getByTestId("open-shift-keypad-digit-0"));
     await userEvent.click(screen.getByTestId("open-shift-keypad-digit-0"));
-    expect(screen.getByTestId("open-shift-keypad-display").textContent).toBe("₹5.00");
+    expect(screen.getByTestId("open-shift-keypad-display").textContent).toBe("₹500.00");
     expect(screen.getByTestId("open-shift-submit")).toHaveProperty("disabled", false);
   });
 
@@ -78,7 +78,14 @@ describe("ShiftScreen - open shift", () => {
     render(<ShiftScreen outletId="outlet-1" />);
     await screen.findByTestId("open-shift-form");
     await userEvent.click(screen.getByTestId("open-shift-keypad-digit-5"));
-    await waitFor(() => expect(screen.getByTestId("open-shift-keypad-display").textContent).toBe("A$0.05"));
+    await waitFor(() => expect(screen.getByTestId("open-shift-keypad-display").textContent).toBe("A$5.00"));
+    // restiq-web#370: cents go after the decimal point.
+    await userEvent.click(screen.getByTestId("open-shift-keypad-decimal"));
+    await userEvent.click(screen.getByTestId("open-shift-keypad-digit-0"));
+    await userEvent.click(screen.getByTestId("open-shift-keypad-digit-5"));
+    expect(screen.getByTestId("open-shift-keypad-display").textContent).toBe("A$5.05");
+    await userEvent.click(screen.getByTestId("open-shift-keypad-clear"));
+    expect(screen.getByTestId("open-shift-keypad-display").textContent).toBe("A$0.00");
   });
 
   it("opens a shift with the entered float and shows the dashboard", async () => {
@@ -93,7 +100,7 @@ describe("ShiftScreen - open shift", () => {
     await userEvent.click(screen.getByTestId("open-shift-submit"));
 
     expect(await screen.findByTestId("shift-dashboard")).toBeTruthy();
-    expect(screen.getByTestId("shift-opening-float").textContent).toBe("₹20.00");
+    expect(screen.getByTestId("shift-opening-float").textContent).toBe("₹2,000.00");
     expect(screen.getByTestId("movement-log-empty")).toBeTruthy();
   });
 });
@@ -134,7 +141,7 @@ describe("ShiftScreen - cash movements", () => {
 
     expect(await screen.findByTestId("movement-row-movement-1")).toBeTruthy();
     expect(screen.getByTestId("movement-row-movement-1").textContent).toContain("Petty cash for supplies");
-    expect(screen.getByTestId("movement-row-movement-1").textContent).toContain("₹5.00");
+    expect(screen.getByTestId("movement-row-movement-1").textContent).toContain("₹500.00");
     expect(screen.queryByTestId("log-movement-dialog")).toBeNull();
   });
 });

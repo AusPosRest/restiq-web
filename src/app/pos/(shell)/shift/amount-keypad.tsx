@@ -14,15 +14,21 @@
 // `display` overrides the default money-formatted readout for non-money
 // digit entry (CAP-7's percent-based discount) - optional and additive, so
 // every existing money caller is unaffected.
-import { formatMinor } from "./shift-state";
+//
+// restiq-web#370: with `onDecimal` the entry is whole rupees / dollars plus an optional decimal part
+// (the shift float, cash movement and drawer count). The bottom-left key becomes "." and Clear
+// moves under the readout. Without it nothing changes for the tender and discount keypads.
+import { entryToMinor, formatMinor } from "./shift-state";
 
-const KEYS = ["1", "2", "3", "4", "5", "6", "7", "8", "9", "clear", "0", "back"] as const;
+const DIGITS = ["1", "2", "3", "4", "5", "6", "7", "8", "9"] as const;
 
 export interface AmountKeypadProps {
   digits: string;
   onDigit: (digit: string) => void;
   onBackspace: () => void;
   onClear: () => void;
+  /** Turns on whole-units entry with a decimal point key (see the note above). */
+  onDecimal?: () => void;
   testId: string;
   currency?: string;
   disabled?: boolean;
@@ -30,12 +36,17 @@ export interface AmountKeypadProps {
   display?: string;
 }
 
-export function AmountKeypad({ digits, onDigit, onBackspace, onClear, testId, currency = "INR", disabled, display }: Readonly<AmountKeypadProps>) {
+export function AmountKeypad({ digits, onDigit, onBackspace, onClear, onDecimal, testId, currency = "INR", disabled, display }: Readonly<AmountKeypadProps>) {
+  const keys = [...DIGITS, onDecimal ? "decimal" : "clear", "0", "back"];
+
   function handleKeyDown(event: React.KeyboardEvent<HTMLDivElement>) {
     if (disabled) return;
     if (/^[0-9]$/.test(event.key)) {
       event.preventDefault();
       onDigit(event.key);
+    } else if (onDecimal && (event.key === "." || event.key === ",")) {
+      event.preventDefault();
+      onDecimal();
     } else if (event.key === "Backspace") {
       event.preventDefault();
       onBackspace();
@@ -48,10 +59,36 @@ export function AmountKeypad({ digits, onDigit, onBackspace, onClear, testId, cu
   return (
     <div data-testid={testId} onKeyDown={handleKeyDown} tabIndex={0} className="flex min-h-fit flex-1 flex-col items-center gap-3 focus:outline-none">
       <output data-testid={`${testId}-display`} className="font-headline min-w-[10ch] text-center text-4xl font-bold tabular-nums tracking-tight text-foreground">
-        {display ?? formatMinor(parseInt(digits || "0", 10), currency)}
+        {display ?? formatMinor(onDecimal ? entryToMinor(digits) : parseInt(digits || "0", 10), currency)}
       </output>
+      {onDecimal && (
+        <button
+          type="button"
+          data-testid={`${testId}-clear`}
+          disabled={disabled}
+          onClick={onClear}
+          className="-mt-2 min-h-10 rounded-lg px-3 text-sm font-semibold uppercase tracking-wide text-muted-foreground transition-colors hover:text-foreground focus:outline-none focus-visible:ring-2 focus-visible:ring-ring disabled:pointer-events-none disabled:opacity-50"
+        >
+          Clear
+        </button>
+      )}
       <div className="grid min-h-fit flex-1 auto-rows-[minmax(2.5rem,1fr)] grid-cols-3 gap-2">
-        {KEYS.map((key) => {
+        {keys.map((key) => {
+          if (key === "decimal") {
+            return (
+              <button
+                key={key}
+                type="button"
+                aria-label="Decimal point"
+                data-testid={`${testId}-decimal`}
+                disabled={disabled}
+                onClick={onDecimal}
+                className="flex h-full min-h-10 w-20 items-center justify-center rounded-lg bg-secondary text-xl font-semibold text-secondary-foreground transition-colors hover:bg-accent focus:outline-none focus-visible:ring-2 focus-visible:ring-ring disabled:pointer-events-none disabled:opacity-50"
+              >
+                .
+              </button>
+            );
+          }
           if (key === "clear") {
             return (
               <button

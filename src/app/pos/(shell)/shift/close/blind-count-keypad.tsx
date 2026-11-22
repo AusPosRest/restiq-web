@@ -9,7 +9,7 @@
 // network side of that same rule.
 import { Button } from "@/components/ui/button";
 import { AmountKeypad } from "../amount-keypad";
-import { appendDigit, digitsToMinor, validateCountedCash } from "../shift-state";
+import { appendEntryKey, entryToMinor, validateCountedCash } from "../shift-state";
 
 export interface BlindCountKeypadProps {
   digits: string;
@@ -35,7 +35,8 @@ export function BlindCountKeypad({ digits, onDigitsChange, busy, error, currency
         digits={digits}
         disabled={busy}
         currency={currency}
-        onDigit={(digit) => onDigitsChange(appendDigit(digits, digit))}
+        onDigit={(digit) => onDigitsChange(appendEntryKey(digits, digit))}
+        onDecimal={() => onDigitsChange(appendEntryKey(digits, "."))}
         onBackspace={() => onDigitsChange(digits.slice(0, -1))}
         onClear={() => onDigitsChange("")}
       />
@@ -46,7 +47,7 @@ export function BlindCountKeypad({ digits, onDigitsChange, busy, error, currency
         </p>
       )}
 
-      <Button size="lg" data-testid="blind-count-submit" disabled={busy || validationError !== null} onClick={() => onSubmit(digitsToMinor(digits))}>
+      <Button size="lg" data-testid="blind-count-submit" disabled={busy || validationError !== null} onClick={() => onSubmit(entryToMinor(digits))}>
         {busy ? "Submitting..." : "Submit count"}
       </Button>
     </div>

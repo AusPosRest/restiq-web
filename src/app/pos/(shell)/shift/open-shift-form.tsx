@@ -6,7 +6,7 @@
 import { useState } from "react";
 import { Button } from "@/components/ui/button";
 import { AmountKeypad } from "./amount-keypad";
-import { appendDigit, validateOpeningFloat } from "./shift-state";
+import { appendEntryKey, entryToMinor, validateOpeningFloat } from "./shift-state";
 
 export function OpenShiftForm({
   busy,
@@ -29,7 +29,8 @@ export function OpenShiftForm({
         digits={digits}
         currency={currency}
         disabled={busy}
-        onDigit={(digit) => setDigits((current) => appendDigit(current, digit))}
+        onDigit={(digit) => setDigits((current) => appendEntryKey(current, digit))}
+        onDecimal={() => setDigits((current) => appendEntryKey(current, "."))}
         onBackspace={() => setDigits((current) => current.slice(0, -1))}
         onClear={() => setDigits("")}
       />
@@ -44,7 +45,7 @@ export function OpenShiftForm({
         size="lg"
         data-testid="open-shift-submit"
         disabled={busy || validationError !== null}
-        onClick={() => onOpen(parseInt(digits, 10))}
+        onClick={() => onOpen(entryToMinor(digits))}
       >
         {busy ? "Opening..." : "Open shift"}
       </Button>

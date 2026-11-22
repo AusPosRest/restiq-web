@@ -5,6 +5,10 @@ logged, per feature and date, in `wiki/tasks/completed.md`; this file starts
 with the payments epic.
 
 
+## Unreleased - shift keypads read whole rupees / dollars (#370)
+
+- Fixed: the opening float, cash movement and drawer count keypads read typed digits as paise / cents, so 1000 opened a ₹10 float. They now read whole currency units like the tender keypad, with a **.** key for paise / cents (523.45). Clear sits under the amount on these three keypads.
+
 ## Unreleased - Platform Console sidebar stays put (#440)
 
 - Fixed: the Platform Console sidebar no longer scrolls away with a long page. It stays at window height, with **Sign out** always in view, and scrolls on its own on a short window.

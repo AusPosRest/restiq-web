@@ -146,8 +146,9 @@ describe("CloseShiftScreen - blind count", () => {
     render(<CloseShiftScreen outletId={OUTLET_ID} />);
     await screen.findByTestId("blind-count-keypad");
 
-    for (const digit of ["1", "8", "4", "5", "0", "0", "0"]) {
-      await userEvent.click(screen.getByTestId(`blind-count-digit-${digit}`));
+    // restiq-web#370: whole rupees, then paise after the decimal point.
+    for (const key of ["digit-1", "digit-8", "digit-4", "digit-5", "digit-0", "decimal", "digit-0", "digit-0"]) {
+      await userEvent.click(screen.getByTestId(`blind-count-${key}`));
     }
     expect(screen.getByTestId("blind-count-display").textContent).toBe("₹18,450.00");
 
