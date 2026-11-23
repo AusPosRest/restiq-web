@@ -120,6 +120,18 @@ describe("ExpoScreen", () => {
     expect(screen.getByTestId("kds-expo-order-order-1-progress").textContent).toBe("1 of 2 ready");
   });
 
+  // restiq-web#372: one sideways-scrolling row put the 8th order (and a Ready one) off-screen.
+  // jsdom has no layout, so this pins the classes that make the rail wrap like the Cook rail.
+  it("wraps order cards onto new rows and scrolls down, never sideways", async () => {
+    vi.stubGlobal("fetch", mockFetch(() => [twoStationOrder()]));
+    renderScreen();
+
+    await vi.waitFor(() => expect(screen.getByTestId("kds-expo-rail")).toBeTruthy());
+    const classes = screen.getByTestId("kds-expo-rail").className.split(/\s+/);
+    expect(classes).toEqual(expect.arrayContaining(["flex-wrap", "content-start", "md:overflow-y-auto"]));
+    expect(classes).not.toContain("overflow-x-auto");
+  });
+
   it("renders the Waiting-On panel with exactly the not-yet-bumped items", async () => {
     vi.stubGlobal("fetch", mockFetch(() => [twoStationOrder()]));
     renderScreen();
