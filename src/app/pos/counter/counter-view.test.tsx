@@ -528,3 +528,44 @@ describe("CounterView - card terminal (issue #188)", () => {
     expect(screen.getByTestId("counter-settled-panel").textContent).toContain("1 tender captured");
   });
 });
+
+describe("CounterView - an item sold out since the menu loaded (restiq-web#374)", () => {
+  const DAL = { ...MENU.items[0], id: "item-dal", name: "Dal Makhani", shortName: "Dal Makhani", priceMinor: 22000 };
+  const FRESH_MENU: PosMenuView = { ...MENU, items: [MENU.items[0], DAL] };
+  const NAAN_SOLD_OUT: PosMenuView = { ...MENU, items: [{ ...MENU.items[0], available: false }, DAL] };
+
+  it("shows the empty order with Discard instead of sticking on the bill, marks the tile sold out, and adds the next item to the same order", async () => {
+    const user = userEvent.setup();
+    let menuReads = 0;
+    const fetchMock = stubFetch({
+      "GET menu": () => jsonResponse(menuReads++ === 0 ? FRESH_MENU : NAAN_SOLD_OUT),
+      [`POST outlets/${OUTLET_ID}/counter-orders`]: () => jsonResponse(counterOrder(), 201),
+      "POST orders/order-47/bill": () => jsonResponse(bill("order-47"), 201),
+      "POST orders/order-47/lines": (init) => {
+        const body = JSON.parse(String(init?.body)) as { itemId: string };
+        if (body.itemId === "item-naan") {
+          return jsonResponse({ error: { code: "item_unavailable", message: "This item is currently unavailable" } }, 400);
+        }
+        return jsonResponse(counterOrder({ lines: [{ ...NAAN_LINE, id: "line-dal", itemId: "item-dal", unitPriceMinor: 22000 }] }), 201);
+      },
+    });
+    render(<CounterView outletId={OUTLET_ID} currentStaffId={CURRENT_STAFF_ID} currentStaffName="Priya" />);
+    await screen.findByTestId("counter-view");
+
+    await user.click(screen.getByTestId("item-tile-item-naan"));
+    await waitFor(() => expect(screen.getByTestId("counter-action-error").textContent).toContain("This item is currently unavailable"));
+    await screen.findByTestId("counter-discard-order");
+    expect(screen.queryByText("Loading the bill…")).toBeNull();
+    expect(screen.getByTestId("token-badge-number").textContent).toBe("#47");
+    await screen.findByTestId("item-tile-unavailable-item-naan");
+    expect(menuReads).toBe(2);
+
+    await user.click(screen.getByTestId("item-tile-item-dal"));
+    await waitFor(() => expect(screen.getByTestId("bill-line-line-dal")).toBeTruthy());
+    const counterOrderPosts = fetchMock.mock.calls.filter(([url, init]) => String(url).includes("counter-orders") && init?.method === "POST");
+    expect(counterOrderPosts).toHaveLength(1);
+    // A menu refresh must not re-run the resumed-order lookup (it would drop the order in progress).
+    expect(fetchMock.mock.calls.some(([url, init]) => (init?.method ?? "GET") === "GET" && String(url).endsWith("/orders/order-47"))).toBe(false);
+    expect(sessionStorage.getItem(`pos:counter-order:${CURRENT_STAFF_ID}`)).toBe("order-47");
+  });
+});

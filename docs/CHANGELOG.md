@@ -5,6 +5,11 @@ logged, per feature and date, in `wiki/tasks/completed.md`; this file starts
 with the payments epic.
 
 
+## Unreleased - till menu stays current; a sold-out tap no longer jams the cart (#374)
+
+- Fixed: the counter and order screens re-read the menu every 30 seconds and when the tab comes back into view, so a dish marked sold out (or back on) changes on the till without a reload. The order in progress, tenders and any open sheet stay as they are.
+- Fixed: on the counter, a first item refused as sold out no longer leaves the cart stuck on "Loading the bill…". The new order shows with its token and **Discard empty order**, the next item goes into the same order, and the refused tile turns Sold out at once (on the order screen too).
+
 ## Unreleased - cash round-off sent to the server, tendered and change printed (#377)
 
 - Fixed: a cash bill settled with rounded cash (₹890 on a ₹890.40 bill) was posted as ₹890.40, so shift close expected 40 paise that were never in the drawer. The till now posts the cash that went into the drawer and the server stores the round-off on the bill.

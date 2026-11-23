@@ -60,6 +60,7 @@ import {
 } from "../api";
 import { LoadErrorPanel, Skeleton } from "../data-states";
 import { usePosLoad } from "../use-pos-load";
+import { useMenuRefresh } from "../use-menu-refresh";
 import { ModifierSheet, type ModifierSheetConfirmValue } from "../orders/[orderId]/modifier-sheet";
 import { PosComboTile } from "../orders/[orderId]/pos-combo-tile";
 import { PosItemTile } from "../orders/[orderId]/pos-item-tile";
@@ -93,6 +94,7 @@ export function CounterView({
   currentStaffName,
 }: Readonly<{ outletId: string; currentStaffId: string; currentStaffName: string }>) {
   const menuLoad = usePosLoad<PosMenuView>("menu");
+  useMenuRefresh(menuLoad.refresh);
   const shiftOpen = useShiftOpen(outletId);
   // undefined = still checking this tab for an order in progress; null = none (a fresh, not-yet-created order).
   const [resumed, setResumed] = useState<OrderView | null | undefined>(undefined);
@@ -100,6 +102,10 @@ export function CounterView({
   const [round, setRound] = useState(0);
 
   const menu = menuLoad.data;
+  // Look up the resumed order once per staff member, when the menu first
+  // lands - not on every quiet menu refresh (restiq-web#374), which would
+  // re-key CounterLoaded and drop the order on screen.
+  const menuReady = menu !== null;
   useEffect(() => {
     if (!menu) return;
     let cancelled = false;
@@ -118,7 +124,8 @@ export function CounterView({
     return () => {
       cancelled = true;
     };
-  }, [menu, currentStaffId]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [menuReady, currentStaffId]);
 
   if (menuLoad.failed) {
     return <LoadErrorPanel testId="counter-menu-error" message="Couldn't load the menu." onRetry={menuLoad.retry} />;
@@ -141,6 +148,7 @@ export function CounterView({
       currentStaffName={currentStaffName}
       shiftOpen={shiftOpen}
       onStartNextOrder={startNextOrder}
+      onMenuStale={menuLoad.refresh}
     />
   );
 }
@@ -153,6 +161,7 @@ function CounterLoaded({
   currentStaffName,
   shiftOpen,
   onStartNextOrder,
+  onMenuStale,
 }: Readonly<{
   outletId: string;
   menu: PosMenuView;
@@ -161,6 +170,7 @@ function CounterLoaded({
   currentStaffName: string;
   shiftOpen: boolean | null;
   onStartNextOrder: () => void;
+  onMenuStale: () => void;
 }>) {
   // null until the first item is rung up - opening the screen creates nothing (PE-16).
   const [order, setOrder] = useState<OrderView | null>(initialOrder);
@@ -242,12 +252,25 @@ function CounterLoaded({
   const itemsById = useMemo(() => new Map(menu.items.map((item) => [item.id, item])), [menu.items]);
   const activeCategory = sortedCategories.find((category) => category.id === effectiveCategoryId) ?? null;
 
+  // restiq-web#374: an add refused after the order was created still shows
+  // that order's bill (token + Discard), so the cart never sticks on "Loading
+  // the bill…" and the next tap goes into the same order. A sold-out refusal
+  // also re-reads the menu so the tile turns Sold out at once.
+  function handleAddError(error: unknown, createdOrderId: string | null, fallback: string) {
+    if (createdOrderId) loadBill(createdOrderId);
+    if (error instanceof PosApiError && error.code === "item_unavailable") onMenuStale();
+    setActionError(errorMessage(error, fallback));
+  }
+
   function submitLine(itemId: string, value: ModifierSheetConfirmValue, onSettled: () => void) {
     setAddingLine(true);
     setActionError(null);
+    // The id ensureOrder() resolved with - `order` in this closure is still null on the first tap.
+    let orderId: string | null = null;
     ensureOrder()
-      .then((current) =>
-        addOrderLine(
+      .then((current) => {
+        orderId = current.id;
+        return addOrderLine(
           current.id,
           {
             itemId,
@@ -257,13 +280,13 @@ function CounterLoaded({
             note: value.specialInstructions || undefined,
           },
           menu,
-        ),
-      )
+        );
+      })
       .then((updated) => {
         applyUpdate(updated);
         onSettled();
       })
-      .catch((error: unknown) => setActionError(errorMessage(error, "Couldn't add that item to the order.")))
+      .catch((error: unknown) => handleAddError(error, orderId, "Couldn't add that item to the order."))
       .finally(() => setAddingLine(false));
   }
 
@@ -272,13 +295,17 @@ function CounterLoaded({
     setAddingLine(true);
     setActionError(null);
     const comboId = activeCombo.id;
+    let orderId: string | null = null;
     ensureOrder()
-      .then((current) => addComboLine(current.id, { comboId, ...value }, menu))
+      .then((current) => {
+        orderId = current.id;
+        return addComboLine(current.id, { comboId, ...value }, menu);
+      })
       .then((updated) => {
         applyUpdate(updated);
         setActiveCombo(null);
       })
-      .catch((error: unknown) => setActionError(errorMessage(error, "Couldn't add that combo to the order.")))
+      .catch((error: unknown) => handleAddError(error, orderId, "Couldn't add that combo to the order."))
       .finally(() => setAddingLine(false));
   }
 

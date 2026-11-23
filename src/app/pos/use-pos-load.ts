@@ -4,7 +4,7 @@
 // current path + attempt hasn't landed yet), so no state is set synchronously
 // inside effects and every view gets retry for free. Mirrors /admin's
 // use-admin-load.ts / /ops's use-ops-load.ts.
-import { useEffect, useState } from "react";
+import { useCallback, useEffect, useState } from "react";
 import { posApi } from "./api";
 
 interface Landed<T> {
@@ -19,6 +19,8 @@ export interface PosLoad<T> {
   failed: boolean;
   data: T | null;
   retry: () => void;
+  /** Re-fetch in the background, keeping what's shown (restiq-web#374). */
+  refresh: () => void;
 }
 
 export function usePosLoad<T>(path: string): PosLoad<T> {
@@ -39,11 +41,21 @@ export function usePosLoad<T>(path: string): PosLoad<T> {
     };
   }, [path, attempt]);
 
+  // restiq-web#374: a quiet re-fetch - no loading or failed flip, and a
+  // failure keeps the data already shown. Only replaces the attempt it was
+  // asked from, so a retry() in between wins.
+  const refresh = useCallback(() => {
+    void posApi<T>(path)
+      .then((value) => setLanded((prev) => (prev && prev.path === path && prev.attempt === attempt && !prev.failed ? { ...prev, value } : prev)))
+      .catch(() => undefined);
+  }, [path, attempt]);
+
   const current = landed !== null && landed.path === path && landed.attempt === attempt ? landed : null;
   return {
     loading: current === null,
     failed: current?.failed ?? false,
     data: current && !current.failed ? current.value : null,
     retry: () => setAttempt((n) => n + 1),
+    refresh,
   };
 }

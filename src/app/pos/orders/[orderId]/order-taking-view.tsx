@@ -31,6 +31,7 @@ import {
 import { DEFAULT_MANAGER_REASON_CODES, ManagerPinDialog, type ManagerApprovalResult } from "../../components/manager-pin-dialog";
 import { LoadErrorPanel, Skeleton } from "../../data-states";
 import { usePosLoad } from "../../use-pos-load";
+import { useMenuRefresh } from "../../use-menu-refresh";
 import { ModifierSheet, type ModifierSheetConfirmValue } from "./modifier-sheet";
 import { OrderPanel } from "./order-panel";
 import { PosComboTile } from "./pos-combo-tile";
@@ -53,6 +54,10 @@ import {
 export function OrderTakingView({ orderId, currentStaffId }: Readonly<{ orderId: string; currentStaffId: string }>) {
   const orderLoad = usePosLoad<RawOrder>(`orders/${orderId}`);
   const menuLoad = usePosLoad<PosMenuView>("menu");
+  // restiq-web#374: keep sold-out flags current. OrderTakingLoaded only reads
+  // initialOrder on mount (useState), so a refreshed menu recomputing it below
+  // never resets the order on screen.
+  useMenuRefresh(menuLoad.refresh);
 
   if (orderLoad.loading || menuLoad.loading) return <LoadingShell />;
 
@@ -69,6 +74,7 @@ export function OrderTakingView({ orderId, currentStaffId }: Readonly<{ orderId:
       currentStaffId={currentStaffId}
       initialOrder={toOrderView(orderLoad.data, menuLoad.data)}
       menu={menuLoad.data}
+      onMenuStale={menuLoad.refresh}
     />
   );
 }
@@ -78,7 +84,8 @@ function OrderTakingLoaded({
   currentStaffId,
   initialOrder,
   menu,
-}: Readonly<{ orderId: string; currentStaffId: string; initialOrder: OrderView; menu: PosMenuView }>) {
+  onMenuStale,
+}: Readonly<{ orderId: string; currentStaffId: string; initialOrder: OrderView; menu: PosMenuView; onMenuStale: () => void }>) {
   const [order, setOrder] = useState(initialOrder);
   const [selectedCategoryId, setSelectedCategoryId] = useState<string | null>(null);
   const [query, setQuery] = useState("");
@@ -103,6 +110,12 @@ function OrderTakingLoaded({
   const itemsById = useMemo(() => new Map(menu.items.map((item) => [item.id, item])), [menu.items]);
   const activeCategory = sortedCategories.find((category) => category.id === effectiveCategoryId) ?? null;
 
+  // restiq-web#374: a sold-out refusal re-reads the menu so the tile turns Sold out at once.
+  function handleAddError(error: unknown, fallback: string) {
+    if (error instanceof PosApiError && error.code === "item_unavailable") onMenuStale();
+    setActionError(errorMessage(error, fallback));
+  }
+
   function submitLine(itemId: string, value: ModifierSheetConfirmValue, onSettled: () => void) {
     setAddingLine(true);
     setActionError(null);
@@ -121,7 +134,7 @@ function OrderTakingLoaded({
         setOrder(updated);
         onSettled();
       })
-      .catch((error: unknown) => setActionError(errorMessage(error, "Couldn't add that item to the order.")))
+      .catch((error: unknown) => handleAddError(error, "Couldn't add that item to the order."))
       .finally(() => setAddingLine(false));
   }
 
@@ -165,7 +178,7 @@ function OrderTakingLoaded({
         setOrder(updated);
         setActiveCombo(null);
       })
-      .catch((error: unknown) => setActionError(errorMessage(error, "Couldn't add that combo to the order.")))
+      .catch((error: unknown) => handleAddError(error, "Couldn't add that combo to the order."))
       .finally(() => setAddingLine(false));
   }
 
