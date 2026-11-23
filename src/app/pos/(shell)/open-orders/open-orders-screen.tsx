@@ -90,7 +90,7 @@ function OpenOrdersLoaded({
           type="button"
           data-testid="open-orders-refresh"
           onClick={onReload}
-          className="rounded-md border border-border px-3 py-1.5 text-xs font-semibold uppercase tracking-wider text-muted-foreground hover:bg-accent hover:text-accent-foreground"
+          className="max-md:min-h-10 rounded-md border border-border px-3 py-1.5 text-xs font-semibold uppercase tracking-wider text-muted-foreground hover:bg-accent hover:text-accent-foreground"
         >
           Refresh
         </button>

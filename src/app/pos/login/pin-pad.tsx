@@ -326,7 +326,7 @@ export function PinPad({ nextPath }: { nextPath: string }) {
             type="button"
             data-testid="pos-rebind"
             onClick={rebind}
-            className="text-xs font-medium text-primary underline-offset-2 hover:underline focus:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+            className="inline-flex max-md:min-h-10 items-center text-xs font-medium text-primary underline-offset-2 hover:underline focus:outline-none focus-visible:ring-2 focus-visible:ring-ring"
           >
             Not this restaurant? Re-enrol
           </button>

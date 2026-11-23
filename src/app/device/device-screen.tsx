@@ -284,7 +284,7 @@ function DeviceCard({
           type="button"
           data-testid="device-unenrol"
           onClick={onUnenrol}
-          className="mt-2 rounded-lg border border-border bg-transparent px-3 py-2 font-medium text-foreground transition-colors hover:bg-accent focus:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+          className="mt-2 max-md:min-h-10 rounded-lg border border-border bg-transparent px-3 py-2 font-medium text-foreground transition-colors hover:bg-accent focus:outline-none focus-visible:ring-2 focus-visible:ring-ring"
         >
           Un-enrol this device
         </button>

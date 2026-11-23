@@ -27,7 +27,7 @@ export function ModeToggle({ current }: Readonly<{ current: "counter" | "tables"
       href={HREF[other]}
       data-testid="pos-mode-toggle"
       aria-label={`Switch to ${other === "tables" ? "Tables" : "Counter"} mode`}
-      className="inline-flex items-center gap-2 rounded-full px-2 py-1 focus:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+      className="inline-flex max-md:min-h-10 items-center gap-2 rounded-full px-2 py-1 focus:outline-none focus-visible:ring-2 focus-visible:ring-ring"
     >
       {label("counter", "Counter")}
       <span aria-hidden="true" className="relative inline-flex h-6 w-11 shrink-0 items-center rounded-full bg-primary/25 ring-1 ring-primary/50">
@@ -60,7 +60,7 @@ export function PosHeader({
         <Link
           href="/pos/shift"
           data-testid="pos-header-more"
-          className="rounded-lg px-2 py-1.5 text-xs font-semibold text-muted-foreground transition-colors hover:bg-accent hover:text-foreground focus:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+          className="inline-flex max-md:min-h-10 items-center rounded-lg px-2 py-1.5 text-xs font-semibold text-muted-foreground transition-colors hover:bg-accent hover:text-foreground focus:outline-none focus-visible:ring-2 focus-visible:ring-ring"
         >
           Shift &amp; more
         </Link>

@@ -51,6 +51,15 @@ describe("ShiftBar", () => {
     expect(fetchMock).not.toHaveBeenCalled();
   });
 
+  it("wraps its links onto extra lines on a phone instead of scrolling sideways (#384)", () => {
+    routeFetch({});
+    render(<ShiftBar initial={DISPLAY} />);
+    const links = screen.getByTestId("pos-shift-bar-links");
+    expect(links.className).toContain("flex-wrap");
+    expect(links.className).not.toContain("overflow-x-auto");
+    expect(screen.getByTestId("pos-shift-bar").className).toContain("flex-wrap");
+  });
+
   it("off a hub (404), the /pos layout's poller changes nothing in the bar", async () => {
     const fetchMock = routeFetch({});
     render(

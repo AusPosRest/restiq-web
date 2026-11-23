@@ -58,7 +58,7 @@ export function PaymentsScreen({ outletId }: Readonly<{ outletId: string }>) {
           data-testid="pos-payments-refresh"
           onClick={retry}
           disabled={loading}
-          className="flex items-center gap-1.5 rounded-lg border border-border/60 px-3 py-1.5 text-xs font-medium text-muted-foreground transition-colors hover:bg-accent hover:text-foreground focus:outline-none focus-visible:ring-2 focus-visible:ring-ring disabled:opacity-50"
+          className="flex max-md:min-h-10 items-center gap-1.5 rounded-lg border border-border/60 px-3 py-1.5 text-xs font-medium text-muted-foreground transition-colors hover:bg-accent hover:text-foreground focus:outline-none focus-visible:ring-2 focus-visible:ring-ring disabled:opacity-50"
         >
           <RotateCcw className="size-3.5" aria-hidden="true" /> Refresh
         </button>
@@ -123,7 +123,7 @@ export function PaymentsScreen({ outletId }: Readonly<{ outletId: string }>) {
                           <Link
                             href={`/pos/orders/${encodeURIComponent(payment.orderId)}/refund?billId=${encodeURIComponent(payment.billId)}`}
                             data-testid={`pos-payment-refund-${payment.billId}`}
-                            className="rounded-md px-2 py-1 text-xs font-semibold text-primary underline-offset-4 hover:underline focus:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+                            className="inline-flex max-md:min-h-10 items-center rounded-md px-2 py-1 text-xs font-semibold text-primary underline-offset-4 hover:underline focus:outline-none focus-visible:ring-2 focus-visible:ring-ring"
                           >
                             Refund
                           </Link>

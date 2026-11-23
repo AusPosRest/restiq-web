@@ -198,7 +198,7 @@ export function BillSummary({
             type="button"
             data-testid="bill-add-discount"
             onClick={onAddDiscount}
-            className="mt-3 w-full rounded-lg border border-border px-3 py-2 text-sm font-semibold text-foreground hover:bg-accent"
+            className="mt-3 max-md:min-h-10 w-full rounded-lg border border-border px-3 py-2 text-sm font-semibold text-foreground hover:bg-accent"
           >
             {pendingDiscount ? "Change discount" : "Add discount"}
           </button>
