@@ -5,6 +5,12 @@ logged, per feature and date, in `wiki/tasks/completed.md`; this file starts
 with the payments epic.
 
 
+## Unreleased - Till landing by outlet type, long kitchen tickets, demo links (#388)
+
+- Changed: after PIN sign-in the till opens on Counter at quick-service and food-court outlets and on the table map everywhere else (needs restiq-backend#320, which adds the outlet's `type` to the sign-in reply; with an older backend the till opens on the table map as before). The Counter / Tables switch is unchanged.
+- Fixed: a long kitchen ticket no longer pushes BUMP below the screen. A ticket over 12 rows (a dish, a modifier and a note are one row each) splits into cards side by side: "1/3", "cont. 2/3"... with the same ageing colour and elapsed time on each, and BUMP / REFIRE (or RECALL) on the last one. Fixed size, not measured from the screen (`TICKET_ROW_BUDGET`).
+- Fixed: the landing page shows its "Live demo" links and demo copy only where `/demo` exists (`demoPagesEnabled()`); the page is now rendered per request so `DEMO_PAGES` is read at run time. The demo page test takes its restaurant names from `demo-logins.ts`.
+
 ## Unreleased - QR guest minors (#385)
 
 - Changed: the guest order status page numbers orders "Order 1", "Order 2"... (kiosk orders show their pickup number); the internal id is gone. The welcome screen asks for a name only, with no phone number. An outlet with no dishes shows "The menu isn't ready yet". The guest menu and dish page show a veg / non-veg marker and the dish description; the till tile shows the marker; the owner's dish editor has an optional Description (300 characters). The menu remembers the chosen category when a guest opens a dish and comes back. The simulator's Guest QR no longer has a built-in table: paste the table's QR link instead.

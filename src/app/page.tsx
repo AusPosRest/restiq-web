@@ -1,12 +1,17 @@
 // Public marketing landing page (issue #262). The demo portal that used to
 // live here (sign-in doors, demo logins, live devices) is now /demo.
-// Static on purpose: no API calls, so it renders even when the backend is down.
+// No API calls, so it renders even when the backend is down. Rendered per request (not static)
+// because the demo links depend on DEMO_PAGES, a Worker runtime variable (see src/app/simulator/layout.tsx).
 import type { Metadata } from "next";
 import Link from "next/link";
+import { demoPagesEnabled } from "@/lib/demo-pages";
 import { body, display, mono } from "./landing-fonts";
 import { DrawerMock, FloorMini, PinMini, QrMini, SheetMini, TerminalMock } from "./landing-mockups";
 import { HeroScene, ProductTour, Reveal, UpiPay } from "./landing-motion";
 import "./landing.css";
+
+// PE-30: read DEMO_PAGES per request, not baked in at build time.
+export const dynamic = "force-dynamic";
 
 export const metadata: Metadata = {
   title: "RESTIQ - the restaurant POS that keeps cooking offline",
@@ -37,23 +42,24 @@ const NAV = [
 ];
 
 export default function Home() {
+  const demo = demoPagesEnabled();
   return (
     <div
       style={PALETTE}
       className={`${display.variable} ${body.variable} ${mono.variable} flex-1 bg-[var(--paper)] font-[family-name:var(--font-body)] text-[var(--ink)] antialiased`}
     >
-      <SiteHeader />
+      <SiteHeader demo={demo} />
       <main>
-        <Hero />
+        <Hero demo={demo} />
         <BuiltFor />
         <Product />
         <Offline />
         <Payments />
         <Setup />
-        <Faq />
-        <FinalCta />
+        <Faq demo={demo} />
+        <FinalCta demo={demo} />
       </main>
-      <SiteFooter />
+      <SiteFooter demo={demo} />
     </div>
   );
 }
@@ -69,7 +75,7 @@ function Logo() {
   );
 }
 
-function SiteHeader() {
+function SiteHeader({ demo }: Readonly<{ demo: boolean }>) {
   return (
     <header className="sticky top-0 z-30 border-b border-white/10 bg-[var(--night)] text-stone-100">
       <nav aria-label="Main" className="mx-auto flex h-16 max-w-6xl items-center gap-6 px-4 sm:px-6">
@@ -85,13 +91,15 @@ function SiteHeader() {
           <Link href="/admin/login" data-testid="landing-sign-in" className={`hidden rounded-full px-3 py-2 text-sm font-medium hover:bg-white/10 sm:inline-block ${FOCUS}`}>
             Sign in
           </Link>
-          <Link
-            href="/demo"
-            data-testid="landing-nav-demo"
-            className={`rounded-full bg-[var(--amber)] px-4 py-2 text-sm font-semibold text-[var(--ink)] hover:brightness-110 ${FOCUS}`}
-          >
-            Live demo
-          </Link>
+          {demo && (
+            <Link
+              href="/demo"
+              data-testid="landing-nav-demo"
+              className={`rounded-full bg-[var(--amber)] px-4 py-2 text-sm font-semibold text-[var(--ink)] hover:brightness-110 ${FOCUS}`}
+            >
+              Live demo
+            </Link>
+          )}
         </div>
       </nav>
     </header>
@@ -100,7 +108,7 @@ function SiteHeader() {
 
 const HEADLINE = "The restaurant POS that keeps cooking when the internet doesn’t.";
 
-function Hero() {
+function Hero({ demo }: Readonly<{ demo: boolean }>) {
   const words = HEADLINE.split(" ");
   return (
     <section className="relative overflow-hidden bg-[var(--night)] text-stone-100">
@@ -129,13 +137,15 @@ function Hero() {
             Tables, counter, kitchen screens, QR ordering and self-order kiosks: one system that runs the whole service, online or off.
           </p>
           <div className="lp-fade mt-9 flex flex-wrap justify-center gap-3" style={{ "--d": "850ms" } as React.CSSProperties}>
-            <Link
-              href="/demo"
-              data-testid="landing-hero-demo"
-              className={`rounded-full bg-[var(--amber)] px-7 py-3.5 text-base font-semibold text-[var(--ink)] shadow-[0_10px_40px_-8px_rgba(245,158,11,0.7)] transition hover:-translate-y-0.5 hover:brightness-110 ${FOCUS}`}
-            >
-              Try the live demo &rarr;
-            </Link>
+            {demo && (
+              <Link
+                href="/demo"
+                data-testid="landing-hero-demo"
+                className={`rounded-full bg-[var(--amber)] px-7 py-3.5 text-base font-semibold text-[var(--ink)] shadow-[0_10px_40px_-8px_rgba(245,158,11,0.7)] transition hover:-translate-y-0.5 hover:brightness-110 ${FOCUS}`}
+              >
+                Try the live demo &rarr;
+              </Link>
+            )}
             <a
               href="#product"
               data-testid="landing-hero-tour"
@@ -144,9 +154,11 @@ function Hero() {
               See how it works
             </a>
           </div>
-          <p className={`${M} lp-fade mt-6 text-[11px] uppercase tracking-[0.14em] text-stone-500`} style={{ "--d": "1000ms" } as React.CSSProperties}>
-            No sign-up · demo logins are on the next page
-          </p>
+          {demo && (
+            <p className={`${M} lp-fade mt-6 text-[11px] uppercase tracking-[0.14em] text-stone-500`} style={{ "--d": "1000ms" } as React.CSSProperties}>
+              No sign-up · demo logins are on the next page
+            </p>
+          )}
         </div>
         <div className="lp-fade mt-16 lg:mt-20" style={{ "--d": "600ms" } as React.CSSProperties}>
           <HeroScene />
@@ -364,16 +376,20 @@ const FAQS = [
   },
 ];
 
-function Faq() {
+function Faq({ demo }: Readonly<{ demo: boolean }>) {
   return (
     <section id="faq" className="mx-auto grid max-w-6xl scroll-mt-16 gap-12 px-4 py-24 sm:px-6 lg:grid-cols-[1fr_1.6fr] lg:py-32">
       <Reveal>
         <p className={`${M} text-[11px] uppercase tracking-[0.16em] text-[var(--amber-ink)]`}>FAQ</p>
         <h2 className={`${D} mt-3 text-[2.1rem] leading-[1.05] font-extrabold sm:text-5xl`}>Questions, answered.</h2>
-        <p className="mt-5 text-lg leading-relaxed text-[var(--ink-soft)]">Still wondering? The live demo has every screen signed in and ready to click.</p>
-        <Link href="/demo" data-testid="landing-faq-demo" className={`mt-6 inline-flex rounded-full border border-[var(--ink)] px-5 py-2.5 text-sm font-semibold transition hover:bg-[var(--ink)] hover:text-white ${FOCUS}`}>
-          Open the demo &rarr;
-        </Link>
+        {demo && (
+          <>
+            <p className="mt-5 text-lg leading-relaxed text-[var(--ink-soft)]">Still wondering? The live demo has every screen signed in and ready to click.</p>
+            <Link href="/demo" data-testid="landing-faq-demo" className={`mt-6 inline-flex rounded-full border border-[var(--ink)] px-5 py-2.5 text-sm font-semibold transition hover:bg-[var(--ink)] hover:text-white ${FOCUS}`}>
+              Open the demo &rarr;
+            </Link>
+          </>
+        )}
       </Reveal>
       <div className="space-y-3">
         {FAQS.map((item, i) => (
@@ -392,7 +408,7 @@ function Faq() {
   );
 }
 
-function FinalCta() {
+function FinalCta({ demo }: Readonly<{ demo: boolean }>) {
   return (
     <section className="px-4 pb-24 pt-8 sm:px-6">
       <Reveal className="relative mx-auto max-w-6xl overflow-hidden rounded-[2rem] bg-[var(--night)] px-6 py-20 text-center text-white sm:px-12">
@@ -401,17 +417,21 @@ function FinalCta() {
           <h2 className={`${D} mx-auto max-w-3xl text-4xl leading-[1.02] font-extrabold text-balance sm:text-6xl`}>
             Run Friday night on <span className="text-[var(--amber)]">RESTIQ</span>.
           </h2>
-          <p className="mx-auto mt-5 max-w-xl text-lg text-stone-400">
-            Walk through the whole restaurant - POS, kitchen, QR ordering and kiosk - with demo logins, right now.
-          </p>
+          {demo && (
+            <p className="mx-auto mt-5 max-w-xl text-lg text-stone-400">
+              Walk through the whole restaurant - POS, kitchen, QR ordering and kiosk - with demo logins, right now.
+            </p>
+          )}
           <div className="mt-9 flex flex-wrap justify-center gap-3">
-            <Link
-              href="/demo"
-              data-testid="landing-cta-demo"
-              className={`rounded-full bg-[var(--amber)] px-7 py-3.5 text-base font-semibold text-[var(--ink)] shadow-[0_10px_40px_-8px_rgba(245,158,11,0.7)] transition hover:-translate-y-0.5 hover:brightness-110 ${FOCUS}`}
-            >
-              Try the live demo &rarr;
-            </Link>
+            {demo && (
+              <Link
+                href="/demo"
+                data-testid="landing-cta-demo"
+                className={`rounded-full bg-[var(--amber)] px-7 py-3.5 text-base font-semibold text-[var(--ink)] shadow-[0_10px_40px_-8px_rgba(245,158,11,0.7)] transition hover:-translate-y-0.5 hover:brightness-110 ${FOCUS}`}
+              >
+                Try the live demo &rarr;
+              </Link>
+            )}
             <Link
               href="/admin/login"
               data-testid="landing-cta-owner"
@@ -436,7 +456,7 @@ const FOOTER_LINKS = [
   { href: "https://github.com/AusPosRest/restiq-downloads/releases/latest/download/RESTIQ-POS-Setup.exe", label: "Windows app (download)", testId: "landing-footer-windows" },
 ];
 
-function SiteFooter() {
+function SiteFooter({ demo }: Readonly<{ demo: boolean }>) {
   return (
     <footer className="bg-[var(--night)] text-stone-300">
       <div className="mx-auto flex max-w-6xl flex-col gap-10 px-4 py-16 sm:px-6 md:flex-row md:items-start md:justify-between">
@@ -450,10 +470,10 @@ function SiteFooter() {
             Pilots open · India &amp; Australia
           </p>
         </div>
-        <nav aria-label="Sign in and demo">
-          <p className={`${M} text-[11px] uppercase tracking-[0.16em] text-stone-500`}>Sign in &amp; demo</p>
+        <nav aria-label={demo ? "Sign in and demo" : "Sign in"}>
+          <p className={`${M} text-[11px] uppercase tracking-[0.16em] text-stone-500`}>{demo ? "Sign in & demo" : "Sign in"}</p>
           <div className="mt-4 grid grid-cols-2 gap-x-12 gap-y-3 text-sm sm:grid-cols-3">
-            {FOOTER_LINKS.map((link) => (
+            {FOOTER_LINKS.filter((link) => demo || link.href !== "/demo").map((link) => (
               <Link key={link.href} href={link.href} data-testid={link.testId} className={`rounded hover:text-white ${FOCUS}`}>
                 {link.label}
               </Link>

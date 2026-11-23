@@ -24,7 +24,12 @@ export const POS_STAFF_COOKIE = "pos_staff";
 
 export interface PosStaffDisplay {
   staff: { id: string; name: string };
-  outlet: { id: string; name: string };
+  outlet: { id: string; name: string; type?: string };
+}
+
+/** First screen after sign-in (restiq-web#388): Counter for counter-service outlets, the table map for the rest and for an older backend that sends no type. */
+export function posLandingPath(outletType: string | undefined): string {
+  return outletType === "qsr" || outletType === "food_court" ? "/pos/counter" : "/pos/table-map";
 }
 
 /** Parses the pos_staff cookie value, or null for anything missing/malformed. */

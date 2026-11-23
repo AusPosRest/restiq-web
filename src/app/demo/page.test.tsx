@@ -3,6 +3,10 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { DEMO_OWNER, DEMO_STAFF } from "../demo-logins";
 import Home from "./page";
 
+// Derived so renaming a demo restaurant in demo-logins.ts does not break this test.
+const SPICE_TENANT = DEMO_STAFF[0].tenant;
+const BAYLEAF_TENANT = DEMO_OWNER.tenant;
+
 const API_URL = "https://api.example.test";
 
 function jsonResponse(status: number, body: unknown): Response {
@@ -10,19 +14,19 @@ function jsonResponse(status: number, body: unknown): Response {
 }
 
 const DEVICES = [
-  { id: "d-pos", tenantId: "tenant-spice", label: "POS-1", type: "pos", status: "active", tenantName: "Spice Route Hospitality", outletName: "Spice Route Outlet" },
-  { id: "d-kiosk", tenantId: "tenant-bayleaf", label: "KIOSK-1", type: "kiosk", status: "active", tenantName: "Bay Leaf Kitchens", outletId: "outlet-bayleaf", outletName: "Bay Leaf Counter" },
-  { id: "d-kds", tenantId: "tenant-spice", label: "KDS-1", type: "kds", status: "active", tenantName: "Spice Route Hospitality", outletName: "Spice Route Outlet" },
-  { id: "d-cds", tenantId: "tenant-bayleaf", label: "CDS-1", type: "cds", status: "active", tenantName: "Bay Leaf Kitchens", outletName: null },
-  { id: "d-printer", tenantId: "tenant-spice", label: "Counter printer", type: "printer", status: "active", tenantName: "Spice Route Hospitality", outletName: "Spice Route Outlet" },
-  { id: "d-terminal", tenantId: "tenant-spice", label: "Counter terminal", type: "terminal", status: "active", tenantName: "Spice Route Hospitality", outletName: "Spice Route Outlet" },
-  { id: "d-revoked", tenantId: "tenant-bayleaf", label: "POS-OLD", type: "pos", status: "revoked", tenantName: "Bay Leaf Kitchens", outletName: null },
+  { id: "d-pos", tenantId: "tenant-spice", label: "POS-1", type: "pos", status: "active", tenantName: SPICE_TENANT, outletName: "Spice Route Outlet" },
+  { id: "d-kiosk", tenantId: "tenant-bayleaf", label: "KIOSK-1", type: "kiosk", status: "active", tenantName: BAYLEAF_TENANT, outletId: "outlet-bayleaf", outletName: "Bay Leaf Counter" },
+  { id: "d-kds", tenantId: "tenant-spice", label: "KDS-1", type: "kds", status: "active", tenantName: SPICE_TENANT, outletName: "Spice Route Outlet" },
+  { id: "d-cds", tenantId: "tenant-bayleaf", label: "CDS-1", type: "cds", status: "active", tenantName: BAYLEAF_TENANT, outletName: null },
+  { id: "d-printer", tenantId: "tenant-spice", label: "Counter printer", type: "printer", status: "active", tenantName: SPICE_TENANT, outletName: "Spice Route Outlet" },
+  { id: "d-terminal", tenantId: "tenant-spice", label: "Counter terminal", type: "terminal", status: "active", tenantName: SPICE_TENANT, outletName: "Spice Route Outlet" },
+  { id: "d-revoked", tenantId: "tenant-bayleaf", label: "POS-OLD", type: "pos", status: "revoked", tenantName: BAYLEAF_TENANT, outletName: null },
 ];
 
 // Both demo restaurants are in Test mode; a Live one ("Real Diner") must never show up on /demo.
 const TENANTS = [
-  { id: "tenant-spice", name: "Spice Route Hospitality", testMode: true },
-  { id: "tenant-bayleaf", name: "Bay Leaf Kitchens", testMode: true },
+  { id: "tenant-spice", name: SPICE_TENANT, testMode: true },
+  { id: "tenant-bayleaf", name: BAYLEAF_TENANT, testMode: true },
   { id: "tenant-real", name: "Real Diner", testMode: false },
 ];
 const LIVE_DEVICE = { id: "d-live", tenantId: "tenant-real", label: "POS-LIVE", type: "pos", status: "active", tenantName: "Real Diner", outletName: "Main" };
@@ -85,11 +89,11 @@ describe("Landing page", () => {
   });
 
   it("lists only Test-mode tenants' logins and devices", async () => {
-    stubDevicesFetch(TENANTS.map((tenant) => (tenant.name === "Bay Leaf Kitchens" ? { ...tenant, testMode: false } : tenant)));
+    stubDevicesFetch(TENANTS.map((tenant) => (tenant.name === BAYLEAF_TENANT ? { ...tenant, testMode: false } : tenant)));
     render(await Home());
     expect(screen.getByTestId("landing-owner-login-none")).toBeTruthy();
     for (const staff of DEMO_STAFF) {
-      expect(Boolean(screen.queryByTestId(`landing-staff-${staff.name}`))).toBe(staff.tenant === "Spice Route Hospitality");
+      expect(Boolean(screen.queryByTestId(`landing-staff-${staff.name}`))).toBe(staff.tenant === SPICE_TENANT);
     }
     expect(screen.queryByTestId("landing-device-d-kiosk")).toBeNull();
     expect(screen.queryByTestId("landing-device-d-live")).toBeNull();

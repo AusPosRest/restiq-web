@@ -66,6 +66,9 @@ actually built here, story by story. Backend counterpart:
     CAP-2's table map already exists as its own route tree, see below), so this story lands
     on a `ComingSoon` placeholder *inside* the real shell (shift bar included) rather than a
     route that 404s.
+    **Now (#388):** `/pos` redirects by the outlet's `type` from the `pos_staff` cookie
+    (`posLandingPath()` in `src/lib/pos-session.ts`): `qsr` and `food_court` open
+    `/pos/counter`, everything else (and an older backend that sends no type) `/pos/table-map`.
   - **Theme:** `.pos-theme` added to `src/app/globals.css`, same charcoal+amber ground as
     Console Dark/Tenant Admin with POS's own fixed status vocabulary
     (`--status-available/occupied/warning/alert/reserved` - DESIGN.md: never repurposed for

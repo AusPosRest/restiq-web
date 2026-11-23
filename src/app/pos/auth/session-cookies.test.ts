@@ -26,4 +26,12 @@ describe("posLoginResponse cookie security (W1)", () => {
   it("sets secure cookies behind a TLS-terminating proxy", () => {
     for (const c of setCookies("http://internal:3000/pos/auth/login", { "x-forwarded-proto": "https" })) expect(c).toMatch(/;\s*secure/i);
   });
+
+  it("keeps the outlet type in the pos_staff cookie so the till can pick its landing screen", () => {
+    const typed = { ...result, outlet: { ...result.outlet, type: "qsr" } };
+    const cookies = posLoginResponse(typed, new Request("http://localhost/pos/auth/login", { method: "POST" })).headers.getSetCookie();
+    const staff = cookies.find((c) => c.startsWith(`${POS_STAFF_COOKIE}=`)) ?? "";
+    const value = decodeURIComponent(staff.split(";")[0].slice(POS_STAFF_COOKIE.length + 1));
+    expect(JSON.parse(value).outlet.type).toBe("qsr");
+  });
 });

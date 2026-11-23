@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { decidePosRoute, parsePosStaffDisplay, sanitizePosNextPath } from "./pos-session";
+import { decidePosRoute, parsePosStaffDisplay, posLandingPath, sanitizePosNextPath } from "./pos-session";
 
 function fakeToken(exp: number): string {
   const payload = Buffer.from(JSON.stringify({ sub: "staff-1", aud: "pos", exp })).toString("base64url");
@@ -85,5 +85,21 @@ describe("parsePosStaffDisplay", () => {
     expect(parsePosStaffDisplay(undefined)).toBeNull();
     expect(parsePosStaffDisplay("not-json")).toBeNull();
     expect(parsePosStaffDisplay(JSON.stringify({ staff: { id: "s1", name: "Priya" } }))).toBeNull();
+  });
+});
+
+describe("posLandingPath", () => {
+  it("lands counter-service outlets on the counter", () => {
+    expect(posLandingPath("qsr")).toBe("/pos/counter");
+    expect(posLandingPath("food_court")).toBe("/pos/counter");
+  });
+
+  it("lands everything else, including a missing type, on the table map", () => {
+    for (const type of ["dine_in", "cloud_kitchen", "mystery", undefined]) expect(posLandingPath(type)).toBe("/pos/table-map");
+  });
+
+  it("keeps parsing a cookie written without an outlet type", () => {
+    const parsed = parsePosStaffDisplay(JSON.stringify({ staff: { id: "s", name: "S" }, outlet: { id: "o", name: "O" } }));
+    expect(parsed?.outlet.type).toBeUndefined();
   });
 });
