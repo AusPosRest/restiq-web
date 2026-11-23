@@ -11,7 +11,7 @@ import { useState } from "react";
 import { Button } from "@/components/ui/button";
 import { AmountKeypad } from "./amount-keypad";
 import type { CashMovementType } from "../../api";
-import { appendDigit, digitsToMinor, validateMovementForm } from "./shift-state";
+import { appendEntryKey, entryToMinor, validateMovementForm } from "./shift-state";
 
 export interface LogMovementDialogProps {
   open: boolean;
@@ -50,7 +50,7 @@ function DialogBody({ busy, error, onCancel, onSubmit, currency }: Readonly<LogM
             className="mt-4 space-y-4"
             onSubmit={(event) => {
               event.preventDefault();
-              if (canSubmit) onSubmit(type, digitsToMinor(digits), reason.trim());
+              if (canSubmit) onSubmit(type, entryToMinor(digits), reason.trim());
             }}
           >
             <fieldset className="flex justify-center gap-4 text-sm" data-testid="movement-type">
@@ -75,7 +75,8 @@ function DialogBody({ busy, error, onCancel, onSubmit, currency }: Readonly<LogM
                 digits={digits}
                 currency={currency}
                 disabled={busy}
-                onDigit={(digit) => setDigits((current) => appendDigit(current, digit))}
+                onDigit={(digit) => setDigits((current) => appendEntryKey(current, digit))}
+                onDecimal={() => setDigits((current) => appendEntryKey(current, "."))}
                 onBackspace={() => setDigits((current) => current.slice(0, -1))}
                 onClear={() => setDigits("")}
               />
