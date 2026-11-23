@@ -24,11 +24,26 @@ describe("money (PE-10, PE-23)", () => {
     expect(localeForCurrency("INR")).toBe("en-IN");
   });
 
-  it("rounds rupee cash to the nearest rupee and leaves other currencies alone (CU-11)", () => {
+  it("rounds rupee cash to the nearest rupee and Australian cash to 5 cents, half up (CU-11, restiq-web#377)", () => {
     expect(cashRoundOffMinor(89040, "INR")).toBe(-40);
     expect(cashRoundOffMinor(89060, "INR")).toBe(40);
     expect(cashRoundOffMinor(89050, "INR")).toBe(50);
     expect(cashRoundOffMinor(89000, "INR")).toBe(0);
     expect(cashRoundOffMinor(1995, "AUD")).toBe(0);
+    expect(cashRoundOffMinor(1233, "AUD")).toBe(2);
+    expect(cashRoundOffMinor(1232, "AUD")).toBe(-2);
+    expect(cashRoundOffMinor(1231, "AUD")).toBe(-1);
+    expect(cashRoundOffMinor(1234, "AUD")).toBe(1);
+    expect(cashRoundOffMinor(1995, "USD")).toBe(0);
+    expect(cashRoundOffMinor(0, "INR")).toBe(0);
+    expect(cashRoundOffMinor(-40, "INR")).toBe(0);
+  });
+
+  it("agrees with restiq-backend's integer rule for every due amount", () => {
+    for (const [currency, unit] of [["INR", 100], ["AUD", 5]] as const) {
+      for (let due = 1; due <= 2000; due++) {
+        expect(due + cashRoundOffMinor(due, currency)).toBe(Math.floor((due * 2 + unit) / (2 * unit)) * unit);
+      }
+    }
   });
 });

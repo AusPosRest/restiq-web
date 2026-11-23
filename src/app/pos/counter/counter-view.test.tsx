@@ -293,6 +293,9 @@ describe("CounterView - ring up and settle in one continuous flow", () => {
     await user.click(screen.getByTestId("finalize-bill"));
 
     await screen.findByTestId("counter-settled-panel");
+    // restiq-web#377: the cash goes up with what was handed over.
+    const finalizeCall = fetchMock.mock.calls.find(([input]) => String(input).endsWith("/bills/bill-order-47/finalize"));
+    expect(JSON.parse(String(finalizeCall![1]?.body)).tenders).toEqual([{ method: "cash", amountMinor: 6300, tenderedMinor: 6300 }]);
     // restiq-web#361: the web never sends to the kitchen itself on Charge - a
     // successful finalize fires the ticket server-side.
     expect(sentToKitchen(fetchMock)).toBe(false);

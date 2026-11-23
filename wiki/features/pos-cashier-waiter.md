@@ -959,7 +959,8 @@ done now, this is what actually happened:
 ## CAP-7 - Bill & Settle (story 8)
 
 > **Update 2026-10-08 (#306).**
-> - Cash can go over the total. The screen shows "Change due" and posts the cash net of change, because the backend still needs the tenders to equal the total.
+> - Cash can go over the total. The screen shows "Change due" and posts the cash net of change.
+> - #377 (2026-11-23), CU-11: cash is settled to the nearest rupee (INR) or 5 cents (AUD), half up; only the cash share of a split is rounded, card / UPI stay exact. Finalize posts the cash that went into the drawer (₹890 on a ₹890.40 bill, not ₹890.40) with `tenderedMinor` (what was handed over; the last cash tender carries the change), and restiq-backend#241 stores the difference as the bill's `roundOffMinor`. The invoice page and thermal receipt print the stored round-off and, when change was given, "Cash tendered" and "Change"; bills settled before #377 still get the INR guess on reprint.
 > - The payment keypad takes whole currency units.
 > - The bill lists `taxBreakdown` lines (CGST/SGST, GST).
 > - #369 (2026-10-19): with a discount pending, those lines are recomputed on the discounted value (`billFigures` in `bill-state.ts`: GST rounded once, CGST = floor(half), SGST = remainder), so Discount + tax lines add up to TOTAL before finalize. The split follows the bill's `gstSplitRounding` (restiq-backend#244): `exact_total` or null rounds once (CGST = floor(half), SGST = remainder); `equal_half_up` / `equal_half_even` round each half on its own.
@@ -1020,7 +1021,7 @@ done now, this is what actually happened:
     without closing, exactly its existing contract. See "How to use this component" in
     story 9's original wiki entry for the general pattern - this is that pattern's first
     real caller.
-  - **Finalize** - disabled until `tenderedMinor` exactly equals `grandTotalMinor`
+  - **Finalize** - disabled until `tenderedMinor` exactly equals `grandTotalMinor` (superseded: cash may go over for change, and since #377 may cover the market-rounded cash share instead)
     (`canFinalizeBill`, never allows over-tendering to silently pass either). Once the bill
     comes back `status: "finalised"`, the whole mutation half of the screen (discount
     button, `TenderKeypad`, Finalize button) stops rendering outright and is replaced by a

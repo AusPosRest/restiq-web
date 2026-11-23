@@ -183,6 +183,41 @@ describe("BillInvoiceView - GST details, variants, token and round-off (PE-18, C
     expect(screen.getByTestId("invoice-tender-0").textContent).toContain("₹890.00");
   });
 
+  it("prints the stored round-off on a split bill, and the cash tendered and change (restiq-web#377)", async () => {
+    stubFetch(() =>
+      jsonResponse(
+        inInvoice({
+          totalMinor: 89060,
+          roundOffMinor: 40,
+          tenders: [
+            { method: "upi_manual", amountMinor: 50000, tenderedMinor: null, changeMinor: null, createdAt: "2026-09-02T10:31:00.000Z" },
+            { method: "cash", amountMinor: 39100, tenderedMinor: 50000, changeMinor: 10900, createdAt: "2026-09-02T10:31:00.000Z" },
+          ],
+        }),
+      ),
+    );
+    render(<BillInvoiceView billId={BILL_ID} />);
+    await screen.findByTestId("bill-invoice-view");
+
+    expect(screen.getByTestId("invoice-round-off").textContent).toBe("Round off+₹0.40");
+    expect(screen.getByTestId("invoice-amount-paid").textContent).toBe("Amount paid₹891.00");
+    expect(screen.getByTestId("invoice-tender-1").textContent).toContain("₹391.00");
+    expect(screen.queryByTestId("invoice-cash-tendered-0")).toBeNull();
+    expect(screen.getByTestId("invoice-cash-tendered-1").textContent).toBe("Cash tendered₹500.00");
+    expect(screen.getByTestId("invoice-change-1").textContent).toBe("Change₹109.00");
+  });
+
+  it("shows no change rows for exact cash", async () => {
+    stubFetch(() =>
+      jsonResponse(inInvoice({ totalMinor: 89040, roundOffMinor: -40, tenders: [{ method: "cash", amountMinor: 89000, tenderedMinor: 89000, changeMinor: 0, createdAt: "2026-09-02T10:31:00.000Z" }] })),
+    );
+    render(<BillInvoiceView billId={BILL_ID} />);
+    await screen.findByTestId("bill-invoice-view");
+    expect(screen.getByTestId("invoice-tender-0").textContent).toContain("₹890.00");
+    expect(screen.queryByTestId("invoice-cash-tendered-0")).toBeNull();
+    expect(screen.queryByTestId("invoice-change-0")).toBeNull();
+  });
+
   it("does not round a card / UPI bill or an AUD bill", async () => {
     stubFetch(() => jsonResponse(inInvoice({ totalMinor: 89040, tenders: [{ method: "upi_manual", amountMinor: 89040, createdAt: "2026-09-02T10:31:00.000Z" }] })));
     render(<BillInvoiceView billId={BILL_ID} />);

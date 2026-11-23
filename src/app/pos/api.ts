@@ -393,9 +393,11 @@ export function getBill(billId: string): Promise<BillView> {
 /**
  * Submits every pending discount + tender together (`FinalizeBillDto`) -
  * the real backend has no separate discount/tender endpoints, see
- * bill-state.ts's file header. Rejected (400 `tender_mismatch`) if the
- * tenders don't exactly sum to the total - `canFinalizeBill()` already keeps
- * the button disabled in that case, this is the server-side backstop.
+ * bill-state.ts's file header. Rejected (400 `tender_mismatch`) unless the
+ * tenders sum to the total, or to the total with the cash share rounded per
+ * market (restiq-backend#241, stored as `roundOffMinor`) -
+ * `canFinalizeWithElectronic()` already keeps the button disabled otherwise,
+ * this is the server-side backstop.
  */
 export function finalizeBill(billId: string, input: FinalizeBillInput): Promise<BillView> {
   return posApi<BillView>(`bills/${billId}/finalize`, { method: "POST", body: JSON.stringify(input) });
@@ -458,6 +460,9 @@ export interface InvoiceTenderView {
   amountMinor: number;
   /** An external tender's reference / bill number (restiq-backend#146). */
   reference?: string | null;
+  /** restiq-backend#241: cash handed over and the change given back - null unless recorded. Optional for older APIs and print-job snapshots. */
+  tenderedMinor?: number | null;
+  changeMinor?: number | null;
   createdAt: string;
 }
 
@@ -496,6 +501,8 @@ export interface InvoiceView {
   taxBreakdown: InvoiceTaxBreakdownView[];
   taxMinor: number;
   totalMinor: number;
+  /** restiq-backend#241: the cash round-off stored at finalize; amount paid is totalMinor + this. Null when none, absent from older APIs and print-job snapshots. */
+  roundOffMinor?: number | null;
   pricesIncludeTax: boolean;
   tenders: InvoiceTenderView[];
   creditNotes: InvoiceCreditNoteView[];

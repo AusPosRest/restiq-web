@@ -109,4 +109,18 @@ describe("PrinterScreen", () => {
     render(<ThermalReceipt invoice={INVOICE} printedAt="2026-09-09T00:00:00.000Z" />);
     expect(screen.queryByTestId("thermal-test-mode")).toBeNull();
   });
+
+  it("prints the stored round-off, cash tendered and change (restiq-web#377)", () => {
+    const paid: InvoiceView = {
+      ...INVOICE,
+      status: "finalized",
+      totalMinor: 1233,
+      roundOffMinor: 2,
+      tenders: [{ method: "cash", amountMinor: 1235, tenderedMinor: 2000, changeMinor: 765, createdAt: "2026-09-09T00:00:00.000Z" }],
+    };
+    render(<ThermalReceipt invoice={paid} printedAt="2026-09-09T00:00:00.000Z" />);
+    expect(screen.getByTestId("thermal-round-off").textContent).toBe("Round off+A$0.02");
+    expect(screen.getByTestId("thermal-cash-tendered-0").textContent).toBe("Cash tenderedA$20.00");
+    expect(screen.getByTestId("thermal-change-0").textContent).toBe("ChangeA$7.65");
+  });
 });

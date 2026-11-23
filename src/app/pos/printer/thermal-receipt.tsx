@@ -3,6 +3,7 @@
 // bottom edge - fed out of the slot line by line (`animate-paper-feed`,
 // globals.css; still for reduced-motion users). Same InvoiceView the
 // invoice page renders, laid out the way a receipt printer would.
+import { Fragment } from "react";
 import type { InvoiceView } from "../api";
 import { localeForCurrency } from "@/lib/money";
 import { invoiceCashRoundOff } from "../bills/invoice-round-off";
@@ -86,7 +87,16 @@ export function ThermalReceipt({ invoice, printedAt }: Readonly<{ invoice: Invoi
         <>
           <Rule />
           {tenders.map((tender, index) => (
-            <Row key={index} label={TENDER_METHOD_LABEL[tender.method as BillTenderMethod] ?? tender.method} value={formatMinor(tender.amountMinor, currency)} />
+            <Fragment key={index}>
+              <Row label={TENDER_METHOD_LABEL[tender.method as BillTenderMethod] ?? tender.method} value={formatMinor(tender.amountMinor, currency)} />
+              {/* restiq-web#377: what the guest handed over and the change, when the till recorded it. */}
+              {tender.method === "cash" && tender.tenderedMinor != null && tender.tenderedMinor > tender.amountMinor && (
+                <>
+                  <Row label="Cash tendered" value={formatMinor(tender.tenderedMinor, currency)} testId={`thermal-cash-tendered-${index}`} />
+                  <Row label="Change" value={formatMinor(tender.tenderedMinor - tender.amountMinor, currency)} testId={`thermal-change-${index}`} />
+                </>
+              )}
+            </Fragment>
           ))}
         </>
       )}

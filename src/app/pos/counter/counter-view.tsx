@@ -363,7 +363,7 @@ function CounterLoaded({
     // lines to the kitchen in the same transaction (restiq-backend#210), so a
     // failed payment (e.g. shift_not_open) never leaves a ticket for an
     // unpaid order on the KDS.
-    finalizeBill(bill.id, { tenders: tendersForFinalize(billTotalMinor(bill), bill, pendingTenders) })
+    finalizeBill(bill.id, { tenders: tendersForFinalize(billTotalMinor(bill), bill, pendingTenders, menu.currency) })
       .then((finalised) => {
         setBill(finalised);
         // Paid: a reload now starts a fresh order rather than resuming this one.

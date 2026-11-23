@@ -57,6 +57,9 @@ export interface BillTenderView {
   riskAcknowledged?: boolean;
   /** An external tender's reference / bill number (restiq-backend#146); null otherwise. */
   reference?: string | null;
+  /** restiq-backend#241: cash handed over and the change given back - null unless recorded. Optional for older APIs. */
+  tenderedMinor?: number | null;
+  changeMinor?: number | null;
   createdAt: string;
 }
 
@@ -77,6 +80,8 @@ export interface BillView {
   gstSplitRounding?: GstSplitRounding | null;
   /** subtotal (+ tax when not inclusive) - discount, never persisted as its own column - always derived server-side (bill-core.ts's `toBillView`). */
   totalMinor: number;
+  /** restiq-backend#241: the cash round-off settled at finalize (tenders sum to totalMinor + this); null when none. Optional for older APIs. */
+  roundOffMinor?: number | null;
   status: BillStatus;
   createdAt: string;
   finalizedAt: string | null;
@@ -94,6 +99,8 @@ export interface PendingTender {
   amountMinor: number;
   /** Required for `external`: the outside receipt / bill number. */
   reference?: string;
+  /** Cash only (restiq-backend#241): what the guest handed over, >= amountMinor; set by tendersForFinalize. */
+  tenderedMinor?: number;
 }
 
 /** Not yet submitted either - same finalize-call-only posture as `PendingTender` (`FinalizeBillDto.discountMinor`/`discountReason`). `managerPin` is only ever present on the above-threshold path (see discount-dialog.tsx). */

@@ -202,7 +202,7 @@ function PaymentsView({
 
   return (
     <div className="flex flex-col gap-6">
-      <div className="grid grid-cols-2 gap-3 lg:grid-cols-4 xl:grid-cols-8" data-testid="payments-totals">
+      <div className="grid grid-cols-2 gap-3 lg:grid-cols-3" data-testid="payments-totals">
         <KpiStatCard testId="payments-totals-count" label="Bills">
           <p className="text-2xl font-semibold tabular-nums">{totals.count.toLocaleString()}</p>
         </KpiStatCard>
@@ -220,6 +220,9 @@ function PaymentsView({
         </KpiStatCard>
         <KpiStatCard testId="payments-totals-tendered" label="Tendered">
           <p className="text-2xl font-semibold tabular-nums">{formatMoney(totals.tenderedMinor, currency)}</p>
+        </KpiStatCard>
+        <KpiStatCard testId="payments-totals-round-off" label="Round-off">
+          <p className="text-2xl font-semibold tabular-nums">{formatMoney(totals.roundOffMinor ?? 0, currency)}</p>
         </KpiStatCard>
         <KpiStatCard testId="payments-totals-refunded" label="Refunded">
           <p className="text-2xl font-semibold tabular-nums">{formatMoney(totals.refundedMinor, currency)}</p>

@@ -20,7 +20,7 @@
 // an "Unpaid" badge and omits the invoice number for that case; the payments
 // section already stays hidden on its own since `tenders` is empty.
 import Link from "next/link";
-import { useEffect, useState } from "react";
+import { Fragment, useEffect, useState } from "react";
 import { Button } from "@/components/ui/button";
 import { fetchInvoice, PosApiError, type InvoiceView } from "../../../api";
 import { PrintBillButton } from "../../print-bill-button";
@@ -262,13 +262,28 @@ export function InvoiceReceipt({ invoice }: Readonly<{ invoice: InvoiceView }>) 
           <h2 className="font-label text-xs font-semibold uppercase tracking-wider text-muted-foreground">Payments</h2>
           <ul className="mt-1 flex flex-col gap-1">
             {tenders.map((tender, index) => (
-              <li key={index} data-testid={`invoice-tender-${index}`} className="flex items-center justify-between">
-                <span>
-                  {tenderMethodLabel(tender.method)}
-                  {tender.reference ? ` #${tender.reference}` : ""} · {formatIssuedAt(tender.createdAt, locale)}
-                </span>
-                <span className="tabular-nums">{formatMinor(tender.amountMinor, invoice.currency)}</span>
-              </li>
+              <Fragment key={index}>
+                <li data-testid={`invoice-tender-${index}`} className="flex items-center justify-between">
+                  <span>
+                    {tenderMethodLabel(tender.method)}
+                    {tender.reference ? ` #${tender.reference}` : ""} · {formatIssuedAt(tender.createdAt, locale)}
+                  </span>
+                  <span className="tabular-nums">{formatMinor(tender.amountMinor, invoice.currency)}</span>
+                </li>
+                {/* restiq-web#377: what the guest handed over and the change, when the till recorded it. */}
+                {tender.method === "cash" && tender.tenderedMinor != null && tender.tenderedMinor > tender.amountMinor && (
+                  <>
+                    <li data-testid={`invoice-cash-tendered-${index}`} className="flex items-center justify-between pl-3 text-muted-foreground">
+                      <span>Cash tendered</span>
+                      <span className="tabular-nums">{formatMinor(tender.tenderedMinor, invoice.currency)}</span>
+                    </li>
+                    <li data-testid={`invoice-change-${index}`} className="flex items-center justify-between pl-3 text-muted-foreground">
+                      <span>Change</span>
+                      <span className="tabular-nums">{formatMinor(tender.tenderedMinor - tender.amountMinor, invoice.currency)}</span>
+                    </li>
+                  </>
+                )}
+              </Fragment>
             ))}
           </ul>
         </section>

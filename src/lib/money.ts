@@ -28,12 +28,18 @@ export function formatPrice(amountMinor: number, currency: string): string {
   return format(amountMinor, currency, amountMinor % 100 === 0 ? 0 : 2);
 }
 
+const CASH_ROUNDING_UNIT_MINOR: Record<string, number> = { INR: 100, AUD: 5 };
+
 /**
- * CU-11: rupee cash is settled to the nearest rupee (50 paise rounds up) -
- * the adjustment to add to what is due: -40 for ₹890.40, +40 for ₹890.60.
- * 0 for any other currency. Display / tender side only: the bill and its
- * tenders keep the exact total (restiq-backend's finalize requires it).
+ * CU-11 / restiq-web#377: cash is settled to the market's smallest coin -
+ * nearest rupee for INR, nearest 5 cents for AUD, half rounds up - and this is
+ * the adjustment to add to the cash due: -40 for ₹890.40, +2 for A$12.33.
+ * 0 for any other currency or nothing due. Must match restiq-backend's
+ * bill-core cashRoundOffMinor exactly: finalize accepts the cash share
+ * rounded this way and stores the difference as the bill's roundOffMinor.
  */
 export function cashRoundOffMinor(dueMinor: number, currency: string): number {
-  return currency === "INR" ? Math.round(dueMinor / 100) * 100 - dueMinor : 0;
+  const unit = CASH_ROUNDING_UNIT_MINOR[currency];
+  if (!unit || dueMinor <= 0) return 0;
+  return Math.floor((dueMinor * 2 + unit) / (2 * unit)) * unit - dueMinor;
 }
