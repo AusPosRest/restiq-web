@@ -20,6 +20,7 @@ import type { RoleView, StaffView } from "./(shell)/staff/staff-state";
 import { filenameFromContentDisposition, type ReportExport } from "./(shell)/reports/reports-state";
 import type { PaymentsResponse } from "./(shell)/reports/payments-state";
 import type { TopItemsResponse } from "./(shell)/reports/top-items-state";
+import { leaveIfSessionEnded, SESSION_ENDED_MESSAGE } from "@/lib/session-ended";
 
 export class AdminApiError extends Error {
   constructor(
@@ -44,6 +45,7 @@ export async function adminApi<T>(path: string, init?: RequestInit): Promise<T> 
     throw new AdminApiError("The API could not be reached", 0);
   }
   const body: unknown = res.status === 204 ? null : await res.json().catch(() => null);
+  if (leaveIfSessionEnded(res, body, "/admin/login")) throw new AdminApiError(SESSION_ENDED_MESSAGE, 401, "unauthorized");
   if (!res.ok) {
     const error = (body as { error?: { code?: string; message?: string } & Record<string, unknown> } | null)?.error;
     throw new AdminApiError(error?.message ?? "The request failed", res.status, error?.code, error);
@@ -96,6 +98,7 @@ export async function uploadMenuImport(file: File): Promise<MenuImportDraft> {
     throw new AdminApiError("The API could not be reached", 0);
   }
   const payload: unknown = await res.json().catch(() => null);
+  if (leaveIfSessionEnded(res, payload, "/admin/login")) throw new AdminApiError(SESSION_ENDED_MESSAGE, 401, "unauthorized");
   if (!res.ok) {
     const error = (payload as { error?: { code?: string; message?: string } } | null)?.error;
     throw new AdminApiError(error?.message ?? "The upload failed", res.status, error?.code);
@@ -648,8 +651,10 @@ async function fetchExport(path: string, fallbackFilename: string): Promise<Repo
   } catch {
     throw new AdminApiError("The API could not be reached", 0);
   }
+  if (leaveIfSessionEnded(res, null, "/admin/login")) throw new AdminApiError(SESSION_ENDED_MESSAGE, 401, "unauthorized");
   if (!res.ok) {
     const body: unknown = await res.json().catch(() => null);
+    if (leaveIfSessionEnded(res, body, "/admin/login")) throw new AdminApiError(SESSION_ENDED_MESSAGE, 401, "unauthorized");
     const error = (body as { error?: { code?: string; message?: string } } | null)?.error;
     throw new AdminApiError(error?.message ?? "The export failed", res.status, error?.code);
   }

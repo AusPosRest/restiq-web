@@ -40,6 +40,8 @@
 // carries the (null) keys. closeShift()'s response is typed separately
 // (ClosedShift) precisely because that's the one call where those fields are
 // real, non-null values.
+import { leaveIfSessionEnded, SESSION_ENDED_MESSAGE } from "@/lib/session-ended";
+
 export class PosApiError extends Error {
   constructor(
     message: string,
@@ -61,6 +63,7 @@ export async function posApi<T>(path: string, init?: RequestInit): Promise<T> {
     throw new PosApiError("The API could not be reached", 0);
   }
   const body: unknown = res.status === 204 ? null : await res.json().catch(() => null);
+  if (leaveIfSessionEnded(res, body, "/pos/login")) throw new PosApiError(SESSION_ENDED_MESSAGE, 401, "unauthorized");
   if (!res.ok) {
     const error = (body as { error?: { code?: string; message?: string } } | null)?.error;
     throw new PosApiError(error?.message ?? "The request failed", res.status, error?.code);
