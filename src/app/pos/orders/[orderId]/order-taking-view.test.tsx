@@ -596,3 +596,27 @@ describe("OrderTakingView - mistakes on a sent order (CU-15, CU-27)", () => {
   });
 });
 });
+
+describe("OrderTakingView - an item sold out since the menu loaded (restiq-web#374)", () => {
+  it("re-reads the menu so the tile turns Sold out, keeping the order on screen", async () => {
+    const user = userEvent.setup();
+    const soldOut: PosMenuView = { ...MENU, items: MENU.items.map((item) => (item.id === "item-naan" ? { ...item, available: false } : item)) };
+    let menuReads = 0;
+    stubFetch((url) => {
+      if (url.includes("/menu")) return jsonResponse(menuReads++ === 0 ? MENU : soldOut);
+      if (url.endsWith("/lines")) return jsonResponse({ error: { code: "item_unavailable", message: "This item is currently unavailable" } }, 400);
+      return jsonResponse(order());
+    });
+    renderView();
+    await waitFor(() => expect(screen.getByTestId("order-taking-view")).toBeTruthy());
+
+    await user.click(screen.getByTestId("category-tab-cat-breads"));
+    await user.click(screen.getByTestId("item-tile-item-naan"));
+    await waitFor(() => expect(screen.getByTestId("order-taking-action-error").textContent).toContain("This item is currently unavailable"));
+    await screen.findByTestId("item-tile-unavailable-item-naan");
+    expect(menuReads).toBe(2);
+    expect(screen.getByTestId("order-taking-view")).toBeTruthy();
+    // Still on the Breads tab: the inner screen kept its state through the refresh.
+    expect(screen.getByTestId("category-tab-cat-breads").getAttribute("aria-pressed")).toBe("true");
+  });
+});

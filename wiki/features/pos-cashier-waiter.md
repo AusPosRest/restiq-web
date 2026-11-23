@@ -885,6 +885,13 @@ done now, this is what actually happened:
     direct "Open orders" link on the table map, a reciprocal "Switch to Counter Mode" /
     "Switch to Table Mode" link pair was added between `/pos/table-map` and `/pos/counter` so
     both entry points are actually reachable today.
+- **Menu kept current (restiq-web#374).** The counter and order screens re-read the menu
+  every 30 s while the tab is visible and when it comes back into view (`use-menu-refresh.ts`,
+  `usePosLoad`'s quiet `refresh()`), and at once after an `item_unavailable` refusal, so
+  sold-out tiles update without a reload or a loading flash. The counter's resumed-order
+  lookup runs once per staff member, not per refresh. If the first item of a new counter
+  order is refused, the order's bill is loaded anyway: the cart shows the token and
+  **Discard empty order** instead of "Loading the bill…".
 - **Backend not available at build time.** `restiq-backend#62` ("QSR counter and token mode")
   had no branch and no commits when this was built (`gh issue view 62`/`gh api
   repos/AusPosRest/restiq-backend/branches` both confirming only `dev`/`main`/
