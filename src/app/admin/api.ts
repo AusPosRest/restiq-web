@@ -191,6 +191,8 @@ export interface CreateItemInput {
   name: string;
   shortName: string;
   vegMarker?: "veg" | "non_veg";
+  /** Max 300 chars; shown to guests on the QR menu. */
+  description?: string;
   stationId?: string;
   variants?: NewVariantInput[];
   modifierGroupIds?: string[];
@@ -208,6 +210,8 @@ export interface UpdateItemInput {
   /** null removes the photo (restiq-backend#142). */
   photoUrl?: string | null;
   vegMarker?: "veg" | "non_veg" | null;
+  /** null clears it. */
+  description?: string | null;
 }
 
 export function updateMenuItem(itemId: string, input: UpdateItemInput): Promise<ItemView> {

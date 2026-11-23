@@ -9,6 +9,7 @@
 // picked - see menu-state.ts's canAddToCart for the exact gate.
 import { useEffect, useState } from "react";
 import { Textarea } from "@/components/ui/textarea";
+import { VegMarker } from "@/components/veg-marker";
 import { useRouter } from "next/navigation";
 import { CartPill } from "../../cart-pill";
 import { SessionEndedView } from "../../session-ended-view";
@@ -175,11 +176,19 @@ export function ItemDetailView({ itemId }: Readonly<{ itemId: string }>) {
       <div className="flex flex-col gap-6 px-5 pt-5">
         <div>
           <div className="flex items-start justify-between gap-3">
-            <h1 className="font-headline text-xl font-semibold text-foreground">{item.name}</h1>
+            <h1 className="flex items-center gap-2 font-headline text-xl font-semibold text-foreground">
+              <VegMarker marker={item.vegMarker} data-testid="qr-item-detail-veg" />
+              {item.name}
+            </h1>
             {price && (
               <span className="shrink-0 text-lg font-semibold tabular-nums text-foreground">{formatPriceMinor(price.priceMinor, price.currency)}</span>
             )}
           </div>
+          {item.description && (
+            <p data-testid="qr-item-detail-description" className="mt-2 text-sm text-muted-foreground">
+              {item.description}
+            </p>
+          )}
           {!item.available && (
             <p data-testid="qr-item-detail-unavailable" className="mt-2 text-sm font-medium text-muted-foreground">
               Unavailable today

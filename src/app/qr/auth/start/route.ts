@@ -1,4 +1,4 @@
-// Starts a table session (CAP-1, first guest): exchanges name+phone for a
+// Starts a table session (CAP-1, first guest): exchanges the guest's name for a
 // guest JWT + shareable 4-digit PIN and stores the JWT in an httpOnly cookie
 // - the token never reaches client-side JS, mirroring pos/auth/login's
 // credential-exchange shape (AD-13, extended to the guest realm).
@@ -14,24 +14,19 @@ import { apiUrl } from "@/lib/api-url";
 import { guestSessionResponse } from "../session-cookies";
 import type { GuestApiError, GuestStartResult } from "../types";
 
-const PHONE_PATTERN = /^\d{10}$/;
-
 function errorResponse(status: number, code: string, message: string): NextResponse {
   return NextResponse.json({ error: { code, message } }, { status });
 }
 
 export async function POST(request: Request): Promise<NextResponse> {
   const body: unknown = await request.json().catch(() => null);
-  const { outletId, tableId, name, phone } = (body ?? {}) as Record<string, unknown>;
+  const { outletId, tableId, name } = (body ?? {}) as Record<string, unknown>;
 
   if (typeof outletId !== "string" || !outletId || typeof tableId !== "string" || !tableId) {
     return errorResponse(400, "validation_failed", "outletId and tableId are required");
   }
   if (typeof name !== "string" || !name.trim()) {
     return errorResponse(400, "validation_failed", "Your name is required");
-  }
-  if (typeof phone !== "string" || !PHONE_PATTERN.test(phone)) {
-    return errorResponse(400, "validation_failed", "A 10-digit phone number is required");
   }
 
   const url = apiUrl();
@@ -44,7 +39,7 @@ export async function POST(request: Request): Promise<NextResponse> {
     upstream = await fetch(`${url}/guest/v1/sessions`, {
       method: "POST",
       headers: { "content-type": "application/json" },
-      body: JSON.stringify({ outletId, tableId, name: name.trim(), phone }),
+      body: JSON.stringify({ outletId, tableId, name: name.trim() }),
       cache: "no-store",
     });
   } catch {

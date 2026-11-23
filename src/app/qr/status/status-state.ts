@@ -56,3 +56,9 @@ export function sortOrdersNewestFirst(orders: GuestOrderStatusView[]): GuestOrde
     return bPlaced.localeCompare(aPlaced);
   });
 }
+
+/** Table orders are shown as "Order 1", "Order 2"... by when they were placed (oldest = 1), never by internal id. */
+export function orderNumbers(orders: GuestOrderStatusView[]): Map<string, number> {
+  const oldestFirst = sortOrdersNewestFirst(orders).reverse();
+  return new Map(oldestFirst.map((o, i) => [o.orderId, i + 1]));
+}

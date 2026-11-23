@@ -13,11 +13,13 @@ export interface ItemDraft {
   categoryId: string;
   /** "" = not marked (PE-13: FSSAI veg / non-veg marker). */
   vegMarker: VegMarker | "";
+  /** Optional, max 300; blank clears it. Guests see it on the QR menu. */
+  description: string;
 }
 
 export function itemDraftFromView(item: ItemView | null, defaultCategoryId: string): ItemDraft {
-  if (!item) return { name: "", shortName: "", categoryId: defaultCategoryId, vegMarker: "" };
-  return { name: item.name, shortName: item.shortName, categoryId: item.categoryId, vegMarker: item.vegMarker ?? "" };
+  if (!item) return { name: "", shortName: "", categoryId: defaultCategoryId, vegMarker: "", description: "" };
+  return { name: item.name, shortName: item.shortName, categoryId: item.categoryId, vegMarker: item.vegMarker ?? "", description: item.description ?? "" };
 }
 
 /** CU-1: the kitchen ticket name follows the item name until the owner edits it themselves. */

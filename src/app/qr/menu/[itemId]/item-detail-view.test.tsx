@@ -68,6 +68,25 @@ describe("ItemDetailView", () => {
     cleanup();
   });
 
+  it("shows the veg marker beside the name and the full description", async () => {
+    const description = "Slow-cooked overnight with a long list of spices, finished with butter and a squeeze of lime.";
+    vi.stubGlobal("fetch", fetchRouter({ "/menu/items/i1": jsonResponse(200, { ...SIMPLE_ITEM, vegMarker: "veg", description }), "/api/cart": jsonResponse(200, CART_RESPONSE) }));
+    render(<ItemDetailView itemId="i1" />);
+    await screen.findByTestId("qr-item-detail");
+
+    expect(screen.getByTestId("qr-item-detail-veg").getAttribute("aria-label")).toBe("Vegetarian");
+    expect(screen.getByTestId("qr-item-detail-description").textContent).toBe(description);
+  });
+
+  it("renders no marker and no description element when the dish has neither", async () => {
+    vi.stubGlobal("fetch", fetchRouter({ "/menu/items/i1": jsonResponse(200, { ...SIMPLE_ITEM, vegMarker: null, description: "" }), "/api/cart": jsonResponse(200, CART_RESPONSE) }));
+    render(<ItemDetailView itemId="i1" />);
+    await screen.findByTestId("qr-item-detail");
+
+    expect(screen.queryByTestId("qr-item-detail-veg")).toBeNull();
+    expect(screen.queryByTestId("qr-item-detail-description")).toBeNull();
+  });
+
   it("adds a simple item with nothing to configure straight away", async () => {
     vi.stubGlobal(
       "fetch",

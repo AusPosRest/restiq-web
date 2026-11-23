@@ -95,7 +95,7 @@ describe("SimulatorDevices (PE-26 / CU-25)", () => {
     openSpy.mockReturnValueOnce(null);
     render(<SimulatorDevices />);
     await screen.findByTestId("simulator-empty");
-    await userEvent.click(screen.getByTestId("simulator-add-guest-qr"));
+    await userEvent.click(screen.getByTestId("simulator-add-mail-inbox"));
     expect(screen.getByText(/Pop-up blocked/)).toBeTruthy();
   });
 
@@ -114,9 +114,34 @@ describe("SimulatorDevices (PE-26 / CU-25)", () => {
   it("refuses a custom address that is not a page of this app", async () => {
     render(<SimulatorDevices />);
     await screen.findByTestId("simulator-empty");
-    await userEvent.type(screen.getByTestId("simulator-custom-path"), "https://example.com");
+    await userEvent.type(screen.getByTestId("simulator-custom-path"), "ftp://example.com");
     await userEvent.click(screen.getByTestId("simulator-custom-add"));
     expect(screen.getByRole("alert").textContent).toContain("same-origin path");
     expect(openSpy).not.toHaveBeenCalled();
+  });
+
+  it("Guest QR with no configured table opens nothing, and points at the custom box with a hint", async () => {
+    render(<SimulatorDevices />);
+    await screen.findByTestId("simulator-empty");
+
+    await userEvent.click(screen.getByTestId("simulator-add-guest-qr"));
+
+    expect(openSpy).not.toHaveBeenCalled();
+    expect(document.activeElement).toBe(screen.getByTestId("simulator-custom-path"));
+    expect(screen.getByTestId("simulator-custom-hint").textContent).toBe("Paste the table's QR link (Owner console → Tables).");
+    expect(screen.getByTestId("simulator-empty")).toBeTruthy();
+  });
+
+  it("a pasted table QR link opens as a phone-sized Guest QR on its path only", async () => {
+    render(<SimulatorDevices />);
+    await screen.findByTestId("simulator-empty");
+
+    await userEvent.type(screen.getByTestId("simulator-custom-path"), "https://niftypos.com.au/qr/t/o1/t1");
+    await userEvent.click(screen.getByTestId("simulator-custom-add"));
+
+    const [url, , features] = openSpy.mock.calls[0] as [string, string, string];
+    expect(url).toMatch(/^http:\/\/sim-[a-z0-9]+\.localhost:3000\/qr\/t\/o1\/t1$/);
+    expect(features).toBe("popup,width=390,height=844");
+    expect(within(screen.getByTestId("simulator-device-list")).getByText("Guest QR")).toBeTruthy();
   });
 });

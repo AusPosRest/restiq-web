@@ -248,7 +248,7 @@ describe("ItemDrawer open/close and field editing", () => {
     expect(onClose).toHaveBeenCalled();
     const patchCall = fetchMock.mock.calls.find(([, init]) => (init as RequestInit | undefined)?.method === "PATCH");
     expect(patchCall?.[0]).toBe("/admin/api/menu/items/item-1");
-    expect(JSON.parse((patchCall?.[1] as RequestInit).body as string)).toEqual({ name: "Malai Tikka", shortName: "Paneer Tikka", categoryId: "tandoor", vegMarker: null });
+    expect(JSON.parse((patchCall?.[1] as RequestInit).body as string)).toEqual({ name: "Malai Tikka", shortName: "Paneer Tikka", categoryId: "tandoor", vegMarker: null, description: null });
   });
 
   it("says a new item needs a price, and that a negative one is not allowed (PE-13)", async () => {
@@ -261,6 +261,44 @@ describe("ItemDrawer open/close and field editing", () => {
     await userEvent.type(screen.getByTestId("item-create-price"), "-5");
     expect(screen.getByTestId("item-create-price-error").textContent).toBe("Price can't be negative.");
     expect(fetchMock.mock.calls.some(([, init]) => init?.method === "POST")).toBe(false);
+  });
+
+  it("sends the description on create, and null on update when it is cleared", async () => {
+    const created = item({ id: "item-4", name: "Dosa" });
+    const fetchMock = vi.fn((input: RequestInfo | URL, init?: RequestInit) => {
+      if ((init?.method ?? "GET") === "POST" && String(input) === "/admin/api/menu/items") return Promise.resolve(jsonResponse(created, 201));
+      if (init?.method === "PATCH") return Promise.resolve(jsonResponse(item({ description: null })));
+      return Promise.resolve(jsonResponse({ error: { code: "not_found", message: "unhandled" } }, 404));
+    });
+    vi.stubGlobal("fetch", fetchMock);
+
+    renderDrawer({ item: null });
+    const box = screen.getByTestId("item-description-input");
+    expect(box.getAttribute("maxlength")).toBe("300");
+    await userEvent.type(screen.getByTestId("item-name-input"), "Dosa");
+    await userEvent.type(box, "  Crisp and thin  ");
+    await userEvent.type(screen.getByTestId("item-create-price"), "90");
+    await userEvent.click(screen.getByTestId("item-save"));
+    await waitFor(() => expect(fetchMock.mock.calls.some(([, init]) => init?.method === "POST")).toBe(true));
+    const post = fetchMock.mock.calls.find(([, init]) => init?.method === "POST");
+    expect(JSON.parse(post?.[1]?.body as string).description).toBe("Crisp and thin");
+  });
+
+  it("clears the description on update when emptied", async () => {
+    const fetchMock = vi.fn((_input: RequestInfo | URL, init?: RequestInit) =>
+      Promise.resolve(init?.method === "PATCH" ? jsonResponse(item({ description: null })) : jsonResponse({}, 404)),
+    );
+    vi.stubGlobal("fetch", fetchMock);
+    renderDrawer({ item: item({ description: "Old text" }) });
+
+    const box = screen.getByTestId("item-description-input") as HTMLTextAreaElement;
+    expect(box.value).toBe("Old text");
+    await userEvent.clear(box);
+    await userEvent.click(screen.getByTestId("item-save"));
+
+    await waitFor(() => expect(fetchMock.mock.calls.some(([, init]) => init?.method === "PATCH")).toBe(true));
+    const patch = fetchMock.mock.calls.find(([, init]) => init?.method === "PATCH");
+    expect(JSON.parse(patch?.[1]?.body as string).description).toBeNull();
   });
 
   it("creates an item with Half/Full portions and their prices in one go (CU-1)", async () => {

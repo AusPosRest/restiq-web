@@ -195,6 +195,7 @@ function DrawerBody({
           name: draft.name,
           shortName: draft.shortName,
           ...(draft.vegMarker ? { vegMarker: draft.vegMarker } : {}),
+          ...(draft.description.trim() ? { description: draft.description.trim() } : {}),
           ...(stationId ? { stationId } : {}),
           ...(newVariants.length > 0
             ? { variants: newVariants.map((v) => ({ name: v.name.trim(), priceMinor: majorStringToPriceMinor(v.price) ?? 0, currency })) }
@@ -222,6 +223,7 @@ function DrawerBody({
           shortName: draft.shortName,
           categoryId: draft.categoryId,
           vegMarker: draft.vegMarker || null,
+          description: draft.description.trim() || null,
         });
         setLiveItem(updated);
         onSaved(updated);
@@ -463,6 +465,25 @@ function DrawerBody({
                   </option>
                 ))}
               </select>
+            </div>
+
+            <div>
+              <label htmlFor="item-description" className={LABEL_CLASS}>
+                Description (optional)
+              </label>
+              <textarea
+                id="item-description"
+                data-testid="item-description-input"
+                value={draft.description}
+                maxLength={300}
+                rows={3}
+                onChange={(event) => setDraft((d) => ({ ...d, description: event.target.value }))}
+                aria-describedby="item-description-hint"
+                className={FIELD_CLASS}
+              />
+              <p id="item-description-hint" className="mt-1 text-xs text-muted-foreground">
+                Guests see this on the QR menu.
+              </p>
             </div>
 
             <div className="grid grid-cols-2 gap-3">

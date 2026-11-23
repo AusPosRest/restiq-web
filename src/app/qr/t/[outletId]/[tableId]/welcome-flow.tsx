@@ -28,7 +28,6 @@ import {
   backspacePin,
   initialFlowState,
   isValidName,
-  isValidPhone,
   PIN_LENGTH,
   type WelcomeFlowState,
 } from "./welcome-flow-state";
@@ -62,20 +61,19 @@ export function WelcomeFlow({
   // simpler than threading digit-entry state back up through WelcomeFlowState).
   const [joinAttempt, setJoinAttempt] = useState(0);
 
-  async function startSession(name: string, phone: string) {
+  async function startSession(name: string) {
     setState((s) => (s.step === "start-form" ? { ...s, pending: true, error: null } : s));
     let res: Response;
     try {
       res = await fetch("/qr/auth/start", {
         method: "POST",
         headers: { "content-type": "application/json" },
-        body: JSON.stringify({ outletId, tableId, name, phone }),
+        body: JSON.stringify({ outletId, tableId, name }),
       });
     } catch {
       setState({
         step: "start-form",
         name,
-        phone,
         error: "Couldn't reach the restaurant - check your connection and try again",
         notice: null,
         pending: false,
@@ -95,7 +93,6 @@ export function WelcomeFlow({
       setState({
         step: "start-form",
         name,
-        phone,
         error: errorMessage(body, "Couldn't start your table session - please try again"),
         notice: null,
         pending: false,
@@ -133,7 +130,7 @@ export function WelcomeFlow({
       if (body.error?.code === "no_open_session") {
         // The truth was "start", not "join" - flip modes with a friendly
         // line, same discipline as the start->join flip above.
-        setState({ step: "start-form", name, phone: "", error: null, notice: START_INVITE_NOTICE, pending: false });
+        setState({ step: "start-form", name, error: null, notice: START_INVITE_NOTICE, pending: false });
         return;
       }
       const fallback =
@@ -158,7 +155,7 @@ export function WelcomeFlow({
 
   function switchToStart() {
     setState((s) =>
-      s.step === "join-form" ? { step: "start-form", name: s.name, phone: "", error: null, notice: null, pending: false } : s,
+      s.step === "join-form" ? { step: "start-form", name: s.name, error: null, notice: null, pending: false } : s,
     );
   }
 
@@ -193,19 +190,18 @@ function StartForm({
   onSwitchToJoin,
 }: Readonly<{
   state: Extract<WelcomeFlowState, { step: "start-form" }>;
-  onSubmit: (name: string, phone: string) => void;
+  onSubmit: (name: string) => void;
   onSwitchToJoin: () => void;
 }>) {
   const [name, setName] = useState(state.name);
-  const [phone, setPhone] = useState(state.phone);
-  const canSubmit = isValidName(name) && isValidPhone(phone) && !state.pending;
+  const canSubmit = isValidName(name) && !state.pending;
 
   return (
     <form
       data-testid="qr-start-form"
       onSubmit={(e) => {
         e.preventDefault();
-        if (canSubmit) onSubmit(name.trim(), phone);
+        if (canSubmit) onSubmit(name.trim());
       }}
     >
       <h2 className="font-headline text-2xl font-semibold text-foreground">Welcome, order together with your table.</h2>
@@ -224,29 +220,6 @@ function StartForm({
             autoComplete="name"
             className="mt-1 w-full rounded-lg border border-border bg-background px-3 py-3 text-base text-foreground outline-none focus-visible:ring-2 focus-visible:ring-ring"
           />
-        </div>
-        <div className="mt-4">
-          <label htmlFor="qr-phone" className="text-xs font-medium text-muted-foreground">
-            Phone number
-          </label>
-          <input
-            id="qr-phone"
-            data-testid="qr-phone-input"
-            value={phone}
-            onChange={(e) => setPhone(e.target.value.replace(/\D/g, "").slice(0, 10))}
-            placeholder="10-digit number"
-            inputMode="numeric"
-            autoComplete="tel"
-            aria-describedby={phone !== "" && !isValidPhone(phone) ? "qr-phone-hint" : undefined}
-            aria-invalid={phone !== "" && !isValidPhone(phone)}
-            className="mt-1 w-full rounded-lg border border-border bg-background px-3 py-3 text-base tabular-nums text-foreground outline-none focus-visible:ring-2 focus-visible:ring-ring"
-          />
-          {/* PE-24/CU-22: say why Start Session is still greyed out. */}
-          {phone !== "" && !isValidPhone(phone) && (
-            <p id="qr-phone-hint" data-testid="qr-phone-hint" className="mt-1 text-xs text-error-soft">
-              Enter your 10-digit mobile number.
-            </p>
-          )}
         </div>
       </div>
 

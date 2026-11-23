@@ -1,10 +1,10 @@
 "use client";
 
-// POSItemTile (DESIGN.md: "grid tile: item name, price, veg/non-veg dot" -
-// the veg/non-veg dot is omitted, see order-taking-state.ts's file header
-// for why). An unavailable ("Sold out") item is shown, not hidden, but disabled -
+// POSItemTile (DESIGN.md: "grid tile: item name, price, veg/non-veg dot").
+// An unavailable ("Sold out") item is shown, not hidden, but disabled -
 // same "state is always visible, never a silent gap" pattern as table-map's
 // TableTile.
+import { VegMarker } from "@/components/veg-marker";
 import { formatPriceMinor, resolveUnitPriceMinor, type PosMenuItemView } from "./order-taking-state";
 
 export function PosItemTile({ item, currency, onTap }: Readonly<{ item: PosMenuItemView; currency: string; onTap: () => void }>) {
@@ -17,12 +17,13 @@ export function PosItemTile({ item, currency, onTap }: Readonly<{ item: PosMenuI
       data-testid={`item-tile-${item.id}`}
       disabled={!item.available}
       onClick={onTap}
-      className="flex min-h-24 flex-col justify-between gap-2 overflow-hidden rounded-lg border border-border bg-card p-3 text-left transition-colors hover:border-primary/60 hover:bg-accent disabled:cursor-not-allowed disabled:opacity-40 disabled:hover:border-border disabled:hover:bg-card"
+      className="relative flex min-h-24 flex-col justify-between gap-2 overflow-hidden rounded-lg border border-border bg-card p-3 text-left transition-colors hover:border-primary/60 hover:bg-accent disabled:cursor-not-allowed disabled:opacity-40 disabled:hover:border-border disabled:hover:bg-card"
     >
       {item.photoUrl && (
         // eslint-disable-next-line @next/next/no-img-element -- owner-supplied https or data: URLs, not something next/image's optimizer can handle
         <img data-testid={`item-tile-photo-${item.id}`} src={item.photoUrl} alt="" loading="lazy" className="-mx-3 -mt-3 aspect-[4/3] w-[calc(100%+1.5rem)] max-w-none object-cover" />
       )}
+      <VegMarker marker={item.vegMarker} data-testid={`item-tile-veg-${item.id}`} className="absolute right-2 top-2 bg-card" />
       <span className="font-headline text-sm font-semibold text-foreground">{item.name}</span>
       <span className="flex items-center justify-between">
         <span className="tabular-nums text-sm font-semibold text-primary">

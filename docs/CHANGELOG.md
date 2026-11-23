@@ -5,6 +5,10 @@ logged, per feature and date, in `wiki/tasks/completed.md`; this file starts
 with the payments epic.
 
 
+## Unreleased - QR guest minors (#385)
+
+- Changed: the guest order status page numbers orders "Order 1", "Order 2"... (kiosk orders show their pickup number); the internal id is gone. The welcome screen asks for a name only, with no phone number. An outlet with no dishes shows "The menu isn't ready yet". The guest menu and dish page show a veg / non-veg marker and the dish description; the till tile shows the marker; the owner's dish editor has an optional Description (300 characters). The menu remembers the chosen category when a guest opens a dish and comes back. The simulator's Guest QR no longer has a built-in table: paste the table's QR link instead.
+
 ## Unreleased - Payments lists refunds owed (#386)
 
 - Added: the till's Payments screen shows a "Refunds owed" panel above the totals when a guest's card was charged after their bill was already paid (the backend flags the payment instead of adding it to the bill). Each row gives the date and time, bill, table or token, method and amount, with a note to refund it in the card provider's dashboard. Read-only; nothing shows when there are none. The other half of #386, taking a payment at the counter while a card payment is pending, was already in place (it shipped with #404); this entry is only the refunds-owed panel.

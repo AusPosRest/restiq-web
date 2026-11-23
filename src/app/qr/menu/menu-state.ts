@@ -16,14 +16,10 @@
 // `currency`, so price display always resolves currency per-item, never
 // assumed globally.
 //
-// KNOWN SCHEMA GAP - be honest, don't fabricate (spec-qr-self-order's own
-// framing, echoed in wiki/features/qr-self-order.md): the real
-// `MenuItemView` has no photo, no bilingual (Hindi) name, and no veg/
-// non-veg field, and the mocks (Q3/Q4) show all three plus a star rating
-// and a "bestseller" badge that also don't exist in the data. This client
-// renders an initial-letter tile instead of a photo and omits the veg
-// marker, Hindi name, rating, and bestseller badge entirely rather than
-// inventing any of them.
+// Not in the data, so never invented: a bilingual (Hindi) name, a star rating
+// and a "bestseller" badge (the Q3/Q4 mocks show them). Photo, veg marker and
+// description are real optional fields; without a photo the card shows an
+// initial-letter tile.
 
 import type { ComboMenuView } from "@/lib/combo";
 import { formatPrice } from "@/lib/money";
@@ -69,6 +65,9 @@ export interface MenuItemView {
   // Issue #218: the backend has carried photoUrl since #73's guest fields;
   // optional so an older backend still falls back to the letter tile.
   photoUrl?: string | null;
+  /** Veg / non-veg mark and the owner's short description; optional so an older backend still works. */
+  vegMarker?: "veg" | "non_veg" | null;
+  description?: string | null;
 }
 
 export interface MenuCategoryView {

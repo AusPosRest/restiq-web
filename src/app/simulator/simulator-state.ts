@@ -29,11 +29,9 @@ export const PRESETS: readonly DevicePreset[] = [
   {
     key: "guest-qr",
     label: "Guest QR",
-    // /qr/t/{outletId}/{tableId}; the outlet needs qr_ordering enabled.
-    // Point this at a real table with NEXT_PUBLIC_SIMULATOR_GUEST_QR_PATH.
-    path:
-      process.env.NEXT_PUBLIC_SIMULATOR_GUEST_QR_PATH ||
-      "/qr/t/01a042f2-8e56-733d-ad2e-739163950988/22222222-2222-7222-8222-222222220001",
+    // /qr/t/{outletId}/{tableId} of a real table (qr_ordering enabled), from
+    // NEXT_PUBLIC_SIMULATOR_GUEST_QR_PATH. Empty = paste the table's QR link instead.
+    path: process.env.NEXT_PUBLIC_SIMULATOR_GUEST_QR_PATH ?? "",
     width: 390,
     height: 844,
   },
@@ -42,6 +40,11 @@ export const PRESETS: readonly DevicePreset[] = [
 ];
 
 export const CUSTOM_DEVICE_SIZE = { width: 480, height: 640 };
+
+/** A pasted table QR path (/qr/t/...) is a guest's phone; anything else is a plain custom page. */
+export function customDeviceFor(path: string): Pick<DevicePreset, "label" | "width" | "height"> {
+  return path.startsWith("/qr/t/") ? { label: "Guest QR", width: 390, height: 844 } : { label: "Custom", ...CUSTOM_DEVICE_SIZE };
+}
 
 export interface SimDevice {
   id: string;
@@ -69,10 +72,18 @@ export function nextLabel(devices: readonly SimDevice[], base: string): string {
   return `${base} ${n}`;
 }
 
-/** Same-origin path only, so the custom box can't open an arbitrary site. */
+/** Same-origin path only, so the custom box can't open an arbitrary site. A pasted http(s) link is cut down to its path + query. */
 export function validateCustomPath(input: string): { ok: true; path: string } | { ok: false; error: string } {
-  const trimmed = input.trim();
+  let trimmed = input.trim();
   if (!trimmed) return { ok: false, error: "Enter a path." };
+  if (/^https?:\/\//i.test(trimmed)) {
+    try {
+      const url = new URL(trimmed);
+      trimmed = url.pathname + url.search;
+    } catch {
+      // not a parseable link - the path rules below reject it
+    }
+  }
   const normalized = trimmed.replace(/\\/g, "/");
   if (!normalized.startsWith("/") || normalized.startsWith("//")) {
     return { ok: false, error: 'Must be a same-origin path starting with "/" (not a full URL).' };

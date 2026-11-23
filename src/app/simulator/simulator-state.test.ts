@@ -1,5 +1,5 @@
 import { beforeEach, describe, expect, it } from "vitest";
-import { createDevice, deviceUrl, loadDevices, nextLabel, PRESETS, saveDevices, validateCustomPath, windowFeatures, windowName } from "./simulator-state";
+import { createDevice, CUSTOM_DEVICE_SIZE, customDeviceFor, deviceUrl, loadDevices, nextLabel, PRESETS, saveDevices, validateCustomPath, windowFeatures, windowName } from "./simulator-state";
 
 describe("PRESETS", () => {
   it("keeps the owner console, POS, KDS, kiosk, guest QR and mail inbox presets", () => {
@@ -7,6 +7,11 @@ describe("PRESETS", () => {
       expect.arrayContaining(["owner-console", "pos-till", "kds", "kiosk", "guest-qr", "mail-inbox"]),
     );
     expect(PRESETS.find((preset) => preset.key === "mail-inbox")?.path).toBe("/ops/inbox");
+  });
+
+  it("has no hard-coded table for Guest QR - its path comes from the env var, or is empty", () => {
+    expect(PRESETS.find((preset) => preset.key === "guest-qr")?.path).toBe(process.env.NEXT_PUBLIC_SIMULATOR_GUEST_QR_PATH ?? "");
+    expect(PRESETS.find((preset) => preset.key === "guest-qr")?.path).not.toContain("/qr/t/");
   });
 });
 
@@ -25,8 +30,23 @@ describe("validateCustomPath", () => {
     expect(validateCustomPath("/pos/login")).toEqual({ ok: true, path: "/pos/login" });
   });
 
-  it.each(["https://x", "//evil.com", "javascript:x", "", "   ", "/\\evil.com"])("rejects %s", (input) => {
+  it("keeps only the path and query of a pasted http(s) link, so it can only open this same site", () => {
+    expect(validateCustomPath("https://niftypos.com.au/qr/t/o1/t1?src=qr#frag")).toEqual({ ok: true, path: "/qr/t/o1/t1?src=qr" });
+    expect(validateCustomPath("  http://localhost:3105/qr/t/o1/t1 ")).toEqual({ ok: true, path: "/qr/t/o1/t1" });
+  });
+
+  it.each(["ftp://x/qr", "https://", "//evil.com", "javascript:x", "", "   ", "/\\evil.com"])("rejects %s", (input) => {
     expect(validateCustomPath(input).ok).toBe(false);
+  });
+});
+
+describe("customDeviceFor", () => {
+  it("opens a pasted table QR path as a phone-sized Guest QR", () => {
+    expect(customDeviceFor("/qr/t/o1/t1")).toEqual({ label: "Guest QR", width: 390, height: 844 });
+  });
+
+  it("opens any other path at the custom size", () => {
+    expect(customDeviceFor("/pos/login")).toEqual({ label: "Custom", ...CUSTOM_DEVICE_SIZE });
   });
 });
 
