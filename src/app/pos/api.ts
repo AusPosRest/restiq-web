@@ -347,6 +347,19 @@ export interface PaymentMethodTotal {
   amountMinor: number;
 }
 
+/** A card payment that succeeded after its bill was already paid (restiq-web#386). */
+export interface RefundDueEntry {
+  id: string;
+  billId: string;
+  billNumber: number | null;
+  orderId: string;
+  tableLabel: string | null;
+  tokenNumber: number | null;
+  method: string;
+  amountMinor: number;
+  flaggedAt: string;
+}
+
 export interface PaymentHistoryView {
   outletId: string;
   /** YYYY-MM-DD in the outlet's timezone. */
@@ -357,6 +370,8 @@ export interface PaymentHistoryView {
   count: number;
   byMethod: PaymentMethodTotal[];
   payments: PaymentHistoryEntry[];
+  /** Last 7 days, newest first; absent on an older API. */
+  refundsDue?: RefundDueEntry[];
 }
 
 // --- CAP-7 Bill & Settle (story 8, issue #53 web / #59 backend). See

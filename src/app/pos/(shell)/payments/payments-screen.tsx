@@ -8,6 +8,10 @@
 // Refund entry point (issue #405): the backend only lists tenders on
 // finalised bills, so every bill here is refundable. Its newest row carries
 // one Refund link; the refund screen does the rest, manager PIN included.
+//
+// Refunds owed (issue #386): a card payment that succeeded after its bill was
+// already paid is not added to the bill; the backend flags it and this panel
+// tells staff to refund the guest in the card provider's dashboard.
 import Link from "next/link";
 import { RotateCcw } from "lucide-react";
 import type { PaymentHistoryEntry, PaymentHistoryView } from "../../api";
@@ -26,6 +30,10 @@ export function methodLabel(method: string): string {
 
 function formatTime(iso: string): string {
   return new Date(iso).toLocaleTimeString(DATE_LOCALE, { hour: "2-digit", minute: "2-digit" });
+}
+
+function formatDateTime(iso: string): string {
+  return `${new Date(iso).toLocaleDateString(DATE_LOCALE, { day: "numeric", month: "short" })}, ${formatTime(iso)}`;
 }
 
 function billLabel(payment: PaymentHistoryEntry): string {
@@ -75,6 +83,28 @@ export function PaymentsScreen({ outletId }: Readonly<{ outletId: string }>) {
 
       {!loading && !failed && data && (
         <div data-testid="pos-payments-content" className="space-y-6">
+          {data.refundsDue && data.refundsDue.length > 0 && (
+            <div role="status" data-testid="pos-payments-refunds-due" className="rounded-lg border border-status-alert/40 px-4 py-3 text-sm">
+              <h2 className="font-headline font-semibold text-status-alert">
+                Refunds owed (<span data-testid="pos-payments-refunds-due-count">{data.refundsDue.length}</span>)
+              </h2>
+              <p className="mt-1 text-muted-foreground">
+                These card payments went through after the bill was already paid. The customer was charged and needs a refund. Refund each one in your card provider&apos;s dashboard.
+              </p>
+              <ul className="mt-3 space-y-2">
+                {data.refundsDue.map((refund) => (
+                  <li key={refund.id} data-testid={`pos-payments-refund-due-${refund.id}`} className="flex flex-col gap-0.5 border-t border-status-alert/20 pt-2 sm:flex-row sm:flex-wrap sm:items-baseline sm:gap-x-4">
+                    <span className="tabular-nums text-muted-foreground">{formatDateTime(refund.flaggedAt)}</span>
+                    {refund.billNumber !== null && <span>Bill #{refund.billNumber}</span>}
+                    {(refund.tableLabel || refund.tokenNumber !== null) && <span>{refund.tableLabel ? `Table ${refund.tableLabel}` : `Token ${refund.tokenNumber}`}</span>}
+                    <span>{methodLabel(refund.method)}</span>
+                    <span className="font-medium tabular-nums">{formatMinor(refund.amountMinor, data.currency)}</span>
+                  </li>
+                ))}
+              </ul>
+            </div>
+          )}
+
           {data.byMethod.length > 0 && (
             <div className="flex flex-wrap gap-3" data-testid="pos-payments-totals">
               {data.byMethod.map((total) => (

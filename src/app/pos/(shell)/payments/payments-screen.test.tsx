@@ -4,7 +4,7 @@ import { cleanup, render, screen } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import type { PaymentHistoryView } from "../../api";
-import { PaymentsScreen } from "./payments-screen";
+import { methodLabel, PaymentsScreen } from "./payments-screen";
 
 const OUTLET_ID = "outlet-1";
 
@@ -69,6 +69,49 @@ describe("PaymentsScreen", () => {
     expect(links.map((link) => link.getAttribute("data-testid"))).toEqual(["pos-payment-refund-b2", "pos-payment-refund-b1"]);
     expect(screen.getByTestId("pos-payment-refund-b2").getAttribute("href")).toBe("/pos/orders/o2/refund?billId=b2");
     expect(screen.getByTestId("pos-payment-row-t3").contains(screen.getByTestId("pos-payment-refund-b2"))).toBe(true);
+  });
+
+  // restiq-web#386: card payments that landed after the bill was already paid.
+  const REFUNDS_DUE = [
+    { id: "pi1", billId: "b9", billNumber: 9, orderId: "o9", tableLabel: "T4", tokenNumber: null, method: "card_online", amountMinor: 35000, flaggedAt: "2026-09-15T10:05:00.000Z" },
+    { id: "pi2", billId: "b8", billNumber: null, orderId: "o8", tableLabel: null, tokenNumber: 21, method: "card_terminal", amountMinor: 12050, flaggedAt: "2026-09-14T18:40:00.000Z" },
+  ];
+
+  it("lists refunds owed above the totals and table (restiq-web#386)", async () => {
+    vi.stubGlobal("fetch", vi.fn().mockResolvedValue(jsonResponse({ ...VIEW, refundsDue: REFUNDS_DUE })));
+    render(<PaymentsScreen outletId={OUTLET_ID} />);
+    const panel = await screen.findByTestId("pos-payments-refunds-due");
+
+    expect(panel.getAttribute("role")).toBe("status");
+    expect(screen.getByTestId("pos-payments-refunds-due-count").textContent).toContain("2");
+    expect(panel.textContent).toContain("Refund each one in your card provider's dashboard.");
+    const first = screen.getByTestId("pos-payments-refund-due-pi1").textContent ?? "";
+    expect(first).toContain("Bill #9");
+    expect(first).toContain("Table T4");
+    expect(first).toContain(methodLabel("card_online"));
+    expect(first).toContain("₹350.00");
+    expect(first).toContain("15 Sept");
+    const second = screen.getByTestId("pos-payments-refund-due-pi2").textContent ?? "";
+    expect(second).not.toContain("Bill #");
+    expect(second).toContain("Token 21");
+    expect(second).toContain("₹120.50");
+
+    // Above the totals and the table, which are unchanged.
+    const totals = screen.getByTestId("pos-payments-totals");
+    expect(panel.compareDocumentPosition(totals) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
+    expect(screen.getByTestId("pos-payments-total-cash").textContent).toContain("₹210.00");
+    expect(screen.getAllByTestId(/^pos-payment-row-/)).toHaveLength(3);
+  });
+
+  it("shows no refunds panel when refundsDue is empty or missing (restiq-web#386)", async () => {
+    vi.stubGlobal("fetch", vi.fn().mockResolvedValueOnce(jsonResponse({ ...VIEW, refundsDue: [] })).mockResolvedValueOnce(jsonResponse(VIEW)));
+    const { unmount } = render(<PaymentsScreen outletId={OUTLET_ID} />);
+    await screen.findByTestId("pos-payments-content");
+    expect(screen.queryByTestId("pos-payments-refunds-due")).toBeNull();
+    unmount();
+    render(<PaymentsScreen outletId={OUTLET_ID} />);
+    await screen.findByTestId("pos-payments-content");
+    expect(screen.queryByTestId("pos-payments-refunds-due")).toBeNull();
   });
 
   it("shows the empty state when nothing has been taken today", async () => {

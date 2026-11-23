@@ -1622,6 +1622,12 @@ exactly this gap:
   the screen never computes dates.
 - **Tests:** `payments-screen.test.tsx` (totals + rows as served, empty
   state, retry) and the link assertion in `shift-bar.test.tsx`.
+- **Refunds owed (issue #386):** when `refundsDue` (last 7 days, newest first) is
+  non-empty, a `role="status"` alert panel (`pos-payments-refunds-due`) sits above
+  the totals: one stacked row per card payment that succeeded after its bill was
+  already paid (date and time, bill, table/token, method, amount) and a note to
+  refund it in the card provider's dashboard. Read-only; hidden when empty or
+  when an older API omits the field.
 - **Not built (by design):** refunds in the list, a date picker, per-cashier
   filter, drill-down into a bill.
 ## Windows app: receipt printer and cash drawer (issue #292)
