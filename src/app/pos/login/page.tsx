@@ -1,3 +1,4 @@
+import Link from "next/link";
 import { Suspense } from "react";
 import { headers } from "next/headers";
 import { sanitizePosNextPath } from "@/lib/pos-session";
@@ -12,7 +13,7 @@ import { PinPad } from "./pin-pad";
 export default async function PosLoginPage({
   searchParams,
 }: {
-  searchParams: Promise<{ next?: string; expired?: string }>;
+  searchParams: Promise<{ next?: string; expired?: string; removed?: string }>;
 }) {
   const params = await searchParams;
   const nextPath = sanitizePosNextPath(params.next);
@@ -42,7 +43,22 @@ export default async function PosLoginPage({
 
       <section className="flex flex-1 flex-col justify-center bg-card px-6 py-12 sm:px-16 lg:max-w-[36rem]">
         <div className="mx-auto w-full max-w-sm">
-          {params.expired === "1" ? (
+          {params.removed === "1" ? (
+            <div
+              role="alert"
+              data-testid="pos-login-removed-banner"
+              className="mb-6 rounded-lg border border-status-warning/40 bg-status-warning/10 px-4 py-3 text-center text-sm text-status-warning"
+            >
+              <p>This device was removed by the owner. Set it up again with a new code from the owner console&apos;s Devices page.</p>
+              <Link
+                href="/device"
+                data-testid="pos-login-removed-setup"
+                className="mt-3 inline-flex min-h-10 items-center justify-center rounded-lg border border-status-warning/40 px-4 font-medium underline"
+              >
+                Set up this device
+              </Link>
+            </div>
+          ) : params.expired === "1" ? (
             <p
               role="status"
               data-testid="pos-login-expired-banner"

@@ -4,13 +4,17 @@
 // kdsApi, adminApi, opsApi), so every screen and poll gets it. Before this the kitchen display
 // said "Reconnecting" forever and the consoles showed "couldn't be loaded".
 //
+// A device the owner removed is the same, except the API says 401 "device_revoked" and the sign-in
+// page gets removed=1, so it says the device was removed and where to set it up again (#389). The
+// PIN sign-in itself answers 403 for that code, which is not a session ending and does not navigate.
+//
 // A session ends in two ways the caller can see:
 //  - the API answers 401 with one of the auth guards' two codes. Other 401s (a wrong manager PIN,
 //    a wrong password, a bad handoff code) are not the session ending and must sign nobody out;
 //  - the cookie itself has expired, so src/proxy.ts redirects the request to the sign-in page and
 //    fetch follows it: a 200 full of HTML, which the callers used to read as an empty answer.
 
-const SESSION_ENDED_CODES = new Set(["unauthorized", "session_revoked"]);
+const SESSION_ENDED_CODES = new Set(["unauthorized", "session_revoked", "device_revoked"]);
 
 export const SESSION_ENDED_MESSAGE = "This session has ended - sign in again";
 
@@ -23,8 +27,9 @@ export function leaveIfSessionEnded(res: Pick<Response, "status" | "redirected" 
   if (!refused && !sentToSignIn) return false;
   const { pathname, search } = window.location;
   if (pathname === loginPath) return false;
+  const notice = refused && code === "device_revoked" ? "removed=1" : "expired=1";
   // A full navigation, on purpose: this runs outside React (no router), and nothing held in memory should outlive the session.
   // eslint-disable-next-line @next/next/no-location-assign-relative-destination
-  window.location.assign(`${loginPath}?next=${encodeURIComponent(pathname + search)}&expired=1`);
+  window.location.assign(`${loginPath}?next=${encodeURIComponent(pathname + search)}&${notice}`);
   return true;
 }

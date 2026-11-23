@@ -43,9 +43,21 @@ describe("leaveIfSessionEnded", () => {
     expect(assign).not.toHaveBeenCalled();
   });
 
+  it("goes to sign-in with removed=1 when the owner removed the device (401 device_revoked only)", () => {
+    const assign = stubLocation("/pos/table-map", "?x=1");
+    expect(leaveIfSessionEnded(...refused(401, "device_revoked"), "/pos/login")).toBe(true);
+    expect(assign).toHaveBeenCalledWith("/pos/login?next=%2Fpos%2Ftable-map%3Fx%3D1&removed=1");
+    assign.mockClear();
+    // The PIN sign-in itself answers 403 device_revoked: the pad shows that, no navigation.
+    expect(leaveIfSessionEnded(...refused(403, "device_revoked"), "/pos/login")).toBe(false);
+    expect(assign).not.toHaveBeenCalled();
+  });
+
   it("does not loop on the sign-in page itself", () => {
     const assign = stubLocation("/ops/login");
     expect(leaveIfSessionEnded(...refused(401, "unauthorized"), "/ops/login")).toBe(false);
+    expect(assign).not.toHaveBeenCalled();
+    expect(leaveIfSessionEnded(...refused(401, "device_revoked"), "/ops/login")).toBe(false);
     expect(assign).not.toHaveBeenCalled();
   });
 });

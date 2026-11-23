@@ -5,6 +5,12 @@ logged, per feature and date, in `wiki/tasks/completed.md`; this file starts
 with the payments epic.
 
 
+## Unreleased - Removed device notice, kiosk heartbeat (#389)
+
+- Fixed: a till, kitchen display, card terminal or printer screen on a device the owner removed no longer shows "Reconnecting" or "Couldn't load... Retry" forever. The API's 401 `device_revoked` now sends it to the PIN screen with "This device was removed by the owner" and a "Set up this device" link to `/device`.
+- Added: a kiosk tab reports in every 30 s (`POST /qr/auth/kiosk/heartbeat` -> restiq-backend#322), on the start screen and while ordering, so the owner's Devices page shows it online. When the API says it is no longer an active kiosk, the start screen says "This kiosk isn't in use" instead of "Tap to start". With an older backend the heartbeat is refused and nothing changes.
+- Already covered by #371, no change here: an ended session (the owner signing out in another browser, a revoked PIN) returns each console to its sign-in page.
+
 ## Unreleased - Till landing by outlet type, long kitchen tickets, demo links (#388)
 
 - Changed: after PIN sign-in the till opens on Counter at quick-service and food-court outlets and on the table map everywhere else (needs restiq-backend#320, which adds the outlet's `type` to the sign-in reply; with an older backend the till opens on the table map as before). The Counter / Tables switch is unchanged.

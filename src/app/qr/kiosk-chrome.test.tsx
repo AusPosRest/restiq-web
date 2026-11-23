@@ -2,6 +2,7 @@
 // the session after IDLE_MS of no activity, and "Start over" does it at once.
 import { act, cleanup, render, screen } from "@testing-library/react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
+import { HEARTBEAT_MS } from "../pos/device-heartbeat";
 import { IDLE_MS, KioskChrome, KioskFrame } from "./kiosk-chrome";
 
 const replace = vi.fn();
@@ -49,7 +50,7 @@ describe("KioskChrome", () => {
       button.click();
     });
     await act(async () => undefined);
-    expect(String(vi.mocked(fetch).mock.calls[0]?.[0])).toBe("/qr/auth/kiosk/end");
+    expect(vi.mocked(fetch).mock.calls.some((call) => call[0] === "/qr/auth/kiosk/end")).toBe(true);
     expect(replace).toHaveBeenCalledWith(HOME);
   });
 
@@ -108,5 +109,48 @@ describe("KioskChrome", () => {
     expect(screen.getByTestId("page")).toBeTruthy();
     expect(screen.queryByTestId("kiosk-device")).toBeNull();
     expect(screen.queryByTestId("kiosk-hardware")).toBeNull();
+  });
+});
+
+// Issue #389: an ordering screen on a kiosk tab reports in with the stored
+// device's ids; a normal guest never does, and a failed beat changes nothing.
+describe("KioskChrome heartbeat", () => {
+  const heartbeats = () => vi.mocked(fetch).mock.calls.filter((call) => call[0] === "/qr/auth/kiosk/heartbeat");
+
+  it("beats with the stored kiosk's outlet and device on an ordering screen, then on the interval", async () => {
+    vi.useFakeTimers();
+    sessionStorage.setItem("device:enrolled", JSON.stringify(KIOSK));
+    render(<KioskChrome />);
+    await act(async () => undefined);
+    expect(heartbeats()).toHaveLength(1);
+    expect(JSON.parse(String((heartbeats()[0] as [string, RequestInit])[1].body))).toEqual({ outletId: "out-1", deviceId: "dev-1" });
+    await act(async () => {
+      vi.advanceTimersByTime(HEARTBEAT_MS);
+    });
+    expect(heartbeats()).toHaveLength(2);
+  });
+
+  it("ignores a 404 mid-order - the guest keeps the screen", async () => {
+    sessionStorage.setItem("device:enrolled", JSON.stringify(KIOSK));
+    vi.stubGlobal("fetch", vi.fn(() => Promise.resolve(new Response(JSON.stringify({ error: { code: "not_found", message: "No such outlet or kiosk" } }), { status: 404 }))));
+    render(<KioskChrome />);
+    await act(async () => undefined);
+    expect(heartbeats()).toHaveLength(1);
+    expect(screen.getByTestId("kiosk-chrome")).toBeTruthy();
+    expect(replace).not.toHaveBeenCalled();
+  });
+
+  it("never beats for a normal QR guest", async () => {
+    render(<KioskFrame><p>menu</p></KioskFrame>);
+    await act(async () => undefined);
+    expect(heartbeats()).toHaveLength(0);
+  });
+
+  it("does not beat from the chrome on the attract screen (KioskStart does)", async () => {
+    sessionStorage.setItem("device:enrolled", JSON.stringify(KIOSK));
+    pathname = "/qr/kiosk/out-1";
+    render(<KioskChrome />);
+    await act(async () => undefined);
+    expect(heartbeats()).toHaveLength(0);
   });
 });
