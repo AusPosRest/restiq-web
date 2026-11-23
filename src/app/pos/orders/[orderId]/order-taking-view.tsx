@@ -271,7 +271,7 @@ function OrderTakingLoaded({
             value={query}
             onChange={(event) => setQuery(event.target.value)}
             placeholder="Search menu"
-            className="w-full rounded-lg border border-border bg-input py-2 pl-9 pr-3 text-sm text-foreground placeholder:text-muted-foreground/60 focus:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+            className="max-md:min-h-10 w-full rounded-lg border border-border bg-input py-2 pl-9 pr-3 text-sm text-foreground placeholder:text-muted-foreground/60 focus:outline-none focus-visible:ring-2 focus-visible:ring-ring"
           />
         </div>
         <p data-testid="order-owner" className="text-sm text-muted-foreground">
@@ -317,7 +317,7 @@ function OrderTakingLoaded({
                 setQuery("");
               }}
               title={category.name}
-              className={`shrink-0 max-w-48 truncate rounded-md px-3 py-2 text-left text-sm font-semibold transition-colors lg:max-w-none lg:whitespace-normal lg:line-clamp-2 lg:[overflow-wrap:anywhere] ${
+              className={`max-md:min-h-10 shrink-0 max-w-48 truncate rounded-md px-3 py-2 text-left text-sm font-semibold transition-colors lg:max-w-none lg:whitespace-normal lg:line-clamp-2 lg:[overflow-wrap:anywhere] ${
                 category.id === effectiveCategoryId ? "bg-primary text-primary-foreground" : "text-muted-foreground hover:bg-accent hover:text-foreground"
               }`}
             >

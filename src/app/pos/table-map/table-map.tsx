@@ -139,7 +139,7 @@ function TableMapLoaded({
         <Link
           href="/pos/open-orders"
           data-testid="table-map-open-orders-link"
-          className="whitespace-nowrap rounded-md border border-border px-3 py-1.5 text-xs font-semibold uppercase tracking-wider text-muted-foreground hover:bg-accent hover:text-accent-foreground"
+          className="inline-flex max-md:min-h-10 items-center whitespace-nowrap rounded-md border border-border px-3 py-1.5 text-xs font-semibold uppercase tracking-wider text-muted-foreground hover:bg-accent hover:text-accent-foreground"
         >
           Open orders
         </Link>
@@ -147,7 +147,7 @@ function TableMapLoaded({
           type="button"
           data-testid="table-map-refresh"
           onClick={onReload}
-          className="whitespace-nowrap rounded-md border border-border px-3 py-1.5 text-xs font-semibold uppercase tracking-wider text-muted-foreground hover:bg-accent hover:text-accent-foreground"
+          className="max-md:min-h-10 whitespace-nowrap rounded-md border border-border px-3 py-1.5 text-xs font-semibold uppercase tracking-wider text-muted-foreground hover:bg-accent hover:text-accent-foreground"
         >
           Refresh
         </button>

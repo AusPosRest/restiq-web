@@ -5,6 +5,10 @@ logged, per feature and date, in `wiki/tasks/completed.md`; this file starts
 with the payments epic.
 
 
+## Unreleased - till works at phone width (#384)
+
+- Fixed: on a phone the till's top bar (Shift, Open orders, Payments, Status) scrolled its links sideways, so a waiter saw only "Open orders". The links now wrap onto extra lines so all of them, including Clock Out and Sign out, show. Header buttons and links, category tabs, menu search, Add discount, Refresh, Refund, Re-enrol and the shift and device buttons are at least 40px tall on a phone; desktop sizes are unchanged.
+
 ## Unreleased - kitchen display Serve rail wraps (#372)
 
 - Fixed: on the kitchen display's Serve screen the order cards sat in one sideways-scrolling row, so with eight or more orders the later ones - including a Ready one - were off-screen. The rail now wraps onto new rows and scrolls down, like the Cook rail.

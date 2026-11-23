@@ -23,7 +23,7 @@ export function LockTillButton() {
       data-testid="pos-lock-till"
       disabled={locking}
       onClick={() => void lock()}
-      className="flex items-center gap-1.5 rounded-lg border border-border px-3 py-1.5 text-xs font-semibold text-muted-foreground transition-colors hover:bg-accent hover:text-foreground focus:outline-none focus-visible:ring-2 focus-visible:ring-ring disabled:opacity-50"
+      className="flex max-md:min-h-10 items-center gap-1.5 rounded-lg border border-border px-3 py-1.5 text-xs font-semibold text-muted-foreground transition-colors hover:bg-accent hover:text-foreground focus:outline-none focus-visible:ring-2 focus-visible:ring-ring disabled:opacity-50"
     >
       <Lock className="size-3.5" aria-hidden="true" /> {locking ? "Locking…" : "Lock"}
     </button>

@@ -90,7 +90,7 @@ export function ShiftScreen({ outletId }: Readonly<{ outletId: string }>) {
         <h1 className="font-headline text-lg font-semibold">Shift &amp; cash management</h1>
         {shift && (
           <Link href="/pos/shift/close" data-testid="close-shift-link">
-            <Button variant="secondary">Close shift</Button>
+            <Button variant="secondary" className="max-md:min-h-10">Close shift</Button>
           </Link>
         )}
       </header>
@@ -123,7 +123,7 @@ export function ShiftScreen({ outletId }: Readonly<{ outletId: string }>) {
 
           <div className="flex items-center justify-between">
             <h2 className="font-headline text-lg font-semibold">Cash movements</h2>
-            <Button data-testid="log-movement-open" onClick={() => setMovementOpen(true)}>
+            <Button data-testid="log-movement-open" className="max-md:min-h-10" onClick={() => setMovementOpen(true)}>
               Log cash movement
             </Button>
           </div>

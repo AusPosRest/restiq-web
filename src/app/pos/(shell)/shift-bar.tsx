@@ -69,7 +69,7 @@ export function ShiftBar({ initial }: Readonly<{ initial: PosStaffDisplay | null
   }
 
   return (
-    <header data-testid="pos-shift-bar" className="flex h-14 items-center justify-between gap-3 border-b border-border/40 bg-card px-4 sm:px-6">
+    <header data-testid="pos-shift-bar" className="flex min-h-14 flex-wrap items-center justify-between gap-x-3 gap-y-1 border-b border-border/40 bg-card px-4 sm:px-6">
       <div className="flex shrink-0 items-center gap-4">
         <p className="font-headline text-sm font-bold tracking-tight text-primary">RESTIQ</p>
         <HubStatusStrip pillTestId="pos-status-online" />
@@ -78,8 +78,8 @@ export function ShiftBar({ initial }: Readonly<{ initial: PosStaffDisplay | null
       {failed ? (
         <LoadErrorPanel testId="pos-shift-bar-error" message="Couldn't clock out." onRetry={() => void handleClockOut()} />
       ) : initial ? (
-        // Scrolls sideways inside the bar on a phone (restiq-web#444) instead of widening the page.
-        <div className="flex min-w-0 items-center gap-4 overflow-x-auto py-1">
+        // Wraps onto its own row on a phone (restiq-web#384) so every link shows; min-w-0 + wrap keeps the page from widening (#444).
+        <div data-testid="pos-shift-bar-links" className="flex min-w-0 max-w-full flex-wrap items-center justify-end gap-x-4 gap-y-1 py-1 max-md:basis-full max-md:justify-start">
           <div className="shrink-0 text-right">
             <p data-testid="pos-shift-bar-staff-name" className="text-sm font-medium text-foreground">
               {initial.staff.name}
