@@ -614,6 +614,12 @@ This pass reconciled the guess against it:
   back to the tab's stored enrolment) and `router.push("/qr/menu")`. A 403
   `kiosk_disabled` / 404 shows the backend's message in `kiosk-start-error`
   and never navigates; an un-enrolled tab is told to enrol first.
+- **Heartbeat (#389):** `qr/kiosk-heartbeat.ts` `useKioskHeartbeat(outletId,
+  deviceId)` POSTs `/qr/auth/kiosk/heartbeat` (-> `POST /guest/v1/kiosk/heartbeat`,
+  restiq-backend#322) at once and every 30 s. `KioskStart` uses it on the
+  attract screen and shows `kiosk-removed` ("This kiosk isn't in use") while
+  the answer is 404 `not_found`; `KioskChrome` uses it on the ordering screens
+  and ignores the answer. Never both on one screen; a table guest never beats.
 - **Auth routes:** `qr/auth/kiosk/route.ts` forwards to the backend and sets
   the usual `guest_session` + `guest_display` cookies (`tableId: ""`,
   `pin: ""`, `guestName: "Kiosk"`) so every later screen parses them

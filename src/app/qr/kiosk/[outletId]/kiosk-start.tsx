@@ -9,6 +9,7 @@ import { UtensilsCrossed } from "lucide-react";
 import { useRouter, useSearchParams } from "next/navigation";
 import { useState } from "react";
 import { readStoredDevice, writeStoredDevice } from "../../../device/device-state";
+import { useKioskHeartbeat } from "../../kiosk-heartbeat";
 
 const MENU_ROUTE = "/qr/menu";
 
@@ -22,6 +23,10 @@ export function KioskStart({ outletId }: Readonly<{ outletId: string }>) {
   function deviceId(): string | null {
     return searchParams.get("device") || readStoredDevice()?.id || null;
   }
+
+  // Issue #389: report in while idling here; the owner removing this kiosk
+  // swaps the start button for a notice (only a definite 404 not_found).
+  const removed = useKioskHeartbeat(outletId, deviceId());
 
   async function start() {
     const id = deviceId();
@@ -59,6 +64,18 @@ export function KioskStart({ outletId }: Readonly<{ outletId: string }>) {
   // The attract loop a real kiosk idles on: a full-bleed poster where the whole
   // screen is the start button (one accessible button, named for its action).
   const starting = state.kind === "starting";
+  if (removed) {
+    // No link - customers stand at this screen.
+    return (
+      <main data-testid="kiosk-attract" className="flex min-h-screen flex-1 flex-col">
+        <div role="alert" data-testid="kiosk-removed" className="flex flex-1 flex-col items-center justify-center gap-4 bg-zinc-900 px-8 text-center text-white">
+          <h1 className="font-headline text-4xl font-black tracking-tight">This kiosk isn&apos;t in use</h1>
+          <p className="max-w-xs text-lg text-white/90">It was removed by the owner. Please order at the counter.</p>
+          <p className="max-w-xs text-xs text-white/60">Staff: set it up again with a new code from the owner console&apos;s Devices page.</p>
+        </div>
+      </main>
+    );
+  }
   return (
     <main data-testid="kiosk-attract" className="relative flex min-h-screen flex-1 flex-col">
       <button

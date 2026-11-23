@@ -22,6 +22,8 @@
 import { Nfc, Printer, ScanBarcode } from "lucide-react";
 import { usePathname, useRouter } from "next/navigation";
 import { useEffect, useSyncExternalStore } from "react";
+import { readStoredDevice } from "../device/device-state";
+import { useKioskHeartbeat } from "./kiosk-heartbeat";
 import { endKioskSession, isKioskTab, kioskHomePath } from "./kiosk-session";
 
 // ponytail: fixed 90 s; make it an outlet setting if a tenant asks.
@@ -41,6 +43,11 @@ export function KioskChrome() {
 
   const onAttract = pathname.startsWith("/qr/kiosk/");
   const active = kiosk && !onAttract;
+  // Issue #389: the ordering screens report in for the stored kiosk (the
+  // attract screen's KioskStart does it there). A failed beat is ignored so a
+  // guest mid-order is never interrupted.
+  const device = active ? readStoredDevice() : null;
+  useKioskHeartbeat(device?.outletId ?? null, device?.id ?? null);
 
   useEffect(() => {
     if (!kiosk || pathname !== "/qr") return;
