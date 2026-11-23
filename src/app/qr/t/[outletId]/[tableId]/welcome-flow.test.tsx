@@ -23,9 +23,9 @@ describe("WelcomeFlow", () => {
     render(<WelcomeFlow outletId="o1" tableId="t1" />);
 
     const nameInput = screen.getByLabelText("Your name") as HTMLInputElement;
-    const phoneInput = screen.getByLabelText("Phone number") as HTMLInputElement;
     expect(nameInput).toBeTruthy();
-    expect(phoneInput).toBeTruthy();
+    expect(screen.queryByLabelText("Phone number")).toBeNull();
+    expect(screen.queryByTestId("qr-phone-input")).toBeNull();
     expect(screen.getByTestId("qr-start-submit")).toBeTruthy();
     expect(screen.getByTestId("qr-switch-to-join")).toBeTruthy();
     expect(screen.queryByTestId("qr-join-form")).toBeNull();
@@ -37,7 +37,6 @@ describe("WelcomeFlow", () => {
     render(<WelcomeFlow outletId="o1" tableId="t1" />);
 
     await userEvent.type(screen.getByLabelText("Your name"), "Rahul");
-    await userEvent.type(screen.getByLabelText("Phone number"), "9876543210");
     await userEvent.click(screen.getByTestId("qr-start-submit"));
 
     const pin = await screen.findByTestId("qr-session-pin");
@@ -46,32 +45,20 @@ describe("WelcomeFlow", () => {
 
     const [url, init] = fetchMock.mock.calls[0] as [string, RequestInit];
     expect(url).toBe("/qr/auth/start");
-    expect(JSON.parse(init.body as string)).toEqual({ outletId: "o1", tableId: "t1", name: "Rahul", phone: "9876543210" });
+    expect(JSON.parse(init.body as string)).toEqual({ outletId: "o1", tableId: "t1", name: "Rahul" });
   });
 
-  it("CU-22/PE-24: names the restaurant and table, and says why a short phone number isn't accepted", async () => {
+  it("CU-22: names the restaurant and table", () => {
     render(<WelcomeFlow outletId="o1" tableId="t1" welcome={{ restaurantName: "Spice Garden", outletName: "Indiranagar", tableLabel: "T3" }} />);
     expect(screen.getByTestId("qr-welcome-identity").textContent).toBe("Spice GardenIndiranagar · Table T3");
-
-    expect(screen.queryByTestId("qr-phone-hint")).toBeNull();
-    await userEvent.type(screen.getByLabelText("Phone number"), "12345");
-    expect(screen.getByTestId("qr-phone-hint").textContent).toBe("Enter your 10-digit mobile number.");
-    await userEvent.type(screen.getByLabelText("Phone number"), "67890");
-    expect(screen.queryByTestId("qr-phone-hint")).toBeNull();
   });
 
-  it("disables the start submit until name and a 10-digit phone are entered", async () => {
+  it("enables the start submit once a name is entered", async () => {
     render(<WelcomeFlow outletId="o1" tableId="t1" />);
     const submit = screen.getByTestId("qr-start-submit") as HTMLButtonElement;
     expect(submit.disabled).toBe(true);
 
     await userEvent.type(screen.getByLabelText("Your name"), "Rahul");
-    expect(submit.disabled).toBe(true);
-
-    await userEvent.type(screen.getByLabelText("Phone number"), "987");
-    expect(submit.disabled).toBe(true);
-
-    await userEvent.type(screen.getByLabelText("Phone number"), "6543210");
     expect(submit.disabled).toBe(false);
   });
 
@@ -85,7 +72,6 @@ describe("WelcomeFlow", () => {
     render(<WelcomeFlow outletId="o1" tableId="t1" />);
 
     await userEvent.type(screen.getByLabelText("Your name"), "Rahul");
-    await userEvent.type(screen.getByLabelText("Phone number"), "9876543210");
     await userEvent.click(screen.getByTestId("qr-start-submit"));
 
     expect(await screen.findByTestId("qr-join-form")).toBeTruthy();

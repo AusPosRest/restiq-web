@@ -13,7 +13,7 @@ import Link from "next/link";
 import { isKioskTab } from "../kiosk-session";
 import { SessionEndedView } from "../session-ended-view";
 import type { GuestOrderStatusView, GuestOrderStep } from "./status-api";
-import { formatReachedAt, reachedAtFor, sortOrdersNewestFirst, STEP_LABELS, STEP_ORDER, stepState, type StepState } from "./status-state";
+import { formatReachedAt, orderNumbers, reachedAtFor, sortOrdersNewestFirst, STEP_LABELS, STEP_ORDER, stepState, type StepState } from "./status-state";
 import { useStatusPoll } from "./use-status-poll";
 
 // Q3 Menu Browse's conventional flat route (see cart-screen.tsx's MENU_ROUTE
@@ -34,6 +34,7 @@ export function StatusScreen() {
   if (poll.failed || !poll.data) return <ErrorPanel onRetry={poll.retry} />;
 
   const orders = sortOrdersNewestFirst(poll.data.orders);
+  const numbers = orderNumbers(poll.data.orders);
 
   return (
     <main data-testid="qr-status" className="flex min-h-screen flex-1 flex-col px-6 pb-12 pt-8">
@@ -46,21 +47,28 @@ export function StatusScreen() {
       ) : null}
 
       <div className="mt-6 flex flex-col gap-4" role="region" aria-live="polite" aria-label="Your orders' status">
-        {orders.length === 0 ? <EmptyState /> : orders.map((order) => <OrderCard key={order.orderId} order={order} />)}
+        {orders.length === 0 ? <EmptyState /> : orders.map((order) => <OrderCard key={order.orderId} order={order} number={numbers.get(order.orderId) ?? 1} />)}
       </div>
     </main>
   );
 }
 
-function OrderCard({ order }: Readonly<{ order: GuestOrderStatusView }>) {
+function OrderCard({ order, number }: Readonly<{ order: GuestOrderStatusView; number: number }>) {
   return (
     <section data-testid={`status-order-${order.orderId}`} className="rounded-xl border border-border bg-card p-4">
-      <p data-testid={`status-order-id-${order.orderId}`} className="text-sm font-semibold text-foreground">
-        Order #{order.orderId.slice(-6).toUpperCase()}
-      </p>
-      {order.tokenNumber != null && (
-        <p data-testid={`status-order-token-${order.orderId}`} className="mt-1 text-sm text-muted-foreground">
-          Number <span className="font-headline text-2xl font-bold tabular-nums text-primary">{order.tokenNumber}</span> · pay at the counter
+      {order.tokenNumber != null ? (
+        <>
+          <p data-testid={`status-order-id-${order.orderId}`} className="text-sm font-semibold text-foreground">
+            Order{" "}
+            <span data-testid={`status-order-token-${order.orderId}`} className="font-headline text-2xl font-bold tabular-nums text-primary">
+              {order.tokenNumber}
+            </span>
+          </p>
+          <p className="mt-1 text-sm text-muted-foreground">Pay at the counter</p>
+        </>
+      ) : (
+        <p data-testid={`status-order-id-${order.orderId}`} className="text-sm font-semibold text-foreground">
+          Order {number}
         </p>
       )}
       <Stepper order={order} />

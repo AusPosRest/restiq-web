@@ -2,7 +2,6 @@
 // free of React so it's unit-testable without a DOM, mirroring
 // pos/login/pin-login-state.ts's split between logic and UI.
 export const PIN_LENGTH = 4;
-const PHONE_PATTERN = /^\d{10}$/;
 
 export function appendDigit(pin: string, digit: string): string {
   if (pin.length >= PIN_LENGTH) return pin;
@@ -15,10 +14,6 @@ export function backspacePin(pin: string): string {
 
 export function isValidName(name: string): boolean {
   return name.trim().length > 0;
-}
-
-export function isValidPhone(phone: string): boolean {
-  return PHONE_PATTERN.test(phone);
 }
 
 /**
@@ -34,11 +29,11 @@ export function isValidPhone(phone: string): boolean {
  * mode) shown once, right after such a flip.
  */
 export type WelcomeFlowState =
-  | { step: "start-form"; name: string; phone: string; error: string | null; notice: string | null; pending: boolean }
+  | { step: "start-form"; name: string; error: string | null; notice: string | null; pending: boolean }
   | { step: "started"; pin: string; guestName: string }
   | { step: "join-form"; name: string; pin: string; error: string | null; notice: string | null; pending: boolean }
   | { step: "joined"; guestName: string };
 
 export function initialFlowState(): WelcomeFlowState {
-  return { step: "start-form", name: "", phone: "", error: null, notice: null, pending: false };
+  return { step: "start-form", name: "", error: null, notice: null, pending: false };
 }

@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import type { GuestOrderStatusView } from "./status-api";
-import { formatReachedAt, reachedAtFor, sortOrdersNewestFirst, stepState } from "./status-state";
+import { formatReachedAt, orderNumbers, reachedAtFor, sortOrdersNewestFirst, stepState } from "./status-state";
 
 function order(overrides: Partial<GuestOrderStatusView>): GuestOrderStatusView {
   return {
@@ -71,5 +71,15 @@ describe("sortOrdersNewestFirst", () => {
     const copy = [...list];
     sortOrdersNewestFirst(list);
     expect(list).toEqual(copy);
+  });
+});
+
+describe("orderNumbers", () => {
+  it("numbers orders by when they were placed, oldest = 1", () => {
+    const first = order({ orderId: "first", steps: [{ step: "placed", reachedAt: "2026-08-29T09:00:00.000Z" }] });
+    const second = order({ orderId: "second", steps: [{ step: "placed", reachedAt: "2026-08-29T11:00:00.000Z" }] });
+    const numbers = orderNumbers([second, first]);
+    expect(numbers.get("first")).toBe(1);
+    expect(numbers.get("second")).toBe(2);
   });
 });

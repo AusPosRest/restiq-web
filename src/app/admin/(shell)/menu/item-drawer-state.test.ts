@@ -20,11 +20,17 @@ function item(overrides: Partial<ItemView> = {}): ItemView {
 
 describe("itemDraftFromView", () => {
   it("defaults a create-mode draft to the given category with blank fields", () => {
-    expect(itemDraftFromView(null, "tandoor")).toEqual({ name: "", shortName: "", categoryId: "tandoor", vegMarker: "" });
+    expect(itemDraftFromView(null, "tandoor")).toEqual({ name: "", shortName: "", categoryId: "tandoor", vegMarker: "", description: "" });
   });
 
   it("derives an edit-mode draft from the item's routine fields", () => {
-    expect(itemDraftFromView(item({ vegMarker: "veg" }), "tandoor")).toEqual({ name: "Paneer Tikka", shortName: "Paneer Tikka", categoryId: "tandoor", vegMarker: "veg" });
+    expect(itemDraftFromView(item({ vegMarker: "veg", description: "Charred in the tandoor" }), "tandoor")).toEqual({
+      name: "Paneer Tikka",
+      shortName: "Paneer Tikka",
+      categoryId: "tandoor",
+      vegMarker: "veg",
+      description: "Charred in the tandoor",
+    });
   });
 });
 

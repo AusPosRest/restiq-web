@@ -108,6 +108,73 @@ describe("MenuView", () => {
     expect(screen.queryByTestId("qr-menu-item-photo-i4")).toBeNull();
   });
 
+  it("shows the veg marker and a clamped description on the card, and nothing when absent", async () => {
+    const menu = {
+      ...MENU,
+      categories: [
+        {
+          ...MENU.categories[0],
+          items: [
+            { ...MENU.categories[0].items[0], vegMarker: "veg", description: "Charred in the tandoor" },
+            { ...MENU.categories[0].items[1], vegMarker: "non_veg", description: null },
+          ],
+        },
+      ],
+    };
+    routeFetch({ "GET /qr/api/menu": () => jsonResponse(200, menu) });
+    render(<MenuView />);
+    await screen.findByTestId("qr-menu");
+
+    expect(screen.getByTestId("qr-menu-item-veg-i1").getAttribute("aria-label")).toBe("Vegetarian");
+    expect(screen.getByTestId("qr-menu-item-veg-i2").getAttribute("aria-label")).toBe("Non-vegetarian");
+    const description = screen.getByTestId("qr-menu-item-description-i1");
+    expect(description.textContent).toBe("Charred in the tandoor");
+    expect(description.className).toContain("line-clamp-2");
+    expect(screen.queryByTestId("qr-menu-item-description-i2")).toBeNull();
+  });
+
+  it("shows a proper empty state, without search or tabs, when the menu has no dishes or combos", async () => {
+    routeFetch({ "GET /qr/api/menu": () => jsonResponse(200, { outletId: "o1", categories: [{ id: "c1", name: "Starters", sortOrder: 0, items: [] }], combos: [] }) });
+    render(<MenuView />);
+
+    const empty = await screen.findByTestId("qr-menu-empty-all");
+    expect(empty.textContent).toContain("The menu isn't ready yet");
+    expect(empty.textContent).toContain("Please ask a member of staff to take your order.");
+    expect(screen.queryByTestId("qr-menu-search")).toBeNull();
+    expect(screen.queryByRole("tablist")).toBeNull();
+  });
+
+  it("remembers the chosen category for the session and restores it on the next visit", async () => {
+    routeFetch();
+    const first = render(<MenuView />);
+    await screen.findByTestId("qr-menu");
+    fireEvent.click(screen.getByTestId("qr-menu-tab-c2"));
+    expect(screen.getByTestId("qr-menu-item-i3")).toBeTruthy();
+    first.unmount();
+
+    render(<MenuView />);
+    await screen.findByTestId("qr-menu");
+    expect(screen.getByTestId("qr-menu-tab-c2").getAttribute("aria-selected")).toBe("true");
+    expect(screen.getByTestId("qr-menu-item-i3")).toBeTruthy();
+  });
+
+  it("ignores a remembered category that no longer exists", async () => {
+    sessionStorage.setItem("qr-menu-category", "gone");
+    routeFetch();
+    render(<MenuView />);
+    await screen.findByTestId("qr-menu");
+    expect(screen.getByTestId("qr-menu-tab-c1").getAttribute("aria-selected")).toBe("true");
+  });
+
+  it("does not remember the category on a kiosk tab", async () => {
+    sessionStorage.setItem("device:enrolled", JSON.stringify({ id: "k1", tenantId: "t", outletId: "o1", label: "K", type: "kiosk", role: "terminal", status: "active", enrolledAt: "", revokedAt: null }));
+    routeFetch();
+    render(<MenuView />);
+    await screen.findByTestId("qr-menu");
+    fireEvent.click(screen.getByTestId("qr-menu-tab-c2"));
+    expect(sessionStorage.getItem("qr-menu-category")).toBeNull();
+  });
+
   it("a kiosk tab gets the category rail and photo grid", async () => {
     sessionStorage.setItem("device:enrolled", JSON.stringify({ id: "k1", tenantId: "t", outletId: "o1", label: "K", type: "kiosk", role: "terminal", status: "active", enrolledAt: "", revokedAt: null }));
     routeFetch();

@@ -53,6 +53,27 @@ describe("StatusScreen", () => {
     expect(orderNodes[1].getAttribute("data-testid")).toBe(`status-order-${READY_ORDER.orderId}`);
   });
 
+  it("numbers table orders 1, 2 by when placed and never shows the internal id", async () => {
+    vi.stubGlobal("fetch", vi.fn().mockResolvedValue(jsonResponse(200, TWO_ORDERS)));
+    render(<StatusScreen />);
+    await screen.findByTestId(`status-order-${PREPARING_ORDER.orderId}`);
+
+    expect(screen.getByTestId(`status-order-id-${READY_ORDER.orderId}`).textContent).toBe("Order 1");
+    expect(screen.getByTestId(`status-order-id-${PREPARING_ORDER.orderId}`).textContent).toBe("Order 2");
+    expect(document.body.textContent).not.toContain("D4E5");
+  });
+
+  it("shows a kiosk order's pickup number as its order number", async () => {
+    const kiosk = { ...PREPARING_ORDER, tokenNumber: 42 };
+    vi.stubGlobal("fetch", vi.fn().mockResolvedValue(jsonResponse(200, { sessionId: "s1", orders: [kiosk] })));
+    render(<StatusScreen />);
+    await screen.findByTestId(`status-order-${kiosk.orderId}`);
+
+    expect(screen.getByTestId(`status-order-id-${kiosk.orderId}`).textContent).toBe("Order 42");
+    expect(screen.getByTestId(`status-order-token-${kiosk.orderId}`).textContent).toBe("42");
+    expect(screen.getByText("Pay at the counter")).toBeTruthy();
+  });
+
   it("links each order's Request bill to its own checkout bill (CAP-5)", async () => {
     vi.stubGlobal("fetch", vi.fn().mockResolvedValue(jsonResponse(200, TWO_ORDERS)));
     render(<StatusScreen />);

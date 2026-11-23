@@ -8,7 +8,7 @@
 // per-outlet `availability` check plus start/join/session-read endpoints.
 //   GET  /guest/v1/outlets/:outletId/availability (public) ->
 //     200 { available: boolean, reason?: 'not_found' | 'qr_ordering_disabled' }
-//   POST /guest/v1/sessions       { outletId, tableId, name, phone } ->
+//   POST /guest/v1/sessions       { outletId, tableId, name, phone? } ->
 //     201 { token, pin, session: TableSessionView }
 //     409 session_already_open, 403 qr_ordering_disabled, 404 not_found
 //   POST /guest/v1/sessions/join  { outletId, tableId, pin, name } ->

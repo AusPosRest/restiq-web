@@ -14,7 +14,7 @@ changed once it landed.
 ## CAP-1 - QR entry and table session (story 1, issue #64)
 
 - **Intent:** a guest scans the table QR and reaches the outlet's menu in their browser
-  with no app or account; the first guest starts the session (name + phone) and gets a
+  with no app or account; the first guest starts the session (name only) and gets a
   shareable 4-digit PIN; later guests join with that PIN; an outlet with `qr_ordering`
   disabled serves a polite unavailable page, never the menu.
 - **Built:**
@@ -41,7 +41,7 @@ changed once it landed.
     - EXPERIENCE.md's IA treats them as one linear step and nothing yet needs to
       deep-link into the middle of starting/joining. There is no backend lookup that
       says whether a table already has an open session, so the screen shows both
-      affordances up front - "Start ordering" (name+phone form) primary, "Join your
+      affordances up front - "Start ordering" (name form) primary, "Join your
       table" (name field + 4-digit keypad, auto-submitting at 4 digits like the POS PIN
       pad) secondary - and discovers the truth reactively from the start/join responses
       themselves (see Reconciliation below).
@@ -58,7 +58,7 @@ changed once it landed.
       region wrapping the whole state area so a screen-reader guest hears the
       start→PIN, join→joined, or mode-flip convergence.
   - **Auth route handlers** (`src/app/qr/auth/start/route.ts`,
-    `src/app/qr/auth/join/route.ts`): exchange name+phone or PIN+name for a guest JWT,
+    `src/app/qr/auth/join/route.ts`): exchange name or PIN+name for a guest JWT,
     stored in an httpOnly `guest_session` cookie the browser never reads directly
     (mirrors every other realm's auth route pattern) plus a small non-sensitive
     `guest_display` cookie (outlet/table/name/PIN) for later screens to render from
@@ -557,10 +557,9 @@ This pass reconciled the guess against it:
     session-started and joined panels, linking to the new menu route - closing the gap
     where CAP-1 had nowhere for a guest to go next.
   - **Known, deliberate gaps - be honest, don't fabricate** (schema doesn't support
-    these; see `menu-state.ts`'s header comment for the full reasoning): no dish photos
-    (an initial-letter tile stands in), no bilingual (Hindi) names, no veg/non-veg FSSAI
-    marker, no star ratings, no "bestseller" badge, no dish description on Q4 - the real
-    `MenuItemView` has none of these fields. All are simply omitted, never invented.
+    these; see `menu-state.ts`'s header comment for the full reasoning): no bilingual
+    (Hindi) names, no star ratings, no "bestseller" badge. Photo, veg marker and
+    description were added later (see "Guest minors (#385)" at the end). Omitted, never invented.
   - **a11y (WCAG 2.1 AA floor):** labeled search input, `role="tablist"` category tabs,
     `aria-live` on the item list and the cart pill, unavailable items carry an explicit
     "Unavailable today" text label (never color/opacity alone as the sole signal),
@@ -669,3 +668,31 @@ copying the note to the kitchen order require restiq-backend#231.
 
 Unit tests cover trimmed notes, empty and whitespace-only omission, the textarea
 limit/counter, and cart notes alongside lines without notes.
+
+## Guest minors (#385)
+
+- **Order number on Order Status:** a table order shows "Order 1", "Order 2"... by when it
+  was placed in the session (oldest = 1, `orderNumbers` in `status-state.ts`); a kiosk order
+  shows "Order {pickup number}" in the big type with "Pay at the counter". The internal order
+  id is never shown. testids `status-order-id-<id>`, `status-order-token-<id>` kept.
+- **No phone at the start:** the welcome form asks for the name only; `/qr/auth/start` no
+  longer validates or sends a phone (`POST /guest/v1/sessions` takes `phone?`). The optional
+  phone at checkout is unchanged.
+- **Empty menu:** no dishes and no combos shows `qr-menu-empty-all` ("The menu isn't ready
+  yet" / "Please ask a member of staff to take your order."), with no search box or tabs.
+  An empty search or category still shows `qr-menu-empty`.
+- **Veg marker and description:** shared `components/veg-marker.tsx` (`role="img"`, green
+  `veg` / red `non_veg`, nothing for null). Menu card: marker beside the name
+  (`qr-menu-item-veg-<id>`), description under it (`qr-menu-item-description-<id>`, 2 lines,
+  1 on kiosk). Dish page: `qr-item-detail-veg`, full `qr-item-detail-description`; no
+  description element when empty. Till tiles show the marker (`item-tile-veg-<id>`), no
+  description. Owner's dish editor: optional Description textarea (`item-description-input`,
+  max 300; empty clears it). All new fields are optional so an older backend still works.
+- **Category kept:** the chosen category id is remembered in `sessionStorage`
+  (`qr-menu-category`) and restored when it still has dishes or combos; not stored on a kiosk
+  tab; every storage access is in try/catch.
+- **Simulator "Guest QR":** no hard-coded table. The preset path is
+  `NEXT_PUBLIC_SIMULATOR_GUEST_QR_PATH` or empty; when empty, clicking it focuses the custom
+  path box with a hint ("Paste the table's QR link (Owner console → Tables)."). The custom box
+  also accepts a full http(s) link, keeping only its path + query; a `/qr/t/...` path opens
+  as a 390x844 "Guest QR".

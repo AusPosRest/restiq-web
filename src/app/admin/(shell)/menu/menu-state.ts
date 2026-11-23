@@ -56,6 +56,8 @@ export interface ItemView {
   // https or an uploaded data:image URL (issue #218); optional for older backends.
   photoUrl?: string | null;
   vegMarker?: VegMarker | null;
+  /** Shown to guests on the QR menu; optional for older backends. */
+  description?: string | null;
   /** Kitchen station this item's tickets go to; null = the outlet's first station. */
   stationId?: string | null;
   /** restiq-backend#211: current dine-in base price, inline (no per-row price request). */

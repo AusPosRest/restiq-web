@@ -12,6 +12,7 @@
 // color-only), and the "+" is a separate, named button (never nested).
 import { Plus } from "lucide-react";
 import { useEffect, useMemo, useState, useSyncExternalStore } from "react";
+import { VegMarker } from "@/components/veg-marker";
 import { ComboPicker, type ComboPickerConfirmValue } from "@/components/combo-picker";
 import { combosFor, comboSavingsMinor, type ComboItemInfo, type ComboMenuView } from "@/lib/combo";
 import { GuestApiError } from "../api-client";
@@ -31,6 +32,31 @@ type Notice = { kind: "added" | "error"; text: string };
 
 const MENU_HREF = "/qr/menu";
 const NOTICE_MS = 2500;
+const CATEGORY_KEY = "qr-menu-category";
+
+// sessionStorage can throw (private mode, blocked storage) - the menu works fine without it.
+function readSavedCategory(): string | null {
+  try {
+    return sessionStorage.getItem(CATEGORY_KEY);
+  } catch {
+    return null;
+  }
+}
+
+function saveCategory(id: string): void {
+  try {
+    sessionStorage.setItem(CATEGORY_KEY, id);
+  } catch {
+    // not remembered - the menu still works
+  }
+}
+
+/** The category to open on: the remembered one while it still has dishes or combos, else the first. */
+function initialCategoryId(menu: GuestMenuView, kiosk: boolean): string | null {
+  const usable = menu.categories.filter((c) => c.items.length > 0 || (menu.combos ?? []).some((combo) => combo.categoryId === c.id));
+  const saved = kiosk ? null : readSavedCategory();
+  return usable.find((c) => c.id === saved)?.id ?? nonEmptyCategories(menu.categories)[0]?.id ?? null;
+}
 
 function subscribeNoop(): () => void {
   return () => undefined;
@@ -97,7 +123,7 @@ export function MenuView() {
       if (!active) return;
       setState(next);
       if (next.kind === "loaded") {
-        setActiveCategoryId((prev) => prev ?? nonEmptyCategories(next.menu.categories)[0]?.id ?? null);
+        setActiveCategoryId((prev) => prev ?? initialCategoryId(next.menu, isKioskTab()));
       }
     })();
     return () => {
@@ -115,7 +141,7 @@ export function MenuView() {
     const next = await loadMenu();
     setState(next);
     if (next.kind === "loaded") {
-      setActiveCategoryId((prev) => prev ?? nonEmptyCategories(next.menu.categories)[0]?.id ?? null);
+      setActiveCategoryId((prev) => prev ?? initialCategoryId(next.menu, isKioskTab()));
     }
   }
 
@@ -197,6 +223,19 @@ export function MenuView() {
   const combos = combosFor(allCombos, activeCategoryId, query);
   const currency = allCombos[0]?.currency ?? "INR";
   const showTabs = query.trim() === "" && categories.length > 0;
+  const menuIsEmpty = nonEmptyCategories(state.menu.categories).length === 0 && allCombos.length === 0;
+
+  if (menuIsEmpty) {
+    return (
+      <main data-testid="qr-menu" data-layout={kiosk ? "kiosk" : "list"} className="flex min-h-screen flex-1 flex-col px-4 pb-24 pt-6">
+        <div data-testid="qr-menu-empty-all" className="flex flex-1 flex-col items-center justify-center rounded-xl border border-dashed border-border/60 px-6 py-16 text-center">
+          <p className="font-headline text-lg font-medium text-foreground">The menu isn&apos;t ready yet</p>
+          <p className="mt-2 max-w-xs text-sm text-muted-foreground">Please ask a member of staff to take your order.</p>
+        </div>
+        <CartPill key={cartKey} />
+      </main>
+    );
+  }
 
   const tabs = showTabs && (
     <div
@@ -214,7 +253,10 @@ export function MenuView() {
             role="tab"
             aria-selected={selected}
             data-testid={`qr-menu-tab-${category.id}`}
-            onClick={() => setActiveCategoryId(category.id)}
+            onClick={() => {
+              setActiveCategoryId(category.id);
+              if (!kiosk) saveCategory(category.id);
+            }}
             className={`${kiosk ? "rounded-xl px-1 py-5 text-center text-sm leading-tight" : "shrink-0 rounded-full px-4 py-2 text-sm"} font-semibold transition-colors focus-visible:outline focus-visible:outline-2 focus-visible:outline-ring ${
               selected ? "bg-primary text-primary-foreground" : "bg-card text-foreground hover:bg-accent"
             }`}
@@ -379,7 +421,15 @@ function MenuItemCard({
           )}
         </span>
         <span className={`block min-w-0 flex-1 ${kiosk ? "w-full p-3" : ""}`}>
-          <span className={`block font-headline font-semibold text-foreground ${kiosk ? "line-clamp-2 text-lg leading-tight" : "truncate text-base"}`}>{item.name}</span>
+          <span className="flex items-center gap-1.5">
+            <VegMarker marker={item.vegMarker} data-testid={`qr-menu-item-veg-${item.id}`} />
+            <span className={`block min-w-0 font-headline font-semibold text-foreground ${kiosk ? "line-clamp-2 text-lg leading-tight" : "truncate text-base"}`}>{item.name}</span>
+          </span>
+          {item.description && (
+            <span data-testid={`qr-menu-item-description-${item.id}`} className={`mt-0.5 block text-xs text-muted-foreground ${kiosk ? "line-clamp-1" : "line-clamp-2"}`}>
+              {item.description}
+            </span>
+          )}
           {item.allergens.length > 0 && (
             <span className="mt-0.5 block truncate text-xs text-muted-foreground">Contains: {item.allergens.map((allergen) => allergen.name).join(", ")}</span>
           )}

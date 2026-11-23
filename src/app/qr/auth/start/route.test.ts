@@ -28,30 +28,22 @@ describe("POST /qr/auth/start", () => {
   it("rejects a missing name before calling the backend", async () => {
     const fetchMock = vi.fn();
     vi.stubGlobal("fetch", fetchMock);
-    const res = await POST(jsonRequest({ outletId: "o1", tableId: "t1", name: "", phone: "9876543210" }));
+    const res = await POST(jsonRequest({ outletId: "o1", tableId: "t1", name: "" }));
     expect(res.status).toBe(400);
     expect(fetchMock).not.toHaveBeenCalled();
   });
 
-  it("rejects a non-10-digit phone before calling the backend", async () => {
-    const fetchMock = vi.fn();
-    vi.stubGlobal("fetch", fetchMock);
-    const res = await POST(jsonRequest({ outletId: "o1", tableId: "t1", name: "Rahul", phone: "123" }));
-    expect(res.status).toBe(400);
-    expect(fetchMock).not.toHaveBeenCalled();
-  });
-
-  it("sends outletId, tableId, name, phone to the backend", async () => {
+  it("sends outletId, tableId and name (no phone) to the backend", async () => {
     const fetchMock = vi
       .fn()
       .mockResolvedValue(upstreamJson(201, { token: "guest-jwt", pin: "4729", session: { outletId: "o1", tableId: "t1" } }));
     vi.stubGlobal("fetch", fetchMock);
 
-    await POST(jsonRequest({ outletId: "o1", tableId: "t1", name: "Rahul", phone: "9876543210" }));
+    await POST(jsonRequest({ outletId: "o1", tableId: "t1", name: "Rahul" }));
 
     const [url, init] = fetchMock.mock.calls[0] as [string, RequestInit];
     expect(url).toBe(`${API_URL}/guest/v1/sessions`);
-    expect(JSON.parse(init.body as string)).toEqual({ outletId: "o1", tableId: "t1", name: "Rahul", phone: "9876543210" });
+    expect(JSON.parse(init.body as string)).toEqual({ outletId: "o1", tableId: "t1", name: "Rahul" });
   });
 
   it("sets an httpOnly guest_session cookie and returns the shareable pin", async () => {
@@ -60,7 +52,7 @@ describe("POST /qr/auth/start", () => {
       vi.fn().mockResolvedValue(upstreamJson(201, { token: "guest-jwt", pin: "4729", session: { outletId: "o1", tableId: "t1" } })),
     );
 
-    const res = await POST(jsonRequest({ outletId: "o1", tableId: "t1", name: "Rahul", phone: "9876543210" }));
+    const res = await POST(jsonRequest({ outletId: "o1", tableId: "t1", name: "Rahul" }));
     expect(res.status).toBe(200);
 
     const body = (await res.json()) as { pin: string };
@@ -77,7 +69,7 @@ describe("POST /qr/auth/start", () => {
       "fetch",
       vi.fn().mockResolvedValue(upstreamJson(403, { error: { code: "qr_ordering_disabled", message: "Ordering is off" } })),
     );
-    const res = await POST(jsonRequest({ outletId: "o1", tableId: "t1", name: "Rahul", phone: "9876543210" }));
+    const res = await POST(jsonRequest({ outletId: "o1", tableId: "t1", name: "Rahul" }));
     expect(res.status).toBe(403);
     const body = (await res.json()) as { error: { code: string } };
     expect(body.error.code).toBe("qr_ordering_disabled");
@@ -90,7 +82,7 @@ describe("POST /qr/auth/start", () => {
         upstreamJson(409, { error: { code: "session_already_open", message: "This table already has an open session - join it with its PIN instead" } }),
       ),
     );
-    const res = await POST(jsonRequest({ outletId: "o1", tableId: "t1", name: "Rahul", phone: "9876543210" }));
+    const res = await POST(jsonRequest({ outletId: "o1", tableId: "t1", name: "Rahul" }));
     expect(res.status).toBe(409);
     const body = (await res.json()) as { error: { code: string } };
     expect(body.error.code).toBe("session_already_open");
@@ -98,7 +90,7 @@ describe("POST /qr/auth/start", () => {
 
   it("returns 502 when the backend is unreachable", async () => {
     vi.stubGlobal("fetch", vi.fn().mockRejectedValue(new TypeError("network down")));
-    const res = await POST(jsonRequest({ outletId: "o1", tableId: "t1", name: "Rahul", phone: "9876543210" }));
+    const res = await POST(jsonRequest({ outletId: "o1", tableId: "t1", name: "Rahul" }));
     expect(res.status).toBe(502);
   });
 
@@ -106,7 +98,7 @@ describe("POST /qr/auth/start", () => {
     delete process.env.NEXT_PUBLIC_API_URL;
     const fetchMock = vi.fn();
     vi.stubGlobal("fetch", fetchMock);
-    const res = await POST(jsonRequest({ outletId: "o1", tableId: "t1", name: "Rahul", phone: "9876543210" }));
+    const res = await POST(jsonRequest({ outletId: "o1", tableId: "t1", name: "Rahul" }));
     expect(res.status).toBe(500);
     expect(fetchMock).not.toHaveBeenCalled();
   });

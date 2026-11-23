@@ -7,7 +7,7 @@
 import { useEffect, useRef, useState } from "react";
 import {
   createDevice,
-  CUSTOM_DEVICE_SIZE,
+  customDeviceFor,
   deviceUrl,
   isLocalHostname,
   loadDevices,
@@ -39,6 +39,8 @@ export function SimulatorDevices() {
   const [status, setStatus] = useState<Record<string, DeviceStatus>>({});
   const [customPath, setCustomPath] = useState("");
   const [customError, setCustomError] = useState<string | null>(null);
+  const [customHint, setCustomHint] = useState<string | null>(null);
+  const customInput = useRef<HTMLInputElement>(null);
   const windows = useRef(new Map<string, Window>());
 
   // Deferred load so server render and first client render agree (window
@@ -102,15 +104,26 @@ export function SimulatorDevices() {
     setDevices((current) => current.filter((device) => device.id !== id));
   }
 
+  // A preset with no path configured (Guest QR without a table) sends the user to the custom box instead.
+  function handlePreset(preset: DevicePreset) {
+    if (preset.path) {
+      addDevice(preset);
+      return;
+    }
+    setCustomHint("Paste the table's QR link (Owner console → Tables).");
+    customInput.current?.focus();
+  }
+
   function handleCustomSubmit() {
     const result = validateCustomPath(customPath);
     if (!result.ok) {
       setCustomError(result.error);
       return;
     }
-    addDevice({ label: "Custom", path: result.path, ...CUSTOM_DEVICE_SIZE });
+    addDevice({ path: result.path, ...customDeviceFor(result.path) });
     setCustomPath("");
     setCustomError(null);
+    setCustomHint(null);
   }
 
   return (
@@ -139,7 +152,7 @@ export function SimulatorDevices() {
                 key={preset.key}
                 type="button"
                 data-testid={`simulator-add-${preset.key}`}
-                onClick={() => addDevice(preset)}
+                onClick={() => handlePreset(preset)}
                 className={BUTTON}
               >
                 {preset.label}
@@ -153,6 +166,8 @@ export function SimulatorDevices() {
             <div className="flex gap-2">
               <input
                 id="simulator-custom-path"
+                ref={customInput}
+                aria-describedby={customHint ? "simulator-custom-hint" : undefined}
                 data-testid="simulator-custom-path"
                 type="text"
                 placeholder="/pos/login"
@@ -160,6 +175,7 @@ export function SimulatorDevices() {
                 onChange={(event) => {
                   setCustomPath(event.target.value);
                   setCustomError(null);
+                  setCustomHint(null);
                 }}
                 onKeyDown={(event) => {
                   if (event.key === "Enter") handleCustomSubmit();
@@ -170,6 +186,11 @@ export function SimulatorDevices() {
                 Open
               </button>
             </div>
+            {customHint ? (
+              <p id="simulator-custom-hint" data-testid="simulator-custom-hint" className="text-xs text-muted-foreground">
+                {customHint}
+              </p>
+            ) : null}
             {customError ? (
               <p role="alert" data-testid="simulator-custom-error" className="text-xs text-error-soft">
                 {customError}
