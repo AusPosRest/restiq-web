@@ -5,6 +5,10 @@ logged, per feature and date, in `wiki/tasks/completed.md`; this file starts
 with the payments epic.
 
 
+## Unreleased - Payments lists refunds owed (#386)
+
+- Added: the till's Payments screen shows a "Refunds owed" panel above the totals when a guest's card was charged after their bill was already paid (the backend flags the payment instead of adding it to the bill). Each row gives the date and time, bill, table or token, method and amount, with a note to refund it in the card provider's dashboard. Read-only; nothing shows when there are none. The other half of #386, taking a payment at the counter while a card payment is pending, was already in place (it shipped with #404); this entry is only the refunds-owed panel.
+
 ## Unreleased - till works at phone width (#384)
 
 - Fixed: on a phone the till's top bar (Shift, Open orders, Payments, Status) scrolled its links sideways, so a waiter saw only "Open orders". The links now wrap onto extra lines so all of them, including Clock Out and Sign out, show. Header buttons and links, category tabs, menu search, Add discount, Refresh, Refund, Re-enrol and the shift and device buttons are at least 40px tall on a phone; desktop sizes are unchanged.
