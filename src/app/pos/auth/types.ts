@@ -10,6 +10,7 @@ export interface StaffSummary {
 export interface OutletSummary {
   id: string;
   name: string;
+  type?: string;
 }
 
 export type PosLoginResult =

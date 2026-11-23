@@ -7,7 +7,7 @@
 // Color never stands alone (EXPERIENCE.md Accessibility Floor): the ageing
 // state is also carried by the elapsed-time figure itself (it's the number
 // that's growing), and RECALLED/ADD-ON/VOID are always rendered as words.
-import { ageingLevel, formatElapsed, groupLinesByBatch, orderTypeLabel, ticketDisplayNumber, type AgeingLevel } from "./station-queue-state";
+import { ageingLevel, formatElapsed, groupLinesByBatch, orderTypeLabel, splitTicketLines, ticketDisplayNumber, type AgeingLevel } from "./station-queue-state";
 import type { TicketLineView, TicketView } from "../../api";
 
 const FRAME_CLASSES: Record<AgeingLevel, string> = {
@@ -98,105 +98,125 @@ export function TicketCard({
 }>) {
   const isBumped = ticket.status === "bumped";
   const level = ageingLevel(ticket.firedAt, ageingThresholdMinutes, nowMs);
-  const batches = groupLinesByBatch(ticket.lines);
+  const pages = splitTicketLines(ticket.lines);
+  const total = pages.length;
 
-  return (
-    <article
-      data-testid={`kds-ticket-${ticket.id}`}
-      data-ageing={isBumped ? undefined : level}
-      className={`flex w-72 shrink-0 flex-col overflow-hidden rounded-lg border-2 bg-card ${isBumped ? BUMPED_FRAME_CLASSES : FRAME_CLASSES[level]}`}
-    >
-      {ticket.recalled && !isBumped && (
-        <div data-testid={`kds-ticket-${ticket.id}-recalled-banner`} className="bg-ticket-recalled px-3 py-1 text-center text-xs font-bold tracking-wide text-white">
-          RECALLED
-        </div>
-      )}
+  // One <article> per page, side by side in the rail (issue #388): part 1 is
+  // today's card; later parts repeat the header and carry BUMP/REFIRE on the last.
+  return pages.map((pageLines, index) => {
+    const part = index + 1;
+    const isFirst = part === 1;
+    const isLast = part === total;
+    const partId = isFirst ? `kds-ticket-${ticket.id}` : `kds-ticket-${ticket.id}-part-${part}`;
 
-      <header className="flex items-start justify-between gap-2 px-3 pt-3">
-        <div>
-          <p data-testid={`kds-ticket-${ticket.id}-number`} className="font-headline text-xl font-bold text-foreground">
-            {ticketDisplayNumber(ticket)}
-          </p>
-          <p className="text-xs text-muted-foreground">
-            {orderTypeLabel(ticket)}
-          </p>
-        </div>
-        {isBumped ? (
-          <p data-testid={`kds-ticket-${ticket.id}-bumped-summary`} className="text-right text-xs font-medium text-muted-foreground">
-            {bumpedSummary}
-          </p>
-        ) : (
-          <p data-testid={`kds-ticket-${ticket.id}-elapsed`} className="font-headline text-3xl font-bold tabular-nums text-foreground">
-            {formatElapsed(ticket.firedAt, nowMs)}
-          </p>
+    return (
+      <article
+        key={part}
+        data-testid={partId}
+        data-ageing={isBumped ? undefined : level}
+        className={`flex w-72 shrink-0 flex-col overflow-hidden rounded-lg border-2 bg-card ${isBumped ? BUMPED_FRAME_CLASSES : FRAME_CLASSES[level]}`}
+      >
+        {isFirst && ticket.recalled && !isBumped && (
+          <div data-testid={`kds-ticket-${ticket.id}-recalled-banner`} className="bg-ticket-recalled px-3 py-1 text-center text-xs font-bold tracking-wide text-white">
+            RECALLED
+          </div>
         )}
-      </header>
 
-      {recallSummary && (
-        <p data-testid={`kds-ticket-${ticket.id}-recall-history`} className="mx-3 mt-2 text-xs font-medium text-muted-foreground">
-          {recallSummary}
-        </p>
-      )}
-
-      <div className="flex-1 space-y-3 px-3 py-3">
-        {batches.map(({ batch, lines }) => (
-          <div key={batch}>
-            {batch > 0 && (
-              <p data-testid={`kds-ticket-${ticket.id}-addon-${batch}`} className="mb-1 flex items-center gap-2 text-xs font-bold tracking-wide text-ticket-new">
-                <span className="h-px flex-1 bg-ticket-new/40" aria-hidden="true" />
-                ADD-ON
-                <span className="h-px flex-1 bg-ticket-new/40" aria-hidden="true" />
+        <header className="flex items-start justify-between gap-2 px-3 pt-3">
+          <div>
+            <p data-testid={`${partId}-number`} className="font-headline text-xl font-bold text-foreground">
+              {ticketDisplayNumber(ticket)}
+            </p>
+            {total > 1 && (
+              <p data-testid={`kds-ticket-${ticket.id}-part-${part}-label`} className="text-sm font-bold uppercase text-foreground">
+                {isFirst ? `${part}/${total}` : `cont. ${part}/${total}`}
               </p>
             )}
-            <ul className="space-y-2">
-              {lines.map((line) => (
-                <TicketLineRow key={line.id} line={line} />
-              ))}
-            </ul>
+            <p className="text-xs text-muted-foreground">
+              {orderTypeLabel(ticket)}
+            </p>
           </div>
-        ))}
-      </div>
+          {isBumped ? (
+            isFirst && (
+              <p data-testid={`kds-ticket-${ticket.id}-bumped-summary`} className="text-right text-xs font-medium text-muted-foreground">
+                {bumpedSummary}
+              </p>
+            )
+          ) : (
+            <p data-testid={`${partId}-elapsed`} className="font-headline text-3xl font-bold tabular-nums text-foreground">
+              {formatElapsed(ticket.firedAt, nowMs)}
+            </p>
+          )}
+        </header>
 
-      {errorMessage && (
-        <p role="alert" data-testid={`kds-ticket-${ticket.id}-error`} className="px-3 pb-1 text-xs font-medium text-ticket-urgent">
-          {errorMessage} - retrying
-        </p>
-      )}
-
-      <div className="flex gap-2 p-3 pt-0">
-        {ticket.status === "queued" ? (
-          <>
-            <button
-              type="button"
-              data-testid={`kds-ticket-${ticket.id}-bump`}
-              disabled={pending}
-              onClick={onBump}
-              className="flex min-h-14 flex-[2] items-center justify-center rounded-lg bg-ticket-bumped text-lg font-bold text-white transition-opacity hover:opacity-90 disabled:opacity-50"
-            >
-              BUMP
-            </button>
-            <button
-              type="button"
-              data-testid={`kds-ticket-${ticket.id}-refire`}
-              disabled={pending}
-              onClick={onRefire}
-              className="flex min-h-14 flex-1 items-center justify-center rounded-lg border border-border text-sm font-semibold text-foreground transition-colors hover:bg-accent disabled:opacity-50"
-            >
-              REFIRE
-            </button>
-          </>
-        ) : (
-          <button
-            type="button"
-            data-testid={`kds-ticket-${ticket.id}-recall`}
-            disabled={pending}
-            onClick={onRecall}
-            className="flex min-h-14 flex-1 items-center justify-center rounded-lg border border-ticket-recalled text-sm font-bold text-ticket-recalled transition-colors hover:bg-ticket-recalled/10 disabled:opacity-50"
-          >
-            RECALL
-          </button>
+        {isFirst && recallSummary && (
+          <p data-testid={`kds-ticket-${ticket.id}-recall-history`} className="mx-3 mt-2 text-xs font-medium text-muted-foreground">
+            {recallSummary}
+          </p>
         )}
-      </div>
-    </article>
-  );
+
+        <div className="flex-1 space-y-3 px-3 py-3">
+          {groupLinesByBatch(pageLines).map(({ batch, lines }) => (
+            <div key={batch}>
+              {batch > 0 && (
+                <p data-testid={`${partId}-addon-${batch}`} className="mb-1 flex items-center gap-2 text-xs font-bold tracking-wide text-ticket-new">
+                  <span className="h-px flex-1 bg-ticket-new/40" aria-hidden="true" />
+                  ADD-ON
+                  <span className="h-px flex-1 bg-ticket-new/40" aria-hidden="true" />
+                </p>
+              )}
+              <ul className="space-y-2">
+                {lines.map((line) => (
+                  <TicketLineRow key={line.id} line={line} />
+                ))}
+              </ul>
+            </div>
+          ))}
+        </div>
+
+        {isLast && errorMessage && (
+          <p role="alert" data-testid={`kds-ticket-${ticket.id}-error`} className="px-3 pb-1 text-xs font-medium text-ticket-urgent">
+            {errorMessage} - retrying
+          </p>
+        )}
+
+        {isLast && (
+          <div className="flex gap-2 p-3 pt-0">
+            {ticket.status === "queued" ? (
+              <>
+                <button
+                  type="button"
+                  data-testid={`kds-ticket-${ticket.id}-bump`}
+                  disabled={pending}
+                  onClick={onBump}
+                  className="flex min-h-14 flex-[2] items-center justify-center rounded-lg bg-ticket-bumped text-lg font-bold text-white transition-opacity hover:opacity-90 disabled:opacity-50"
+                >
+                  BUMP
+                </button>
+                <button
+                  type="button"
+                  data-testid={`kds-ticket-${ticket.id}-refire`}
+                  disabled={pending}
+                  onClick={onRefire}
+                  className="flex min-h-14 flex-1 items-center justify-center rounded-lg border border-border text-sm font-semibold text-foreground transition-colors hover:bg-accent disabled:opacity-50"
+                >
+                  REFIRE
+                </button>
+              </>
+            ) : (
+              <button
+                type="button"
+                data-testid={`kds-ticket-${ticket.id}-recall`}
+                disabled={pending}
+                onClick={onRecall}
+                className="flex min-h-14 flex-1 items-center justify-center rounded-lg border border-ticket-recalled text-sm font-bold text-ticket-recalled transition-colors hover:bg-ticket-recalled/10 disabled:opacity-50"
+              >
+                RECALL
+              </button>
+            )}
+          </div>
+        )}
+      </article>
+    );
+  });
 }

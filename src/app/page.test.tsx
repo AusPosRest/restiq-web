@@ -32,4 +32,20 @@ describe("Marketing landing page (issue #262)", () => {
       expect(container.querySelector(`#${id}`)).not.toBeNull();
     }
   });
+
+  it("shows the demo links only where /demo exists (production needs DEMO_PAGES=on)", () => {
+    const ids = ["landing-nav-demo", "landing-hero-demo", "landing-faq-demo", "landing-cta-demo", "landing-footer-demo"];
+    vi.stubEnv("NODE_ENV", "production");
+    try {
+      const off = render(<Home />);
+      for (const id of ids) expect(screen.queryByTestId(id)).toBeNull();
+      expect(off.container.textContent).not.toMatch(/demo/i);
+      off.unmount();
+      vi.stubEnv("DEMO_PAGES", "on");
+      render(<Home />);
+      for (const id of ids) expect(screen.getByTestId(id).getAttribute("href")).toBe("/demo");
+    } finally {
+      vi.unstubAllEnvs();
+    }
+  });
 });

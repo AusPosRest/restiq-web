@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import type { TicketLineView, TicketView } from "../../api";
-import { ageingLevel, formatElapsed, groupLinesByBatch, orderTypeLabel, sortOldestFirst, ticketDisplayNumber } from "./station-queue-state";
+import { ageingLevel, formatElapsed, groupLinesByBatch, orderTypeLabel, sortOldestFirst, splitTicketLines, ticketDisplayNumber } from "./station-queue-state";
 
 const FIRED_AT = "2026-08-29T10:00:00.000Z";
 const FIRED_MS = Date.parse(FIRED_AT);
@@ -128,5 +128,39 @@ describe("groupLinesByBatch", () => {
   it("handles a ticket with only its original fire and no add-ons", () => {
     const groups = groupLinesByBatch([line({ id: "only" })]);
     expect(groups).toEqual([{ batch: 0, lines: [expect.objectContaining({ id: "only" })] }]);
+  });
+});
+
+describe("splitTicketLines (#388)", () => {
+  const plain = (count: number) => Array.from({ length: count }, (_, i) => line({ id: `l${i}` }));
+  const ids = (pages: TicketLineView[][]) => pages.map((page) => page.map((l) => l.id));
+
+  it("splits 20 plain lines into pages of 12 and 8, in order", () => {
+    const pages = splitTicketLines(plain(20));
+    expect(pages.map((page) => page.length)).toEqual([12, 8]);
+    expect(pages.flat().map((l) => l.id)).toEqual(plain(20).map((l) => l.id));
+  });
+
+  it("counts each modifier and a note as a row", () => {
+    // 1 + 1 note + 3 modifiers = 5 rows each: two fit in 12, the third does not.
+    const heavy = (id: string) => line({ id, note: "no onion", modifiers: [{ id: `${id}m1`, name: "a" }, { id: `${id}m2`, name: "b" }, { id: `${id}m3`, name: "c" }] });
+    expect(ids(splitTicketLines([heavy("a"), heavy("b"), heavy("c")]))).toEqual([["a", "b"], ["c"]]);
+  });
+
+  it("never splits a line across cards", () => {
+    // 11 plain rows + one 3-row line: the 3-row line moves whole to page 2.
+    const lines = [...plain(11), line({ id: "big", modifiers: [{ id: "m1", name: "a" }, { id: "m2", name: "b" }] })];
+    expect(ids(splitTicketLines(lines))).toEqual([plain(11).map((l) => l.id), ["big"]]);
+  });
+
+  it("gives a single oversize line a card of its own", () => {
+    const modifiers = Array.from({ length: 15 }, (_, i) => ({ id: `m${i}`, name: `mod ${i}` }));
+    const lines = [line({ id: "before" }), line({ id: "huge", modifiers }), line({ id: "after" })];
+    expect(ids(splitTicketLines(lines))).toEqual([["before"], ["huge"], ["after"]]);
+  });
+
+  it("keeps a short ticket on one page, and an empty ticket as one empty page", () => {
+    expect(ids(splitTicketLines(plain(3)))).toEqual([["l0", "l1", "l2"]]);
+    expect(splitTicketLines([])).toEqual([[]]);
   });
 });

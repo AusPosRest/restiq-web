@@ -82,6 +82,10 @@ slot established by issue #66.
     number, table/type, large tabular elapsed time), ADD-ON-separated line
     groups, seat tags, struck-through-red VOID lines, RECALLED banner
     (`ticket.recalled`, real data), Bump/Refire (queued) or Recall (bumped).
+    A ticket over `TICKET_ROW_BUDGET` (12) rows splits into cards side by
+    side (#388, `splitTicketLines()` in `station-queue-state.ts`): a dish, a
+    modifier and a note are one row each, a line is never split, parts are
+    labelled "1/N" and "cont. n/N", and the actions sit on the last part.
   - `station-queue-screen.tsx` - ties it together: reconnecting notice on
     poll failure, skeleton on first load, calm "No open tickets" empty
     state, the oldest-left ticket rail.

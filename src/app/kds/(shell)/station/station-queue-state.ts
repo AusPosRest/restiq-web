@@ -82,3 +82,29 @@ export function groupLinesByBatch(lines: TicketLineView[]): { batch: number; lin
   }
   return [...byBatch.entries()].sort(([a], [b]) => a - b).map(([batch, batchLines]) => ({ batch, lines: batchLines }));
 }
+
+// ponytail: a fixed row budget, not a measurement of the screen - one card of
+// ~12 rows fits a typical kitchen display with BUMP above the fold. Upgrade
+// path: measure the rail height if kitchens run very small or very tall screens.
+export const TICKET_ROW_BUDGET = 12;
+
+/**
+ * Splits a ticket's lines into cards that sit side by side (issue #388), so a
+ * long order never pushes BUMP/REFIRE below the fold. A line costs 1 row, +1
+ * for a note, +1 per modifier; lines keep their order and are never split, an
+ * oversize line gets a card of its own, and there is always at least one page.
+ */
+export function splitTicketLines(lines: TicketLineView[], rowBudget = TICKET_ROW_BUDGET): TicketLineView[][] {
+  const pages: TicketLineView[][] = [[]];
+  let used = 0;
+  for (const line of lines) {
+    const cost = 1 + (line.note ? 1 : 0) + line.modifiers.length;
+    if (used > 0 && used + cost > rowBudget) {
+      pages.push([]);
+      used = 0;
+    }
+    pages[pages.length - 1].push(line);
+    used += cost;
+  }
+  return pages;
+}
