@@ -152,7 +152,7 @@ function BillSettleLoaded({
       discountMinor: pendingDiscount?.amountMinor,
       discountReason: pendingDiscount?.reason,
       managerPin: pendingDiscount?.managerPin,
-      tenders: tendersForFinalize(totalMinor, bill, pendingTenders),
+      tenders: tendersForFinalize(totalMinor, bill, pendingTenders, menu.currency),
     })
       .then((finalised) => {
         setBill(finalised);

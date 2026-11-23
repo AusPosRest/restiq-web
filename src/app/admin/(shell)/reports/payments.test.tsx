@@ -46,7 +46,7 @@ function paymentRow(overrides: Partial<PaymentRow> = {}): PaymentRow {
   };
 }
 
-const TOTALS = { count: 2, subtotalMinor: 150000, discountMinor: 5000, taxMinor: 8000, totalMinor: 233000, tenderedMinor: 233000, refundedMinor: 1000, netMinor: 232000 };
+const TOTALS = { count: 2, subtotalMinor: 150000, discountMinor: 5000, taxMinor: 8000, totalMinor: 233000, tenderedMinor: 232960, roundOffMinor: -40, refundedMinor: 1000, netMinor: 232000 };
 
 function firstPageResponse(): PaymentsResponse {
   return {
@@ -151,6 +151,9 @@ describe("Payments", () => {
     expect(screen.getByTestId("payments-totals-count").textContent).toContain("2");
     expect(screen.getByTestId("payments-totals-total").textContent).toContain("₹2,330.00");
     expect(screen.getByTestId("payments-totals-refunded").textContent).toContain("₹10.00");
+    // restiq-web#377: the cash round-off the server stored, so Tendered = Total + Round-off.
+    expect(screen.getByTestId("payments-totals-tendered").textContent).toContain("₹2,329.60");
+    expect(screen.getByTestId("payments-totals-round-off").textContent).toContain("-₹0.40");
     // PE-33: net of refunds, to the paisa.
     expect(screen.getByTestId("payments-totals-net").textContent).toContain("₹2,320.00");
 

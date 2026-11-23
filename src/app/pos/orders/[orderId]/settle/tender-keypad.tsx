@@ -106,7 +106,7 @@ export function TenderKeypad({
   const blocked = cashLocked && method === "cash";
   const canAdd = !blocked && amountMinor > 0 && referenceReady && (!isTerminal || (amountMinor <= remainingMinor && terminalReady));
   const methods: KeypadMethod[] = onSendToTerminal ? [...METHODS, "card_terminal"] : METHODS;
-  // CU-11: rupee cash is collected to the nearest rupee; the bill keeps its exact total.
+  // CU-11 / restiq-web#377: cash is collected to the nearest rupee / 5 cents; finalize stores the round-off on the bill.
   const isCash = method === "cash";
   const roundOffMinor = isCash ? cashRoundOffMinor(remainingMinor, currency) : 0;
   const fillMinor = remainingMinor + roundOffMinor;

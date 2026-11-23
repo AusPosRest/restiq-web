@@ -155,18 +155,53 @@ describe("rupee cash round-off (CU-11)", () => {
     expect(canFinalizeWithElectronic(bill(), 89060, [{ method: "cash", amountMinor: 89100 }], [], "INR")).toBe(true);
   });
 
-  it("never rounds AUD or a non-cash tender", () => {
+  it("never rounds a non-cash tender, and keeps a 5-cent AUD bill exact", () => {
     expect(canFinalizeWithElectronic(bill(), 1995, [{ method: "cash", amountMinor: 1900 }], [], "AUD")).toBe(false);
     expect(canFinalizeWithElectronic(bill(), 89040, [{ method: "upi_manual", amountMinor: 89000 }], [], "INR")).toBe(false);
+    expect(canFinalizeWithElectronic(bill(), 1232, [{ method: "upi_manual", amountMinor: 1230 }], [], "AUD")).toBe(false);
   });
 
-  it("posts tenders that sum to the exact bill total - the server never sees the round-off", () => {
-    expect(tendersForFinalize(89040, bill(), [{ method: "cash", amountMinor: 100000 }])).toEqual([{ method: "cash", amountMinor: 89040 }]);
-    expect(tendersForFinalize(89040, bill(), [{ method: "cash", amountMinor: 89000 }])).toEqual([{ method: "cash", amountMinor: 89040 }]);
-    expect(tendersForFinalize(89060, bill(), [{ method: "upi_manual", amountMinor: 50000 }, { method: "cash", amountMinor: 39100 }])).toEqual([
+  it("posts the cash that went into the drawer, with what was handed over - the server stores the round-off (restiq-web#377)", () => {
+    expect(tendersForFinalize(89040, bill(), [{ method: "cash", amountMinor: 100000 }], "INR")).toEqual([{ method: "cash", amountMinor: 89000, tenderedMinor: 100000 }]);
+    expect(tendersForFinalize(89040, bill(), [{ method: "cash", amountMinor: 89000 }], "INR")).toEqual([{ method: "cash", amountMinor: 89000, tenderedMinor: 89000 }]);
+    expect(tendersForFinalize(89060, bill(), [{ method: "upi_manual", amountMinor: 50000 }, { method: "cash", amountMinor: 39100 }], "INR")).toEqual([
       { method: "upi_manual", amountMinor: 50000 },
-      { method: "cash", amountMinor: 39060 },
+      { method: "cash", amountMinor: 39100, tenderedMinor: 39100 },
     ]);
+  });
+
+  it("puts the whole change on the last cash tender posted, so tendered sums to the cash keyed", () => {
+    const posted = tendersForFinalize(105630, bill(), [{ method: "upi_manual", amountMinor: 50000 }, { method: "cash", amountMinor: 1100 }, { method: "cash", amountMinor: 60000 }], "INR");
+    expect(posted).toEqual([
+      { method: "upi_manual", amountMinor: 50000 },
+      { method: "cash", amountMinor: 1100, tenderedMinor: 1100 },
+      { method: "cash", amountMinor: 54500, tenderedMinor: 60000 },
+    ]);
+    // A cash tender the change uses up entirely is dropped; its cash rides on the one before.
+    expect(tendersForFinalize(1000, bill(), [{ method: "cash", amountMinor: 1000 }, { method: "cash", amountMinor: 500 }], "INR")).toEqual([
+      { method: "cash", amountMinor: 1000, tenderedMinor: 1500 },
+    ]);
+  });
+
+  it("leaves card / UPI-only bills exact and untouched", () => {
+    const upi: PendingTender[] = [{ method: "upi_manual", amountMinor: 89040 }];
+    expect(tendersForFinalize(89040, bill(), upi, "INR")).toEqual(upi);
+    expect(tendersForFinalize(89040, bill([tender("upi_qr", 89040)]), [], "INR")).toEqual([]);
+  });
+});
+
+describe("Australian cash round-off to 5 cents (restiq-web#377)", () => {
+  it("settles A$12.33 with A$12.35 cash, gives change against A$12.35, and posts tendered + drawer amounts", () => {
+    expect(canFinalizeWithElectronic(bill(), 1233, [{ method: "cash", amountMinor: 1235 }], [], "AUD")).toBe(true);
+    expect(canFinalizeWithElectronic(bill(), 1233, [{ method: "cash", amountMinor: 1230 }], [], "AUD")).toBe(false);
+    expect(cashChangeMinor(1233, bill(), [{ method: "cash", amountMinor: 2000 }], "AUD")).toBe(765);
+    expect(tendersForFinalize(1233, bill(), [{ method: "cash", amountMinor: 2000 }], "AUD")).toEqual([{ method: "cash", amountMinor: 1235, tenderedMinor: 2000 }]);
+  });
+
+  it("rounds only the cash share of a split: A$10 card on A$22.32 leaves A$12.32 -> A$12.30 cash", () => {
+    const b = bill([tender("card_terminal", 1000)]);
+    expect(canFinalizeWithElectronic(b, 2232, [{ method: "cash", amountMinor: 1230 }], [], "AUD")).toBe(true);
+    expect(tendersForFinalize(2232, b, [{ method: "cash", amountMinor: 1230 }], "AUD")).toEqual([{ method: "cash", amountMinor: 1230, tenderedMinor: 1230 }]);
   });
 });
 

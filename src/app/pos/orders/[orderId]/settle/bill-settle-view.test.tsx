@@ -339,10 +339,10 @@ describe("BillSettleView - finalize", () => {
     await userEvent.click(screen.getByTestId("finalize-bill"));
     expect((await screen.findByTestId("finalised-change-due")).textContent).toBe("Change due ₹181.00");
     const finalizeCall = fetchMock.mock.calls.find(([input]) => String(input).endsWith("/bills/bill-1/finalize"));
-    expect(JSON.parse(String(finalizeCall![1]?.body)).tenders).toEqual([{ method: "cash", amountMinor: 81900 }]);
+    expect(JSON.parse(String(finalizeCall![1]?.body)).tenders).toEqual([{ method: "cash", amountMinor: 81900, tenderedMinor: 100000 }]);
   });
 
-  it("CU-11: rounds rupee cash to the nearest rupee - ₹1,000 note on a ₹890.40 bill gives ₹110 change; the exact total is posted", async () => {
+  it("CU-11: rounds rupee cash to the nearest rupee - ₹1,000 note on a ₹890.40 bill gives ₹110 change; ₹890 is posted with ₹1,000 tendered (restiq-web#377)", async () => {
     const odd = { subtotalMinor: 84800, taxMinor: 4240, totalMinor: 89040 };
     const fetchMock = stubFetch({
       [`POST orders/${ORDER_ID}/bill`]: () => jsonResponse(makeBill(odd), 201),
@@ -369,7 +369,26 @@ describe("BillSettleView - finalize", () => {
     await userEvent.click(screen.getByTestId("finalize-bill"));
     expect((await screen.findByTestId("finalised-change-due")).textContent).toBe("Change due ₹110.00");
     const finalizeCall = fetchMock.mock.calls.find(([input]) => String(input).endsWith("/bills/bill-1/finalize"));
-    expect(JSON.parse(String(finalizeCall![1]?.body)).tenders).toEqual([{ method: "cash", amountMinor: 89040 }]);
+    expect(JSON.parse(String(finalizeCall![1]?.body)).tenders).toEqual([{ method: "cash", amountMinor: 89000, tenderedMinor: 100000 }]);
+  });
+
+  it("restiq-web#377: rounds Australian cash to 5 cents - A$12.33 is collected as A$12.35 and posted that way", async () => {
+    const aud = { subtotalMinor: 1233, taxMinor: 112, totalMinor: 1233, pricesIncludeTax: true };
+    const fetchMock = stubFetch({
+      "GET menu": () => jsonResponse({ ...MENU, currency: "AUD" }),
+      [`POST orders/${ORDER_ID}/bill`]: () => jsonResponse(makeBill(aud), 201),
+      "POST bills/bill-1/finalize": () => jsonResponse(makeBill({ ...aud, status: "finalized", finalizedAt: "2026-08-25T10:05:00.000Z" })),
+    });
+    render(<BillSettleView orderId={ORDER_ID} />);
+    await screen.findByTestId("bill-summary");
+
+    expect(screen.getByTestId("tender-cash-rounded").textContent).toBe("Cash to collect A$12.35 · round off +A$0.02");
+    await userEvent.click(screen.getByTestId("tender-fill-remaining"));
+    expect(screen.queryByTestId("tender-change-due")).toBeNull();
+    await userEvent.click(screen.getByTestId("finalize-bill"));
+    await waitFor(() => expect(fetchMock.mock.calls.some(([input]) => String(input).endsWith("/bills/bill-1/finalize"))).toBe(true));
+    const finalizeCall = fetchMock.mock.calls.find(([input]) => String(input).endsWith("/bills/bill-1/finalize"));
+    expect(JSON.parse(String(finalizeCall![1]?.body)).tenders).toEqual([{ method: "cash", amountMinor: 1235, tenderedMinor: 1235 }]);
   });
 
   it("disables Finalize until pending tenders exactly cover the total, then submits discount + tenders together", async () => {

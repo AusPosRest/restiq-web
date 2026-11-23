@@ -852,7 +852,7 @@ device" stays in the header for both. Default tab: Devices. Test:
 
 - **Intent:** an owner browses every finalized bill for an outlet over a date
   range, sees a totals strip (count/subtotal/discount/tax/total/tendered/
-  refunded), and can export the same filtered range as a CSV.
+  round-off (#377: the bills' stored cash round-offs)/refunded), and can export the same filtered range as a CSV.
 - **Built:** `/admin/reports/payments` (`src/app/admin/(shell)/reports/
   payments/page.tsx` wraps `payments.tsx`), linked from a "Payments" card at
   the top of `/admin/reports` (`reports-payments-link`, above the report card

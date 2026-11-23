@@ -15,4 +15,19 @@ describe("invoiceCashRoundOff (CU-11)", () => {
     expect(invoiceCashRoundOff({ status: "open", currency: "INR", totalMinor: 89040, tenders: [] }).roundOffMinor).toBe(0);
     expect(invoiceCashRoundOff({ status: "finalized", currency: "AUD", totalMinor: 1995, tenders: [cash(1995)] }).roundOffMinor).toBe(0);
   });
+
+  it("never guesses a round-off for an older AUD bill (they were never rounded)", () => {
+    expect(invoiceCashRoundOff({ status: "finalized", currency: "AUD", totalMinor: 1233, tenders: [cash(1233)] })).toEqual({ roundOffMinor: 0, tenders: [cash(1233)] });
+  });
+
+  it("uses the stored round-off and tenders as-is when the server recorded one (restiq-web#377)", () => {
+    const tenders = [{ ...cash(50000), method: "upi_manual" }, cash(39100)];
+    expect(invoiceCashRoundOff({ status: "finalized", currency: "INR", totalMinor: 89060, roundOffMinor: 40, tenders })).toEqual({ roundOffMinor: 40, tenders });
+    const aud = [cash(1235)];
+    expect(invoiceCashRoundOff({ status: "finalized", currency: "AUD", totalMinor: 1233, roundOffMinor: 2, tenders: aud })).toEqual({ roundOffMinor: 2, tenders: aud });
+  });
+
+  it("still guesses for a rupee bill whose round-off came back null (settled before restiq-web#377)", () => {
+    expect(invoiceCashRoundOff({ status: "finalized", currency: "INR", totalMinor: 89040, roundOffMinor: null, tenders: [cash(89040)] }).roundOffMinor).toBe(-40);
+  });
 });

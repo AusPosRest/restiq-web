@@ -49,6 +49,8 @@ export interface PaymentRow {
   /** May be absent per the contract - a bill priced before per-line tax tracking existed. */
   taxBreakdown?: PaymentTaxBreakdownEntry[];
   totalMinor: number;
+  /** restiq-backend#241: the cash round-off stored at finalize; null when none. */
+  roundOffMinor?: number | null;
   tenders: PaymentTender[];
   creditNotes: PaymentCreditNote[];
 }
@@ -60,6 +62,8 @@ export interface PaymentsTotals {
   taxMinor: number;
   totalMinor: number;
   tenderedMinor: number;
+  /** restiq-backend#241 / restiq-web#377: the bills' cash round-offs - tenderedMinor = totalMinor + roundOffMinor. Optional for older APIs. */
+  roundOffMinor?: number;
   refundedMinor: number;
   /** totalMinor - refundedMinor: the same "sales" the dashboard shows (PE-33). */
   netMinor: number;

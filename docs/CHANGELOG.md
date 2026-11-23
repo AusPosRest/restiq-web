@@ -5,6 +5,13 @@ logged, per feature and date, in `wiki/tasks/completed.md`; this file starts
 with the payments epic.
 
 
+## Unreleased - cash round-off sent to the server, tendered and change printed (#377)
+
+- Fixed: a cash bill settled with rounded cash (₹890 on a ₹890.40 bill) was posted as ₹890.40, so shift close expected 40 paise that were never in the drawer. The till now posts the cash that went into the drawer and the server stores the round-off on the bill.
+- Fixed: Australian cash is rounded to the nearest 5 cents on the till (A$12.33 is collected as A$12.35). Card and other non-cash tenders stay exact. On a split bill only the cash part is rounded.
+- Fixed: the invoice page and the printed receipt show the stored round-off (split bills included) and, when change was given, "Cash tendered" and "Change" under the cash payment.
+- Added: owner console, Reports > Payments: a **Round-off** total next to Total and Tendered.
+
 ## Unreleased - shift keypads read whole rupees / dollars (#370)
 
 - Fixed: the opening float, cash movement and drawer count keypads read typed digits as paise / cents, so 1000 opened a ₹10 float. They now read whole currency units like the tender keypad, with a **.** key for paise / cents (523.45). Clear sits under the amount on these three keypads.
