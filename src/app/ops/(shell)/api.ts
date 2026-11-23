@@ -1,4 +1,6 @@
 // Typed client-side access to the console API via the /ops/api pass-through.
+import { leaveIfSessionEnded, SESSION_ENDED_MESSAGE } from "@/lib/session-ended";
+
 export class OpsApiError extends Error {
   constructor(
     message: string,
@@ -20,6 +22,7 @@ export async function opsApi<T>(path: string, init?: RequestInit): Promise<T> {
     throw new OpsApiError("The console API could not be reached", 0);
   }
   const body: unknown = await res.json().catch(() => null);
+  if (leaveIfSessionEnded(res, body, "/ops/login")) throw new OpsApiError(SESSION_ENDED_MESSAGE, 401, "unauthorized");
   if (!res.ok) {
     const error = (body as { error?: { code?: string; message?: string } } | null)?.error;
     throw new OpsApiError(error?.message ?? "The request failed", res.status, error?.code);
@@ -290,6 +293,7 @@ export async function publishAgreement(title: string, file: File, reason: string
     throw new OpsApiError("The API could not be reached", 0);
   }
   const payload: unknown = await res.json().catch(() => null);
+  if (leaveIfSessionEnded(res, payload, "/ops/login")) throw new OpsApiError(SESSION_ENDED_MESSAGE, 401, "unauthorized");
   if (!res.ok) {
     const error = (payload as { error?: { code?: string; message?: string } } | null)?.error;
     throw new OpsApiError(error?.message ?? "The agreement could not be published.", res.status, error?.code);

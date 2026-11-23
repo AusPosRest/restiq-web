@@ -7,6 +7,8 @@
 // wiring"). No request bodies on bump/recall/refire and no actor
 // attribution anywhere in this API - an approved decision (SPEC open
 // question resolved "no" - shared station screen, FR-34), not an omission.
+import { leaveIfSessionEnded, SESSION_ENDED_MESSAGE } from "@/lib/session-ended";
+
 export class KdsApiError extends Error {
   constructor(
     message: string,
@@ -28,6 +30,7 @@ export async function kdsApi<T>(path: string, init?: RequestInit): Promise<T> {
     throw new KdsApiError("The API could not be reached", 0);
   }
   const body: unknown = res.status === 204 ? null : await res.json().catch(() => null);
+  if (leaveIfSessionEnded(res, body, "/pos/login")) throw new KdsApiError(SESSION_ENDED_MESSAGE, 401, "unauthorized");
   if (!res.ok) {
     const error = (body as { error?: { code?: string; message?: string } } | null)?.error;
     throw new KdsApiError(error?.message ?? "The request failed", res.status, error?.code);

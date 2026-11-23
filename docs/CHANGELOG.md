@@ -5,6 +5,10 @@ logged, per feature and date, in `wiki/tasks/completed.md`; this file starts
 with the payments epic.
 
 
+## Unreleased - an ended session returns to sign-in (#371)
+
+- Fixed: when a session ends (expired, revoked, signed out elsewhere) the till and kitchen display go to the PIN pad, the owner console to owner sign-in and the Platform Console to operator sign-in, with the "session expired" notice and a return to the same screen. Before, the 401 was swallowed: the kitchen display said "Reconnecting" forever and the consoles showed "couldn't be loaded". A wrong PIN or password, which also answers 401, signs nobody out. This also covers a cookie that has simply expired: that request is redirected to the sign-in page, which the consoles used to read as an empty answer.
+
 ## Unreleased - till menu stays current; a sold-out tap no longer jams the cart (#374)
 
 - Fixed: the counter and order screens re-read the menu every 30 seconds and when the tab comes back into view, so a dish marked sold out (or back on) changes on the till without a reload. The order in progress, tenders and any open sheet stay as they are.
