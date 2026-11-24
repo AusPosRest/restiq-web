@@ -98,6 +98,17 @@ describe("TerminalScreen", () => {
     expect(screen.getByTestId("terminal-method-tap")).toBeTruthy();
   });
 
+  it("draws only Cards and Wallets for an AUD payment - UPI and EMI are India-only", async () => {
+    stubTerminal([intent("pi-au", { currency: "AUD" })]);
+    render(<TerminalScreen outletId="outlet-1" outletName="One - BLR" />);
+
+    await screen.findByTestId("terminal-request-pi-au");
+    expect(screen.getByTestId("terminal-rail-cards")).toBeTruthy();
+    expect(screen.getByTestId("terminal-rail-wallets")).toBeTruthy();
+    expect(screen.queryByTestId("terminal-rail-upi")).toBeNull();
+    expect(screen.queryByTestId("terminal-rail-emi")).toBeNull();
+  });
+
   it("tells the cashier to refund a card that went through after the bill was already paid (restiq-backend#208)", async () => {
     stubTerminal([intent("pi-late", { amountMinor: 100 })], { status: "succeeded", tenderId: null, failureReason: "late_capture_refund_due" });
     render(<TerminalScreen outletId="outlet-1" outletName="One - BLR" />);

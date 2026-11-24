@@ -5,6 +5,13 @@ logged, per feature and date, in `wiki/tasks/completed.md`; this file starts
 with the payments epic.
 
 
+## Unreleased - POS minors: counter take-over, no UPI in Australia (#391)
+
+- Fixed: taking over a counter order from "Open & held orders" opens the Counter screen with its token (it opened the table order screen titled with an internal id). Table orders are unchanged.
+- Fixed: UPI is offered only to Indian restaurants (`hasUpi()` in `lib/money.ts`): an Australian till has no UPI tender when settling (table and counter), no UPI refund choice, and its card terminal screen draws only Cards and Wallets.
+- Backend (restiq-backend#324): a counter line is charged the price its tile shows (one price for every channel), and the "no card terminal" message no longer mentions UPI outside India.
+- Already in place, no change: the owner console sets one price per dish (#272); cash is rounded to 5c in Australia, cash part only (#377).
+
 ## Unreleased - Console polish (#390)
 
 - Fixed (operator console): catalog prices use the market's format (A$12.50, ₹199.50; they showed "$" and rounded rupees). A tenant's Subscription tab shows "Standard · Monthly · A$99.00 per month" (or "No price set") instead of the raw plan name, and hides the ACTIVE badge while the restaurant is not live yet; its card billing amount and invoice amounts use the same money format, no longer the browser's. "Taking real payments since..." uses the consoles' fixed date format. "Recent onboardings" shows the TEST badge.

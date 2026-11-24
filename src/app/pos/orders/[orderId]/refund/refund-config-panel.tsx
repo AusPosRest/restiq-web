@@ -25,7 +25,7 @@ import { ManagerPinDialog, type ManagerApprovalResult, type ManagerPinDialogReas
 import type { OrderLineView } from "../order-taking-state";
 import type { BillView } from "../settle/bill-state";
 import {
-  REFUND_CHOICES,
+  refundChoices,
   computeRefundTotals,
   defaultRefundChoice,
   refundMethodFor,
@@ -150,7 +150,7 @@ export function RefundConfigPanel({ billId, lines, bill, currency, onRefunded }:
       <fieldset data-testid="refund-method">
         <legend className="font-label mb-1.5 block text-xs font-semibold uppercase tracking-wider text-muted-foreground">Refund to</legend>
         <div className="flex flex-wrap gap-4 text-sm">
-          {REFUND_CHOICES.map((option) => (
+          {refundChoices(currency).map((option) => (
             <label key={option.value} className="flex items-center gap-1.5">
               <input
                 type="radio"

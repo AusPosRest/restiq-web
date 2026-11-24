@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { cashRoundOffMinor, formatMoney, formatPrice, localeForCurrency } from "./money";
+import { cashRoundOffMinor, formatMoney, formatPrice, hasUpi, localeForCurrency } from "./money";
 
 describe("money (PE-10, PE-23)", () => {
   it("shows rupees with Indian grouping and paise", () => {
@@ -45,5 +45,11 @@ describe("money (PE-10, PE-23)", () => {
         expect(due + cashRoundOffMinor(due, currency)).toBe(Math.floor((due * 2 + unit) / (2 * unit)) * unit);
       }
     }
+  });
+
+  it("offers UPI only in India", () => {
+    expect(hasUpi("INR")).toBe(true);
+    expect(hasUpi("AUD")).toBe(false);
+    expect(hasUpi("USD")).toBe(false);
   });
 });

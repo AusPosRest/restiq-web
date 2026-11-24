@@ -40,6 +40,7 @@
 // "mirrors, never replaces, the server gate" posture as
 // `order-taking-state.ts`'s `canSendToKitchen`.
 import { computeUnitTotalMinor, type OrderLineView } from "../order-taking-state";
+import { hasUpi } from "@/lib/money";
 import { TENDER_METHOD_LABEL, type BillTenderMethod, type BillTenderView, type BillView } from "../settle/bill-state";
 
 /** How the money goes back to the guest - the four choices the refund screen offers (restiq-web#353). */
@@ -51,6 +52,11 @@ export const REFUND_CHOICES: { value: RefundChoice; label: string }[] = [
   { value: "upi", label: "UPI" },
   { value: "external", label: "External" },
 ];
+
+/** UPI is offered as a refund choice only where UPI exists. */
+export function refundChoices(currency: string): typeof REFUND_CHOICES {
+  return hasUpi(currency) ? REFUND_CHOICES : REFUND_CHOICES.filter((c) => c.value !== "upi");
+}
 
 function choiceFor(method: BillTenderMethod): RefundChoice {
   if (method.startsWith("card_")) return "card";
