@@ -1,8 +1,9 @@
 "use client";
 
 // Polls the shop hub's status every 10 s (HUB-BUILD-PLAN W2). null means "not
-// on a hub": the cloud answers 404, polling stops, and the till keeps its
-// browser-only connectivity pill. Any other failure keeps the last answer.
+// on a hub": the cloud answers 204 through the web's API route (restiq-web#466;
+// a 404 from an older route is read the same way), polling stops, and the till
+// keeps its browser-only connectivity pill. Any other failure keeps the last answer.
 // `enabled` is false on the PIN pad (no session yet): no polling, null.
 import { useEffect, useState } from "react";
 import { getHubStatus, PosApiError, type HubStatus } from "../../api";
@@ -19,6 +20,7 @@ export function useHubStatus(enabled = true): HubStatus | null {
     async function poll(): Promise<void> {
       try {
         const next = await getHubStatus();
+        if (next === null) return;
         if (!stopped) setStatus(next);
       } catch (error) {
         if (error instanceof PosApiError && error.status === 404) return;

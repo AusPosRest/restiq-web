@@ -25,6 +25,16 @@ describe("useHubStatus (W2)", () => {
     expect(fetchMock.mock.calls[0]).toEqual(["/pos/api/hub/status", expect.anything()]);
   });
 
+  // restiq-web#466: the web's own API route now answers 204 for "no hub here".
+  it("stays null and stops polling when the answer is 204 (no hub on the cloud)", async () => {
+    const fetchMock = vi.fn(() => Promise.resolve(new Response(null, { status: 204 })));
+    vi.stubGlobal("fetch", fetchMock);
+    const { result } = renderHook(() => useHubStatus());
+    await act(() => vi.advanceTimersByTimeAsync(HUB_POLL_MS * 3));
+    expect(result.current).toBeNull();
+    expect(fetchMock).toHaveBeenCalledTimes(1);
+  });
+
   it("does not poll while disabled (the PIN pad)", async () => {
     const fetchMock = vi.fn();
     vi.stubGlobal("fetch", fetchMock);

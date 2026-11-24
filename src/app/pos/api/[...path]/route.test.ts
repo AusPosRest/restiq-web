@@ -43,6 +43,24 @@ describe("pos API pass-through", () => {
     expect((upstreamInit.headers as Record<string, string>).authorization).toBe("Bearer a-jwt");
   });
 
+  // restiq-web#466: the hub status endpoint exists only on the offline shop hub. On the cloud
+  // "no hub here" is a normal answer, not a 404 for the browser to log on every page load.
+  it("answers 204 when the cloud has no hub status, and passes every other 404 through", async () => {
+    const fetchMock = vi.fn(() => Promise.resolve(new Response(JSON.stringify({ error: { code: "error", message: "Cannot GET this" } }), { status: 404 })));
+    vi.stubGlobal("fetch", fetchMock);
+    const get = (path: string[]) => GET(requestWithCookie(`https://web.example.test/pos/api/${path.join("/")}`), { params: Promise.resolve({ path }) });
+
+    const hub = await get(["hub", "status"]);
+    expect(hub.status).toBe(204);
+    expect(await hub.text()).toBe("");
+    expect(fetchMock).toHaveBeenCalledWith(`${API_URL}/pos/v1/hub/status`, expect.anything());
+
+    expect((await get(["hub", "rejections"])).status).toBe(404);
+    expect((await get(["orders", "o1"])).status).toBe(404);
+    const posted = await POST(requestWithCookie("https://web.example.test/pos/api/hub/status", { method: "POST", body: "{}" }), { params: Promise.resolve({ path: ["hub", "status"] }) });
+    expect(posted.status).toBe(404);
+  });
+
   it("forwards a POST body as JSON", async () => {
     const fetchMock = vi.fn().mockResolvedValue(new Response(JSON.stringify({ ok: true }), { status: 200 }));
     vi.stubGlobal("fetch", fetchMock);
