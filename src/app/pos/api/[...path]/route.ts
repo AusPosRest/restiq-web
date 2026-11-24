@@ -42,7 +42,10 @@ async function forward(request: NextRequest, params: Promise<{ path: string[] }>
     return NextResponse.json({ error: { code: "upstream_unreachable", message: "The API could not be reached" } }, { status: 502 });
   }
 
-  if (upstream.status === 204) return new NextResponse(null, { status: 204 });
+  // restiq-web#466: hub/status exists only on the offline shop hub. On the cloud the backend has no
+  // such route (404); "no hub here" is a normal answer, so the browser gets 204, not an error to log.
+  const noHubHere = request.method === "GET" && path.join("/") === "hub/status" && upstream.status === 404;
+  if (upstream.status === 204 || noHubHere) return new NextResponse(null, { status: 204 });
 
   const body: unknown = await upstream.json().catch(() => null);
   return NextResponse.json(body ?? { error: { code: "error", message: "Unexpected API response" } }, { status: upstream.status });

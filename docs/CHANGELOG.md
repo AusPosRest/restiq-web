@@ -5,6 +5,10 @@ logged, per feature and date, in `wiki/tasks/completed.md`; this file starts
 with the payments epic.
 
 
+## Unreleased - No hub-status 404 in the till's console (#466)
+
+- Fixed: every signed-in `/pos` page asked `GET /pos/api/hub/status` and, on the cloud, got a 404 that the browser logged as an error. The till's API route now answers 204 for "no hub here"; `getHubStatus()` returns `null` and `useHubStatus` stops polling on it. On an offline hub nothing changes. Together with restiq-backend#259 (no open shift answers 204) a till screen now loads with no failed request.
+
 ## Unreleased - POS minors: counter take-over, no UPI in Australia (#391)
 
 - Fixed: taking over a counter order from "Open & held orders" opens the Counter screen with its token (it opened the table order screen titled with an internal id). Table orders are unchanged.

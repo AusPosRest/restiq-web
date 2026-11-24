@@ -665,8 +665,9 @@ export interface HubRejection {
   source: "cloud" | "orphan";
 }
 
-export function getHubStatus(): Promise<HubStatus> {
-  return posApi<HubStatus>("hub/status");
+/** null = not on a hub: the web's API route answers 204 for the cloud's missing hub/status (restiq-web#466). */
+export function getHubStatus(): Promise<HubStatus | null> {
+  return posApi<HubStatus | null>("hub/status");
 }
 
 /** Gated on `settle_bills` by the hub (D-7): a 403 means this staff member may not see Sync issues. */

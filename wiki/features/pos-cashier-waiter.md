@@ -1665,8 +1665,10 @@ HUB-BUILD-PLAN W1-W3, built against the H6 contract (backend not built yet).
   10 s. `HubStatusStrip` (pill + Sync issues link) sits in the shift bar
   (`pos-status-online`) and the table-map/counter `PosHeader`
   (`pos-header-status`); the lock banner renders at the top of every page,
-  order taking, settle and bills included. A 404 means "not on a hub": it stops polling and the pill keeps the
-  browser online/offline signal. On a hub the pill (`pos-status-online`,
+  order taking, settle and bills included. "Not on a hub" stops polling and the pill keeps the
+  browser online/offline signal: since #466 the till's API route (`pos/api/[...path]/route.ts`)
+  answers 204 for the cloud's missing `hub/status` (it was a 404 the browser logged on every page
+  load), `getHubStatus()` returns `null`, and a 404 is still read the same way. On a hub the pill (`pos-status-online`,
   `data-hub="true"`) reads "Online" or "Offline · N sales waiting to sync"
   (`outboxDepth`), and `HubLockBanner` (`pos-hub-lock-banner`,
   `data-reason`) shows under the bar while `locked`: offline-limit says new
