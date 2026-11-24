@@ -25,6 +25,18 @@ describe("ReceiptPreview", () => {
     expect(receipt.taxLines).toEqual([{ label: "Includes GST 10%", amountMinor: Math.round(receipt.totalMinor / 11) }]);
   });
 
+  it("prints the tax number under the name: GSTIN or ABN, hidden when none is saved", () => {
+    const tokens = normalizeBranding(null);
+    const { rerender } = render(<ReceiptPreview tokens={tokens} taxRegistration={{ registrationType: "gstin", registrationNumber: "29ABCDE1234F1Z5" }} />);
+    expect(screen.getByTestId("receipt-preview-tax-id").textContent).toBe("GSTIN: 29ABCDE1234F1Z5");
+    rerender(<ReceiptPreview tokens={tokens} taxRegistration={{ registrationType: "abn", registrationNumber: "51 824 753 556" }} />);
+    expect(screen.getByTestId("receipt-preview-tax-id").textContent).toBe("ABN: 51 824 753 556");
+    rerender(<ReceiptPreview tokens={tokens} taxRegistration={{ registrationType: "abn", registrationNumber: null }} />);
+    expect(screen.queryByTestId("receipt-preview-tax-id")).toBeNull();
+    rerender(<ReceiptPreview tokens={tokens} />);
+    expect(screen.queryByTestId("receipt-preview-tax-id")).toBeNull();
+  });
+
   it("shows the restaurant's own name and currency", () => {
     render(<ReceiptPreview tokens={normalizeBranding(null)} tenant={{ name: "Bondi Beans", country: "AU" }} />);
     expect(screen.getByTestId("receipt-preview-tenant-name").textContent).toBe("Bondi Beans");

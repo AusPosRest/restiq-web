@@ -24,6 +24,27 @@ function formatDateTime(iso: string): string {
   return new Date(iso).toLocaleString(DATE_LOCALE, { day: "2-digit", month: "short", year: "numeric", hour: "2-digit", minute: "2-digit" });
 }
 
+// key={id} at the call site resets `loaded` when a different version is shown.
+function AgreementFrame({ id, title }: Readonly<{ id: string; title: string }>) {
+  const [loaded, setLoaded] = useState(false);
+  return (
+    <div className="relative mt-4">
+      <iframe
+        data-testid="agreement-viewer"
+        title={`${title} (PDF)`}
+        src={agreementFileUrl(id)}
+        onLoad={() => setLoaded(true)}
+        className="h-[32rem] w-full rounded-lg border border-border/40 bg-background"
+      />
+      {!loaded && (
+        <p role="status" data-testid="agreement-viewer-loading" className="pointer-events-none absolute inset-0 flex items-center justify-center text-sm text-muted-foreground">
+          Loading the agreement…
+        </p>
+      )}
+    </div>
+  );
+}
+
 export function AgreementSigner() {
   const { loading, failed, data, retry } = useAdminLoad<OwnerAgreementView>("agreement");
 
@@ -101,12 +122,7 @@ function AgreementView({
         </p>
         {current.hasFile ? (
           <>
-            <iframe
-              data-testid="agreement-viewer"
-              title={`${current.title} (PDF)`}
-              src={agreementFileUrl(current.id)}
-              className="mt-4 h-[32rem] w-full rounded-lg border border-border/40 bg-background"
-            />
+            <AgreementFrame key={current.id} id={current.id} title={current.title} />
             <p className="mt-2 text-xs text-muted-foreground">
               Can&apos;t see the document?{" "}
               <a data-testid="agreement-open" href={agreementFileUrl(current.id)} target="_blank" rel="noreferrer" className="underline underline-offset-2">

@@ -5,6 +5,13 @@ logged, per feature and date, in `wiki/tasks/completed.md`; this file starts
 with the payments epic.
 
 
+## Unreleased - Console polish (#390)
+
+- Fixed (operator console): catalog prices use the market's format (A$12.50, ₹199.50; they showed "$" and rounded rupees). A tenant's Subscription tab shows "Standard · Monthly · A$99.00 per month" (or "No price set") instead of the raw plan name, and hides the ACTIVE badge while the restaurant is not live yet; its card billing amount and invoice amounts use the same money format, no longer the browser's. "Taking real payments since..." uses the consoles' fixed date format. "Recent onboardings" shows the TEST badge.
+- Fixed (owner console): the receipt preview shows the saved tax number ("GSTIN: ..." / "ABN: ..."); the agreement shows "Loading the agreement..." until the PDF has loaded.
+- Fixed (kitchen display): the empty Done screen says "No bumped tickets in the last 12 hours".
+- Removed: the unused `jszip` dependency.
+
 ## Unreleased - Removed device notice, kiosk heartbeat (#389)
 
 - Fixed: a till, kitchen display, card terminal or printer screen on a device the owner removed no longer shows "Reconnecting" or "Couldn't load... Retry" forever. The API's 401 `device_revoked` now sends it to the PIN screen with "This device was removed by the owner" and a "Set up this device" link to `/device`.

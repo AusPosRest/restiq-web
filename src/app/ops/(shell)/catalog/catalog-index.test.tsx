@@ -20,7 +20,7 @@ const PANEER: CatalogProduct = {
   tags: ["veg", "grill"],
   updatedAt: "2026-09-16T00:00:00.000Z",
 };
-const PIE: CatalogProduct = { ...PANEER, id: "0192aaaa-0000-7000-8000-000000000002", name: "Meat Pie", shortName: "Pie", vegMarker: null, category: "Mains", suggestedPriceMinor: 1200, currency: "AUD", tags: ["bakery"] };
+const PIE: CatalogProduct = { ...PANEER, id: "0192aaaa-0000-7000-8000-000000000002", name: "Meat Pie", shortName: "Pie", vegMarker: null, category: "Mains", suggestedPriceMinor: 1250, currency: "AUD", tags: ["bakery"] };
 
 function jsonResponse(body: unknown, status = 200): Response {
   return new Response(JSON.stringify(body), { status, headers: { "content-type": "application/json" } });
@@ -77,6 +77,14 @@ describe("CatalogIndex", () => {
     await waitFor(() => expect(screen.queryByTestId(`catalog-row-${PANEER.id}`)).toBeNull());
     expect(screen.getByTestId(`catalog-row-${PIE.id}`)).toBeTruthy();
     expect(screen.getByTestId("catalog-tag-bakery").getAttribute("aria-pressed")).toBe("true");
+  });
+
+  it("shows prices in the market's own format", async () => {
+    stubFetch();
+    renderIndex();
+    const paneer = await screen.findByTestId(`catalog-row-${PANEER.id}`);
+    expect(paneer.textContent).toContain("₹249");
+    expect(screen.getByTestId(`catalog-row-${PIE.id}`).textContent).toContain("A$12.50");
   });
 
   it("adds a product through the dialog and posts the normalised payload", async () => {

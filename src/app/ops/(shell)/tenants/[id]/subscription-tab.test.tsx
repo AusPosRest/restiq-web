@@ -39,7 +39,7 @@ function jsonResponse(body: unknown, status = 200): Response {
   return new Response(JSON.stringify(body), { status, headers: { "content-type": "application/json" } });
 }
 
-function renderTab(sub: SubscriptionView, extraRoutes?: (url: string, init?: RequestInit) => Response | undefined) {
+function renderTab(sub: SubscriptionView, extraRoutes?: (url: string, init?: RequestInit) => Response | undefined, tenantStatus?: string) {
   const fetchMock = vi.fn((url: string, init?: RequestInit) => {
     const extra = extraRoutes?.(url, init);
     if (extra) return Promise.resolve(extra);
@@ -51,7 +51,7 @@ function renderTab(sub: SubscriptionView, extraRoutes?: (url: string, init?: Req
   vi.stubGlobal("fetch", fetchMock);
   render(
     <ToastProvider>
-      <SubscriptionTab tenantId={TENANT_ID} />
+      <SubscriptionTab tenantId={TENANT_ID} tenantStatus={tenantStatus} />
     </ToastProvider>,
   );
   return fetchMock;
@@ -75,11 +75,33 @@ describe("SubscriptionTab", () => {
     renderTab(subscription());
     await screen.findByTestId("subscription-tab");
     expect(screen.getByTestId("subscription-status").textContent).toBe("active");
-    expect(screen.getByText("standard · monthly")).toBeTruthy();
+    expect(screen.getByTestId("subscription-plan").textContent).toBe("Standard · Monthly · A$49.00 per month");
     expect(screen.getByTestId("subscription-grace-window").textContent).toBe("72h");
     expect(screen.getByTestId("subscription-suspend")).toBeTruthy();
     expect(screen.queryByTestId("subscription-reactivate")).toBeNull();
     expect((await screen.findByTestId("contract-plan-source")).textContent).toContain("A$49.00 per month");
+  });
+
+  it("labels an annual enterprise plan with its price, or says no price is set", async () => {
+    renderTab(subscription({ plan: "enterprise", billingPeriod: "annual", cardBilling: { status: "not_set_up", amountMinor: "11880000", currency: "INR" } }));
+    await screen.findByTestId("subscription-tab");
+    expect(screen.getByTestId("subscription-plan").textContent).toBe("Enterprise · Annual · ₹1,18,800.00 per year");
+    cleanup();
+    renderTab(subscription({ cardBilling: { status: "not_set_up", amountMinor: null, currency: "AUD" } }));
+    await screen.findByTestId("subscription-tab");
+    expect(screen.getByTestId("subscription-plan").textContent).toBe("Standard · Monthly · No price set");
+    expect(screen.getByTestId("card-billing-amount").textContent).toBe("No price set");
+  });
+
+  it("hides the ACTIVE badge while the restaurant is provisioning, but not other statuses", async () => {
+    renderTab(subscription(), undefined, "provisioning");
+    await screen.findByTestId("subscription-tab");
+    expect(screen.queryByTestId("subscription-status")).toBeNull();
+    expect(screen.getByTestId("subscription-not-live")).toBeTruthy();
+    cleanup();
+    renderTab(subscription({ status: "suspended" }), undefined, "provisioning");
+    await screen.findByTestId("subscription-tab");
+    expect(screen.getByTestId("subscription-status").textContent).toBe("suspended");
   });
 
   it("maps suspended to the critical badge and shows the read-only banner", async () => {
@@ -101,7 +123,7 @@ describe("SubscriptionTab", () => {
     );
     await screen.findByTestId("subscription-tab");
     expect(screen.getByTestId("card-billing-status").textContent).toBe("not set up");
-    expect(screen.getByTestId("card-billing-amount").textContent).toContain("49.00");
+    expect(screen.getByTestId("card-billing-amount").textContent).toBe("A$49.00 per month");
     await userEvent.click(screen.getByTestId("card-billing-copy"));
     expect((await screen.findByTestId("card-billing-link-result-url") as HTMLInputElement).value).toBe("https://checkout.stripe.test/x");
   });

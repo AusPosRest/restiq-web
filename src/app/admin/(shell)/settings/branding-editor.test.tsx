@@ -27,6 +27,7 @@ function stubFetch({ get = ALL_NULL_BRANDING, saveOk = true }: { get?: unknown; 
     const url = String(input);
     const method = init?.method ?? "GET";
     if (url.includes("/admin/api/branding") && method === "GET") return Promise.resolve(jsonResponse(get));
+    if (url.includes("/admin/api/tax-registration") && method === "GET") return Promise.resolve(jsonResponse({ registrationType: "gstin", registrationNumber: "29ABCDE1234F1Z5" }));
     if (url.includes("/admin/api/branding") && method === "PUT") {
       if (!saveOk) return Promise.resolve(jsonResponse({ error: { code: "error", message: "nope" } }, 500));
       const body = JSON.parse(String(init?.body));
@@ -91,6 +92,12 @@ describe("BrandingEditor", () => {
     fireEventChange(radius, "20");
     expect(screen.getByTestId("branding-corner-radius-value").textContent).toBe("20px");
     expect(screen.getByTestId("receipt-preview").style.borderRadius).toBe("20px");
+  });
+
+  it("prints the saved tax registration number on the preview", async () => {
+    stubFetch();
+    renderEditor();
+    expect((await screen.findByTestId("receipt-preview-tax-id")).textContent).toBe("GSTIN: 29ABCDE1234F1Z5");
   });
 
   it("keeps Save disabled until something actually changes, then saves the flat token shape and toasts success", async () => {

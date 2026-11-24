@@ -85,7 +85,7 @@ export function BumpedViewScreen() {
           <p data-testid="kds-bumped-empty" className="font-headline text-2xl font-bold text-foreground uppercase">
             Bumped
           </p>
-          <p className="text-sm text-muted-foreground">No bumped tickets</p>
+          <p className="text-sm text-muted-foreground">No bumped tickets in the last 12 hours</p>
         </div>
       )}
 

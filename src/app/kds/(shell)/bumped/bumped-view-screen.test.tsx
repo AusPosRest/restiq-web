@@ -182,6 +182,6 @@ describe("BumpedViewScreen", () => {
     renderScreen();
 
     await vi.waitFor(() => expect(screen.getByTestId("kds-bumped-empty")).toBeTruthy());
-    expect(screen.getByText("No bumped tickets")).toBeTruthy();
+    expect(screen.getByText("No bumped tickets in the last 12 hours")).toBeTruthy();
   });
 });
