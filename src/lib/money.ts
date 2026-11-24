@@ -28,6 +28,11 @@ export function formatPrice(amountMinor: number, currency: string): string {
   return format(amountMinor, currency, amountMinor % 100 === 0 ? 0 : 2);
 }
 
+/** UPI exists only in India: an AUD (or any other non-INR) till must not offer it. */
+export function hasUpi(currency: string): boolean {
+  return currency === "INR";
+}
+
 const CASH_ROUNDING_UNIT_MINOR: Record<string, number> = { INR: 100, AUD: 5 };
 
 /**

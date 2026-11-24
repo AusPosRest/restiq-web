@@ -11,6 +11,7 @@ import {
   canRefundBill,
   computeRefundTotals,
   defaultRefundChoice,
+  refundChoices,
   refundMethodFor,
   refundMethodLabel,
   hasRefundSelection,
@@ -155,5 +156,12 @@ describe("refund method (restiq-web#353)", () => {
   it("labels an older note with no method as not recorded", () => {
     expect(refundMethodLabel("cash")).toBe("Cash");
     expect(refundMethodLabel(null)).toBe("Not recorded");
+  });
+});
+
+describe("refundChoices", () => {
+  it("offers UPI in India only", () => {
+    expect(refundChoices("INR").map((c) => c.value)).toEqual(["cash", "card", "upi", "external"]);
+    expect(refundChoices("AUD").map((c) => c.value)).toEqual(["cash", "card", "external"]);
   });
 });

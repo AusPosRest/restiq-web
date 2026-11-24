@@ -51,7 +51,7 @@ function OpenOrdersLoaded({
   onReload,
 }: Readonly<{ orders: OpenOrderEntry[]; currentStaffId: string; onReload: () => void }>) {
   const router = useRouter();
-  const [pendingTransfer, setPendingTransfer] = useState<{ orderId: string; label: string; ownerName: string } | null>(null);
+  const [pendingTransfer, setPendingTransfer] = useState<{ orderId: string; label: string; ownerName: string; counter: boolean } | null>(null);
   const [busy, setBusy] = useState(false);
   const [actionError, setActionError] = useState<string | null>(null);
 
@@ -72,11 +72,13 @@ function OpenOrdersLoaded({
 
   function handleTransferConfirm(reason: string) {
     if (!pendingTransfer) return;
+    const { orderId, counter } = pendingTransfer;
     setBusy(true);
     transferOrder(pendingTransfer.orderId, currentStaffId, reason || undefined)
       .then(() => {
         setPendingTransfer(null);
-        router.push(`/pos/orders/${pendingTransfer.orderId}`);
+        if (counter) saveCounterOrderId(currentStaffId, orderId);
+        router.push(counter ? "/pos/counter" : `/pos/orders/${orderId}`);
       })
       .catch((error: unknown) => setActionError(error instanceof PosApiError ? error.message : "Couldn't transfer this order."))
       .finally(() => setBusy(false));
@@ -138,7 +140,7 @@ function OpenOrdersLoaded({
                     onResumeCounter={() => handleResumeCounter(order)}
                     onTakeOver={() => {
                       setActionError(null);
-                      setPendingTransfer({ orderId: order.id, label: originLabel(order), ownerName: staffLabel(order.ownerStaffId, order.ownerName, currentStaffId) });
+                      setPendingTransfer({ orderId: order.id, label: originLabel(order), ownerName: staffLabel(order.ownerStaffId, order.ownerName, currentStaffId), counter: order.origin === "counter" });
                     }}
                   />
                 ))}

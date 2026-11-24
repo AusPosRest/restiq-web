@@ -37,7 +37,7 @@ import { X } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { AmountKeypad } from "../../../(shell)/shift/amount-keypad";
 import { appendDigit, digitsToMinor, formatMinor } from "../../../(shell)/shift/shift-state";
-import { cashRoundOffMinor } from "@/lib/money";
+import { cashRoundOffMinor, hasUpi } from "@/lib/money";
 import type { CardReaderView } from "../../../api";
 import { canSendToReader, isReaderAvailable } from "./card-reader-state";
 import { TENDER_METHOD_LABEL, type BillTenderView, type PendingTender, type PostableTenderMethod } from "./bill-state";
@@ -105,7 +105,8 @@ export function TenderKeypad({
   const referenceReady = !isExternal || reference.trim() !== "";
   const blocked = cashLocked && method === "cash";
   const canAdd = !blocked && amountMinor > 0 && referenceReady && (!isTerminal || (amountMinor <= remainingMinor && terminalReady));
-  const methods: KeypadMethod[] = onSendToTerminal ? [...METHODS, "card_terminal"] : METHODS;
+  const offered = hasUpi(currency) ? METHODS : METHODS.filter((m) => m !== "upi_manual");
+  const methods: KeypadMethod[] = onSendToTerminal ? [...offered, "card_terminal"] : offered;
   // CU-11 / restiq-web#377: cash is collected to the nearest rupee / 5 cents; finalize stores the round-off on the bill.
   const isCash = method === "cash";
   const roundOffMinor = isCash ? cashRoundOffMinor(remainingMinor, currency) : 0;

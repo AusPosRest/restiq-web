@@ -226,4 +226,17 @@ describe("OpenOrdersScreen - clearing out empty orders (CU-14)", () => {
     expect(push).toHaveBeenCalledWith("/pos/counter");
     expect(sessionStorage.getItem(`pos:counter-order:${CURRENT_STAFF_ID}`)).toBe("order-c");
   });
+
+  it("taking over a counter order opens the Counter screen with that order remembered", async () => {
+    const user = userEvent.setup();
+    stubFetch((url) => {
+      if (url.endsWith("/pos/api/orders/order-c/transfer")) return jsonResponse({});
+      return jsonResponse([order({ id: "order-c", tableId: null, tableLabel: null, tokenNumber: 7, ownerId: "staff-priya" })]);
+    });
+    render(<OpenOrdersScreen outletId="outlet-1" currentStaffId={CURRENT_STAFF_ID} />);
+    await user.click(await screen.findByTestId("open-order-take-over-order-c"));
+    await user.click(await screen.findByTestId("transfer-confirm"));
+    await waitFor(() => expect(push).toHaveBeenCalledWith("/pos/counter"));
+    expect(sessionStorage.getItem(`pos:counter-order:${CURRENT_STAFF_ID}`)).toBe("order-c");
+  });
 });

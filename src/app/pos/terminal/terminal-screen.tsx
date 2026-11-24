@@ -23,6 +23,7 @@
 // PIN per card, which no part of this demo has.
 import { useEffect, useRef, useState } from "react";
 import { ArrowRightLeft, CalendarClock, Check, CreditCard, Delete, Nfc, QrCode, Wallet, X } from "lucide-react";
+import { hasUpi } from "@/lib/money";
 import { formatMinor } from "../(shell)/shift/shift-state";
 import { listPendingPaymentIntents, simulatePaymentIntent, type PaymentIntentView } from "../api";
 
@@ -48,11 +49,11 @@ type Stage = "rail" | "entry" | "pin" | "processing" | "result";
  * say so when pressed, rather than charging on a rail that would then be
  * recorded as a card.
  */
-const RAILS: { rail: string; label: string; icon: typeof QrCode; enabled: boolean }[] = [
-  { rail: "upi", label: "UPI", icon: QrCode, enabled: false },
+const RAILS: { rail: string; label: string; icon: typeof QrCode; enabled: boolean; indiaOnly?: boolean }[] = [
+  { rail: "upi", label: "UPI", icon: QrCode, enabled: false, indiaOnly: true },
   { rail: "cards", label: "Cards", icon: CreditCard, enabled: true },
   { rail: "wallets", label: "Wallets", icon: Wallet, enabled: false },
-  { rail: "emi", label: "EMI", icon: CalendarClock, enabled: false },
+  { rail: "emi", label: "EMI", icon: CalendarClock, enabled: false, indiaOnly: true },
 ];
 
 const METHODS: { method: EntryMethod; label: string; hint: string; icon: typeof Nfc }[] = [
@@ -322,7 +323,7 @@ export function TerminalScreen({ outletId, outletName }: Readonly<{ outletId: st
                 <div className="flex w-full flex-1 flex-col gap-3">
                   <p className="text-sm text-zinc-400">Select payment method</p>
                   <div className="grid grid-cols-2 gap-2">
-                    {RAILS.map(({ rail, label, icon: Icon, enabled }) => (
+                    {RAILS.filter((r) => !r.indiaOnly || hasUpi(current.currency)).map(({ rail, label, icon: Icon, enabled }) => (
                       <button
                         key={rail}
                         type="button"
