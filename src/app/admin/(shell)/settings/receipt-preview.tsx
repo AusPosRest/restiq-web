@@ -8,6 +8,7 @@
 // CGST + SGST (2.5% each, the 5% restaurant rate) on top; Australia's prices already include 10% GST.
 import type { CSSProperties } from "react";
 import type { BrandingTokens } from "./branding-state";
+import { registrationTypeLabel, type TaxRegistrationView } from "./tax-registration-state";
 
 export interface PreviewTenant {
   name: string;
@@ -48,7 +49,7 @@ function money(minor: number, currency: "INR" | "AUD"): string {
   return new Intl.NumberFormat(currency === "AUD" ? "en-AU" : "en-IN", { style: "currency", currency }).format(minor / 100);
 }
 
-export function ReceiptPreview({ tokens, logoUrl, tenant }: Readonly<{ tokens: BrandingTokens; logoUrl?: string | null; tenant?: PreviewTenant | null }>) {
+export function ReceiptPreview({ tokens, logoUrl, tenant, taxRegistration }: Readonly<{ tokens: BrandingTokens; logoUrl?: string | null; tenant?: PreviewTenant | null; taxRegistration?: Pick<TaxRegistrationView, "registrationType" | "registrationNumber"> | null }>) {
   const receipt = sampleReceipt(tenant?.country ?? "IN");
   const style: CSSProperties = {
     backgroundColor: tokens.surfaceColor,
@@ -74,6 +75,11 @@ export function ReceiptPreview({ tokens, logoUrl, tenant }: Readonly<{ tokens: B
         <p className="font-semibold" style={{ color: tokens.primaryColor }} data-testid="receipt-preview-tenant-name">
           {tenant?.name ?? "Your restaurant"}
         </p>
+        {taxRegistration?.registrationNumber && (
+          <p className="text-xs opacity-80" data-testid="receipt-preview-tax-id">
+            {registrationTypeLabel(taxRegistration.registrationType)}: {taxRegistration.registrationNumber}
+          </p>
+        )}
         {tokens.receiptHeader && (
           <p className="text-xs opacity-80" data-testid="receipt-preview-header">
             {tokens.receiptHeader}

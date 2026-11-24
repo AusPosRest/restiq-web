@@ -9,6 +9,7 @@ import { Dialog } from "radix-ui";
 import { Plus, Search } from "lucide-react";
 import { useDeferredValue, useState } from "react";
 import { Button } from "@/components/ui/button";
+import { formatPrice } from "@/lib/money";
 import { opsApi, OpsApiError } from "../api";
 import { ConfirmReasonDialog } from "../confirm-reason-dialog";
 import { LoadErrorPanel, Skeleton } from "../data-states";
@@ -19,7 +20,6 @@ import {
   CatalogProduct,
   CURRENCY_LABEL,
   EMPTY_FORM,
-  formatPrice,
   formFromProduct,
   ProductForm,
   productsQuery,

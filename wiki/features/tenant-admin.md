@@ -559,7 +559,7 @@ device" stays in the header for both. Default tab: Devices. Test:
     "<outlet> - QR codes" while printing so the browser's Save as PDF names
     the file after the outlet. `qrSheetHtml`, `qrZipPngFilename`, `slug` and
     `QR_CARD_SIZE_MM` were removed; the per-table Download PNG stays.
-    `jszip` is no longer imported (still listed in package.json - remove it).
+    `jszip` is no longer imported and was removed from package.json in #390.
 
 ## CAP-6 - Devices & printers
 

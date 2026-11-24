@@ -22,7 +22,7 @@ import { AgreementsTab } from "./agreements-tab";
 import { PaymentsTab } from "./payments-tab";
 import { SubscriptionTab } from "./subscription-tab";
 import { OutletsTab, OverviewTab, OwnersTab } from "./tabs";
-import { DATE_LOCALE } from "@/lib/datetime";
+import { DATE_LOCALE, formatDate } from "@/lib/datetime";
 
 // Branding is the owner's job (Settings > Branding); ops no longer edits it (walkthrough cut).
 const TABS = ["overview", "outlets", "devices", "subscription", "payments", "capabilities", "owners", "agreements"] as const;
@@ -275,7 +275,7 @@ export function TenantDetailPage() {
           <p className="text-xs text-muted-foreground" data-testid="tenant-mode-text">
             {tenant.testMode
               ? "Payments are simulated, emails go to the operators' inbox, and this tenant is left out of the platform figures."
-              : `Taking real payments${tenant.liveSince ? ` since ${new Date(tenant.liveSince).toLocaleDateString(undefined, { day: "2-digit", month: "short", year: "numeric" })}` : ""}.`}
+              : `Taking real payments${tenant.liveSince ? ` since ${formatDate(tenant.liveSince)}` : ""}.`}
           </p>
         </div>
         <Button variant="outline" size="sm" data-testid="tenant-mode-switch" onClick={() => setModeTarget(tenant.testMode ? "live" : "test")}>

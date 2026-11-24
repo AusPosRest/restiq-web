@@ -17,6 +17,8 @@ import { StatusBadge } from "../../status-badge";
 import { useToast } from "../../toast";
 import { useOpsLoad } from "../../use-ops-load";
 import { DATE_LOCALE } from "@/lib/datetime";
+import { formatMoney } from "@/lib/money";
+import { PLAN_LABEL } from "../../plans/plans-state";
 import { ContractCard } from "./contract-card";
 import { copyToClipboard, openBlankTab, StripeLinkResult } from "./stripe-link";
 
@@ -24,8 +26,11 @@ function formatDate(iso: string): string {
   return new Date(iso).toLocaleDateString(DATE_LOCALE, { day: "2-digit", month: "short", year: "numeric" });
 }
 
-function formatAmount(amountMinor: string): string {
-  return (Number(amountMinor) / 100).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+const PERIOD_LABEL: Record<string, string> = { monthly: "Monthly", annual: "Annual" };
+
+/** "A$99.00 per month", or "No price set". */
+function priceText({ amountMinor, currency }: SubscriptionView["cardBilling"], billingPeriod: string): string {
+  return amountMinor === null ? "No price set" : `${formatMoney(Number(amountMinor), currency)} per ${billingPeriod === "annual" ? "year" : "month"}`;
 }
 
 export function SubscriptionTab({ tenantId, tenantStatus }: Readonly<{ tenantId: string; tenantStatus?: string }>) {
@@ -121,9 +126,9 @@ export function SubscriptionTab({ tenantId, tenantStatus }: Readonly<{ tenantId:
           <div>
             <h2 className="font-headline text-lg font-semibold">Subscription</h2>
             <div className="mt-2 flex items-center gap-2">
-              <StatusBadge status={sub.status} testId="subscription-status" />
-              <span className="text-sm text-muted-foreground">
-                {sub.plan} · {sub.billingPeriod}
+              {!(tenantStatus === "provisioning" && sub.status === "active") && <StatusBadge status={sub.status} testId="subscription-status" />}
+              <span className="text-sm text-muted-foreground" data-testid="subscription-plan">
+                {PLAN_LABEL[sub.plan as keyof typeof PLAN_LABEL] ?? sub.plan} · {PERIOD_LABEL[sub.billingPeriod] ?? sub.billingPeriod} · {priceText(sub.cardBilling, sub.billingPeriod)}
               </span>
             </div>
             {tenantStatus === "provisioning" && (
@@ -197,9 +202,7 @@ export function SubscriptionTab({ tenantId, tenantStatus }: Readonly<{ tenantId:
         <div className="mt-2 flex flex-wrap items-center gap-3 text-sm">
           <StatusBadge status={sub.cardBilling.status} testId="card-billing-status" />
           <span className="text-muted-foreground" data-testid="card-billing-amount">
-            {sub.cardBilling.amountMinor === null
-              ? "No price set"
-              : `${sub.cardBilling.currency} ${formatAmount(sub.cardBilling.amountMinor)} per ${sub.billingPeriod === "annual" ? "year" : "month"}`}
+            {priceText(sub.cardBilling, sub.billingPeriod)}
           </span>
         </div>
         {(sub.cardBilling.status === "not_set_up" || sub.cardBilling.status === "canceled" || sub.cardBilling.status === "pending") && (
@@ -262,7 +265,7 @@ export function SubscriptionTab({ tenantId, tenantStatus }: Readonly<{ tenantId:
                 {invoices.data.invoices.map((invoice) => (
                   <tr key={invoice.id} data-testid={`invoices-row-${invoice.id}`} className="h-12 border-b border-border/20 last:border-b-0">
                     <td className="px-5 font-medium">{invoice.period}</td>
-                    <td className="px-5 tabular-nums text-muted-foreground">{formatAmount(invoice.amountMinor)}</td>
+                    <td className="px-5 tabular-nums text-muted-foreground">{formatMoney(Number(invoice.amountMinor), sub.cardBilling.currency)}</td>
                     <td className="px-5">
                       <StatusBadge status={invoice.status} testId={`invoice-status-${invoice.id}`} />
                     </td>

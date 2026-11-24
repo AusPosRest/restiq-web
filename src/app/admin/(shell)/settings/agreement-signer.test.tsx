@@ -2,7 +2,7 @@
 // a PDF viewer and signs it with a typed name + consent, naming the file hash they were shown; Sign stays disabled until both are
 // present; a 201 replaces the form with the signed record; an already-signed
 // version shows the record straight away; earlier signatures stay listed.
-import { cleanup, render, screen, waitFor } from "@testing-library/react";
+import { cleanup, fireEvent, render, screen, waitFor } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import type { OwnerAgreementView } from "../../api";
@@ -84,6 +84,17 @@ describe("AgreementSigner", () => {
     expect(screen.getByTestId("agreement-signed").textContent).toContain(V2_SIGNATURE.evidenceSha256);
     expect(screen.queryByTestId("agreement-sign-form")).toBeNull();
     expect(screen.getByTestId("toast-success").textContent).toContain("Agreement v2 signed.");
+  });
+
+  it("shows a loading note over the PDF until the frame has loaded", async () => {
+    stubFetch({ current: CURRENT, signature: null, history: [] });
+    renderSigner();
+    await screen.findByTestId("agreement-view");
+    expect(screen.getByTestId("agreement-viewer-loading").textContent).toBe("Loading the agreement…");
+    expect(screen.getByTestId("agreement-viewer-loading").getAttribute("role")).toBe("status");
+    fireEvent.load(screen.getByTestId("agreement-viewer"));
+    expect(screen.queryByTestId("agreement-viewer-loading")).toBeNull();
+    expect(screen.getByTestId("agreement-viewer")).toBeTruthy();
   });
 
   it("shows the signed record instead of the form when the current version is already signed", async () => {

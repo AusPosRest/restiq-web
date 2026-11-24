@@ -233,6 +233,12 @@ describe("TenantDetailPage lifecycle actions", () => {
     expect(screen.getByTestId("overview-gst").textContent).toContain("Not applicable");
   });
 
+  it("shows the live-since date in the fixed day-first format", async () => {
+    renderPage(tenantDetail({ testMode: false, liveSince: "2026-01-05T00:00:00.000Z" }));
+    await screen.findByTestId("tenant-detail");
+    expect(screen.getByTestId("tenant-mode-text").textContent).toBe("Taking real payments since 5 Jan 2026.");
+  });
+
   // restiq-backend#213: Test / Live mode - badge, confirmation with reason + checkbox, and the API's refusal surfaced.
   describe("Test / Live mode", () => {
     it("badges a Test tenant and switches it to Live after the confirmation", async () => {

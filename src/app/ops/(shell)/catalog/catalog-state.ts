@@ -91,10 +91,6 @@ export function validateProductForm(form: ProductForm): { payload: ProductPayloa
   };
 }
 
-export function formatPrice(priceMinor: number, currency: string): string {
-  return `${currency === "INR" ? "₹" : "$"}${(priceMinor / 100).toFixed(currency === "INR" ? 0 : 2)}`;
-}
-
 export function productsQuery(q: string, tag: string, currency: string): string {
   const params = new URLSearchParams();
   if (q.trim()) params.set("q", q.trim());

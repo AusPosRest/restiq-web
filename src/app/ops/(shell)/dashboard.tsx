@@ -6,6 +6,7 @@ import { ArrowUpRight } from "lucide-react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { TenantListResult } from "./api";
+import { TestModeBadge } from "@/components/test-mode-badge";
 import { LoadErrorPanel, Skeleton } from "./data-states";
 import { StatusBadge } from "./status-badge";
 import { useOpsLoad } from "./use-ops-load";
@@ -126,8 +127,11 @@ function RecentOnboardings() {
                     onClick={() => router.push(`/ops/tenants/${tenant.id}`)}
                     className="flex h-12 w-full items-center justify-between gap-4 px-4 text-left text-sm hover:bg-accent focus:outline-none focus-visible:ring-2 focus-visible:ring-ring"
                   >
-                    <span className="truncate font-medium">{tenant.name}</span>
-                    <span className="flex items-center gap-3">
+                    <span className="flex min-w-0 items-center gap-2">
+                      <span className="truncate font-medium">{tenant.name}</span>
+                      {tenant.testMode && <TestModeBadge testId={`recent-onboarding-test-badge-${tenant.id}`} />}
+                    </span>
+                    <span className="flex shrink-0 items-center gap-3">
                       <span className="text-muted-foreground">{tenant.country}</span>
                       <StatusBadge status={tenant.status} />
                       <span className="tabular-nums text-muted-foreground">
